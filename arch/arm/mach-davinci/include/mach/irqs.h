@@ -95,11 +95,17 @@
 #define IRQ_COMMRX       62
 #define IRQ_EMUINT       63
 
-#define DAVINCI_N_AINTC_IRQ	64
-#define DAVINCI_N_GPIO		71
-
-#define NR_IRQS			(DAVINCI_N_AINTC_IRQ + DAVINCI_N_GPIO)
 
 #define ARCH_TIMER_IRQ IRQ_TINT1_TINT34
+#define DAVINCI_N_GPIO		71
 
+#define IRQ_EMIF_EMWAIT_TIMEOUT 64
+#define IRQ_EMIF_EMWAIT_RISE 65
+
+#define IRQ_GPIO8     66
+#define IRQ_GPIO(x) ((x < 8)? IRQ_GPIO0+x : IRQ_GPIO8-8+x)
+#define IRQ_TO_GPIO(irq) ((irq < IRQ_GPIO(8))? \
+		irq - IRQ_GPIO(0) : irq - (IRQ_GPIO(8)-8))
+
+#define NR_IRQS                  (IRQ_GPIO(70) + 1)
 #endif /* __ASM_ARCH_IRQS_H */
