@@ -247,7 +247,6 @@ gpio_irq_handler(unsigned irq, struct irq_desc *desc)
 
 static int __init davinci_gpio_irq_setup(void)
 {
-	unsigned	gpio, irq, bank;
 	struct clk	*clk;
 
 	clk = clk_get(NULL, "gpio");
@@ -258,36 +257,6 @@ static int __init davinci_gpio_irq_setup(void)
 	}
 
 	clk_enable(clk);
-
-	for (gpio = 0, irq = gpio_to_irq(0), bank = IRQ_GPIOBNK0;
-	     gpio < DAVINCI_N_GPIO; bank++) {
-		struct gpio_controller	*__iomem g = gpio2controller(gpio);
-		unsigned		i;
-
-		__raw_writel(~0, &g->clr_falling);
-		__raw_writel(~0, &g->clr_rising);
-
-		/* set up all irqs in this bank */
-		set_irq_chained_handler(bank, gpio_irq_handler);
-		set_irq_chip_data(bank, g);
-		set_irq_data(bank, (void *)irq);
-
-		for (i = 0; i < 16 && gpio < DAVINCI_N_GPIO;
-		     i++, irq++, gpio++) {
-			set_irq_chip(irq, &gpio_irqchip);
-			set_irq_chip_data(irq, g);
-			set_irq_handler(irq, handle_simple_irq);
-			set_irq_flags(irq, IRQF_VALID);
-		}
-	}
-
-	/* BINTEN -- per-bank interrupt enable. genirq would also let these
-	 * bits be set/cleared dynamically.
-	 */
-	__raw_writel(0x1f, (void *__iomem)
-		     IO_ADDRESS(DAVINCI_GPIO_BASE + 0x08));
-
-	printk(KERN_INFO "DaVinci: %d gpio irqs\n", irq - gpio_to_irq(0));
 
 	return 0;
 }
