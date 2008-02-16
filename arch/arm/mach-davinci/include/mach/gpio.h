@@ -142,13 +142,13 @@ static inline int gpio_to_irq(unsigned gpio)
 {
 	if (gpio >= DAVINCI_N_GPIO)
 		return -EINVAL;
-	return DAVINCI_N_AINTC_IRQ + gpio;
+	return IRQ_GPIO(gpio);
 }
 
 static inline int irq_to_gpio(unsigned irq)
 {
 	/* caller guarantees gpio_to_irq() succeeded */
-	return irq - DAVINCI_N_AINTC_IRQ;
+	return IRQ_TO_GPIO(irq);
 }
 
 #endif				/* __DAVINCI_GPIO_H */
