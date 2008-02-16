@@ -267,21 +267,8 @@ gpio_irq_handler(unsigned irq, struct irq_desc *desc)
 
 static int __init davinci_gpio_irq_setup(void)
 {
-	unsigned	gpio, irq, bank;
-	unsigned	bank_irq;
 	struct clk	*clk;
-	u32		binten = 0;
 
-	if (cpu_is_davinci_dm355()) {		/* or dm335() */
-		bank_irq = IRQ_DM355_GPIOBNK0;
-	} else if (cpu_is_davinci_dm644x()) {
-		bank_irq = IRQ_GPIOBNK0;
-	} else if (cpu_is_davinci_dm646x()) {
-		bank_irq = IRQ_DM646X_GPIOBNK0;
-	} else {
-		printk(KERN_ERR "Don't know first GPIO bank IRQ.\n");
-		return -EINVAL;
-	}
 
 	clk = clk_get(NULL, "gpio");
 	if (IS_ERR(clk)) {
@@ -290,38 +277,6 @@ static int __init davinci_gpio_irq_setup(void)
 		return PTR_ERR(clk);
 	}
 	clk_enable(clk);
-
-	for (gpio = 0, irq = gpio_to_irq(0), bank = 0;
-			gpio < ngpio;
-			bank++, bank_irq++) {
-		struct gpio_controller	*__iomem g = gpio2controller(gpio);
-		unsigned		i;
-
-		__raw_writel(~0, &g->clr_falling);
-		__raw_writel(~0, &g->clr_rising);
-
-		/* set up all irqs in this bank */
-		set_irq_chained_handler(bank_irq, gpio_irq_handler);
-		set_irq_chip_data(bank_irq, g);
-		set_irq_data(bank_irq, (void *)irq);
-
-		for (i = 0; i < 16 && gpio < ngpio; i++, irq++, gpio++) {
-			set_irq_chip(irq, &gpio_irqchip);
-			set_irq_chip_data(irq, g);
-			set_irq_handler(irq, handle_simple_irq);
-			set_irq_flags(irq, IRQF_VALID);
-		}
-
-		binten |= BIT(bank);
-	}
-
-	/* BINTEN -- per-bank interrupt enable. genirq would also let these
-	 * bits be set/cleared dynamically.
-	 */
-	__raw_writel(binten, (void *__iomem)
-		     IO_ADDRESS(DAVINCI_GPIO_BASE + 0x08));
-
-	printk(KERN_INFO "DaVinci: %d gpio irqs\n", irq - gpio_to_irq(0));
 
 	return 0;
 }
