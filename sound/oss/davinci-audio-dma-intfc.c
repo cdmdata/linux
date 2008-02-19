@@ -143,12 +143,23 @@ static int audio_start_dma_chain(audio_stream_t * s);
  * Buffer creation/destruction
  *
  ******************************************************************************/
+#define IRAM_RESERVED 32
+#define IRAM_SIZE 0x4000	//16k in ram0/1 combination
+#define IRAM_LEFT (IRAM_SIZE-IRAM_RESERVED)
+
+char *		iram_dmabuf;
+dma_addr_t	iram_dmaphys;
+int			iram_dmasize;
+extern char* g_DavinciIRam;
+
 int audio_setup_buf(audio_stream_t * s)
 {
+	int max;
 	int frag;
 	int dmasize = 0;
 	char *dmabuf = NULL;
 	dma_addr_t dmaphys = 0;
+	audio_buf_t *b;
 	FN_IN;
 
 	if (s->buffers) {
@@ -160,12 +171,31 @@ int audio_setup_buf(audio_stream_t * s)
 	s->buffers = kmalloc(sizeof(audio_buf_t) * s->nbfrags, GFP_KERNEL);
 	if (!s->buffers)
 		goto err;
-
 	/* Initialise all the memory to 0 */
 	memset(s->buffers, 0, sizeof(audio_buf_t) * s->nbfrags);
 
+	if (iram_dmabuf==NULL) {
+		/* For allocating the IRAM memory */
+		iram_dmabuf = (char*)(g_DavinciIRam+IRAM_RESERVED);
+		iram_dmaphys = (dma_addr_t)(DAVINCI_IRAM_BASE+IRAM_RESERVED);
+		iram_dmasize = (IRAM_LEFT);
+	}
+	max = (s->nbfrags*s->fragsize);
+	dmaphys = iram_dmaphys;
+	dmabuf = iram_dmabuf;
+	dmasize = (iram_dmasize) - (iram_dmasize % s->fragsize);
+	if (dmasize > max) dmasize = max;
+	iram_dmabuf += dmasize;
+	iram_dmaphys += dmasize;
+	iram_dmasize -= dmasize;
+
+	b = &s->buffers[0];
+	b->master = dmasize;
+	if (dmasize) memzero(dmabuf, dmasize);
+
+
 	for (frag = 0; frag < s->nbfrags; frag++) {
-		audio_buf_t *b = &s->buffers[frag];
+		b = &s->buffers[frag];
 
 		/*
 		 * Let's allocate non-cached memory for DMA buffers.
@@ -179,17 +209,9 @@ int audio_setup_buf(audio_stream_t * s)
 				/* allocate consistent memory for DMA
 				   dmaphys(handle)= device viewed address.
 				   dmabuf = CPU-viewed address */
-				dmabuf =
-				    dma_alloc_coherent(NULL, dmasize, &dmaphys,
-						       0);
-
-				/* For allocating the IRAM memory */
-				//dmaphys = (dma_addr_t)(DAVINCI_IRAM_BASE + 0x1000);
-				//dmabuf = (DAVINCI_IRAM_VIRT + 0x1000);
-				if (!dmabuf)
-					dmasize -= s->fragsize;
-			}
-			while (!dmabuf && dmasize);
+				dmabuf = dma_alloc_coherent(NULL, dmasize, &dmaphys,0);
+				if (!dmabuf) dmasize -= s->fragsize;
+			} while (!dmabuf && dmasize);
 
 			if (!dmabuf)
 				goto err;
@@ -209,6 +231,8 @@ int audio_setup_buf(audio_stream_t * s)
 
 	s->dma_started = 0;
 	s->bytecount = 0;
+	s->doneByteCnt = 0;
+	s->lastDoneByteCnt = 0;
 	s->fragcount = 0;
 	s->prevbuf = 0;
 
@@ -231,14 +255,20 @@ void audio_discard_buf(audio_stream_t * s)
 	if (s->buffers) {
 		int frag;
 		for (frag = 0; frag < s->nbfrags; frag++) {
-			if (!s->buffers[frag].master)
-				continue;
-
-			dma_free_coherent(NULL,
-					  s->buffers[frag].master,
-					  s->buffers[frag].data,
-					  s->buffers[frag].dma_addr);
-
+			char *dmabuf;
+			int dmasize = s->buffers[frag].master; 
+			if (!dmasize) continue;
+			dmabuf = s->buffers[frag].data;
+			if ( (dmabuf >= ((char*)(g_DavinciIRam+IRAM_RESERVED))) &&
+				 (dmabuf <  ((char*)(g_DavinciIRam+IRAM_SIZE))) ) {
+				//fixme, this should work as long as things are freed in reserve order
+				//or all of iram is freed before reallocating any
+				iram_dmabuf -= dmasize;
+				iram_dmaphys -= dmasize;
+				iram_dmasize += dmasize;
+			} else {
+				dma_free_coherent(NULL,dmasize,dmabuf,s->buffers[frag].dma_addr);
+			}
 		}
 		kfree(s->buffers);
 		s->buffers = NULL;
@@ -551,6 +581,7 @@ int audio_sync(struct file *file)
 		b->data -= shiftval;
 		local_irq_save(flags);
 		s->bytecount -= shiftval;
+		s->doneByteCnt -= shiftval;
 		if (++s->usr_head >= s->nbfrags)
 			s->usr_head = 0;
 
@@ -905,6 +936,7 @@ static void sound_dma_irq_handler(int sound_curr_lch, u16 ch_status, void *data)
 				/* This fragment is done */
 				b->offset = 0;
 				s->bytecount += s->fragsize;
+				s->doneByteCnt += s->fragsize;
 				s->fragcount++;
 				s->dma_spinref = -s->dma_spinref;
 
@@ -965,6 +997,7 @@ static void audio_dma_callback(int lch, u16 ch_status, void *data)
 		/* This fragment is done */
 		b->offset = 0;
 		s->bytecount += s->fragsize;
+		s->doneByteCnt += s->fragsize;
 		s->fragcount++;
 		s->dma_spinref = -s->dma_spinref;
 
