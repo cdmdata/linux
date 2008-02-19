@@ -34,3 +34,5 @@ obj-$(CONFIG_SGI_XP)		+= sgi-xp/
 obj-$(CONFIG_SGI_GRU)		+= sgi-gru/
 obj-$(CONFIG_HP_ILO)		+= hpilo.o
 obj-$(CONFIG_C2PORT)		+= c2port/
+obj-$(CONFIG_DAV_DMA)		+= ffit.o dav-dma.o
+obj-$(CONFIG_BD_GENTIMER)	+= gen-timer.o
