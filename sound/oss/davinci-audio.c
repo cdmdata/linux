@@ -264,6 +264,7 @@ static int audio_ldm_resume(void *data)
 }
 #endif				/* End of #ifdef CONFIG_PM */
 
+char * g_DavinciIRam;
 /*******************************************************************************
  *
  * audio_probe(): The Audio driver probe function
@@ -279,6 +280,7 @@ static int audio_probe(struct platform_device *dev)
 		return -ENODEV;
 	}
 	ret = audio_state.hw_probe();
+	g_DavinciIRam = (char *)ioremap(DAVINCI_IRAM_BASE, 0x4000); /* 16k */
 	FN_OUT(ret);
 	return ret;
 }
@@ -291,6 +293,10 @@ static int audio_probe(struct platform_device *dev)
 static int audio_remove(struct platform_device *dev)
 {
 	FN_IN;
+	if (g_DavinciIRam) {
+		iounmap((void*)g_DavinciIRam);
+		g_DavinciIRam = NULL;
+	}
 	if (audio_state.hw_remove) {
 		audio_state.hw_remove();
 	}
@@ -916,6 +922,7 @@ audio_ioctl(struct inode *inode, struct file *file, uint cmd, ulong arg)
 				return -EINVAL;
 			}
 			if (s->active) {
+				int cnt;
 				local_irq_save(flags);
 				offset = audio_get_dma_pos(s);
 				inf.ptr = s->dma_tail * s->fragsize + offset;
@@ -926,7 +933,11 @@ audio_ioctl(struct inode *inode, struct file *file, uint cmd, ulong arg)
 				local_irq_restore(flags);
 				if (bytecount < 0)
 					bytecount = 0;
-				inf.bytes = bytecount;
+				//inf.bytes = bytecount;
+				cnt = s->doneByteCnt + offset;
+				inf.bytes = cnt	- s->lastDoneByteCnt;
+				s->lastDoneByteCnt = cnt;
+				if (inf.bytes < 0) inf.bytes = 0;
 			}
 			FN_OUT(17);
 			return copy_to_user((void *)arg, &inf, sizeof(inf));
@@ -1065,7 +1076,7 @@ static int audio_open(struct inode *inode, struct file *file)
 	if (!AUDIO_ACTIVE(state)) {
 		if (state->hw_init && !aic33_init_flag) {
 			state->hw_init(state->data);
-			aic33_init_flag = 0;
+			aic33_init_flag = 1;
 		}
 	}
 

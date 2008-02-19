@@ -60,6 +60,8 @@ typedef struct {
 	int *lch;		/*  Chain of channels this stream is linked to */
 	int input_or_output;	/* Direction of this data stream */
 	int bytecount;		/* nbr of processed bytes */
+	int doneByteCnt;
+	int lastDoneByteCnt;
 	int fragcount;		/* nbr of fragment transitions */
 	struct completion wfc;	/* wait for "nbfrags" fragment completion */
 	wait_queue_head_t wq;	/* for poll */

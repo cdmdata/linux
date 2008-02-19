@@ -13,6 +13,7 @@ obj-$(CONFIG_SOUND_OMAP_AIC23)  += omap-audio-aic23.o
 
 obj-$(CONFIG_SOUND_DAVINCI)	+= davinci-audio-dma-intfc.o davinci-audio.o
 obj-$(CONFIG_SOUND_DAVINCI_AIC33) += davinci-audio-aic33.o
+obj-$(CONFIG_SOUND_DAVINCI_AIC23) += davinci-audio-aic23.o davinci-spi.o
 
 # Please leave it as is, cause the link order is significant !
 
