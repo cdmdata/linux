@@ -50,6 +50,12 @@ config MACH_DAVINCI_SFFSDR
 	  Say Y here to select the Lyrtech Small Form Factor
 	  Software Defined Radio (SFFSDR) board.
 
+config MACH_DAVINCI_XENON
+	bool "Boundary Devices Xenon board"
+	depends on ARCH_DAVINCI_DM644x
+	help
+	  Choose this to build for a Boundary Devices Xenon board
+
 config DAVINCI_RESET_CLOCKS
 	bool "Reset unused clocks during boot"
 	depends on ARCH_DAVINCI
