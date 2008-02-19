@@ -154,11 +154,13 @@ static struct mtd_partition nand_partitions[] = {
 	}
 };
 
-static struct flash_platform_data nand_data = {
-	.parts		= nand_partitions,
-	.nr_parts	= ARRAY_SIZE(nand_partitions),
+static struct davinci_flash_platform_data nand_data = {
+	.parts		= 0,
+	.nr_parts	= 0,
+	.chip_num	= 0, /* 0 - cs2, 1 - cs3, 2 - cs4, 3 - cs5 */
 };
 
+#define DAVINCI_ASYNC_EMIF_DATA_CE0_BASE  0x02000000
 static struct resource nand_resources[] = {
 	{
 		.start	= DAVINCI_ASYNC_EMIF_DATA_CE0_BASE,
