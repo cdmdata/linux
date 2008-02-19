@@ -67,6 +67,7 @@
 #define qvga_portrait_P  240, 64, 34, 1,	320, 20, 8, 3,	0,0,1,0,0,	1,0,1,1,62,LCD_PANEL
 #define lcd_svga_P  800, 64, 32,152,		600,  3, 1,27,	1,1,0,0,0,	1,1,0,1,62,LCD_PANEL
 #define crt800x600_P  800, 64, 32,152,		600,  3, 1,27,	1,1,0,0,0,	1,1,0,1,62,CRT
+#define gvision_P  800, 64, 32,16,		600,  8, 3,2,	1,1,0,0,0,	1,1,0,1,62,LCD_PANEL
 #define crt1024x768_P 1024,0xe4,0x3c,0x70,	768,0x0c,0x0b,0x20, 0,0,1,0,0,	1,1,0,1,62,CRT
 #define hitachi_92_P 960,15,220,1,    160,	200,148,3,	0,0,1,0,0,	1,0,0,1,62,LCD_PANEL
 #define tovis_w_P	1024,104,56,160,	200,3,201,11,	1,1,0,0,0,	1,0,0,1,75,CRT
@@ -99,6 +100,7 @@ const DISPLAYCFG stdDisplayTypes[] = {
 	{hitachi_wxga_P},	//13
 	{hitachi_154_P},	//14
 	{samsung1600x1050},     //15
+	{gvision_P},		//16
 };
 #define DEF_INDEX 14
 #define RESIZER 1
