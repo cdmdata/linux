@@ -38,6 +38,7 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/interrupt.h>
 #include <linux/platform_device.h>
 #include <linux/err.h>
 #include <linux/clk.h>
@@ -67,6 +68,9 @@ static void __iomem *nand_vaddr;
  * MTD structure for DaVinici board
  */
 static struct mtd_info *nand_davinci_mtd;
+static struct completion cmd_complete;
+static int irq_enabled;
+
 
 #ifdef CONFIG_MTD_PARTITIONS
 const char *part_probes[] = { "cmdlinepart", NULL };
@@ -179,16 +183,114 @@ static int nand_davinci_correct_data(struct mtd_info *mtd, u_char *dat,
 					  (read_ecc[2] << 16);
 	u_int32_t eccCalc = calc_ecc[0] | (calc_ecc[1] << 8) |
 					  (calc_ecc[2] << 16);
-	u_int32_t diff = eccCalc ^ eccNand;
+	u_int32_t diff = ecc_calc ^ ecc_nand;
+	if (!diff)
+		return 0;
 
-	if (diff) {
-		if ((((diff>>12)^diff) & 0xfff) == 0xfff) {
-			/* Correctable error */
-			if ((diff>>(12+3)) < chip->ecc.size) {
-				dat[diff>>(12+3)] ^= (1 << ((diff>>12)&7));
-				return 1;
-			} else {
-				return -1;
+	if ((((diff>>12)^diff) & 0xfff) == 0xfff) {
+		/* Correctable error */
+		if ((diff>>(12+3)) < chip->c.ecc.size) {
+			dat[diff>>(12+3)] ^= (1 << ((diff>>12)&7));
+			return 1;
+		}
+	} else if (!(diff & (diff-1))) {
+		/* Single bit ECC error in the ECC itself,
+		   nothing to fix */
+		return 1;
+	}
+	/* Uncorrectable error */
+	dev_warn(chip->parent, "uncorrectable ecc error, "
+		"read=%x, calc=%x, diff=%x\n", ecc_nand, ecc_calc, diff);
+	return -1;
+
+}
+
+#ifdef USE_DMA
+static inline int calculate_ecc_dma(struct d_nand_chip *chip,
+		u_char *ecc_code)
+{
+	int i = chip->c.ecc.steps;
+	unsigned int *p = chip->bounce_ecc;
+	while (i) {
+		unsigned int ecc_val = *p++;
+		/* squeeze 0 middle bits out so that it fits in 3 bytes */
+		unsigned int tmp = (ecc_val&0x0fff)|((ecc_val&0x0fff0000)>>4);
+		/* invert so that erased block ecc is correct */
+		tmp = ~tmp;
+		*ecc_code++ = (u_char)(tmp);
+		*ecc_code++ = (u_char)(tmp >> 8);
+		*ecc_code++ = (u_char)(tmp >> 16);
+		i--;
+	}
+	return 0;
+}
+static inline int correct_data_dma(struct mtd_info *mtd,
+		struct d_nand_chip *chip,
+		u_char *dat, u_char *read_ecc, u_char *calc_ecc)
+{
+	int i = chip->c.ecc.steps;
+	int cnt = 0;
+	int failed = 0;
+	int err_mask = 0;
+	int mask = 1;
+	while (i) {
+		int ret;
+		ret = nand_davinci_correct_data(mtd, dat, read_ecc, calc_ecc);
+		if (ret < 0) {
+			err_mask |= mask;
+			failed++;
+		} else
+			cnt += ret;
+		mask <<= 1;
+		dat += chip->c.ecc.size;
+		read_ecc += 3;
+		calc_ecc += 3;
+		i--;
+	}
+	if (failed)
+		dev_warn(chip->parent, "segment error mask=0x%x, "
+				"corrected=%i\n", err_mask, cnt);
+	mtd->ecc_stats.failed += failed;
+	mtd->ecc_stats.corrected += cnt;
+	return (failed)? -1 : cnt;
+}
+
+static inline void read_buf_dma(struct mtd_info *mtd, uint8_t *buf, int len)
+{
+	struct d_nand_chip *chip = mtd->priv;
+	int edma = chip->edma;
+	int bounce = 0;
+	dma_addr_t phys;
+	/* startup dma */
+	INIT_COMPLETION(chip->dma_complete);
+	phys = dma_map_single(chip->parent, buf, len, DMA_FROM_DEVICE);
+	if (dma_mapping_error(chip->parent, phys)) {
+		phys = chip->bounce_phys;
+		bounce = 1;
+		dev_warn(chip->parent, "bouncing\n");
+	}
+	chip->parm_edma.dst = phys;
+	davinci_set_dma_params(edma, &chip->parm_edma);
+
+	if (nand_is_ready(chip)) {
+		chip->dma_active = 1;
+		davinci_start_dma(edma);
+	} else if (chip->irq < 0) {
+		nand_wait_ready(mtd);
+		chip->dma_active = 1;
+		davinci_start_dma(edma);
+	} else {
+		chip->start_dma_needed = 1;
+		if (!chip->irq_enabled) {
+			enable_irq(chip->irq);
+			chip->irq_enabled = 1;
+		}
+		if (nand_is_ready(chip)) {
+			rmb();
+			if (chip->start_dma_needed) {
+				chip->start_dma_needed = 0;
+				chip->dma_active = 1;
+				davinci_start_dma(edma);
 			}
 		} else if (!(diff & (diff-1))) {
 			/* Single bit ECC error in the ECC itself,
@@ -198,6 +300,166 @@ static int nand_davinci_correct_data(struct mtd_info *mtd, u_char *dat,
 			/* Uncorrectable error */
 			return -1;
 		}
+	}
+	wait_for_completion(&chip->dma_complete);
+	if (bounce)
+		memcpy(buf, chip->bounce_base, len);
+	else
+		dma_unmap_single(chip->parent, phys, len, DMA_FROM_DEVICE);
+}
+#if 0
+void dump(uint8_t *buf, int len)
+{
+	int i = 0;
+	unsigned int *p = (unsigned int *)buf;
+	while (len >= 16) {
+		printk(KERN_ERR "%08x %08x %08x %08x  %04x\n",
+				p[3], p[2], p[1], p[0], i);
+		len -= 16;
+		i += 16;
+		p += 4;
+	}
+}
+#endif
+static int read_page_dma(struct mtd_info *mtd, struct nand_chip *_chip,
+	uint8_t *buf)
+{
+	edmacc_paramentry_regs parm;
+	struct d_nand_chip *chip = (struct d_nand_chip *)_chip;
+	int i;
+	uint8_t *ecc_calc = chip->c.buffers->ecccalc;
+	uint8_t *ecc_code = chip->c.buffers->ecccode;
+	uint32_t *eccpos = chip->c.ecc.layout->eccpos;
+
+	nand_davinci_enable_hwecc(mtd, NAND_ECC_READ);
+	read_buf_dma(mtd, buf, mtd->writesize);
+	calculate_ecc_dma(chip, ecc_calc);
+
+	i = chip->c.ecc.total;
+	while (i--)
+		*ecc_code++ = chip->bounce_oob[*eccpos++];
+
+	correct_data_dma(mtd, chip, buf, chip->c.buffers->ecccode, ecc_calc);
+	davinci_get_dma_params(chip->edma_ecc, &parm);
+#if 0
+	printk(KERN_ERR "%x %x, %x %x, %x %x, %x %x\n",
+			chip->parm_ecc.dst, parm.dst,
+			chip->parm_ecc.src_dst_cidx, parm.src_dst_cidx,
+			chip->parm_ecc.a_b_cnt, parm.a_b_cnt,
+			chip->parm_ecc.ccnt, parm.ccnt);
+	dump(buf, mtd->writesize);
+	dump(chip->bounce_oob, mtd->oobsize);
+#endif
+	return 0;
+}
+#ifdef USE_DMA_FOR_WRITE
+int get_oob_bytes_before_ecc(struct d_nand_chip *chip)
+{
+	uint32_t *eccpos = chip->c.ecc.layout->eccpos;
+	int oob_before = 63;
+	int i;
+	for (i = 0; i < chip->c.ecc.total; i++)
+		if (oob_before > eccpos[i])
+			oob_before = eccpos[i];
+	return oob_before & ~0xf;	/* keep multiple of 16 */
+}
+
+static inline void write_buf_dma(struct mtd_info *mtd, const uint8_t *buf,
+		int len)
+{
+	struct d_nand_chip *chip = mtd->priv;
+	int edma = chip->edma;
+	int bounce = 0;
+	dma_addr_t phys;
+	/* startup dma */
+	INIT_COMPLETION(chip->dma_complete);
+	phys = dma_map_single(chip->parent, (uint8_t *)buf, len, DMA_TO_DEVICE);
+	if (dma_mapping_error(chip->parent, phys)) {
+		memcpy(chip->bounce_base, buf, len);
+		phys = chip->bounce_phys;
+		bounce = 1;
+		dev_warn(chip->parent, "bouncing write\n");
+	}
+	chip->parm_edma_write.src = phys;
+	davinci_set_dma_params(edma, &chip->parm_edma_write);
+
+	chip->dma_active = 1;
+	davinci_start_dma(edma);
+	wait_for_completion(&chip->dma_complete);
+	if (bounce == 0)
+		dma_unmap_single(chip->parent, phys, len, DMA_TO_DEVICE);
+}
+/**
+ * write_page_dma - hardware ecc based page write function
+ */
+static void write_page_dma(struct mtd_info *mtd, struct nand_chip *_chip,
+	const uint8_t *buf)
+{
+	struct d_nand_chip *chip = (struct d_nand_chip *)_chip;
+	int i;
+	int before_ecc = chip->oob_bytes_before_ecc;
+	uint8_t *ecc_calc = chip->c.buffers->ecccalc;
+	uint32_t *eccpos = chip->c.ecc.layout->eccpos;
+
+	nand_davinci_enable_hwecc(mtd, NAND_ECC_WRITE);
+	write_buf_dma(mtd, buf, mtd->writesize);
+	calculate_ecc_dma(chip, ecc_calc);
+
+	for (i = 0; i < chip->c.ecc.total; i++)
+		chip->c.oob_poi[eccpos[i]] = ecc_calc[i];
+
+	memcpy(chip->bounce_oob, chip->c.oob_poi, before_ecc);
+	nand_davinci_write_buf(mtd, chip->c.oob_poi + before_ecc,
+			mtd->oobsize - before_ecc);
+}
+#endif
+
+static void dma_cb(int lch, u16 ch_status, void *data)
+{
+	struct d_nand_chip *chip = (struct d_nand_chip *)data;
+	if (DMA_COMPLETE != ch_status) {
+		dev_err(chip->parent, "[DMA FAILED]\n");
+	} else if (chip->dma_active) {
+		chip->dma_active = 0;
+		complete(&chip->dma_complete);
+		return;
+	} else {
+		dev_err(chip->parent, "unexpected dma callback\n");
+	}
+	davinci_stop_dma(chip->edma);
+	davinci_clean_channel(chip->edma);
+	davinci_stop_dma(chip->edma_ecc);
+	davinci_clean_channel(chip->edma_ecc);
+	davinci_set_dma_params(chip->edma_ecc, &chip->parm_ecc);
+	chip->dma_active = 0;
+	complete(&chip->dma_complete);
+}
+
+static int get_dma_channels(struct mtd_info *mtd, struct d_nand_chip *chip)
+{
+	int edma;
+	int tcc = 0;
+	int edma_oob;
+	int tcc_oob;
+	int edma_ecc;
+	int tcc_ecc = 0;
+	int edma_fcr;
+	int tcc_fcr = 0;
+	int edma_ecc_parm;
+	int tcc_ecc_parm = 0;
+	int edma_fcr_parm;
+	int tcc_fcr_parm = 0;
+	int r;
+	edmacc_paramentry_regs parm;
+	enum dma_event_q queue_no = EVENTQ_1;
+	int eccsize = chip->c.ecc.size;
+
+#ifdef USE_DMA_FOR_WRITE
+	int edma_oob_write;
+	int tcc_oob_write;
+	int before_ecc = get_oob_bytes_before_ecc(chip);
+	chip->oob_bytes_before_ecc = before_ecc;
+#endif
 
 	}
 	return 0;
@@ -353,6 +615,65 @@ static void nand_davinci_read_buf(struct mtd_info *mtd, uint8_t *buf, int len)
 		p[i] = readl(chip->IO_ADDR_R);
 }
 
+static inline int nand_davinci_get_ready(struct mtd_info *mtd)
+{
+	return (davinci_nand_readl(NANDFSR_OFFSET) & NAND_BUSY_FLAG);
+}
+static irqreturn_t nand_isr(int irq, void *mtd_id)
+{
+	struct mtd_info *mtd = (struct mtd_info *)mtd_id;
+	if (nand_davinci_get_ready(mtd)) {
+//		printk(KERN_ERR "nand_isr ready\n");
+		complete(&cmd_complete);
+	} else {
+//		printk(KERN_ERR "nand_isr not ready\n");
+	}
+	return IRQ_HANDLED;
+}
+
+/*
+ * nand_davinci_waitfunc_with_irq
+ * Wait for command done. (erase/program only)
+ * allow 400ms for erase
+ * allow  20ms for program
+ */
+static int nand_davinci_waitfunc_with_irq(
+		struct mtd_info *mtd, struct nand_chip *chip)
+{
+	unsigned long timeout = (chip->state == FL_ERASING)?
+			((HZ * 400) / 1000) : ((HZ * 20) / 1000);
+	__raw_writeb(NAND_CMD_STATUS, (chip->IO_ADDR_R+MASK_CLE));
+	cmd_complete.done = 0;
+	if (!irq_enabled) {
+		enable_irq(IRQ_EMIF_EMWAIT_RISE);
+		irq_enabled = 1;
+	}
+	if (!nand_davinci_get_ready(mtd)) {
+		if (wait_for_completion_timeout(&cmd_complete, timeout)==0) {
+			printk(KERN_ERR "waitfunc timeout\n");
+		}
+	}
+	return __raw_readb(chip->IO_ADDR_R);
+}
+static int nand_davinci_dev_ready_with_irq(struct mtd_info *mtd)
+{
+#if 1
+	if (irq_enabled) {
+		disable_irq(IRQ_EMIF_EMWAIT_RISE);
+		irq_enabled = 0;
+	}
+	return nand_davinci_get_ready(mtd);
+#else
+	cmd_complete.done = 0;
+	if (!nand_davinci_get_ready(mtd)) {
+		if (wait_for_completion_timeout(&cmd_complete, 2)==0) {
+			printk(KERN_ERR "dev_ready timeout\n");
+		}
+		return nand_davinci_get_ready(mtd);
+	}
+	return 1;
+#endif
+}
 /*
  * Check hardware register for wait status. Returns 1 if device is ready,
  * 0 if it is still busy.
@@ -480,7 +801,7 @@ int __devinit nand_davinci_probe(struct platform_device *pdev)
 	struct device        	  *dev = NULL;
 	u32                  	  nand_rev_code;
 #ifdef CONFIG_MTD_CMDLINE_PARTS
-	char                 	  *master_name;
+	const char             	  *master_name;
 	int 		     	  mtd_parts_nb = 0;
 	struct mtd_partition 	  *mtd_parts = 0;
 #endif
@@ -555,6 +876,16 @@ int __devinit nand_davinci_probe(struct platform_device *pdev)
 	/* Speed up the creation of the bad block table */
 	chip->scan_bbt      = nand_davinci_scan_bbt;
 
+	init_completion(&cmd_complete);
+	if (request_irq(IRQ_EMIF_EMWAIT_RISE, &nand_isr, 0,
+			"davinci_nand", nand_davinci_mtd)) {
+		printk(KERN_ERR "nand: request_irq failed, irq:%i\n",
+				IRQ_EMIF_EMWAIT_RISE);
+	} else {
+		chip->dev_ready = nand_davinci_dev_ready_with_irq;
+		chip->waitfunc = nand_davinci_waitfunc_with_irq;
+		irq_enabled = 1;
+	}
 	nand_davinci_flash_init();
 
 	nand_davinci_mtd->owner = THIS_MODULE;
