@@ -735,19 +735,10 @@ static void __devinit nand_davinci_flash_init(void)
 	/* Check for correct pin mux, reconfigure if necessary */
 	tmp = davinci_readl(DAVINCI_SYSTEM_MODULE_BASE + PINMUX0);
 
-	if ((tmp & 0x20020C1F) != 0x00000C1F) {
+	if (tmp & ((1<<DAVINCI_MUX_HPIEN)|(1<<DAVINCI_MUX_ATAEN))) {
 		/* Disable HPI and ATA mux */
 		davinci_mux_peripheral(DAVINCI_MUX_HPIEN, 0);
 		davinci_mux_peripheral(DAVINCI_MUX_ATAEN, 0);
-
-		/* Enable VLYNQ and AEAW */
-		davinci_mux_peripheral(DAVINCI_MUX_AEAW0, 1);
-		davinci_mux_peripheral(DAVINCI_MUX_AEAW1, 1);
-		davinci_mux_peripheral(DAVINCI_MUX_AEAW2, 1);
-		davinci_mux_peripheral(DAVINCI_MUX_AEAW3, 1);
-		davinci_mux_peripheral(DAVINCI_MUX_AEAW4, 1);
-		davinci_mux_peripheral(DAVINCI_MUX_VLSCREN, 1);
-		davinci_mux_peripheral(DAVINCI_MUX_VLYNQEN, 1);
 
 		regval = davinci_readl(DAVINCI_SYSTEM_MODULE_BASE + PINMUX0);
 
