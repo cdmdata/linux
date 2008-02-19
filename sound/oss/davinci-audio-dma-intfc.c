@@ -920,6 +920,7 @@ static void sound_dma_irq_handler(int sound_curr_lch, u16 ch_status, void *data)
 		DPRINTK("lch=%d,status=0x%x, data=%p\n", sound_curr_lch,
 			ch_status, data);
 
+#if 0
 		if (AUDIO_QUEUE_LAST(s)) {
 			audio_stream_t *s = data;
 			audio_buf_t *b = &s->buffers[s->dma_tail];
@@ -955,6 +956,7 @@ static void sound_dma_irq_handler(int sound_curr_lch, u16 ch_status, void *data)
 			audio_stop_dma(s);
 			return;
 		}
+#endif
 
 		/* Start the work item  - we ping pong the work items */
 		if (!work_item_running) {
