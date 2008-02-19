@@ -27,3 +27,6 @@ obj-$(CONFIG_INTEL_MENLOW)	+= intel_menlow.o
 obj-$(CONFIG_ENCLOSURE_SERVICES) += enclosure.o
 obj-$(CONFIG_KGDB_TESTS)	+= kgdbts.o
 obj-$(CONFIG_SGI_XP)		+= sgi-xp/
+obj-$(CONFIG_DAV_DMA)		+= ffit.o dav-dma.o
+obj-$(CONFIG_BD_GENTIMER)	+= gen-timer.o
+
