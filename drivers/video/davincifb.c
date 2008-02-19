@@ -1223,8 +1223,7 @@ static int davincifb_set_par(struct fb_info *info)
 	int shift = (dm->videomode.vmode == FB_VMODE_INTERLACED) ? 1 : 0;
 //ensure this is a multiple of 32 bytes
 //	printk(KERN_INFO "set_par %x %x\n",info->var.xres_virtual,info->var.xres);
-
-	memset(info->pseudo_palette, 0x0, sizeof(int) * 17);
+//	memset(info->pseudo_palette, 0x0, sizeof(int) * 17);
 
 	/* First set everything in 'dm' */
 	if (is_win(info->fix.id, VID0)) {
@@ -1717,7 +1716,7 @@ davincifb_setcolreg(unsigned regno, unsigned red, unsigned green,
 
 		switch (info->var.bits_per_pixel) {
 		case 16:
-			((u16 *) (info->pseudo_palette))[regno] = v;
+			((u32 *)info->pseudo_palette)[regno] = v;
 			break;
 		default:
 			return 1;
