@@ -38,8 +38,12 @@
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/mtd/mtd.h>
+#include <linux/mtd/nand.h>
 #include <linux/mtd/nand_ecc.h>
 
+//#define VERIFY_NEW_ECC_ALG
+#ifdef VERIFY_NEW_ECC_ALG
 /*
  * Pre-calculated 256-way 1 byte column parity
  */
@@ -68,7 +72,7 @@ static const u_char nand_ecc_precalc_table[] = {
  * @dat:	raw data
  * @ecc_code:	buffer for ECC
  */
-int nand_calculate_ecc(struct mtd_info *mtd, const u_char *dat,
+int nand_calculate_ecc_old(struct mtd_info *mtd, const u_char *dat,
 		       u_char *ecc_code)
 {
 	uint8_t idx, reg1, reg2, reg3, tmp1, tmp2;
@@ -121,16 +125,116 @@ int nand_calculate_ecc(struct mtd_info *mtd, const u_char *dat,
 
 	return 0;
 }
+#endif
+
+#ifdef CONFIG_MTD_NAND_ECC_SMC
+#define LOW_ORDER_INDEX 0
+#define HIGH_ORDER_INDEX 1
+#else
+#define LOW_ORDER_INDEX 1
+#define HIGH_ORDER_INDEX 0
+#endif
+
+/**
+ * nand_calculate_ecc - [NAND Interface] Calculate 3-byte ECC for 256/512 byte block
+ * @mtd:	MTD block structure
+ * @dat:	raw data
+ * @ecc_code:	buffer for ECC
+ */
+int nand_calculate_ecc(struct mtd_info *mtd, const u_char *dat,
+		       u_char *ecc_code)
+{
+	uint32_t j = ((struct nand_chip *)mtd->priv)->ecc.size;			/* 256 or 512 bytes/ecc  */
+	uint32_t k=0;
+	uint32_t xor = 0;
+	uint32_t tecc = 0;
+	uint32_t ecc = 0;
+	uint32_t * p = (uint32_t *)dat;
+	uint32_t v;
+//#define FORCE_ECC_ERROR
+#ifdef FORCE_ECC_ERROR
+	uint32_t forceBitNum;
+	{
+		/* force single bit ecc error to test ecc correction code */
+		u_char* p = (u_char*)dat;
+		forceBitNum = p[0] | (p[1]<<8);	/* 1st word of block determines which bit is made in error */
+		forceBitNum &= 0xfff;
+		if ((forceBitNum&0x800)==0) {
+			/* limit error to 1st 256 bytes */
+			p[forceBitNum>>3] ^= 1<<(forceBitNum&7);
+			printk(KERN_INFO "Forcing ecc error, byte:0x%x, bit:%i\n",forceBitNum>>3,forceBitNum&7);
+		}
+	}
+#endif
+
+	do {
+		v = *p++;
+		xor ^= v;
+		v ^= (v>>16);
+		v ^= (v>>8);
+		v ^= (v>>4);
+		v ^= (v>>2);
+		v ^= (v>>1);
+		if (v&1) tecc ^= k;
+		k++;
+		j-=4;
+	} while (j);
+	__cpu_to_le64s(xor);
+	v = (xor>>16)^xor;
+	v ^= ((v>>8)&(0x00ff00ff&0x00ffffff));
+	v ^= ((v>>4)&(0x0f0f0f0f&0x000f0fff));
+	v ^= ((v>>2)&(0x33333333&0x0003033f));
+	v ^= ((v>>1)&(0x55555555&0x00010117));
+	
+	/* now duplicate all bits */
+	if (tecc&(1<<6)) ecc ^= 3<<22;
+	if (tecc&(1<<5)) ecc ^= 3<<20;
+	if (tecc&(1<<4)) ecc ^= 3<<18;
+	if (tecc&(1<<3)) ecc ^= 3<<16;
+	if (tecc&(1<<2)) ecc ^= 3<<14;
+	if (tecc&(1<<1)) ecc ^= 3<<12;
+	if (tecc&(1<<0)) ecc ^= 3<<10;
+
+	if (v&(1<<16)) ecc ^= 3<<8;
+	if (v&(1<<8)) ecc ^= 3<<6;
+	if (v&(1<<4)) ecc ^= 3<<4;
+	if (v&(1<<2)) ecc ^= 3<<2;
+	if (v&(1<<1)) ecc ^= 3<<0;
+	if (v&(1<<0)) ecc ^= 0x555555;		/* if parity is odd, low bits are opposite of high bits */
+
+#ifdef FORCE_ECC_ERROR
+	if (forceBitNum&0x800) {
+		ecc ^= 1<<(forceBitNum&0xf);
+		printk(KERN_INFO "Forcing single bit error in ecc itself bit %i\n",forceBitNum&0xf);
+	}
+#endif
+	if (((struct nand_chip *)mtd->priv)->ecc.size==256) ecc <<= 2;
+	ecc = ~ecc;
+
+
+#ifdef VERIFY_NEW_ECC_ALG
+	{
+		uint32_t s;
+		nand_calculate_ecc_old(mtd,dat,ecc_code);
+		ecc &= 0xffffff;
+		s = (ecc_code[HIGH_ORDER_INDEX]<<16) | (ecc_code[LOW_ORDER_INDEX]<<8) | ecc_code[2];
+
+		if (s != ecc) {
+			printk(KERN_ERR "New algorithm is buggy!!!! s=%x, ecc=%x\n",s,ecc);
+			return 0;
+		}
+	}
+#endif
+
+	/* Calculate final ECC code */
+	ecc_code[HIGH_ORDER_INDEX] = (u_char)(ecc>>16);
+	ecc_code[LOW_ORDER_INDEX] = (u_char)(ecc>>8);
+	ecc_code[2] = (u_char)ecc;
+	return 0;
+}
+
 EXPORT_SYMBOL(nand_calculate_ecc);
 
-static inline int countbits(uint32_t byte)
-{
-	int res = 0;
-
-	for (;byte; byte >>= 1)
-		res += byte & 0x01;
-	return res;
-}
 
 /**
  * nand_correct_data - [NAND Interface] Detect and correct bit error(s)
@@ -139,54 +243,66 @@ static inline int countbits(uint32_t byte)
  * @read_ecc:	ECC from the chip
  * @calc_ecc:	the ECC calculated from raw data
  *
- * Detect and correct a 1 bit error for 256 byte block
+ * Detect and correct a 1 bit error for 256/512 byte block
  */
 int nand_correct_data(struct mtd_info *mtd, u_char *dat,
 		      u_char *read_ecc, u_char *calc_ecc)
 {
-	uint8_t s0, s1, s2;
+	uint32_t s,t;
+	s = (calc_ecc[HIGH_ORDER_INDEX]<<16) | (calc_ecc[LOW_ORDER_INDEX]<<8) | calc_ecc[2];
+	t = (read_ecc[HIGH_ORDER_INDEX]<<16) | (read_ecc[LOW_ORDER_INDEX]<<8) | read_ecc[2];
 
-#ifdef CONFIG_MTD_NAND_ECC_SMC
-	s0 = calc_ecc[0] ^ read_ecc[0];
-	s1 = calc_ecc[1] ^ read_ecc[1];
-	s2 = calc_ecc[2] ^ read_ecc[2];
-#else
-	s1 = calc_ecc[0] ^ read_ecc[0];
-	s0 = calc_ecc[1] ^ read_ecc[1];
-	s2 = calc_ecc[2] ^ read_ecc[2];
+	s ^= t;
+	if (s == 0) {
+#ifdef FORCE_ECC_ERROR
+		printk(KERN_ERR "Trying to force an error failed\n");
 #endif
-	if ((s0 | s1 | s2) == 0)
 		return 0;
+	}
+
+	if (((struct nand_chip *)mtd->priv)->ecc.size==256) {
+		if ((s&3)==0) s ^= (1<<24);
+		s >>= 2;
+	}
 
 	/* Check for a single bit error */
-	if( ((s0 ^ (s0 >> 1)) & 0x55) == 0x55 &&
-	    ((s1 ^ (s1 >> 1)) & 0x55) == 0x55 &&
-	    ((s2 ^ (s2 >> 1)) & 0x54) == 0x54) {
+	if( ((s ^ (s >> 1)) & 0x555555) == 0x555555) {
 
 		uint32_t byteoffs, bitnum;
 
-		byteoffs = (s1 << 0) & 0x80;
-		byteoffs |= (s1 << 1) & 0x40;
-		byteoffs |= (s1 << 2) & 0x20;
-		byteoffs |= (s1 << 3) & 0x10;
+		byteoffs = (s >> (23-8)) & 0x100;	/* bit 23 used for 512 byte eccsize */
+		byteoffs |= (s >> (21-7)) & 0x80;
+		byteoffs |= (s >> (19-6)) & 0x40;
+		byteoffs |= (s >> (17-5)) & 0x20;
+		byteoffs |= (s >> (15-4)) & 0x10;
+		byteoffs |= (s >> (13-3)) & 0x08;
+		byteoffs |= (s >> (11-2)) & 0x04;
+		byteoffs |= (s >> (9-1)) & 0x02;
+		byteoffs |= (s >> (7-0)) & 0x01;
 
-		byteoffs |= (s0 >> 4) & 0x08;
-		byteoffs |= (s0 >> 3) & 0x04;
-		byteoffs |= (s0 >> 2) & 0x02;
-		byteoffs |= (s0 >> 1) & 0x01;
-
-		bitnum = (s2 >> 5) & 0x04;
-		bitnum |= (s2 >> 4) & 0x02;
-		bitnum |= (s2 >> 3) & 0x01;
+		bitnum = (s >> (5-2)) & 0x04;
+		bitnum |= (s >> (3-1)) & 0x02;
+		bitnum |= (s >> (1-0)) & 0x01;
 
 		dat[byteoffs] ^= (1 << bitnum);
-
+#ifdef FORCE_ECC_ERROR
+		printk(KERN_INFO "Correcting FORCED single bit ECC error at offset: 0x%x, bit: %i\n", byteoffs, bitnum);
+#endif
 		return 1;
 	}
 
-	if(countbits(s0 | ((uint32_t)s1 << 8) | ((uint32_t)s2 <<16)) == 1)
-		return 1;
-
+	if (((struct nand_chip *)mtd->priv)->ecc.size==256) {
+		s &= 0x3fffff;	/* we may have set bit 22 above, make sure it's clear now */
+	}
+	if ((s & (-s))==s) {
+#ifdef FORCE_ECC_ERROR
+		printk(KERN_INFO "Detected single bit error in ECC itself 0x%x\n",s);
+#endif
+		return 1;			/* Single bit ECC error in the ECC itself, nothing to fix */
+	}
+#ifdef FORCE_ECC_ERROR
+	printk(KERN_ERR "unrecoverable error FORCED 0x%x\n",s);
+#endif
 	return -EBADMSG;
 }
 EXPORT_SYMBOL(nand_correct_data);
