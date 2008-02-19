@@ -368,6 +368,11 @@ void emac_mdio_finding_state(void)
 			/* Set Timer for finding timeout */
 			DPRINTK("PHY NOT Found. Starting timeout\n");
 			emac_phy->timeout = PHY_RECK_TIMEOUT;
+		
+			// force address zero
+			emac_phy->phy_addr = 0 ;
+			emac_phy->state = PHY_FOUND;
+			emac_phy->state_change = 1;
 		}
 	}
 }
