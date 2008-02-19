@@ -904,6 +904,8 @@ config SMC91X
 config TI_DAVINCI_EMAC
 	tristate "TI DaVinci EMAC Support"
 	depends on ARM && ARCH_DAVINCI
+        default y if ARCH_DAVINCI
+	select MII
 	help
 	  This driver supports TI's DaVinci Ethernet .
 
