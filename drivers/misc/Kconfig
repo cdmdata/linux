@@ -364,10 +364,20 @@ config EEEPC_LAPTOP
 	depends on BACKLIGHT_CLASS_DEVICE
 	depends on HWMON
 	depends on EXPERIMENTAL
-
 	---help---
 	  This driver supports the Fn-Fx keys on Eee PC laptops.
 	  It also adds the ability to switch camera/wlan on/off.
+
+config DAV_DMA
+	tristate "Device driver DaVinci DMA"
+	depends on ARCH_DAVINCI
+	default n
+	help
+	  This option enables the use of the DaVinci EDMA engine by applications.
+	  It is typically used for bit-blts of images to and from the frame-buffer.
+
+config BD_GENTIMER
+	tristate "Boundary Devices Generic timer support"
 
 config OMAP_STI
 	bool "Serial Trace Interface support"
