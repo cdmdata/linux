@@ -38,6 +38,7 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/interrupt.h>
 #include <linux/platform_device.h>
 #include <linux/err.h>
 #include <linux/clk.h>
@@ -67,6 +68,9 @@ static void __iomem *nand_vaddr;
  * MTD structure for DaVinici board
  */
 static struct mtd_info *nand_davinci_mtd;
+static struct completion cmd_complete;
+static int irq_enabled;
+
 
 #ifdef CONFIG_MTD_PARTITIONS
 const char *part_probes[] = { "cmdlinepart", NULL };
@@ -353,6 +357,65 @@ static void nand_davinci_read_buf(struct mtd_info *mtd, uint8_t *buf, int len)
 		p[i] = readl(chip->IO_ADDR_R);
 }
 
+static inline int nand_davinci_get_ready(struct mtd_info *mtd)
+{
+	return (davinci_nand_readl(NANDFSR_OFFSET) & NAND_BUSY_FLAG);
+}
+static irqreturn_t nand_isr(int irq, void *mtd_id)
+{
+	struct mtd_info *mtd = (struct mtd_info *)mtd_id;
+	if (nand_davinci_get_ready(mtd)) {
+//		printk(KERN_ERR "nand_isr ready\n");
+		complete(&cmd_complete);
+	} else {
+//		printk(KERN_ERR "nand_isr not ready\n");
+	}
+	return IRQ_HANDLED;
+}
+
+/*
+ * nand_davinci_waitfunc_with_irq
+ * Wait for command done. (erase/program only)
+ * allow 400ms for erase
+ * allow  20ms for program
+ */
+static int nand_davinci_waitfunc_with_irq(
+		struct mtd_info *mtd, struct nand_chip *chip)
+{
+	unsigned long timeout = (chip->state == FL_ERASING)?
+			((HZ * 400) / 1000) : ((HZ * 20) / 1000);
+	__raw_writeb(NAND_CMD_STATUS, (chip->IO_ADDR_R+MASK_CLE));
+	cmd_complete.done = 0;
+	if (!irq_enabled) {
+		enable_irq(IRQ_EMIF_EMWAIT_RISE);
+		irq_enabled = 1;
+	}
+	if (!nand_davinci_get_ready(mtd)) {
+		if (wait_for_completion_timeout(&cmd_complete, timeout)==0) {
+			printk(KERN_ERR "waitfunc timeout\n");
+		}
+	}
+	return __raw_readb(chip->IO_ADDR_R);
+}
+static int nand_davinci_dev_ready_with_irq(struct mtd_info *mtd)
+{
+#if 1
+	if (irq_enabled) {
+		disable_irq(IRQ_EMIF_EMWAIT_RISE);
+		irq_enabled = 0;
+	}
+	return nand_davinci_get_ready(mtd);
+#else
+	cmd_complete.done = 0;
+	if (!nand_davinci_get_ready(mtd)) {
+		if (wait_for_completion_timeout(&cmd_complete, 2)==0) {
+			printk(KERN_ERR "dev_ready timeout\n");
+		}
+		return nand_davinci_get_ready(mtd);
+	}
+	return 1;
+#endif
+}
 /*
  * Check hardware register for wait status. Returns 1 if device is ready,
  * 0 if it is still busy.
@@ -555,6 +618,16 @@ int __devinit nand_davinci_probe(struct platform_device *pdev)
 	/* Speed up the creation of the bad block table */
 	chip->scan_bbt      = nand_davinci_scan_bbt;
 
+	init_completion(&cmd_complete);
+	if (request_irq(IRQ_EMIF_EMWAIT_RISE, &nand_isr, 0,
+			"davinci_nand", nand_davinci_mtd)) {
+		printk(KERN_ERR "nand: request_irq failed, irq:%i\n",
+				IRQ_EMIF_EMWAIT_RISE);
+	} else {
+		chip->dev_ready = nand_davinci_dev_ready_with_irq;
+		chip->waitfunc = nand_davinci_waitfunc_with_irq;
+		irq_enabled = 1;
+	}
 	nand_davinci_flash_init();
 
 	nand_davinci_mtd->owner = THIS_MODULE;
