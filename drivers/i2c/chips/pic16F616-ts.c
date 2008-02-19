@@ -80,6 +80,7 @@ struct pic16f616_ts {
 	int irq;
 };
 const char *client_name = "Pic16F616-ts";
+static unsigned char pullup_delay = 80 ;
 
 /* I2C Addresses to scan */
 static unsigned short normal_i2c[] = { 0x22,I2C_CLIENT_END };
@@ -377,6 +378,11 @@ static int ts_thread(void *_ts)
 	buf[0] = SUM_X;
 	i2c_master_send(&ts->client,buf,1);
 #endif
+
+        buf[0] = 0x39 ;
+        buf[1] = pullup_delay ;       // units of time (loop counter) -1..0x80..0 
+        i2c_master_send(&ts->client,buf,2);
+
 	do {
 #ifdef TESTING
 		msleep(20);
@@ -580,6 +586,42 @@ static int ts_attach_adapter(struct i2c_adapter *adapter)
 	return i2c_probe(adapter, &addr_data, &ts_detect_client);
 }
 
+static int pic_setup(char *options)
+{
+	char *this_opt;
+	int rval = 0 ;
+	printk( KERN_DEBUG "%s options=%s\n", __FUNCTION__, options );
+
+	while ((this_opt = strsep(&options, ",")) != NULL) {
+		if( 0 == strncmp("pudelay:",this_opt,8) ){
+			pullup_delay = simple_strtol(this_opt+8,0,0);
+			printk( KERN_INFO "%s: pullup delay == %d\n", __FUNCTION__, pullup_delay );
+		}
+		else if( *this_opt ){
+			printk( KERN_DEBUG "%s: Unknown option %s\n", __FUNCTION__, this_opt );
+			rval = -1 ;
+			break;
+		}
+	}
+
+	return 0 ;
+}
+
+static char *options = "";
+module_param(options, charp, S_IRUGO);
+
+#ifndef MODULE
+static int __init save_options(char *args)
+{
+	if (!args || !*args)
+		return 0;
+	options=args ;
+        printk( KERN_DEBUG "pic16F616-ts options: %s\n", args );
+	return 0;
+}
+__setup("pic-ts=", save_options);
+#endif
+
 /*-----------------------------------------------------------------------*/
 
 static struct i2c_driver ts_driver = {
@@ -599,6 +641,7 @@ static int __init ts_init(void)
 		printk(KERN_WARNING "%s: i2c_add_driver failed\n",client_name);
 		return res;
 	}
+        pic_setup(options);
 	printk("%s: version 1.0 (Dec. 24, 2007)\n",client_name);
 	return 0;
 }
