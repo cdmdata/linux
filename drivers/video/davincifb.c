@@ -81,6 +81,7 @@ typedef struct
 	unsigned short yRes,ySyncWidth,yBegin,yEnd;
 	unsigned char vsPol,hsPol,pPol,oePol,dPol;
 	unsigned char enable,unscramble,rotate,active,vSyncHz,type;
+	unsigned char encPerPixel;
 } DISPLAYCFG;
 
 const DISPLAYCFG stdDisplayTypes[] = {
@@ -1800,17 +1801,54 @@ struct fb_info *init_fb_info(struct vpbe_dm_win_info *w,
 	return info;
 }
 
-void vpbe_davincifb_lcd_component_config(void)
+DISPLAYCFG cur_display_settings;
+const DISPLAYCFG* build_current_settings(void)
 {
-	const DISPLAYCFG* disp = &stdDisplayTypes[DEF_INDEX];
-	if (1) {
-		int encPerPixel = 1;
-		unsigned short val[4];
-		int bit;
-		int gbit;
+	unsigned int vmod = dispc_reg_in(VENC_VMOD);
+	unsigned int totalX = dispc_reg_in(VENC_DCLKHR);
+	unsigned int encPerPixel = dispc_reg_in(VENC_HINT) / (totalX-1);
+	unsigned int vid_ctl = dispc_reg_in(VENC_VIDCTL);
+	unsigned int sync_ctl = dispc_reg_in(VENC_SYNCCTL);
+	DISPLAYCFG* disp = &cur_display_settings;
+
+	if ((vmod & (VENC_VMOD_VMD|VENC_VMOD_VENC)) !=
+		(VENC_VMOD_VMD|VENC_VMOD_VENC)) {
+		*disp = stdDisplayTypes[DEF_INDEX];
+		encPerPixel = 1;
 		if ((disp->xRes * disp->yRes) <= (640*480)) encPerPixel = 2;
 		if ((disp->xRes * disp->yRes) <= (640*240)) encPerPixel = 4;
 		if ((disp->xRes * disp->yRes) <= (320*240)) encPerPixel = 8;
+		disp->encPerPixel = encPerPixel;
+		return disp;
+	}
+
+	disp->encPerPixel = encPerPixel;
+	disp->xRes = dispc_reg_in(VENC_HVALID) / encPerPixel;
+	disp->xSyncWidth = dispc_reg_in(VENC_HSPLS) / encPerPixel;
+	disp->xBegin = dispc_reg_in(VENC_HSTART) / encPerPixel;
+	disp->xEnd = totalX - (disp->xRes + disp->xSyncWidth + disp->xBegin);
+
+	disp->yRes = dispc_reg_in(VENC_VVALID);
+	disp->ySyncWidth = dispc_reg_in(VENC_VSPLS);
+	disp->yBegin = dispc_reg_in(VENC_VSTART);
+	disp->yEnd = dispc_reg_in(VENC_VINT)+ 1 - (disp->yRes + disp->ySyncWidth + disp->yBegin);
+
+	disp->vsPol = (sync_ctl>>3)&1;
+	disp->hsPol = (sync_ctl>>2)&1;
+	disp->pPol = ((vid_ctl>>14)&1)^1;
+	disp->oePol = (dispc_reg_in(VENC_LCDOUT)>>1)&1;
+
+	disp->enable = 1;
+	return disp;
+}
+void vpbe_davincifb_lcd_component_config(void)
+{
+	const DISPLAYCFG* disp = &cur_display_settings;
+	if (1) {
+		int encPerPixel = disp->encPerPixel;
+		unsigned short val[4];
+		int bit;
+		int gbit;
 		dispc_reg_out(OSD_BASEPX, disp->xBegin);
 		dispc_reg_out(OSD_BASEPY, disp->yBegin);
 
@@ -2223,7 +2261,6 @@ int davincifb_setup(char *options)
 		if (!strncmp(this_opt, "output=", 7)) {
 			flag = 1;
 			if (!strncmp(this_opt + 7, "lcd", 3)) {
-				const DISPLAYCFG* disp = &stdDisplayTypes[DEF_INDEX];
 				dm->display.mode = LCD;
 				dm->display.interface = RGB;
 				dm->videomode.vmode = FB_VMODE_NONINTERLACED;
