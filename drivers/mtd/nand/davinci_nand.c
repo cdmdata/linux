@@ -46,30 +46,98 @@
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
+#include <linux/dma-mapping.h>
 
 #include <mach/hardware.h>
 #include <mach/nand.h>
 #include <mach/mux.h>
+#include <mach/edma.h>
+#include <mach/gpio.h>
 
-#include <asm/mach/flash.h>
+#define USE_DMA
+#define USE_DMA_FOR_WRITE
 
 #ifdef CONFIG_NAND_FLASH_HW_ECC
 #define DAVINCI_NAND_ECC_MODE NAND_ECC_HW3_512
+#define DAVINCI_NAND_ECC_SIZE 512
+#define DAVINCI_NAND_ECC_BYTES 3
 #else
 #define DAVINCI_NAND_ECC_MODE NAND_ECC_SOFT
+#define DAVINCI_NAND_ECC_SIZE 256
+#define DAVINCI_NAND_ECC_BYTES 3
 #endif
 
 #define DRIVER_NAME "davinci_nand"
 
-static struct clk *nand_clock;
-static void __iomem *nand_vaddr;
+struct d_nand_chip {
+	struct nand_chip c;
+	unsigned int mem_start;
+	unsigned long mem_size;
+	struct completion cmd_complete;
+	struct device *parent;
+	unsigned char chip_num;
+	unsigned char irq_enabled;
+	signed char irq;
+#ifdef USE_DMA
+	/* dma variables */
+	unsigned char start_dma_needed;
+	unsigned char dma_active;
+	dma_addr_t bounce_phys;
+	unsigned char *bounce_base;
+	unsigned char *bounce_oob;
+	unsigned int *bounce_ecc;
+	unsigned int *bounce_fcr;
+	int bounce_size;
+	int edma;
+	int edma_oob;
+	int edma_ecc;
+	int edma_fcr;
+	int edma_ecc_parm;
+	int edma_fcr_parm;
+	edmacc_paramentry_regs parm_edma;
+	edmacc_paramentry_regs parm_ecc;
+#ifdef USE_DMA_FOR_WRITE
+	/* transfer part of oob before ecc, rounded down to multiple of 16 */
+	int oob_bytes_before_ecc;
+	int edma_oob_write;
+	edmacc_paramentry_regs parm_edma_write;
+#endif
+	struct completion dma_complete;
+#endif
+};
 
-/*
- * MTD structure for DaVinici board
- */
-static struct mtd_info *nand_davinci_mtd;
-static struct completion cmd_complete;
-static int irq_enabled;
+struct nand_davinci_info {
+	struct mtd_info mtd;
+	struct d_nand_chip chip;
+	struct clk *clk;
+};
+static inline unsigned int davinci_nand_readl(int offset)
+{
+	return davinci_readl(DAVINCI_ASYNC_EMIF_CNTRL_BASE + offset);
+}
+
+static inline void davinci_nand_writel(unsigned long value, int offset)
+{
+	davinci_writel(value, DAVINCI_ASYNC_EMIF_CNTRL_BASE + offset);
+}
+
+static inline int nand_is_ready_emwait(void)
+{
+	return (davinci_nand_readl(NANDFSR_OFFSET) & NAND_BUSY_FLAG);
+}
+
+static inline int nand_is_ready_gpirq(int irq)
+{
+	return gpio_get_value(IRQ_TO_GPIO(irq));
+}
+
+static inline int nand_is_ready(struct d_nand_chip *chip)
+{
+	int irq = chip->irq;
+	if ((irq == IRQ_EMIF_EMWAIT_RISE) || (irq < 0))
+		return nand_is_ready_emwait();
+	return nand_is_ready_gpirq(irq);
+}
 
 
 #ifdef CONFIG_MTD_PARTITIONS
@@ -94,24 +162,14 @@ static struct nand_bbt_descr davinci_memorybased_large = {
 	.pattern = scan_ff_pattern
 };
 
-inline unsigned int davinci_nand_readl(int offset)
-{
-	return davinci_readl(DAVINCI_ASYNC_EMIF_CNTRL_BASE + offset);
-}
-
-inline void davinci_nand_writel(unsigned long value, int offset)
-{
-	davinci_writel(value, DAVINCI_ASYNC_EMIF_CNTRL_BASE + offset);
-}
-
 /*
  * Hardware specific access to control-lines
  */
 static void nand_davinci_hwcontrol(struct mtd_info *mtd, int cmd,
 				   unsigned int ctrl)
 {
-	struct nand_chip *chip = mtd->priv;
-	u32 IO_ADDR_W = (u32)chip->IO_ADDR_W;
+	struct d_nand_chip *chip = mtd->priv;
+	u32 IO_ADDR_W = (u32)chip->c.IO_ADDR_W;
 
 	/* Did the control lines change? */
 	if (ctrl & NAND_CTRL_CHANGE) {
@@ -122,11 +180,11 @@ static void nand_davinci_hwcontrol(struct mtd_info *mtd, int cmd,
 		else if ((ctrl & NAND_CTRL_ALE) == NAND_CTRL_ALE)
 			IO_ADDR_W |= MASK_ALE;
 
-		chip->IO_ADDR_W = (void __iomem *)IO_ADDR_W;
+		chip->c.IO_ADDR_W = (void __iomem *)IO_ADDR_W;
 	}
 
 	if (cmd != NAND_CMD_NONE)
-		writeb(cmd, chip->IO_ADDR_W);
+		writeb(cmd, chip->c.IO_ADDR_W);
 }
 
 static void nand_davinci_select_chip(struct mtd_info *mtd, int chip)
@@ -134,17 +192,96 @@ static void nand_davinci_select_chip(struct mtd_info *mtd, int chip)
 	/* do nothing */
 }
 
+#define read_fast(pDst, pRegs, cnt) asm volatile ( \
+	"	cmp	%2,#16\n" \
+	"1:	ldrhs	r0,[%1]\n" \
+	"	ldrhs	r1,[%1]\n" \
+	"	ldrhs	r2,[%1]\n" \
+	"	ldrhs	r3,[%1]\n" \
+	"	stmhsia	%0!,{r0,r1,r2,r3}\n" \
+	"	beq	3f\n" \
+	"	subhs	%2,%2,#16\n" \
+	"	cmp	%2,#16\n" \
+	"	bhs	1b\n" \
+	"	tst	%2,#0x0c\n" \
+	"2:	ldrne	r0,[%1]\n" \
+	"	strne	r0,[%0],#4\n" \
+	"	subne	%2,%2,#4\n" \
+	"	tst	%2,#0x0c\n" \
+	"	bne	2b\n" \
+	"	tst	%2,#2\n" \
+	"	ldrneh	r0,[%1]\n" \
+	"	strneh	r0,[%0],#2\n" \
+	"	tst	%2,#1\n" \
+	"	ldrneb	r0,[%1]\n" \
+	"	strneb	r0,[%0],#1\n" \
+	"3:\n" \
+	 : "+r"(pDst) : "r"(pRegs), "r"(cnt) \
+	 : "r0", "r1", "r2", "r3")
+
+#define write_fast(pSrc, pRegs, cnt) asm volatile ( \
+	"	cmp	%2,#16\n" \
+	"1:	ldmhsia	%0!,{r0,r1,r2,r3}\n" \
+	"	strhs	r0,[%1]\n" \
+	"	strhs	r1,[%1]\n" \
+	"	strhs	r2,[%1]\n" \
+	"	strhs	r3,[%1]\n" \
+	"	beq	3f\n" \
+	"	subhs	%2,%2,#16\n" \
+	"	cmp	%2,#16\n" \
+	"	bhs	1b\n" \
+	"	tst	%2,#0x0c\n" \
+	"2:	ldrne	r0,[%0],#4\n" \
+	"	strne	r0,[%1]\n" \
+	"	subne	%2,%2,#4\n" \
+	"	tst	%2,#0x0c\n" \
+	"	bne	2b\n" \
+	"	tst	%2,#2\n" \
+	"	ldrneh	r0,[%0],#2\n" \
+	"	strneh	r0,[%1]\n" \
+	"	tst	%2,#1\n" \
+	"	ldrneb	r0,[%0],#1\n" \
+	"	strneb	r0,[%1]\n" \
+	"3:\n" \
+	 : "+r"(pSrc) : "r"(pRegs), "r"(cnt) \
+	 : "r0", "r1", "r2", "r3")
+
+/*
+ * Read from memory register: we can read 4 bytes at a time.
+ * The hardware takes care of actually reading the NAND flash.
+ */
+static void nand_davinci_read_buf(struct mtd_info *mtd, uint8_t *buf, int len)
+{
+	struct nand_chip *chip = mtd->priv;
+	read_fast(buf, chip->IO_ADDR_R, len);
+}
+
+static void nand_davinci_write_buf(struct mtd_info *mtd, const uint8_t *buf,
+	int len)
+{
+	struct nand_chip *chip = mtd->priv;
+	write_fast(buf, chip->IO_ADDR_W, len);
+}
+
+
 #ifdef CONFIG_NAND_FLASH_HW_ECC
 static void nand_davinci_enable_hwecc(struct mtd_info *mtd, int mode)
 {
+	struct d_nand_chip *chip = mtd->priv;
 	u32 retval;
+	/* 0 - cs2, 1 - cs3, 2 - cs4, 3 - cs5 */
+	u_int32_t   chip_num = chip->chip_num;
 
 	/* Reset ECC hardware */
-	retval = davinci_nand_readl(NANDF1ECC_OFFSET);
+	davinci_nand_readl(NANDF1ECC_OFFSET + (chip_num<<2));
 
 	/* Restart ECC hardware */
 	retval = davinci_nand_readl(NANDFCR_OFFSET);
-	retval |= (1 << 8);
+	retval |= 0x100<<chip_num;
+#ifdef USE_DMA
+	if (chip->bounce_fcr)
+		*(chip->bounce_fcr) = retval;
+#endif
 	davinci_nand_writel(retval, NANDFCR_OFFSET);
 }
 
@@ -153,8 +290,9 @@ static void nand_davinci_enable_hwecc(struct mtd_info *mtd, int mode)
  */
 static u32 nand_davinci_readecc(struct mtd_info *mtd)
 {
+	struct d_nand_chip *chip = mtd->priv;
 	/* Read register ECC and clear it */
-	return davinci_nand_readl(NANDF1ECC_OFFSET);
+	return davinci_nand_readl(NANDF1ECC_OFFSET + (chip->chip_num<<2));
 }
 
 /*
@@ -178,10 +316,10 @@ static int nand_davinci_calculate_ecc(struct mtd_info *mtd,
 static int nand_davinci_correct_data(struct mtd_info *mtd, u_char *dat,
 				     u_char *read_ecc, u_char *calc_ecc)
 {
-	struct nand_chip *chip = mtd->priv;
-	u_int32_t eccNand = read_ecc[0] | (read_ecc[1] << 8) |
+	struct d_nand_chip *chip = mtd->priv;
+	u_int32_t ecc_nand = read_ecc[0] | (read_ecc[1] << 8) |
 					  (read_ecc[2] << 16);
-	u_int32_t eccCalc = calc_ecc[0] | (calc_ecc[1] << 8) |
+	u_int32_t ecc_calc = calc_ecc[0] | (calc_ecc[1] << 8) |
 					  (calc_ecc[2] << 16);
 	u_int32_t diff = ecc_calc ^ ecc_nand;
 	if (!diff)
@@ -292,13 +430,6 @@ static inline void read_buf_dma(struct mtd_info *mtd, uint8_t *buf, int len)
 				chip->dma_active = 1;
 				davinci_start_dma(edma);
 			}
-		} else if (!(diff & (diff-1))) {
-			/* Single bit ECC error in the ECC itself,
-			   nothing to fix */
-			return 1;
-		} else {
-			/* Uncorrectable error */
-			return -1;
 		}
 	}
 	wait_for_completion(&chip->dma_complete);
@@ -461,10 +592,191 @@ static int get_dma_channels(struct mtd_info *mtd, struct d_nand_chip *chip)
 	chip->oob_bytes_before_ecc = before_ecc;
 #endif
 
+	chip->bounce_size = mtd->writesize + mtd->oobsize +
+		((chip->c.ecc.steps+2)<<2);
+	chip->bounce_base = (unsigned char *)dma_alloc_coherent(chip->parent,
+		chip->bounce_size, &chip->bounce_phys, GFP_KERNEL | GFP_DMA);
+	if (!chip->bounce_base) {
+		dev_err(chip->parent, "%s : dma_alloc_coherent fail.\n",
+			__FUNCTION__);
+		return -ENOMEM;
 	}
+	printk(KERN_INFO "**** dma_alloc v=0x%08x p=0x%08x size=0x%x\n",
+		(u32)chip->bounce_base, chip->bounce_phys, chip->bounce_size);
+
+
+	/* Acquire master DMA channel */
+	r = davinci_request_dma(DAVINCI_DMA_CHANNEL_ANY, "nand",
+		dma_cb, chip, &edma, &tcc, queue_no);
+	if (r)
+		goto out1;
+
+	tcc_oob = edma;
+	r = davinci_request_dma(DAVINCI_EDMA_PARAM_ANY, "nand_oob",
+		NULL, NULL, &edma_oob, &tcc_oob, queue_no);
+	if (r)
+		goto out2;
+
+	r = davinci_request_dma(DAVINCI_DMA_CHANNEL_ANY, "nand_ecc",
+		NULL, NULL, &edma_ecc, &tcc_ecc, queue_no);
+	if (r)
+		goto out3;
+
+	r = davinci_request_dma(DAVINCI_DMA_CHANNEL_ANY, "nand_fcr",
+		NULL, NULL, &edma_fcr, &tcc_fcr, queue_no);
+	if (r)
+		goto out4;
+
+	r = davinci_request_dma(DAVINCI_EDMA_PARAM_ANY, "nand_ecc_parm",
+		NULL, NULL, &edma_ecc_parm, &tcc_ecc_parm, queue_no);
+	if (r)
+		goto out5;
+
+	r = davinci_request_dma(DAVINCI_EDMA_PARAM_ANY, "nand_fcr_parm",
+		NULL, NULL, &edma_fcr_parm, &tcc_fcr_parm, queue_no);
+	if (r)
+		goto out6;
+
+#ifdef USE_DMA_FOR_WRITE
+	tcc_oob_write = edma;
+	r = davinci_request_dma(DAVINCI_EDMA_PARAM_ANY, "nand_oob_write",
+		NULL, NULL, &edma_oob_write, &tcc_oob_write, queue_no);
+	if (r)
+		goto out7;
+	chip->edma_oob_write = edma_oob_write;
+#endif
+
+	chip->edma = edma;
+	chip->edma_oob = edma_oob;
+	chip->edma_ecc = edma_ecc;
+	chip->edma_fcr = edma_fcr;
+	chip->edma_ecc_parm = edma_ecc_parm;
+	chip->edma_fcr_parm = edma_fcr_parm;
+	chip->bounce_oob = chip->bounce_base + mtd->writesize;
+	chip->bounce_ecc = (unsigned int *)(chip->bounce_oob + mtd->oobsize);
+	chip->bounce_fcr = chip->bounce_ecc + chip->c.ecc.steps;
+/* Intialize main page transfer,
+ * EMIF does not support constant addressing mode (don't use FIFO)
+ */
+	davinci_set_dma_src_params(edma, chip->mem_start, INCR, W32BIT);
+	davinci_set_dma_src_index(edma, 0, 0);
+	davinci_set_dma_dest_params(edma, chip->bounce_phys, INCR, W32BIT);
+	davinci_set_dma_dest_index(edma, 8, eccsize);
+	davinci_set_dma_transfer_params(edma, 8, eccsize>>3,
+		chip->c.ecc.steps, eccsize>>3, ABSYNC);
+	davinci_dma_link_lch(edma, edma_oob);
+	davinci_get_dma_params(edma, &chip->parm_edma);
+	tcc = (chip->parm_edma.opt>>12) & 0x3f;
+	chip->parm_edma.opt &= ~(TCCMODE | TCINTEN | ITCINTEN | TCC);
+	chip->parm_edma.opt |= (TCCHEN | ITCCHEN) | ((edma_ecc & 0x3f)<<12);
+	davinci_set_dma_params(edma, &chip->parm_edma);
+
+/* Intialize oob transfer */
+	davinci_set_dma_src_params(edma_oob, chip->mem_start, INCR, W32BIT);
+	davinci_set_dma_src_index(edma_oob, 0, 0);
+	davinci_set_dma_dest_params(edma_oob,
+			chip->bounce_phys + mtd->writesize, INCR, W32BIT);
+	davinci_set_dma_dest_index(edma_oob, 8, 0);
+	davinci_set_dma_transfer_params(edma_oob, 8, mtd->oobsize>>3,
+		1, mtd->oobsize>>3, ABSYNC);
+	davinci_get_dma_params(edma_oob, &parm);
+	parm.opt &= ~(TCCMODE | TCC);
+	parm.opt |= TCINTEN | (tcc<<12);
+	davinci_set_dma_params(edma_oob, &parm);
+
+/* Intialize ecc transfer */
+	davinci_set_dma_src_params(edma_ecc, DAVINCI_ASYNC_EMIF_CNTRL_BASE +
+			NANDF1ECC_OFFSET + (chip->chip_num<<2), INCR, W32BIT);
+	davinci_set_dma_src_index(edma_ecc, 0, 0);
+	davinci_set_dma_dest_params(edma_ecc, chip->bounce_phys +
+		mtd->writesize + mtd->oobsize, INCR, W32BIT);
+	davinci_set_dma_dest_index(edma_ecc, 4, -4 * (chip->c.ecc.steps - 1));
+	davinci_set_dma_transfer_params(edma_ecc, 4, chip->c.ecc.steps, 0xffff,
+			chip->c.ecc.steps, ASYNC);
+	davinci_dma_link_lch(edma_ecc, edma_ecc_parm);	/* link to self */
+	davinci_get_dma_params(edma_ecc, &chip->parm_ecc);
+	chip->parm_ecc.opt &= ~(TCCMODE | TCINTEN | ITCINTEN | TCC);
+	chip->parm_ecc.opt |= (TCCHEN | ITCCHEN) | ((edma_fcr & 0x3f)<<12);
+	davinci_set_dma_params(edma_ecc, &chip->parm_ecc);
+	davinci_set_dma_params(edma_ecc_parm, &chip->parm_ecc);
+
+/* Intialize fcr transfer */
+	davinci_set_dma_src_params(edma_fcr, chip->bounce_phys +
+			chip->bounce_size - 8, INCR, W32BIT);
+	davinci_set_dma_src_index(edma_fcr, 0, 0);
+	davinci_set_dma_dest_params(edma_fcr, DAVINCI_ASYNC_EMIF_CNTRL_BASE +
+			NANDFCR_OFFSET, INCR, W32BIT);
+	davinci_set_dma_dest_index(edma_fcr, 0, 0);
+	davinci_set_dma_transfer_params(edma_fcr, 4, 0xffff, 0xffff, 0xffff,
+			ASYNC);
+	davinci_dma_link_lch(edma_fcr, edma_fcr_parm);	/* link to self */
+	davinci_get_dma_params(edma_fcr, &parm);
+	parm.opt &= ~(TCCMODE | TCINTEN | ITCINTEN | TCC);
+	parm.opt |= (TCCHEN | ITCCHEN) | ((edma & 0x3f)<<12);
+	davinci_set_dma_params(edma_fcr, &parm);
+	davinci_set_dma_params(edma_fcr_parm, &parm);
+
+#ifdef USE_DMA_FOR_WRITE
+/* Intialize main page write transfer,
+ * use same opt as read
+ */
+	chip->parm_edma_write.opt	= chip->parm_edma.opt;
+	chip->parm_edma_write.src	= chip->bounce_phys;
+	chip->parm_edma_write.a_b_cnt	= ((eccsize>>3)<<16) | 8;
+	chip->parm_edma_write.dst	= chip->mem_start;
+	chip->parm_edma_write.src_dst_bidx = (0<<16) | 8;
+	chip->parm_edma_write.link_bcntrld = ((eccsize>>3)<<16);
+	/* don't know why -8 is needed, don't rely on it
+	 *  | (((edma_oob_write-8)<<5)| 0x4000);
+	 */
+	chip->parm_edma_write.src_dst_cidx = (0<<16) | eccsize;
+	chip->parm_edma_write.ccnt	= chip->c.ecc.steps;
+
+	davinci_set_dma_params(edma, &chip->parm_edma_write);
+	davinci_dma_link_lch(edma, edma_oob_write);
+	davinci_get_dma_params(edma, &chip->parm_edma_write);
+
+/* Intialize oob write transfer */
+	davinci_set_dma_src_params(edma_oob_write,
+			chip->bounce_phys + mtd->writesize, INCR, W32BIT);
+	davinci_set_dma_src_index(edma_oob_write, 8, 0);
+	davinci_set_dma_dest_params(edma_oob_write,
+			chip->mem_start, INCR, W32BIT);
+	davinci_set_dma_dest_index(edma_oob_write, 0, 0);
+	davinci_set_dma_transfer_params(edma_oob_write, 8, before_ecc>>3,
+		1, (mtd->oobsize - before_ecc)>>3, ABSYNC);
+	davinci_get_dma_params(edma_oob_write, &parm);
+	parm.opt &= ~(TCCMODE | TCC);
+	parm.opt |= TCINTEN | (tcc<<12);
+	davinci_set_dma_params(edma_oob_write, &parm);
+#endif
 	return 0;
+#ifdef USE_DMA_FOR_WRITE
+out7:
+	davinci_free_dma(edma_fcr_parm);
+#endif
+out6:
+	davinci_free_dma(edma_ecc_parm);
+out5:
+	davinci_free_dma(edma_fcr);
+out4:
+	davinci_free_dma(edma_ecc);
+out3:
+	davinci_free_dma(edma_oob);
+out2:
+	davinci_free_dma(edma);
+out1:
+	dev_err(chip->parent, "davinci_request_dma() failed with %d\n", r);
+
+	if (chip->bounce_base)
+		dma_free_coherent(NULL, chip->bounce_size,
+				(void *)chip->bounce_base, chip->bounce_phys);
+	chip->bounce_base = NULL;
+	return r;
 }
 #endif
+#endif
+
 
 /*
  * Read OOB data from flash.
@@ -600,33 +912,36 @@ static int nand_davinci_scan_bbt(struct mtd_info *mtd)
 	return ret;
 }
 
-/*
- * Read from memory register: we can read 4 bytes at a time.
- * The hardware takes care of actually reading the NAND flash.
- */
-static void nand_davinci_read_buf(struct mtd_info *mtd, uint8_t *buf, int len)
-{
-	int i;
-	int num_words = len >> 2;
-	u32 *p = (u32 *)buf;
-	struct nand_chip *chip = mtd->priv;
-
-	for (i = 0; i < num_words; i++)
-		p[i] = readl(chip->IO_ADDR_R);
-}
-
-static inline int nand_davinci_get_ready(struct mtd_info *mtd)
-{
-	return (davinci_nand_readl(NANDFSR_OFFSET) & NAND_BUSY_FLAG);
-}
-static irqreturn_t nand_isr(int irq, void *mtd_id)
+static irqreturn_t nand_isr_emwait(int irq, void *mtd_id)
 {
 	struct mtd_info *mtd = (struct mtd_info *)mtd_id;
-	if (nand_davinci_get_ready(mtd)) {
-//		printk(KERN_ERR "nand_isr ready\n");
-		complete(&cmd_complete);
-	} else {
-//		printk(KERN_ERR "nand_isr not ready\n");
+	if (nand_is_ready_emwait()) {
+		struct d_nand_chip *chip = mtd->priv;
+#ifdef USE_DMA
+		if (chip->start_dma_needed) {
+			chip->start_dma_needed = 0;
+			chip->dma_active = 1;
+			davinci_start_dma(chip->edma);
+		}
+#endif
+		complete(&chip->cmd_complete);
+	}
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t nand_isr_gpirq(int irq, void *mtd_id)
+{
+	struct mtd_info *mtd = (struct mtd_info *)mtd_id;
+	struct d_nand_chip *chip = mtd->priv;
+	if (nand_is_ready_gpirq(chip->irq)) {
+#ifdef USE_DMA
+		if (chip->start_dma_needed) {
+			chip->start_dma_needed = 0;
+			chip->dma_active = 1;
+			davinci_start_dma(chip->edma);
+		}
+#endif
+		complete(&chip->cmd_complete);
 	}
 	return IRQ_HANDLED;
 }
@@ -637,98 +952,86 @@ static irqreturn_t nand_isr(int irq, void *mtd_id)
  * allow 400ms for erase
  * allow  20ms for program
  */
-static int nand_davinci_waitfunc_with_irq(
-		struct mtd_info *mtd, struct nand_chip *chip)
+static int waitfunc_emwaitirq(struct mtd_info *mtd, struct nand_chip *_chip)
 {
-	unsigned long timeout = (chip->state == FL_ERASING)?
+	struct d_nand_chip *chip = (struct d_nand_chip *)_chip;
+	unsigned long timeout = (chip->c.state == FL_ERASING)?
 			((HZ * 400) / 1000) : ((HZ * 20) / 1000);
-	__raw_writeb(NAND_CMD_STATUS, (chip->IO_ADDR_R+MASK_CLE));
-	cmd_complete.done = 0;
-	if (!irq_enabled) {
-		enable_irq(IRQ_EMIF_EMWAIT_RISE);
-		irq_enabled = 1;
+	__raw_writeb(NAND_CMD_STATUS, (chip->c.IO_ADDR_R+MASK_CLE));
+	INIT_COMPLETION(chip->cmd_complete);
+	if (!chip->irq_enabled) {
+		enable_irq(chip->irq);
+		chip->irq_enabled = 1;
 	}
-	if (!nand_davinci_get_ready(mtd)) {
-		if (wait_for_completion_timeout(&cmd_complete, timeout)==0) {
+	if (!nand_is_ready_emwait()) {
+		if (wait_for_completion_timeout(&chip->cmd_complete,
+				timeout) == 0)
 			printk(KERN_ERR "waitfunc timeout\n");
-		}
 	}
-	return __raw_readb(chip->IO_ADDR_R);
+	return __raw_readb(chip->c.IO_ADDR_R);
 }
-static int nand_davinci_dev_ready_with_irq(struct mtd_info *mtd)
+static int waitfunc_gpirq(struct mtd_info *mtd, struct nand_chip *_chip)
 {
-#if 1
-	if (irq_enabled) {
-		disable_irq(IRQ_EMIF_EMWAIT_RISE);
-		irq_enabled = 0;
+	struct d_nand_chip *chip = (struct d_nand_chip *)_chip;
+	unsigned long timeout = (chip->c.state == FL_ERASING)?
+			((HZ * 400) / 1000) : ((HZ * 20) / 1000);
+	__raw_writeb(NAND_CMD_STATUS, (chip->c.IO_ADDR_R+MASK_CLE));
+	INIT_COMPLETION(chip->cmd_complete);
+	if (!chip->irq_enabled) {
+		enable_irq(chip->irq);
+		chip->irq_enabled = 1;
 	}
-	return nand_davinci_get_ready(mtd);
-#else
-	cmd_complete.done = 0;
-	if (!nand_davinci_get_ready(mtd)) {
-		if (wait_for_completion_timeout(&cmd_complete, 2)==0) {
-			printk(KERN_ERR "dev_ready timeout\n");
-		}
-		return nand_davinci_get_ready(mtd);
+	if (!nand_is_ready_gpirq(chip->irq)) {
+		if (wait_for_completion_timeout(&chip->cmd_complete,
+				timeout) == 0)
+			printk(KERN_ERR "waitfunc timeout\n");
 	}
-	return 1;
-#endif
+	return __raw_readb(chip->c.IO_ADDR_R);
 }
+
 /*
  * Check hardware register for wait status. Returns 1 if device is ready,
  * 0 if it is still busy.
  */
-static int nand_davinci_dev_ready(struct mtd_info *mtd)
+static int dev_ready_emwait(struct mtd_info *mtd)
 {
-	return (davinci_nand_readl(NANDFSR_OFFSET) & NAND_BUSY_FLAG);
+	return nand_is_ready_emwait();
 }
-
-static void nand_davinci_set_eccsize(struct nand_chip *chip)
+#if 0
+static int dev_ready_emwaitirq(struct mtd_info *mtd)
 {
-	chip->ecc.size = 256;
-
-#ifdef CONFIG_NAND_FLASH_HW_ECC
-	switch (chip->ecc.mode) {
-	case NAND_ECC_HW12_2048:
-		chip->ecc.size = 2048;
-		break;
-
-	case NAND_ECC_HW3_512:
-	case NAND_ECC_HW6_512:
-	case NAND_ECC_HW8_512:
-	chip->ecc.size = 512;
-		break;
-
-	case NAND_ECC_HW3_256:
-	default:
-		/* do nothing */
-		break;
+	return nand_is_ready_emwait();
+}
+static int dev_ready_gpirq(struct mtd_info *mtd)
+{
+	struct d_nand_chip *chip = (struct d_nand_chip *)(mtd->priv);
+	return nand_is_ready_gpirq(chip->irq);
+}
+#else
+static int dev_ready_emwaitirq(struct mtd_info *mtd)
+{
+	struct d_nand_chip *chip = (struct d_nand_chip *)(mtd->priv);
+	if (chip->irq_enabled) {
+		disable_irq(chip->irq);
+		chip->irq_enabled = 0;
 	}
-#endif
+	return nand_is_ready_emwait();
 }
-
-static void nand_davinci_set_eccbytes(struct nand_chip *chip)
+static int dev_ready_gpirq(struct mtd_info *mtd)
 {
-	chip->ecc.bytes = 3;
-
-#ifdef CONFIG_NAND_FLASH_HW_ECC
-	switch (chip->ecc.mode) {
-	case NAND_ECC_HW12_2048:
-		chip->ecc.bytes += 4;
-	case NAND_ECC_HW8_512:
-		chip->ecc.bytes += 2;
-	case NAND_ECC_HW6_512:
-		chip->ecc.bytes += 3;
-	case NAND_ECC_HW3_512:
-	case NAND_ECC_HW3_256:
-	default:
-		/* do nothing */
-		break;
+	struct d_nand_chip *chip = (struct d_nand_chip *)(mtd->priv);
+	if (chip->irq_enabled) {
+		disable_irq(chip->irq);
+		chip->irq_enabled = 0;
 	}
-#endif
+	return nand_is_ready_gpirq(chip->irq);
 }
+#endif
 
-static void __devinit nand_davinci_flash_init(void)
+
+/* chip_num: 0 - cs2, 1 - cs3, 2 - cs4, 3 - cs5 */
+static void __devinit nand_davinci_flash_init(unsigned int chip_num,
+		int width16, int platform_timings)
 {
 	u32 regval, tmp;
 
@@ -747,9 +1050,13 @@ static void __devinit nand_davinci_flash_init(void)
 		       "by bootloader.\n", regval, tmp);
 	}
 
+	/* We don't care what the polarity of EMWAIT is because
+	 * we don't use extended wait
+	 * Let a driver that cares control it.
 	regval = davinci_nand_readl(AWCCR_OFFSET);
 	regval |= 0x10000000;
 	davinci_nand_writel(regval, AWCCR_OFFSET);
+	 */
 
 	/*------------------------------------------------------------------*
 	 *  NAND FLASH CHIP TIMEOUT @ 459 MHz                               *
@@ -758,27 +1065,21 @@ static void __devinit nand_davinci_flash_init(void)
 	 *  AEMIF.CLK period = 1/76.5 MHz = 13.1 ns                         *
 	 *                                                                  *
 	 *------------------------------------------------------------------*/
-	regval = 0
-		| (0 << 31)           /* selectStrobe */
-		| (0 << 30)           /* extWait */
-		| (1 << 26)           /* writeSetup      10 ns */
-		| (3 << 20)           /* writeStrobe     40 ns */
-		| (1 << 17)           /* writeHold       10 ns */
-		| (0 << 13)           /* readSetup       10 ns */
-		| (3 << 7)            /* readStrobe      60 ns */
-		| (0 << 4)            /* readHold        10 ns */
-		| (3 << 2)            /* turnAround      ?? ns */
-		| (0 << 0)            /* asyncSize       8-bit bus */
-		;
+	platform_timings = (platform_timings & ~1) | width16;
 	tmp = davinci_nand_readl(A1CR_OFFSET);
-	if (tmp != regval) {
-		printk(KERN_WARNING "Warning: NAND config: Set A1CR " \
-		       "reg to 0x%08x, was 0x%08x, should be done by " \
-		       "bootloader.\n", regval, tmp);
-		davinci_nand_writel(regval, A1CR_OFFSET); /* 0x0434018C */
+	if (tmp != platform_timings) {
+		if (chip_num == 0) {
+			printk(KERN_WARNING "Warning: NAND config: Set A1CR " \
+			    "reg to 0x%08x, was 0x%08x, should be done by " \
+			    "bootloader.\n", platform_timings, tmp);
+		}
+		davinci_nand_writel(platform_timings,
+				A1CR_OFFSET + (chip_num<<2));
 	}
 
-	davinci_nand_writel(0x00000101, NANDFCR_OFFSET);
+	regval = davinci_nand_readl(NANDFCR_OFFSET);
+	regval |= 1<<chip_num;
+	davinci_nand_writel(regval, NANDFCR_OFFSET);
 }
 
 /*
@@ -786,129 +1087,214 @@ static void __devinit nand_davinci_flash_init(void)
  */
 int __devinit nand_davinci_probe(struct platform_device *pdev)
 {
-	struct flash_platform_data *pdata = pdev->dev.platform_data;
+	struct davinci_flash_platform_data *pdata = pdev->dev.platform_data;
 	struct resource		  *res = pdev->resource;
-	struct nand_chip     	  *chip;
+	struct d_nand_chip     	  *chip;
 	struct device        	  *dev = NULL;
 	u32                  	  nand_rev_code;
+	struct nand_davinci_info *info;
 #ifdef CONFIG_MTD_CMDLINE_PARTS
 	const char             	  *master_name;
 	int 		     	  mtd_parts_nb = 0;
 	struct mtd_partition 	  *mtd_parts = 0;
 #endif
 
-	nand_clock = clk_get(dev, "AEMIFCLK");
-	if (IS_ERR(nand_clock)) {
-		printk(KERN_ERR "Error %ld getting AEMIFCLK clock?\n",
-		       PTR_ERR(nand_clock));
-		return -1;
-	}
+	unsigned int chip_num;
+	int width16;
+	int irq = -1;
+	unsigned int mem_start = 0;
+	unsigned long mem_size = 0;
+	int i;
+	int err;
 
-	clk_enable(nand_clock);
+	for (i = 0; i < pdev->num_resources; i++) {
+		if (res->flags == IORESOURCE_MEM) {
+			mem_start = res->start;
+			mem_size = res->end - mem_start + 1;
+		} else if (res->flags == IORESOURCE_IRQ) {
+			irq = res->start;
+		}
+		res++;
+	}
+	/* 0 - cs2, 1 - cs3, 2 - cs4, 3 - cs5 */
+	chip_num = (mem_start-DAVINCI_ASYNC_EMIF_DATA_CE0_BASE)>>25;
+	if (chip_num > 3)
+		return -ENXIO;
 
 	/* Allocate memory for MTD device structure and private data */
-	nand_davinci_mtd = kmalloc(sizeof(struct mtd_info) +
-				   sizeof(struct nand_chip), GFP_KERNEL);
-
-	if (!nand_davinci_mtd) {
+	info = kzalloc(sizeof(struct nand_davinci_info), GFP_KERNEL);
+	if (!info) {
 		printk(KERN_ERR "Unable to allocate davinci NAND MTD device " \
 		       "structure.\n");
-		clk_disable(nand_clock);
 		return -ENOMEM;
 	}
 
 	/* Get pointer to private data */
-	chip = (struct nand_chip *) (&nand_davinci_mtd[1]);
-
-	/* Initialize structures */
-	memset((char *)nand_davinci_mtd, 0, sizeof(struct mtd_info));
-	memset((char *)chip, 0, sizeof(struct nand_chip));
-
+	chip = &info->chip;
 	/* Link the private data with the MTD structure */
-	nand_davinci_mtd->priv = chip;
+	info->mtd.priv = chip;
+	if (!request_mem_region(mem_start, mem_size, "nand")) {
+		printk(KERN_ERR "request_mem_region failed 0x%x-0x%lx\n",
+			mem_start, mem_start+mem_size-1);
+		err = -EBUSY;
+		goto out_free_info;
+	}
+	chip->c.IO_ADDR_R = ioremap(mem_start, mem_size);
+	if (chip->c.IO_ADDR_R == NULL) {
+		printk(KERN_ERR "DaVinci NAND: ioremap failed.\n");
+		err = -ENOMEM;
+		goto out_release_mem_region;
+	}
+	init_completion(&chip->cmd_complete);
+	chip->mem_start = mem_start;
+	chip->mem_size = mem_size;
+	chip->chip_num = chip_num;
+	chip->irq = -1;
+	chip->c.options = pdata->options;
+	chip->parent = &pdev->dev;
+
+	info->clk = clk_get(dev, "AEMIFCLK");
+	if (IS_ERR(info->clk)) {
+		printk(KERN_ERR "Error %ld getting AEMIFCLK clock?\n",
+		       PTR_ERR(info->clk));
+		err = -ENXIO;
+		goto out_iounmap;
+	}
+
+	clk_enable(info->clk);
 
 	nand_rev_code = davinci_nand_readl(NRCSR_OFFSET);
 
 	printk("DaVinci NAND Controller rev. %d.%d\n",
 	       (nand_rev_code >> 8) & 0xff, nand_rev_code & 0xff);
 
-	nand_vaddr = ioremap(res->start, res->end - res->start);
-	if (nand_vaddr == NULL) {
-		printk(KERN_ERR "DaVinci NAND: ioremap failed.\n");
-		clk_disable(nand_clock);
-		kfree(nand_davinci_mtd);
-		return -ENOMEM;
-	}
 
-	chip->IO_ADDR_R   = (void __iomem *)nand_vaddr;
-	chip->IO_ADDR_W   = (void __iomem *)nand_vaddr;
-	chip->chip_delay  = 0;
-	chip->select_chip = nand_davinci_select_chip;
-	chip->options     = 0;
-	chip->ecc.mode	  = DAVINCI_NAND_ECC_MODE;
+	chip->c.IO_ADDR_W   = chip->c.IO_ADDR_R;
+	chip->c.chip_delay  = 0;
+	chip->c.select_chip = nand_davinci_select_chip;
+	chip->c.ecc.mode	  = DAVINCI_NAND_ECC_MODE;
 
 	/* Set ECC size and bytes */
-	nand_davinci_set_eccsize(chip);
-	nand_davinci_set_eccbytes(chip);
+	chip->c.ecc.size = DAVINCI_NAND_ECC_SIZE;
+	chip->c.ecc.bytes = DAVINCI_NAND_ECC_BYTES;
 
 	/* Set address of hardware control function */
-	chip->cmd_ctrl  = nand_davinci_hwcontrol;
-	chip->dev_ready = nand_davinci_dev_ready;
+	chip->c.cmd_ctrl  = nand_davinci_hwcontrol;
+	chip->c.dev_ready = dev_ready_emwait;
 
 #ifdef CONFIG_NAND_FLASH_HW_ECC
-	chip->ecc.calculate = nand_davinci_calculate_ecc;
-	chip->ecc.correct   = nand_davinci_correct_data;
-	chip->ecc.hwctl     = nand_davinci_enable_hwecc;
+	chip->c.ecc.calculate = nand_davinci_calculate_ecc;
+	chip->c.ecc.correct   = nand_davinci_correct_data;
+	chip->c.ecc.hwctl     = nand_davinci_enable_hwecc;
 #endif
 
 	/* Speed up the read buffer */
-	chip->read_buf      = nand_davinci_read_buf;
+	chip->c.read_buf      = nand_davinci_read_buf;
+	chip->c.write_buf     = nand_davinci_write_buf;
 
 	/* Speed up the creation of the bad block table */
-	chip->scan_bbt      = nand_davinci_scan_bbt;
+	chip->c.scan_bbt      = nand_davinci_scan_bbt;
 
-	init_completion(&cmd_complete);
-	if (request_irq(IRQ_EMIF_EMWAIT_RISE, &nand_isr, 0,
-			"davinci_nand", nand_davinci_mtd)) {
-		printk(KERN_ERR "nand: request_irq failed, irq:%i\n",
-				IRQ_EMIF_EMWAIT_RISE);
-	} else {
-		chip->dev_ready = nand_davinci_dev_ready_with_irq;
-		chip->waitfunc = nand_davinci_waitfunc_with_irq;
-		irq_enabled = 1;
+	if (irq >= 0) {
+		if (request_irq(irq, (irq == IRQ_EMIF_EMWAIT_RISE)?
+				&nand_isr_emwait : &nand_isr_gpirq,
+				0, "davinci_nand", &info->mtd)) {
+			printk(KERN_ERR "nand: request_irq failed, irq:%i\n",
+				irq);
+		} else {
+			if (irq == IRQ_EMIF_EMWAIT_RISE) {
+				chip->c.dev_ready = dev_ready_emwaitirq;
+				chip->c.waitfunc = waitfunc_emwaitirq;
+			} else {
+				chip->c.dev_ready = dev_ready_gpirq;
+				chip->c.waitfunc = waitfunc_gpirq;
+			}
+			chip->irq_enabled = 1;
+			chip->irq = irq;
+		}
 	}
-	nand_davinci_flash_init();
 
-	nand_davinci_mtd->owner = THIS_MODULE;
+	info->mtd.owner = THIS_MODULE;
+
+	width16 = (chip->c.options & NAND_BUSWIDTH_16) ? 1 : 0;
+	nand_davinci_flash_init(chip_num, width16, pdata->timings);
 
 	/* Scan to find existence of the device */
-	if (nand_scan(nand_davinci_mtd, 1)) {
-		printk(KERN_ERR "Chip Select is not set for NAND\n");
-		clk_disable(nand_clock);
-		kfree(nand_davinci_mtd);
-		return -ENXIO;
+	if (nand_scan(&info->mtd, 1)) {
+		width16 ^= 1;
+		nand_davinci_flash_init(chip_num, width16, pdata->timings);
+		if (nand_scan(&info->mtd, 1)) {
+			printk(KERN_ERR "Chip Select is not set for NAND\n");
+			err = -ENXIO;
+			goto out_clk_disable;
+		} else {
+			printk(KERN_ERR "!!!platform option data does not "
+					"match chip width\n");
+		}
+	}
+#define BOOTCFG 0x01C40014
+	if (chip_num == 0) {
+		/* grab default width from EM_WIDTH */
+		int w = (davinci_readl(BOOTCFG)>>5) & 1;
+		if (width16 != w) {
+			printk(KERN_ERR "!!EM_WIDTH pin does not match chip "
+			  "width, this will prevent booting from nand\n");
+		}
 	}
 
+#ifdef CONFIG_NAND_FLASH_HW_ECC
+#ifdef USE_DMA
+	chip->edma = -1;
+	chip->edma_oob = -1;
+	chip->edma_ecc = -1;
+	chip->edma_fcr = -1;
+	chip->edma_ecc_parm = -1;
+	chip->edma_fcr_parm = -1;
+#ifdef USE_DMA_FOR_WRITE
+	chip->edma_oob_write = -1;
+#endif
+	init_completion(&chip->dma_complete);
+	if (get_dma_channels(&info->mtd, chip) == 0) {
+		chip->c.ecc.read_page = read_page_dma;
+#ifdef USE_DMA_FOR_WRITE
+		chip->c.ecc.write_page = write_page_dma;
+#endif
+		printk(KERN_INFO "nand read DMA active\n");
+	}
+#endif
+#endif
 	/* Register the partitions */
-	add_mtd_partitions(nand_davinci_mtd, pdata->parts, pdata->nr_parts);
+	add_mtd_partitions(&info->mtd, pdata->parts, pdata->nr_parts);
 
 #ifdef CONFIG_MTD_CMDLINE_PARTS
-	/* Set nand_davinci_mtd->name = 0 temporarily */
-	master_name = nand_davinci_mtd->name;
-	nand_davinci_mtd->name = (char *)0;
+	/* Set info->mtd.name = 0 temporarily */
+	master_name = info->mtd.name;
+	info->mtd.name = NULL;
 
-	/* nand_davinci_mtd->name == 0, means: don't bother checking
+	/* info->mtd.name == 0, means: don't bother checking
 	   <mtd-id> */
-	mtd_parts_nb = parse_mtd_partitions(nand_davinci_mtd, part_probes,
+	mtd_parts_nb = parse_mtd_partitions(&info->mtd, part_probes,
 					    &mtd_parts, 0);
 
-	/* Restore nand_davinci_mtd->name */
-	nand_davinci_mtd->name = master_name;
+	/* Restore info->mtd.name */
+	info->mtd.name = master_name;
 
-	add_mtd_partitions(nand_davinci_mtd, mtd_parts, mtd_parts_nb);
+	add_mtd_partitions(&info->mtd, mtd_parts, mtd_parts_nb);
 #endif
-
+	dev_set_drvdata(&pdev->dev, info);
+	printk(KERN_INFO "nand options=%x\n", chip->c.options);
 	return 0;
+
+out_clk_disable:
+	clk_disable(info->clk);
+out_iounmap:
+	iounmap(chip->c.IO_ADDR_R);
+out_release_mem_region:
+	release_mem_region(mem_start, mem_size);
+out_free_info:
+	kfree(info);
+	return err;
+
 }
 
 /*
@@ -916,17 +1302,46 @@ int __devinit nand_davinci_probe(struct platform_device *pdev)
  */
 static int nand_davinci_remove(struct platform_device *pdev)
 {
-	clk_disable(nand_clock);
-
-	if (nand_vaddr)
-		iounmap(nand_vaddr);
-
-	/* Release resources, unregister device */
-	nand_release(nand_davinci_mtd);
-
-	/* Free the MTD device structure */
-	kfree(nand_davinci_mtd);
-
+	struct nand_davinci_info *info = dev_get_drvdata(&pdev->dev);
+	dev_set_drvdata(&pdev->dev, NULL);
+	if (info) {
+		/* Release resources, unregister device */
+		clk_disable(info->clk);
+		if (info->chip.irq >= 0)
+			free_irq(info->chip.irq, &info->mtd);
+#ifdef USE_DMA
+		if (info->chip.edma >= 0)
+			davinci_free_dma(info->chip.edma);
+		if (info->chip.edma_oob >= 0)
+			davinci_free_dma(info->chip.edma_oob);
+		if (info->chip.edma_ecc >= 0)
+			davinci_free_dma(info->chip.edma_ecc);
+		if (info->chip.edma_fcr >= 0)
+			davinci_free_dma(info->chip.edma_fcr);
+		if (info->chip.edma_ecc_parm >= 0)
+			davinci_free_dma(info->chip.edma_ecc_parm);
+		if (info->chip.edma_fcr_parm >= 0)
+			davinci_free_dma(info->chip.edma_fcr_parm);
+#ifdef USE_DMA_FOR_WRITE
+		if (info->chip.edma_oob_write >= 0)
+			davinci_free_dma(info->chip.edma_oob_write);
+#endif
+		if (info->chip.bounce_base)
+			dma_free_coherent(NULL, info->chip.bounce_size,
+					(void *)info->chip.bounce_base,
+					info->chip.bounce_phys);
+#endif
+		if (info->chip.c.IO_ADDR_R) {
+			iounmap(info->chip.c.IO_ADDR_R);
+			release_mem_region(info->chip.mem_start,
+					info->chip.mem_size);
+		}
+		nand_release(&info->mtd);
+		/* Free the MTD device structure */
+		kfree(info);
+	} else {
+		printk(KERN_ERR "Info is NULL\n");
+	}
 	return 0;
 }
 

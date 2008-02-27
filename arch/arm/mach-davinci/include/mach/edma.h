@@ -549,6 +549,7 @@ void davinci_dma_unchain_lch(int lch_head, int lch_queue);
  *
  *****************************************************************************/
 void davinci_free_dma(int lch);
+void davinci_clean_channel(int ch_no);
 
 /**
  * davinci_dma_getposition - returns the current transfer points
