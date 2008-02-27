@@ -107,15 +107,30 @@ struct mtd_partition davinci_evm_nandflash_partition[] = {
 	}
 };
 
-static struct flash_platform_data davinci_evm_nandflash_data = {
+static struct davinci_flash_platform_data davinci_evm_nandflash_data = {
+	.timings	= 0
+	| (0 << 31)	/* selectStrobe */
+	| (0 << 30)	/* extWait */
+	| (1 << 26)	/* writeSetup	20 ns */
+	| (3 << 20)	/* writeStrobe	40 ns */
+	| (1 << 17)	/* writeHold	20 ns */
+	| (0 << 13)	/* readSetup	10 ns */
+	| (3 << 7)	/* readStrobe	40 ns */
+	| (0 << 4)	/* readHold	10 ns */
+	| (3 << 2),	/* turnAround	40 ns */
 	.parts		= davinci_evm_nandflash_partition,
 	.nr_parts	= ARRAY_SIZE(davinci_evm_nandflash_partition),
 };
 
-static struct resource davinci_evm_nandflash_resource = {
-	.start		= DAVINCI_ASYNC_EMIF_DATA_CE0_BASE,
-	.end		= DAVINCI_ASYNC_EMIF_DATA_CE0_BASE + SZ_16M - 1,
-	.flags		= IORESOURCE_MEM,
+static struct resource davinci_evm_nandflash_resource[] = {
+	{
+		.start	= DAVINCI_ASYNC_EMIF_DATA_CE0_BASE,
+		.end	= DAVINCI_ASYNC_EMIF_DATA_CE0_BASE + SZ_16K - 1,
+		.flags	= IORESOURCE_MEM,
+	}, {
+		.start	= IRQ_EMIF_EMWAIT_RISE,
+		.flags	= IORESOURCE_IRQ,
+	},
 };
 
 static struct platform_device davinci_evm_nandflash_device = {
@@ -123,9 +138,10 @@ static struct platform_device davinci_evm_nandflash_device = {
 	.id		= 0,
 	.dev		= {
 		.platform_data	= &davinci_evm_nandflash_data,
+		.coherent_dma_mask	= DMA_32BIT_MASK,
 	},
-	.num_resources	= 1,
-	.resource	= &davinci_evm_nandflash_resource,
+	.num_resources	= 2,
+	.resource	= davinci_evm_nandflash_resource,
 };
 #endif
 

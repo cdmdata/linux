@@ -42,4 +42,13 @@
 
 #define NAND_BUSY_FLAG		0x01
 
+struct davinci_flash_platform_data {
+	unsigned int	options;
+	unsigned int	timings;
+	char		*name;
+	struct mtd_partition *parts;
+	unsigned int	nr_parts;
+	char		*type;
+};
+
 #endif	/* __ARCH_ARM_DAVINCI_NAND_H */

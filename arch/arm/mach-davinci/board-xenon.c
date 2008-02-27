@@ -153,7 +153,17 @@ static struct mtd_partition nand_partitions[] = {
 	}
 };
 
-static struct flash_platform_data nand_data = {
+static struct davinci_flash_platform_data nand_data = {
+	.timings	= 0
+	| (0 << 31)	/* selectStrobe */
+	| (0 << 30)	/* extWait */
+	| (1 << 26)	/* writeSetup	20 ns */
+	| (3 << 20)	/* writeStrobe	40 ns */
+	| (1 << 17)	/* writeHold	20 ns */
+	| (0 << 13)	/* readSetup	10 ns */
+	| (2 << 7)	/* readStrobe	30 ns */
+	| (0 << 4)	/* readHold	10 ns */
+	| (3 << 2),	/* turnAround	10 ns */
 	.parts		= nand_partitions,
 	.nr_parts	= ARRAY_SIZE(nand_partitions),
 };
@@ -163,7 +173,7 @@ static struct resource nand_resources[] = {
 		.start	= DAVINCI_ASYNC_EMIF_DATA_CE0_BASE,
 		.end	= DAVINCI_ASYNC_EMIF_DATA_CE0_BASE + SZ_16K - 1,
 		.flags	= IORESOURCE_MEM,
-	},{
+	}, {
 		.start	= IRQ_EMIF_EMWAIT_RISE, /* IRQ_GPIO(18), IRQ_EMIF_EMWAIT_RISE */
 		.flags	= IORESOURCE_IRQ,
 	},
@@ -173,7 +183,8 @@ static struct platform_device nand_device = {
 	.name		= "davinci_nand",
 	.id		= 0,
 	.dev		= {
-		.platform_data	= &nand_data
+		.platform_data	= &nand_data,
+		.coherent_dma_mask	= DMA_32BIT_MASK,
 	},
 
 	.num_resources	= 2,
