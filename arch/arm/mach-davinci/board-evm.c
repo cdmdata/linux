@@ -31,12 +31,13 @@
 
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
-#include <asm/mach/flash.h>
 
 #include <mach/common.h>
 #include <mach/board.h>
 #include <mach/emac.h>
 #include <mach/i2c.h>
+#include <mach/psc.h>
+#include <mach/nand.h>
 
 /* other misc. init functions */
 void __init davinci_psc_init(void);
