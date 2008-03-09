@@ -88,6 +88,7 @@ struct spi_davinci_device {
         struct spiRegs* pSpi;
 };
 static struct spi_davinci_device spiDev;
+static int initted = 0 ;
 
 int spi_tlv320aic23_write_value(u8 reg, u16 value)
 {
@@ -183,5 +184,19 @@ int spi_tlv320aic23_init(void)
 		return status;
 	}
 	spi_davinci_reset(&spiDev);
+        initted = 1 ;
 	return 0;
+}
+
+extern void spi_tlv320aic23_shutdown(void)
+{
+	if(initted){
+	   	struct clk * spi_clock;
+	   	spi_clock = clk_get (0, "SPICLK");
+		if (!IS_ERR(spi_clock))
+			clk_disable (spi_clock);
+
+		release_region((int)spiDev.pSpi, 0x80);
+                free_irq(IRQ_SPINT0,&spiDev);
+	}
 }
