@@ -14,4 +14,7 @@ snd-pxa2xx-pcm-objs		:= pxa2xx-pcm.o
 obj-$(CONFIG_SND_PXA2XX_AC97)	+= snd-pxa2xx-ac97.o
 snd-pxa2xx-ac97-objs		:= pxa2xx-ac97.o
 
+obj-$(CONFIG_SND_DAVINCI_AIC23)	+= snd-davinci-aic23.o
+snd-davinci-aic23-objs		:= davinci-aic23.o davinci-spi.o
+
 obj-$(CONFIG_SND) += omap/
