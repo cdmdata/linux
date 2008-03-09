@@ -199,6 +199,11 @@ static struct platform_device rtc_dev = {
 	.id		= -1,
 };
 
+static struct platform_device audio_dev = {
+	.name		= "davinci-aic23",
+	.id		= -1,
+};
+
 static struct platform_device *davinci_devices[] __initdata = {
 	&nand_device,
 #if defined(CONFIG_FB_DAVINCI) || defined(CONFIG_FB_DAVINCI_MODULE)
@@ -208,6 +213,7 @@ static struct platform_device *davinci_devices[] __initdata = {
 	&usb_dev,
 #endif
 	&rtc_dev,
+        &audio_dev
 };
 
 
