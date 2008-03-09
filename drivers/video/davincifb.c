@@ -112,6 +112,8 @@ const DISPLAYCFG stdDisplayTypes[] = {
 static char *options = "";
 
 module_param(options, charp, S_IRUGO);
+static int dmach = -1 ;
+static int dmatcc = TCC_ANY ;
 
 /*
  * Globals
@@ -707,11 +709,10 @@ static int davincifb_set_attr_blend(struct fb_fillrect *r)
 	return 0;
 }
 
-static DECLARE_WAIT_QUEUE_HEAD(dma_wait);
-static void dav_dma_callback(int lch, unsigned short ch_status, void *data)
+static struct completion dma_completion ;
+static void davincifb_dma_callback(int lch, unsigned short ch_status, void *data)
 {
-//	printk( KERN_ERR "%s: %u\n", __FUNCTION__, ch_status );
-	wake_up_interruptible(&dma_wait);
+	complete(&dma_completion);
 }
 
 unsigned long* gDavinciIRam;
@@ -722,7 +723,6 @@ static int davincifb_fill_rect(struct fb_info *info, struct fb_fillrect *r)
 {
 	struct fb_var_screeninfo *var = &info->var;
 	edmacc_paramentry_regs regs ;
-	int dmach, tcc=0 ;
 	int rval ;
 	unsigned long color = 0 ;
 
@@ -731,7 +731,7 @@ static int davincifb_fill_rect(struct fb_info *info, struct fb_fillrect *r)
 	if (r->dy + r->height > var->yres_virtual)
 		return -EINVAL;
 
-	regs.opt = 0x0010020D ;    // OPT:  transfer complete int enable, static, AB-synchronized, fifo 32-bits
+	regs.opt = 0x0010020D | dmatcc ;    // OPT:  transfer complete int enable, static, AB-synchronized, fifo 32-bits
 	regs.src = DAVINCI_IRAM_BASE ;
 	regs.src_dst_bidx = (info->fix.line_length<<16) | 4 ;
 	regs.link_bcntrld = 0x0000ffff ; // BCNT Reload 0, LINK invalid
@@ -758,28 +758,13 @@ static int davincifb_fill_rect(struct fb_info *info, struct fb_fillrect *r)
 		default:
 			printk( KERN_ERR "%s: unsupported bit depth %d\n", __FUNCTION__, var->bits_per_pixel );
         }
-	if( 0 != ( rval = davinci_request_dma(DAVINCI_DMA_CHANNEL_ANY, "davincifb", dav_dma_callback, 0, &dmach, &tcc, EVENTQ_DEFAULT)) ){
-		printk( KERN_ERR "%s: error %d requesting DMA\n", __FUNCTION__, rval );
-		return -EFAULT ;
-	}
 
 	*gDavinciIRam = color ;
 
 //	printk( KERN_ERR  "%s: allocated dma channel %d\n", __FUNCTION__, dmach );
 	davinci_set_dma_params(dmach, &regs);
-	{
-		DEFINE_WAIT(wait);
-		prepare_to_wait(&dma_wait,&wait,TASK_INTERRUPTIBLE);
-
-		rval = davinci_start_dma(dmach);
-//		printk( KERN_ERR  "%s: dma %d\n", __FUNCTION__, rval );
-
-		schedule();
-
-		finish_wait(&dma_wait,&wait);
-	} // limit scope of wait
-
-	davinci_free_dma(dmach);
+	rval = davinci_start_dma(dmach);
+	wait_for_completion_interruptible(&dma_completion);
 
 	return rval ;
 }
@@ -2617,6 +2602,11 @@ int davincifb_remove(struct device *dev)
 		mem_release(dm->vid1);
 	}
 
+        if( 0 <= dmach ){
+           davinci_free_dma(dmach);
+           printk( KERN_ERR "%s: released dma channel %d\n", __FUNCTION__, dmach );
+           dmach = -1 ;
+        }
 	/* Turn OFF the output device */
 	dm->output_device_config();
 	vpbe_enable_venc(0);
@@ -2640,6 +2630,8 @@ int davincifb_remove(struct device *dev)
 int vpbe_davincifb_probe(struct device *dev)
 {
 	struct platform_device *pdev;
+        int rval ;
+
 //	dma_addr_t vbase = VIDEO_FB_BASE;
 
 	pdev = to_platform_device(dev);
@@ -2682,6 +2674,15 @@ int vpbe_davincifb_probe(struct device *dev)
 	init_waitqueue_head(&dm->resizer_wait);
 #endif
 	dm->timeout = HZ / 5;
+
+        dmatcc = TCC_ANY ;
+	if( 0 != ( rval = davinci_request_dma(DAVINCI_DMA_CHANNEL_ANY, "davincifb", davincifb_dma_callback, 0, &dmach, &dmatcc, EVENTQ_1)) ){
+		printk( KERN_ERR "%s: error %d requesting DMA\n", __FUNCTION__, rval );
+		goto release_mmio;
+	}
+        printk( KERN_ERR "%s: allocated dma channel %d, tcc %d\n", __FUNCTION__, dmach, dmatcc );
+        dmatcc <<= 12 ;
+        init_completion(&dma_completion);
 
 /*
  *	WINDOW SETUP:	
