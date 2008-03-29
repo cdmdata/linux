@@ -964,7 +964,7 @@ CONFIG_USB_MON=y
 # USB Gadget Support
 #
 # CONFIG_USB_GADGET is not set
-CONFIG_MMC=y
+CONFIG_MMC=m
 # CONFIG_MMC_DEBUG is not set
 # CONFIG_MMC_UNSAFE_RESUME is not set
 
@@ -978,7 +978,7 @@ CONFIG_MMC_BLOCK_BOUNCE=y
 #
 # MMC/SD Host Controller Drivers
 #
-CONFIG_MMC_DAVINCI=m
+CONFIG_MMC_DAVINCI=y
 # CONFIG_NEW_LEDS is not set
 CONFIG_RTC_LIB=y
 # CONFIG_RTC_CLASS is not set
