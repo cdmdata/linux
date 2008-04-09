@@ -163,6 +163,10 @@ static void davinci_source_power(struct musb *musb, int is_on, int immediate)
 	if (vbus_state == is_on)
 		return;
 	vbus_state = !is_on;		/* 0/1 vs "-1 == unknown/init" */
+#ifdef CONFIG_MACH_DAVINCI_XENON
+	gpio_set_value(GPIO(50),is_on^1);
+	immediate = 1;
+#endif
 
 #ifdef CONFIG_MACH_DAVINCI_EVM
 	if (machine_is_davinci_evm()) {
@@ -170,10 +174,7 @@ static void davinci_source_power(struct musb *musb, int is_on, int immediate)
 		/* modified EVM board switching VBUS with GPIO(6) not I2C
 		 * NOTE:  PINMUX0.RGB888 (bit23) must be clear
 		 */
-		if (is_on)
-			gpio_set(GPIO(6));
-		else
-			gpio_clear(GPIO(6));
+		gpio_set_value(GPIO(6),is_on);
 		immediate = 1;
 #else
 		if (immediate)
