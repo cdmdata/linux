@@ -47,6 +47,7 @@
 #include <asm/arch/common.h>
 #include <asm/arch/psc.h>
 #include <asm/arch/nand.h>
+#include <asm/arch/gpio.h>
 
 /* other misc. init functions */
 void __init davinci_psc_init(void);
@@ -223,7 +224,7 @@ map_io(void)
 static __init void board_init(void)
 {
 	davinci_psc_init();
-
+	gpio_direction_output(50, 1);	/* turn off USB power */
 #if defined(CONFIG_BLK_DEV_DAVINCI) || defined(CONFIG_BLK_DEV_DAVINCI_MODULE)
 	printk(KERN_WARNING "WARNING: both IDE and NOR flash are enabled, "
 	       "but share pins.\n\t Disable IDE for NOR support.\n");
