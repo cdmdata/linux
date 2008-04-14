@@ -50,7 +50,6 @@
 #define EDMA_H_
 
 /*Used by driver*/
-
 /**************************************************************************\
 * Register Overlay Structure for DRA
 \**************************************************************************/
@@ -333,6 +332,8 @@ enum sync_dimension {
 	ABSYNC = 1
 };
 
+#ifdef __KERNEL__
+
 /******************************************************************************
  * davinci_request_dma - request for the Davinci DMA channel
  *
@@ -552,5 +553,7 @@ void davinci_dma_unchain_lch(int lch_head, int lch_queue);
  *****************************************************************************/
 void davinci_free_dma(int lch);
 void davinci_clean_channel(int ch_no);
+
+#endif
 
 #endif
