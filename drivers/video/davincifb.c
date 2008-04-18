@@ -114,6 +114,7 @@ static char *options = "";
 module_param(options, charp, S_IRUGO);
 static int dmach = -1 ;
 static int dmatcc = TCC_ANY ;
+static int noblank = 1 ;
 
 /*
  * Globals
@@ -1717,7 +1718,9 @@ davincifb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
  */
 int davincifb_blank(int blank_mode, struct fb_info *info)
 {
-	set_win_enable(info->fix.id, (blank_mode)? 0 :1);
+   if((0==blank_mode) || (0==noblank)){
+   	set_win_enable(info->fix.id, (blank_mode)? 0 :1);
+   }
 	return 0;
 }
 
@@ -2166,7 +2169,7 @@ static int CheckWinParms(char* this_opt,char* pName,vpbe_dm_win_info_t *w,int* p
  * 		X,Y specify the window position
  * 		M, N, X, Y are integers
  * 		M, X should be multiples of 16
- * 
+ *    noblank=[0|1]
  *	For example
  *	video=dm64xxfb:output=s-video:format=ntsc:vid0=720x480@0,0
  *	:osd0=off:osd1=off	
@@ -2318,6 +2321,9 @@ int davincifb_setup(char *options)
 								fbMemBase = simple_strtoul(this_opt+10, &p, 0);
 								if (*p=='M') fbMemBase = (fbMemBase<<20)+0x80000000;
 							}
+                     else if( !strncmp(this_opt, "noblank=", 8)) {
+                        noblank=simple_strtoul(this_opt+8,0,0);
+                     }
 		}
 	}
 	if (flag) {
