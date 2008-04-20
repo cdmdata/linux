@@ -48,6 +48,7 @@
 #include <asm/arch/psc.h>
 #include <asm/arch/nand.h>
 #include <asm/arch/gpio.h>
+#include <asm/arch/mux.h>
 
 /* other misc. init functions */
 void __init davinci_psc_init(void);
@@ -229,6 +230,8 @@ static __init void board_init(void)
 	printk(KERN_WARNING "WARNING: both IDE and NOR flash are enabled, "
 	       "but share pins.\n\t Disable IDE for NOR support.\n");
 #endif
+	davinci_mux_peripheral(DAVINCI_MUX_UART1, 1);
+	davinci_mux_peripheral(DAVINCI_MUX_UART2, 1);
 
 	platform_add_devices(davinci_devices,
 			     ARRAY_SIZE(davinci_devices));

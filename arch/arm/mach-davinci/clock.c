@@ -190,11 +190,27 @@ static struct clk davinci_clks[] = {
 		.lpsc = -1,
 		.flags = ALWAYS_ENABLED,
 	},
+#ifdef CONFIG_DAVINCI_UART0
 	{
 		.name = "UART0",
 		.rate = &fixedrate,
 		.lpsc = DAVINCI_LPSC_UART0,
 	},
+#endif
+#ifdef CONFIG_DAVINCI_UART1
+	{
+		.name = "UART1",
+		.rate = &fixedrate,
+		.lpsc = DAVINCI_LPSC_UART1,
+	},
+#endif
+#ifdef CONFIG_DAVINCI_UART2
+	{
+		.name = "UART2",
+		.rate = &fixedrate,
+		.lpsc = DAVINCI_LPSC_UART2,
+	},
+#endif
 	{
 		.name = "UART1",
 		.rate = &fixedrate,
