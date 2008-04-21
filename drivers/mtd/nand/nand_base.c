@@ -71,7 +71,7 @@ static struct nand_ecclayout nand_oob_16 = {
 		 . length = 8}}
 };
 
-static struct nand_ecclayout nand_oob_64 = {
+static struct nand_ecclayout nand_oob_64_3_256 = {
 	.eccbytes = 24,
 	.eccpos = {
 		   40, 41, 42, 43, 44, 45, 46, 47,
@@ -80,6 +80,15 @@ static struct nand_ecclayout nand_oob_64 = {
 	.oobfree = {
 		{.offset = 2,
 		 .length = 38}}
+};
+static struct nand_ecclayout nand_oob_64_3_512 = {
+	.eccbytes = 12,
+	.eccpos = {
+		   52, 53, 54, 55,
+		   56, 57, 58, 59, 60, 61, 62, 63},
+	.oobfree = {
+		{.offset = 2,
+		 .length = 50}}
 };
 
 static int nand_get_device(struct nand_chip *chip, struct mtd_info *mtd,
@@ -2522,27 +2531,6 @@ int nand_scan_tail(struct mtd_info *mtd)
 	/* Set the internal oob buffer location, just after the page data */
 	chip->oob_poi = chip->buffers->databuf + mtd->writesize;
 
-	/*
-	 * If no default placement scheme is given, select an appropriate one
-	 */
-	if (!chip->ecc.layout) {
-		switch (mtd->oobsize) {
-		case 8:
-			chip->ecc.layout = &nand_oob_8;
-			break;
-		case 16:
-			chip->ecc.layout = &nand_oob_16;
-			break;
-		case 64:
-			chip->ecc.layout = &nand_oob_64;
-			break;
-		default:
-			printk(KERN_WARNING "No oob scheme defined for "
-			       "oobsize %d\n", mtd->oobsize);
-			BUG();
-		}
-	}
-
 	if (!chip->write_page)
 		chip->write_page = nand_write_page;
 
@@ -2631,6 +2619,27 @@ int nand_scan_tail(struct mtd_info *mtd)
 		BUG();
 	}
 
+	/*
+	 * If no default placement scheme is given, select an appropriate one
+	 */
+	if (!chip->ecc.layout) {
+		switch (mtd->oobsize) {
+		case 8:
+			chip->ecc.layout = &nand_oob_8;
+			break;
+		case 16:
+			chip->ecc.layout = &nand_oob_16;
+			break;
+		case 64:
+			chip->ecc.layout = (chip->ecc.size==256)? 
+				&nand_oob_64_3_256 : &nand_oob_64_3_512;
+			break;
+		default:
+			printk(KERN_WARNING "No oob scheme defined for "
+			       "oobsize %d\n", mtd->oobsize);
+			BUG();
+		}
+	}
 	/*
 	 * The number of bytes available for a client to place data into
 	 * the out of band area
