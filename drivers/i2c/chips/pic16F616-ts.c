@@ -80,7 +80,8 @@ struct pic16f616_ts {
 	int irq;
 };
 const char *client_name = "Pic16F616-ts";
-static unsigned char pullup_delay = 80 ;
+#define PULLUP_DELAY_DEFAULT 80
+static unsigned char pullup_delay = PULLUP_DELAY_DEFAULT;
 
 /* I2C Addresses to scan */
 static unsigned short normal_i2c[] = { 0x22,I2C_CLIENT_END };
@@ -380,7 +381,7 @@ static int ts_thread(void *_ts)
 #endif
 
         buf[0] = 0x39 ;
-        buf[1] = pullup_delay ;       // units of time (loop counter) -1..0x80..0 
+        buf[1] = pullup_delay ;		// units of time (loop counter) 0 min, 0xff max 
         i2c_master_send(&ts->client,buf,2);
 
 	do {
@@ -595,6 +596,7 @@ static int pic_setup(char *options)
 	while ((this_opt = strsep(&options, ",")) != NULL) {
 		if( 0 == strncmp("pudelay:",this_opt,8) ){
 			pullup_delay = simple_strtol(this_opt+8,0,0);
+			if (pullup_delay==0) pullup_delay = PULLUP_DELAY_DEFAULT;
 			printk( KERN_INFO "%s: pullup delay == %d\n", __FUNCTION__, pullup_delay );
 		}
 		else if( *this_opt ){
