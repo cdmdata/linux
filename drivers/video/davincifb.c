@@ -2315,15 +2315,15 @@ int davincifb_setup(char *options)
 			if (!CheckWinParms(this_opt,"vid0=",dm->vid0,&flag_vid0))
 				if (!CheckWinParms(this_opt,"vid1=",dm->vid1,&flag_vid1))
 					if (!CheckWinParms(this_opt,"osd0=",dm->osd0,&flag_osd0))
-						if (!CheckWinParms(this_opt,"osd1=",dm->osd1,&flag_osd1))
+						if (!CheckWinParms(this_opt,"osd1=",dm->osd1,&flag_osd1)) {
 							if (!strncmp(this_opt, "fbMemBase=", 5)) {
 								char* p;
 								fbMemBase = simple_strtoul(this_opt+10, &p, 0);
 								if (*p=='M') fbMemBase = (fbMemBase<<20)+0x80000000;
+							} else if( !strncmp(this_opt, "noblank=", 8)) {
+								noblank=simple_strtoul(this_opt+8,0,0);
 							}
-                     else if( !strncmp(this_opt, "noblank=", 8)) {
-                        noblank=simple_strtoul(this_opt+8,0,0);
-                     }
+						}
 		}
 	}
 	if (flag) {
