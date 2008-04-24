@@ -27,6 +27,7 @@
 #include <asm/io.h>
 #include <asm/arch/hardware.h>
 #include <asm/arch/gpio.h>
+#include <linux/proc_fs.h>
 
 /*
  * Define this if you want to talk to the input layer
@@ -78,6 +79,7 @@ struct pic16f616_ts {
 	struct timeval	lastInterruptTime;
 #endif
 	int irq;
+   struct proc_dir_entry *procentry ;
 };
 const char *client_name = "Pic16F616-ts";
 #define PULLUP_DELAY_DEFAULT 80
@@ -85,6 +87,15 @@ static unsigned char pullup_delay = PULLUP_DELAY_DEFAULT;
 
 /* I2C Addresses to scan */
 static unsigned short normal_i2c[] = { 0x22,I2C_CLIENT_END };
+
+#define MIN_X		0x20
+#define MAX_X		0x22
+#define MIN_Y		0x24
+#define MAX_Y		0x26
+#define SUM_X		0x28
+#define SUM_Y		0x2b
+#define SAMPLE_CNT 	0x30
+#define PULLUP_DELAY 0x39
 
 /* This makes all addr_data:s */
 I2C_CLIENT_MODULE_PARM(probe,
@@ -101,8 +112,70 @@ static struct i2c_client_address_data addr_data = {
 };
 struct pic16f616_ts* gts;
 
+static char const procentryname[] = {
+   "pic16f616"
+};
+
 static int ts_startup(struct pic16f616_ts* ts);
 static void ts_shutdown(struct pic16f616_ts* ts);
+
+static int pic16f616_proc_read
+	(char *page,
+	 char **start,
+	 off_t off,
+	 int count,
+	 int *eof,
+	 void *data)
+{
+	if (gts) {
+		unsigned char regAddr[] = { MIN_X};
+		unsigned char buf[32];
+		struct i2c_msg readReg[2] = {
+			{gts->client.addr, 0, 1, regAddr},
+			{gts->client.addr, I2C_M_RD, 2, buf}
+		};
+		int totalWritten = 0 ;
+		printk(KERN_ERR "%s\n", __FUNCTION__);
+		while ((0 < count) && (PULLUP_DELAY >= regAddr[0])) {
+			int rval = i2c_transfer(gts->client.adapter,
+						readReg,
+						ARRAY_SIZE(readReg));
+			if (ARRAY_SIZE(readReg) == rval) {
+				int written = snprintf(page, count,
+						       "%02x: %02x %02x\n",
+						       regAddr[0],
+						       buf[0],
+						       buf[1]);
+				if (0 <= written) {
+					count -= written ;
+					page += written ;
+					totalWritten += written ;
+					regAddr[0] += 2 ;
+					continue;
+				}
+			} else
+				printk(KERN_ERR "%s: transfer error %d\n",
+					__func__, rval);
+			/* continue from middle */
+			break;
+		}
+		*eof = 1 ;
+		return totalWritten ;
+	} else {
+		return -EIO ;
+	}
+}
+
+static int
+pic16f616_proc_write
+	(struct file *file,
+	 const char __user *buffer,
+	 unsigned long count,
+	 void *data)
+{
+	printk(KERN_ERR "%s\n", __FUNCTION__);
+	return count ;
+}
 
 /*-----------------------------------------------------------------------*/
 #ifndef USE_INPUT
@@ -330,13 +403,6 @@ static inline void ts_deregister(struct pic16f616_ts *ts)
 
 #endif
 /*-----------------------------------------------------------------------*/
-#define MIN_X		0x20
-#define MAX_X		0x22
-#define MIN_Y		0x24
-#define MAX_Y		0x26
-#define SUM_X		0x28
-#define SUM_Y		0x2b
-#define SAMPLE_CNT 	0x30
 
 /*
  * This is a RT kernel thread that handles the I2c accesses
@@ -556,6 +622,11 @@ static int ts_detect_client(struct i2c_adapter *adapter, int address, int kind)
 	err = ts_register(ts);
 	if (err==0) {
 		gts = ts;
+		ts->procentry = create_proc_entry(procentryname, 0, NULL);
+		if (ts->procentry) {
+			ts->procentry->read_proc = pic16f616_proc_read ;
+			ts->procentry->write_proc = pic16f616_proc_write ;
+		}
 	} else {
 		printk(KERN_WARNING "%s: ts_register failed\n", client_name);
 		ts_deregister(ts);
