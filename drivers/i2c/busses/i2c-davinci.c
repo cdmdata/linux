@@ -307,11 +307,14 @@ i2c_davinci_xfer_msg(struct i2c_adapter *adap, struct i2c_msg *msg, int stop)
 	if (r == 0) {
 		dev_err(dev->dev, "controller timed out\n");
 		i2c_davinci_init(dev);
-		dev->buf = NULL;
+		dev->buf_len = 0;
 		return -ETIMEDOUT;
 	}
 	if (dev->buf_len) {
-		/* signal may have aborted the transfer */
+		/* This should be 0 if all bytes were transferred
+		 * or dev->cmd_err denotes an error.
+		 * A signal may have aborted the transfer.
+		 */
 		if (r >= 0) {
 			dev_err(dev->dev, "abnormal termination buf_len=%i\n",
 				dev->buf_len);
@@ -319,7 +322,7 @@ i2c_davinci_xfer_msg(struct i2c_adapter *adap, struct i2c_msg *msg, int stop)
 		}
 		dev->terminate = 1;
 		wmb();
-		dev->buf = NULL;
+		dev->buf_len = 0;
 	}
 	if (r < 0)
 		return r;
@@ -362,7 +365,7 @@ i2c_davinci_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 
 	for (i = 0; i < num; i++) {
 		ret = i2c_davinci_xfer_msg(adap, &msgs[i], (i == (num - 1)));
-		dev_dbg(dev->dev, "%s ret: %d\n", __func__, ret);
+		dev_dbg(dev->dev, "%s [%d/%d] ret: %d\n", __func__, i + 1, num, ret);
 		if (ret < 0)
 			return ret;
 	}
@@ -374,24 +377,21 @@ static u32 i2c_davinci_func(struct i2c_adapter *adap)
 	return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL;
 }
 
-static inline void terminate_read(struct davinci_i2c_dev *dev)
+static void terminate_read(struct davinci_i2c_dev *dev)
 {
-	if (dev->buf_len)
-		dev->buf_len--;
-	if (dev->buf_len) {
-		u16 w = davinci_i2c_read_reg(dev, DAVINCI_I2C_MDR_REG);
-		w |= DAVINCI_I2C_MDR_NACK;
-		davinci_i2c_write_reg(dev, DAVINCI_I2C_MDR_REG, w);
-	}
+	u16 w = davinci_i2c_read_reg(dev, DAVINCI_I2C_MDR_REG);
+	w |= DAVINCI_I2C_MDR_NACK;
+	davinci_i2c_write_reg(dev, DAVINCI_I2C_MDR_REG, w);
+
 	/* Throw away data */
 	davinci_i2c_read_reg(dev, DAVINCI_I2C_DRR_REG);
 	if (!dev->terminate)
 		dev_err(dev->dev, "RDR IRQ while no data requested\n");
 }
-static inline void terminate_write(struct davinci_i2c_dev *dev)
+static void terminate_write(struct davinci_i2c_dev *dev)
 {
 	u16 w = davinci_i2c_read_reg(dev, DAVINCI_I2C_MDR_REG);
-	w |= DAVINCI_I2C_MDR_RM|DAVINCI_I2C_MDR_STP;
+	w |= DAVINCI_I2C_MDR_RM | DAVINCI_I2C_MDR_STP;
 	davinci_i2c_write_reg(dev, DAVINCI_I2C_MDR_REG, w);
 
 	if (!dev->terminate)
@@ -445,7 +445,7 @@ static irqreturn_t i2c_davinci_isr(int this_irq, void *dev_id)
 			break;
 
 		case DAVINCI_I2C_IVR_RDR:
-			if (dev->buf && dev->buf_len) {
+			if (dev->buf_len) {
 				*dev->buf++ =
 				    davinci_i2c_read_reg(dev,
 							 DAVINCI_I2C_DRR_REG);
@@ -463,7 +463,7 @@ static irqreturn_t i2c_davinci_isr(int this_irq, void *dev_id)
 			break;
 
 		case DAVINCI_I2C_IVR_XRDY:
-			if (dev->buf && dev->buf_len) {
+			if (dev->buf_len) {
 				davinci_i2c_write_reg(dev, DAVINCI_I2C_DXR_REG,
 						      *dev->buf++);
 				dev->buf_len--;
