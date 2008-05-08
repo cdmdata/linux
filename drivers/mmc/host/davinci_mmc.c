@@ -934,22 +934,20 @@ static inline int handle_core_command(
 			mmc_davinci_cmd_done(host, host->cmd);
 		}
 		dev_dbg(mmc_dev(host->mmc), "From code segment "
-			"excuted when card removed\n");
+			"executed when card removed\n");
 		return -1;
 	}
 
 	qstatus = status;
-	while (1) {
+	while (host->bytes_left > 0) {
 		if ((status & MMCSD_EVENT_WRITE) &&
-				(host->data_dir == DAVINCI_MMC_DATADIR_WRITE)
-				&& (host->bytes_left > 0)) {
+				(host->data_dir == DAVINCI_MMC_DATADIR_WRITE)) {
 			/* Buffer almost empty */
 			davinci_fifo_data_trans(host, mmcsd_cfg.rw_threshold);
 		}
 
 		if ((status & MMCSD_EVENT_READ) &&
-				(host->data_dir == DAVINCI_MMC_DATADIR_READ)
-				&& (host->bytes_left > 0)) {
+				(host->data_dir == DAVINCI_MMC_DATADIR_READ)) {
 			/* Buffer almost empty */
 			davinci_fifo_data_trans(host, mmcsd_cfg.rw_threshold);
 		}
