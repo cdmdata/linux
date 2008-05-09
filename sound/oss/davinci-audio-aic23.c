@@ -338,7 +338,7 @@ static audio_state_t aic23_state = {
 	.hw_remove		=	__exit_p(davinci_aic23_remove),
 	.hw_suspend		= davinci_aic23_suspend,
 	.hw_resume		= davinci_aic23_resume,
-	.sem = __SEMAPHORE_INIT(aic23_state.sem,1),
+	.sem = __SEMAPHORE_INITIALIZER(aic23_state.sem,1),
 };
 
 /* This will be defined in the audio.h */
