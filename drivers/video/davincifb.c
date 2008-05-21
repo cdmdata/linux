@@ -1257,6 +1257,59 @@ davincifb_sync(struct fb_info *info)
 	return 0 ;
 }
 
+static int
+davincifb_set_start( struct fb_set_start *set, struct fb_info *info )
+{
+	struct vpbe_dm_win_info *win   = (struct vpbe_dm_win_info *) info->par;
+	unsigned long            start = 0;
+
+	/* Physical mode (absolute address)? */
+	if (set->offset < 0) {
+		start = set->physical;
+
+		/* FIXME: address checks */
+	}
+	else {
+		/* Offset mode (from frame buffer device base). */
+		if (set->offset + info->var.yres * info->fix.line_length >= win->fb_size)
+			return -EFAULT;
+
+		start = win->fb_base_phys + set->offset;
+	}
+
+	/* Set on explicit sync count? */
+	if (set->sync > 1) {
+		if (set->sync <= dm->vsync_cnt) {
+			set_sdram_params( info->fix.id, start, info->fix.line_length );
+			win->sdram_address = start;
+
+			set->sync = dm->vsync_cnt;
+		}
+		else {
+			/* FIXME: No queue yet. */
+			win->sdram_address = start;
+
+			set->sync = 0;
+		}
+	}
+	/* Set on next sync? */
+	else if (set->sync) {
+		win->sdram_address = start;
+
+		set->sync = 0;
+	}
+	/* Set now! */
+	else {
+		set_sdram_params( info->fix.id, start, info->fix.line_length );
+		win->sdram_address = start;
+
+		set->sync = dm->vsync_cnt;
+	}
+
+	return 0;
+}
+
+
 /*
  * davincifb_ioctl - handler for private ioctls.
  */
@@ -1266,6 +1319,7 @@ davincifb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
 	struct vpbe_dm_win_info *w = (struct vpbe_dm_win_info *)info->par;
 	void __user *argp = (void __user *)arg;
 	struct fb_fillrect rect;
+	struct fb_set_start set_start;
 	zoom_params_t zoom;
 	int retval = 0;
 	long std = 0;
@@ -1333,6 +1387,15 @@ davincifb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
 		} else {
 			return -EINVAL;
 		}
+		break;
+	case FBIO_SET_START:
+		if (copy_from_user(&set_start, argp, sizeof(set_start)))
+			return -EFAULT;
+		retval = davincifb_set_start( &set_start, &w->info );
+		if (retval)
+			return retval;
+		if (copy_to_user(argp, &set_start, sizeof(set_start)))
+			return -EFAULT;
 		break;
 	case FBIO_ENABLE_DISABLE_WIN:
 		switch (arg) {
