@@ -27,6 +27,7 @@ typedef struct zoom_params
 } zoom_params_t;
 #define FBIO_SETZOOM		_IOW('F', 0x24, struct zoom_params)
 #define FBIO_GETSTD		_IOR('F', 0x25, u_int32_t)
+
 struct vpfe_resizer_params
 {
 	u_int32_t rsz_cnt;	//busy-lock
@@ -41,6 +42,16 @@ struct vpfe_resizer_params
 	u_int32_t vfilt[16];	//busy-lock
 	u_int32_t yenh;		//busy-lock
 };
+
+typedef struct fb_set_start {
+	int		offset;		/* offset from smem_start */
+	unsigned long	physical;	/* absolute physical address when offset < 0 */
+
+	u_int64_t	sync;		/* input:  target sync counter for change or 0 for no sync at all,
+					   output: sync counter of actual change or 0 if still pending */
+} fb_set_start_t;
+
+
 
 #define FBIO_RESIZER		_IOW('F', 0x26, struct vpfe_resizer_params)
 #define FBIO_SYNC		_IOW('F', 0x27, u_int32_t)
@@ -207,5 +218,6 @@ typedef struct vpbe_backg_color {
 #define FBIO_ENABLE_DISPLAY		_IOW('F', 0x48, unsigned char)
 #define FBIO_SETPOS			_IOW('F', 0x49, u_int32_t)
 #define FBIO_SET_CURSOR			_IOW('F', 0x50, struct fb_cursor)
+#define FBIO_SET_START			_IOW('F', 0x66, struct fb_set_start)
 
 #endif /* _DAVINCIFB_H_ */
