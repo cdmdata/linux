@@ -532,6 +532,14 @@ static struct fb_var_screeninfo vid1_default_var = {
 #define x_pos(w)    ((w)->win_pos.xpos)
 #define y_pos(w)    ((w)->win_pos.ypos)
 #define	zoom(w)		((w)->zoom)
+
+struct fb_var_screeninfo * const default_vars[] = {
+   &vid0_default_var
+,  &vid1_default_var 
+,  &osd0_default_var 
+,  &osd1_default_var 
+};
+
 /*
  * ======== vpbe_set_display_default ========
  */
@@ -1811,7 +1819,9 @@ int parse_win_params(char *wp, int *xres, int *yres, int *xpos, int *ypos)
 }
 
 struct fb_info *init_fb_info(struct vpbe_dm_win_info *w,
-			     struct fb_var_screeninfo *var, char *id)
+			     struct fb_var_screeninfo *var, 
+                             char *id,
+                             const DISPLAYCFG* disp)
 {
 	struct fb_info *info = &(w->info);
 	vpbe_dm_info_t *dm = w->dm;
@@ -1892,6 +1902,18 @@ const DISPLAYCFG* build_current_settings(void)
 	disp->enable = 1;
 	return disp;
 }
+
+static void update_var
+   ( struct fb_var_screeninfo *var,
+     const DISPLAYCFG         *disp )
+{
+   var->xres_virtual = var->xres = disp->xRes ;
+   var->yres_virtual = var->yres = disp->yRes ;
+   var->xres = disp->xRes ;
+   var->xres = disp->xRes ;
+   var->xres = disp->xRes ;
+}
+
 void vpbe_davincifb_lcd_component_config(void)
 {
 	const DISPLAYCFG* disp = &cur_display_settings;
@@ -2242,6 +2264,7 @@ int davincifb_setup(char *options)
 {
 	char *this_opt;
 	struct fb_info *info;
+        int i ;
 	int format_yres = 480;
 	int flag = 0, flag_osd0 = 0, flag_osd1 = 0, flag_vid0 = 0, flag_vid1 = 0;
 	const DISPLAYCFG* disp = build_current_settings();
@@ -2562,7 +2585,7 @@ int vpbe_mem_alloc_max(struct vpbe_dm_win_info *w)
 {
 	dev_dbg(dm->dev, "Allocating buffer of size: %x\n", w->fb_size);
 	if (fbMemBase) {
-		unsigned int size = ((w->fb_size+0xffff)& ~0xffff);
+		unsigned int size = ((w->fb_size+0xffff)& ~0xffff) * TRIPLE_BUF ;
 		w->fb_base_phys = fbMemBase;
 		fbMemBase += size;
 		if (!request_mem_region(w->fb_base_phys, size, w->info.fix.id)) {
@@ -2732,7 +2755,8 @@ int vpbe_davincifb_probe(struct device *dev)
 	davincifb_setup(options);
 
 	/* Set fb_videomode structure */
-	dm->videomode = modelist[dm->display.interface][dm->display.mode];
+        if( LCD != dm->display.mode )
+		dm->videomode = modelist[dm->display.interface][dm->display.mode];
 
 	/* choose config function */
 	init_display_function(&dm->display);
