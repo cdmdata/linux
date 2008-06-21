@@ -1301,17 +1301,11 @@ davincifb_set_start( struct fb_set_start *set, struct fb_info *info )
 		}
 	}
 	/* Set on next sync? */
-	else if (set->sync) {
-		win->sdram_address = start;
-
-		set->sync = 0;
-	}
-	/* Set now! */
 	else {
-		set_sdram_params( info->fix.id, start, info->fix.line_length );
-		win->sdram_address = start;
-
-		set->sync = dm->vsync_cnt;
+           if (set->sync)
+              davincifb_wait_for_vsync(win);
+           set_sdram_params( info->fix.id, start, info->fix.line_length );
+           set->sync = dm->vsync_cnt;
 	}
 
 	return 0;
