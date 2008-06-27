@@ -154,7 +154,8 @@ static inline void cppi_host_txdma_start(struct musb_hw_ep *ep)
 
 	/* NOTE: no locks here; caller should lock and select EP */
 	txcsr = musb_readw(ep->regs, MUSB_TXCSR);
-	txcsr |= MUSB_TXCSR_DMAENAB | MUSB_TXCSR_H_WZC_BITS;
+	txcsr |= MUSB_TXCSR_DMAENAB | MUSB_TXCSR_DMAMODE |
+			MUSB_TXCSR_H_WZC_BITS;
 	musb_writew(ep->regs, MUSB_TXCSR, txcsr);
 }
 
@@ -1235,6 +1236,9 @@ void musb_host_tx(struct musb *musb, u8 epnum)
 		/* REVISIT may need to clear FLUSHFIFO ... */
 		musb_writew(epio, MUSB_TXCSR, tx_csr);
 		musb_writeb(epio, MUSB_TXINTERVAL, 0);
+#ifdef CONFIG_ARCH_DAVINCI
+		hw_ep->fifo_flush_check = 0;
+#endif
 
 		done = true;
 	}
@@ -1298,8 +1302,19 @@ void musb_host_tx(struct musb *musb, u8 epnum)
 		/* set status */
 		urb->status = status;
 		urb->actual_length = qh->offset;
+#ifdef CONFIG_ARCH_DAVINCI
+		/* Check for FIFO empty status.  If not wait for the same
+		 * before completing the urb.  This ensures that the toggle
+		 * status is correctly preserved and data will not be lost.
+		 */
+		if ((tx_csr & MUSB_TXCSR_FIFONOTEMPTY) ||
+			(tx_csr & MUSB_TXCSR_TXPKTRDY)) {
+			hw_ep->fifo_flush_check = 1;
+			tasklet_schedule(&musb->fifo_check);
+			goto finish;
+		}
+#endif
 		musb_advance_schedule(musb, urb, hw_ep, USB_DIR_OUT);
-
 	} else if (!(tx_csr & MUSB_TXCSR_DMAENAB)) {
 		/* WARN_ON(!buf); */
 
@@ -1351,9 +1366,9 @@ finish:
  *       (a) all URBs terminate with REQPKT cleared and fifo(s) empty;
  *       (b) termination conditions are: short RX, or buffer full;
  *       (c) fault modes include
- *           - iff URB_SHORT_NOT_OK, short RX status is -EREMOTEIO.
- *             (and that endpoint's dma queue stops immediately)
- *           - overflow (full, PLUS more bytes in the terminal packet)
+ *	   - iff URB_SHORT_NOT_OK, short RX status is -EREMOTEIO.
+ *	     (and that endpoint's dma queue stops immediately)
+ *	   - overflow (full, PLUS more bytes in the terminal packet)
  *
  *	So for example, usb-storage sets URB_SHORT_NOT_OK, and would
  *	thus be a great candidate for using mode 1 ... for all but the
@@ -1959,6 +1974,9 @@ static int musb_cleanup_urb(struct urb *urb, struct musb_qh *qh, int is_in)
 		musb_writew(epio, MUSB_TXCSR, csr);
 		/* flush cpu writebuffer */
 		csr = musb_readw(epio, MUSB_TXCSR);
+#ifdef CONFIG_ARCH_DAVINCI
+		ep->fifo_flush_check = 0;
+#endif
 	}
 	if (status == 0)
 		musb_advance_schedule(ep->musb, urb, ep, is_in);
@@ -2132,6 +2150,46 @@ static int musb_bus_suspend(struct usb_hcd *hcd)
 		return 0;
 }
 
+#ifdef CONFIG_ARCH_DAVINCI
+/* Tasklet routine to handle the completion request. Check for Fifo status
+ * before completing the request. Avoids false completions when data is still
+ * in the fifo
+ */
+void musb_fifo_check_tasklet(unsigned long data)
+{
+	struct musb		 *musb = (struct musb *)data;
+	u8			 epnum = 1, sch_tsklt = 0;
+	struct musb_hw_ep	 *hw_ep = NULL;
+	unsigned long		 flags;
+	u16			 csr;
+	struct musb_qh		*qh;
+
+	do {
+		hw_ep = &(musb->endpoints[epnum++]);
+		spin_lock_irqsave(&musb->lock, flags);
+		if (hw_ep->fifo_flush_check) {
+			csr = musb_readw(hw_ep->regs, MUSB_TXCSR);
+			if (((csr & MUSB_TXCSR_FIFONOTEMPTY) ||
+				(csr & MUSB_TXCSR_TXPKTRDY)))
+				sch_tsklt = 1;
+			else {
+				hw_ep->fifo_flush_check = 0;
+				qh = hw_ep->out_qh;
+				musb_advance_schedule(musb, next_urb(qh),
+							hw_ep, USB_DIR_OUT);
+				DBG(6, "Completed Tasklet %d\n", hw_ep->epnum);
+			}
+		}
+
+		spin_unlock_irqrestore(&musb->lock, flags);
+	} while (epnum < MUSB_C_NUM_EPS);
+
+	if (sch_tsklt)
+		tasklet_schedule(&musb->fifo_check);
+}
+#endif
+
+
 static int musb_bus_resume(struct usb_hcd *hcd)
 {
 	/* resuming child port does the work */
@@ -2164,3 +2222,4 @@ const struct hc_driver musb_hc_driver = {
 	/* .start_port_reset	= NULL, */
 	/* .hub_irq_enable	= NULL, */
 };
+
