@@ -122,6 +122,7 @@ static struct platform_device usb_dev = {
 
 #endif  /* CONFIG_USB_MUSB_HDRC */
 
+#if 0
 static struct mtd_partition nand_partitions[] = {
 	/* bootloader (U-Boot, etc) in first sector */
 	{
@@ -152,6 +153,7 @@ static struct mtd_partition nand_partitions[] = {
 		.mask_flags	= 0
 	}
 };
+#endif
 
 static struct davinci_flash_platform_data nand_data = {
 	.timings	= 0
@@ -164,8 +166,8 @@ static struct davinci_flash_platform_data nand_data = {
 	| (2 << 7)	/* readStrobe	30 ns */
 	| (0 << 4)	/* readHold	10 ns */
 	| (3 << 2),	/* turnAround	10 ns */
-	.parts		= nand_partitions,
-	.nr_parts	= ARRAY_SIZE(nand_partitions),
+	.parts		= 0,
+	.nr_parts	= 0,
 };
 
 static struct resource nand_resources[] = {
