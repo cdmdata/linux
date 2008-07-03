@@ -43,6 +43,7 @@
 #include <asm/hardware.h>
 #include <asm/arch/irqs.h>
 #include <asm/arch/hardware.h>
+#include <asm/arch/gpio.h>
 
 #include "davinci_mmc.h"
 #include <asm/arch/edma.h>
@@ -1197,7 +1198,11 @@ static struct mmc_host_ops mmc_davinci_ops = {
 
 static int mmc_davinci_get_ro(struct mmc_host *mmc)
 {
+#ifdef CONFIG_MACH_DAVINCI_XENON
+	return (0 != gpio_get_value(17));
+#else
 	return 0;
+#endif
 }
 
 static void mmc_check_card(unsigned long data)
