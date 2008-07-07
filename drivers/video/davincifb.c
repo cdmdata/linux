@@ -1964,27 +1964,6 @@ void vpbe_davincifb_lcd_component_config(void)
 		dispc_reg_out(VENC_DCLKPTN1,val[1]);
 		dispc_reg_out(VENC_DCLKPTN2,val[2]);
 		dispc_reg_out(VENC_DCLKPTN3,val[3]);
-#if 0
-#if encPerPixel==1
-		dispc_reg_out(VENC_DCLKCTL,(1<<11)|(64-1));
-		dispc_reg_out(VENC_DCLKPTN0,0xffff);
-		dispc_reg_out(VENC_DCLKPTN1,0xffff);
-		dispc_reg_out(VENC_DCLKPTN2,0xffff);
-		dispc_reg_out(VENC_DCLKPTN3,0xffff);
-#elif encPerPixel==2
-		dispc_reg_out(VENC_DCLKCTL,(64-1));
-		dispc_reg_out(VENC_DCLKPTN0,0xaaaa);
-		dispc_reg_out(VENC_DCLKPTN1,0xaaaa);
-		dispc_reg_out(VENC_DCLKPTN2,0xaaaa);
-		dispc_reg_out(VENC_DCLKPTN3,0xaaaa);
-#else
-		dispc_reg_out(VENC_DCLKCTL,(64-1));
-		dispc_reg_out(VENC_DCLKPTN0,0xcccc);
-		dispc_reg_out(VENC_DCLKPTN1,0xcccc);
-		dispc_reg_out(VENC_DCLKPTN2,0xcccc);
-		dispc_reg_out(VENC_DCLKPTN3,0xcccc);
-#endif
-#endif
 		dispc_reg_out(VENC_DCLKHS,0);
 		dispc_reg_out(VENC_DCLKHSA,0);
 		dispc_reg_out(VENC_DCLKHR,disp->xRes+disp->xSyncWidth+disp->xBegin+disp->xEnd);
@@ -2000,17 +1979,6 @@ void vpbe_davincifb_lcd_component_config(void)
 		if (bit>16) bit -= encPerPixel;
 		dispc_reg_out(VENC_OSDCLK0,bit-1);
 		dispc_reg_out(VENC_OSDCLK1,val[0]);
-#if 0
-		dispc_reg_out(VENC_OSDCLK0,16-1);
-#if encPerPixel==1
-		dispc_reg_out(VENC_OSDCLK1,0xffff);
-#elif encPerPixel==2
-		dispc_reg_out(VENC_OSDCLK1,0x5555);
-#else
-		dispc_reg_out(VENC_OSDCLK1,0x1111);
-#endif
-#endif
-//		dispc_reg_out(VENC_OSDHAD,64);
 		dispc_reg_out(VENC_OSDHAD,0);
 		dispc_reg_out(VENC_VMOD, (VENC_VMOD_VDMD_RGB666<<VENC_VMOD_VDMD_SHIFT)|
 				VENC_VMOD_VMD|
