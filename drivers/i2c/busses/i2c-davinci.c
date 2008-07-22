@@ -179,10 +179,10 @@ static int i2c_davinci_init(struct davinci_i2c_dev *dev)
 	psc = (input_clock / 7000000) - 1;
 	if ((input_clock / (psc + 1)) > 12000000)
 		psc++;	/* better to run under spec than over */
-	d = (psc >= 2)? 5 : 7 - psc;
+	d = (psc >= 2) ? 5 : 7 - psc;
 
-	clk = ((input_clock / (psc + 1)) / (pdata->bus_freq * 1000)) - (d<<1);
-	clkh = clk>>1;
+	clk = ((input_clock / (psc + 1)) / (pdata->bus_freq * 1000)) - (d << 1);
+	clkh = clk >> 1;
 	clkl = clk - clkh;
 
 	davinci_i2c_write_reg(dev, DAVINCI_I2C_PSC_REG, psc);
@@ -365,7 +365,8 @@ i2c_davinci_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 
 	for (i = 0; i < num; i++) {
 		ret = i2c_davinci_xfer_msg(adap, &msgs[i], (i == (num - 1)));
-		dev_dbg(dev->dev, "%s [%d/%d] ret: %d\n", __func__, i + 1, num, ret);
+		dev_dbg(dev->dev, "%s [%d/%d] ret: %d\n", __func__, i + 1, num,
+			ret);
 		if (ret < 0)
 			return ret;
 	}
