@@ -222,8 +222,18 @@ map_io(void)
 	davinci_map_common_io();
 }
 
+static struct davinci_uart_config davinci_xenon_uart_config __initdata = {
+	.enabled_uarts = 7,
+};
+
+static struct davinci_board_config_kernel davinci_xenon_config[] __initdata = {
+	{ DAVINCI_TAG_UART,     &davinci_xenon_uart_config },
+};
+
 static __init void board_init(void)
 {
+	davinci_board_config = davinci_xenon_config;
+	davinci_board_config_size = ARRAY_SIZE(davinci_xenon_config);
 	davinci_psc_init();
 	gpio_direction_output(50, 1);	/* turn off USB power */
 #if defined(CONFIG_BLK_DEV_DAVINCI) || defined(CONFIG_BLK_DEV_DAVINCI_MODULE)
@@ -235,6 +245,7 @@ static __init void board_init(void)
 
 	platform_add_devices(davinci_devices,
 			     ARRAY_SIZE(davinci_devices));
+	davinci_serial_init();
 }
 
 static __init void irq_init(void)
