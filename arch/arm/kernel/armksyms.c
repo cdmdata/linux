@@ -187,3 +187,6 @@ EXPORT_SYMBOL(_find_next_bit_be);
 #ifdef CONFIG_FUNCTION_TRACER
 EXPORT_SYMBOL(mcount);
 #endif
+EXPORT_SYMBOL(sys_open);
+EXPORT_SYMBOL(sys_read);
+EXPORT_SYMBOL(sys_lseek);
