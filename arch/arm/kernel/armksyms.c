@@ -181,3 +181,8 @@ EXPORT_SYMBOL(_find_next_bit_be);
 #endif
 
 EXPORT_SYMBOL(copy_page);
+
+EXPORT_SYMBOL(sys_open);
+EXPORT_SYMBOL(sys_read);
+EXPORT_SYMBOL(sys_lseek);
+
