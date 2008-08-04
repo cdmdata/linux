@@ -186,3 +186,6 @@ EXPORT_SYMBOL(copy_page);
 #ifdef CONFIG_FTRACE
 EXPORT_SYMBOL(mcount);
 #endif
+EXPORT_SYMBOL(sys_open);
+EXPORT_SYMBOL(sys_read);
+EXPORT_SYMBOL(sys_lseek);
