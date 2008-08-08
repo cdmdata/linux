@@ -34,6 +34,31 @@ config DAVINCI_I2C_EXPANDER
 	  Configure this option to specify whether the board used
 	  has I2C exapnder with ATA, USB, CF.
 
+config DAVINCI_UART0
+	bool "Enable UART0"
+	default y if MACH_DAVINCI_EVM
+	depends on ARCH_DAVINCI644x
+	help
+	  Choose this to include support for UART0
+
+config DAVINCI_UART1
+	bool "Enable UART1"
+	default n if MACH_DAVINCI_EVM
+	depends on ARCH_DAVINCI644x
+	help
+	  Choose this to include support for UART1. Note that the 
+          board-specific startup will need to set up the pin 
+          multiplexing.
+
+config DAVINCI_UART2
+	bool "Enable UART2"
+	default n if MACH_DAVINCI_EVM
+	depends on ARCH_DAVINCI644x
+	help
+	  Choose this to include support for UART2. Note that the 
+          board-specific startup will need to set up the pin 
+          multiplexing.
+
 config DAVINCI_MCBSP
 	bool
         prompt "DaVinci McBSP Driver" if SOUND_DAVINCI=n

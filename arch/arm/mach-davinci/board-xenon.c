@@ -44,10 +44,12 @@
 #include <asm/mach/map.h>
 #include <asm/mach/flash.h>
 
+#include <asm/arch/board.h>
 #include <asm/arch/common.h>
 #include <asm/arch/psc.h>
 #include <asm/arch/nand.h>
 #include <asm/arch/gpio.h>
+#include <asm/arch/mux.h>
 
 /* other misc. init functions */
 void __init davinci_psc_init(void);
@@ -223,17 +225,30 @@ map_io(void)
 	davinci_map_common_io();
 }
 
+static struct davinci_uart_config davinci_xenon_uart_config __initdata = {
+	.enabled_uarts = 7,
+};
+
+static struct davinci_board_config_kernel davinci_xenon_config[] __initdata = {
+	{ DAVINCI_TAG_UART,     &davinci_xenon_uart_config },
+};
+
 static __init void board_init(void)
 {
+	davinci_board_config = davinci_xenon_config;
+	davinci_board_config_size = ARRAY_SIZE(davinci_xenon_config);
 	davinci_psc_init();
 	gpio_direction_output(50, 1);	/* turn off USB power */
 #if defined(CONFIG_BLK_DEV_DAVINCI) || defined(CONFIG_BLK_DEV_DAVINCI_MODULE)
 	printk(KERN_WARNING "WARNING: both IDE and NOR flash are enabled, "
 	       "but share pins.\n\t Disable IDE for NOR support.\n");
 #endif
+	davinci_mux_peripheral(DAVINCI_MUX_UART1, 1);
+	davinci_mux_peripheral(DAVINCI_MUX_UART2, 1);
 
 	platform_add_devices(davinci_devices,
 			     ARRAY_SIZE(davinci_devices));
+	davinci_serial_init();
 }
 
 static __init void irq_init(void)
