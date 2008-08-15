@@ -1,5 +1,8 @@
 #ifndef __ASM_ARCH_REGS_LCD_H
 #define __ASM_ARCH_REGS_LCD_H
+
+#include <asm/arch/bitfield.h> /* for Fld() macro */
+
 /*
  * LCD Controller Registers and Bits Definitions
  */
@@ -119,6 +122,8 @@
 
 #define LCCR3_BPP	Fld (3, 24)	/* Bit Per Pixel */
 #define LCCR3_Bpp(Bpp)	(((Bpp) << FShft (LCCR3_BPP)))
+
+#define LCCR3_BPP3      Fld (1, 29)     /* Bit Per Pixel */
 
 #define LCCR3_ACB	Fld (8, 8)	/* AC Bias */
 #define LCCR3_Acb(Acb)	(((Acb) << FShft (LCCR3_ACB)))
