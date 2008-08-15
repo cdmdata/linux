@@ -7,6 +7,27 @@
 
 #include <linux/scatterlist.h>
 
+#ifdef CONFIG_USB_OHCI_SM501
+static inline int dev_is_sm501(const struct device *dev)
+{
+	return (dev)? (dev->devIsSm501) : 0;
+}
+dma_addr_t sm501_map_single(void * ptr, size_t size, enum dma_data_direction dir);
+void sm501_unmap_single(dma_addr_t dma_addr, size_t size, enum dma_data_direction dir);
+int sm501_map_sg(struct scatterlist * sg, int nents, enum dma_data_direction dir);
+void sm501_unmap_sg(struct scatterlist * sg, int nents, enum dma_data_direction dir);
+void sm501_dma_sync_single(dma_addr_t dma_handle, size_t size, enum dma_data_direction dir);
+void sm501_dma_sync_sg(struct scatterlist * sg, int nelems, enum dma_data_direction dir);
+void * sm501_alloc_coherent(size_t size, dma_addr_t *handle);
+void sm501_free_coherent(size_t size, void *vaddr, dma_addr_t dma_handle);
+
+#define SPECIAL_RF(dev,func)	if (dev_is_sm501(dev)) return sm501_##func;
+#define SPECIAL_V(dev,func)	if (dev_is_sm501(dev)) {sm501_##func; return;}
+#else
+#define SPECIAL_RF(dev,func)
+#define SPECIAL_V(dev,func)
+#endif
+
 /*
  * DMA-consistent mapping functions.  These allocate/free a region of
  * uncached, unwrite-buffered mapped memory space for use with DMA
@@ -164,6 +185,7 @@ static inline dma_addr_t
 dma_map_single(struct device *dev, void *cpu_addr, size_t size,
 	       enum dma_data_direction dir)
 {
+	SPECIAL_RF(dev,map_single(cpu_addr, size, dir));
 	if (!arch_is_coherent())
 		dma_cache_maint(cpu_addr, size, dir);
 
@@ -215,6 +237,7 @@ static inline void
 dma_unmap_single(struct device *dev, dma_addr_t handle, size_t size,
 		 enum dma_data_direction dir)
 {
+        SPECIAL_V(dev,unmap_single(handle, size, dir))
 	/* nothing to do */
 }
 #else
@@ -270,6 +293,7 @@ dma_map_sg(struct device *dev, struct scatterlist *sg, int nents,
 	   enum dma_data_direction dir)
 {
 	int i;
+	SPECIAL_RF(dev,map_sg(sg, nents, dir))
 
 	for (i = 0; i < nents; i++, sg++) {
 		char *virt;
@@ -303,6 +327,7 @@ static inline void
 dma_unmap_sg(struct device *dev, struct scatterlist *sg, int nents,
 	     enum dma_data_direction dir)
 {
+        SPECIAL_V(dev,unmap_sg(sg, nents, dir))
 
 	/* nothing to do */
 }

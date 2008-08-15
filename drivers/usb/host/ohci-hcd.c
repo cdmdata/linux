@@ -995,8 +995,10 @@ MODULE_LICENSE ("GPL");
 #endif
 
 #if defined(CONFIG_PXA27x) || defined(CONFIG_PXA3xx)
+#if !defined(CONFIG_MACH_NEON270)
 #include "ohci-pxa27x.c"
 #define PLATFORM_DRIVER		ohci_hcd_pxa27x_driver
+#endif
 #endif
 
 #ifdef CONFIG_ARCH_EP93XX
@@ -1052,7 +1054,7 @@ MODULE_LICENSE ("GPL");
 #define SSB_OHCI_DRIVER		ssb_ohci_driver
 #endif
 
-#ifdef CONFIG_MFD_SM501
+#ifdef CONFIG_USB_OHCI_SM501
 #include "ohci-sm501.c"
 #define PLATFORM_DRIVER		ohci_hcd_sm501_driver
 #endif

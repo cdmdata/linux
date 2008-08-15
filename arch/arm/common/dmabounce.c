@@ -404,9 +404,10 @@ dma_map_single(struct device *dev, void *ptr, size_t size,
 
 	dev_dbg(dev, "%s(ptr=%p,size=%d,dir=%x)\n",
 		__func__, ptr, size, dir);
-
 	BUG_ON(dir == DMA_NONE);
 
+	SPECIAL_RF(dev,map_single(ptr, size, dir))
+	
 	dma_addr = map_single(dev, ptr, size, dir);
 
 	return dma_addr;
@@ -428,6 +429,8 @@ dma_unmap_single(struct device *dev, dma_addr_t dma_addr, size_t size,
 
 	BUG_ON(dir == DMA_NONE);
 
+	SPECIAL_V(dev,unmap_single(dma_addr, size, dir))
+	
 	unmap_single(dev, dma_addr, size, dir);
 }
 
@@ -442,6 +445,8 @@ dma_map_sg(struct device *dev, struct scatterlist *sg, int nents,
 
 	BUG_ON(dir == DMA_NONE);
 
+	SPECIAL_RF(dev,map_sg(sg, nents, dir))
+	
 	for (i = 0; i < nents; i++, sg++) {
 		struct page *page = sg_page(sg);
 		unsigned int offset = sg->offset;
@@ -466,6 +471,7 @@ dma_unmap_sg(struct device *dev, struct scatterlist *sg, int nents,
 
 	BUG_ON(dir == DMA_NONE);
 
+	SPECIAL_V(dev,unmap_sg(sg, nents, dir))
 	for (i = 0; i < nents; i++, sg++) {
 		dma_addr_t dma_addr = sg->dma_address;
 		unsigned int length = sg->length;

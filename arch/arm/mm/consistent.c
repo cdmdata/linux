@@ -16,6 +16,7 @@
 #include <linux/list.h>
 #include <linux/init.h>
 #include <linux/device.h>
+#include <linux/autoconf.h>
 #include <linux/dma-mapping.h>
 
 #include <asm/memory.h>
@@ -274,6 +275,8 @@ __dma_alloc(struct device *dev, size_t size, dma_addr_t *handle, gfp_t gfp,
 void *
 dma_alloc_coherent(struct device *dev, size_t size, dma_addr_t *handle, gfp_t gfp)
 {
+	SPECIAL_RF(dev,alloc_coherent(size, handle))
+
 	if (arch_is_coherent()) {
 		void *virt;
 
@@ -361,6 +364,7 @@ void dma_free_coherent(struct device *dev, size_t size, void *cpu_addr, dma_addr
 	u32 off;
 
 	WARN_ON(irqs_disabled());
+	SPECIAL_V(dev,free_coherent(size, cpu_addr, handle))
 
 	if (arch_is_coherent()) {
 		kfree(cpu_addr);
