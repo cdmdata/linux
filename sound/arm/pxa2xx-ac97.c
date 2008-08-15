@@ -57,7 +57,7 @@ static struct pxa2xx_pcm_dma_params pxa2xx_ac97_pcm_in = {
 };
 
 static struct snd_pcm *pxa2xx_ac97_pcm;
-static struct snd_ac97 *pxa2xx_ac97_ac97;
+struct snd_ac97 *pxa2xx_ac97_ac97;
 
 static int pxa2xx_ac97_pcm_startup(struct snd_pcm_substream *substream)
 {
