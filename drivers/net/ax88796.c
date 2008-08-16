@@ -55,7 +55,9 @@ static int phy_debug = 0;
 #define ei_outb_p(_v, _a) ei_outb(_v, _a)
 
 /* define EI_SHIFT() to take into account our register offsets */
+#ifdef AX88796_NEED_REGOFFS
 #define EI_SHIFT(x)     (ei_local->reg_offset[(x)])
+#endif
 
 /* Ensure we have our RCR base value */
 #define AX88796_PLATFORM
@@ -140,7 +142,6 @@ static int ax_initial_check(struct net_device *dev)
 
 static void ax_reset_8390(struct net_device *dev)
 {
-	struct ei_device *ei_local = netdev_priv(dev);
 	struct ax_device  *ax = to_ax_dev(dev);
 	unsigned long reset_start_time = jiffies;
 	void __iomem *addr = (void __iomem *)dev->base_addr;
@@ -325,7 +326,6 @@ static void ax_block_output(struct net_device *dev, int count,
 static void
 ax_mii_ei_outbits(struct net_device *dev, unsigned int bits, int len)
 {
-	struct ei_device *ei_local = (struct ei_device *) netdev_priv(dev);
 	void __iomem *memr_addr = (void __iomem *)dev->base_addr + AX_MEMR;
 	unsigned int memr;
 
@@ -364,7 +364,6 @@ ax_mii_ei_outbits(struct net_device *dev, unsigned int bits, int len)
 static unsigned int
 ax_phy_ei_inbits(struct net_device *dev, int no)
 {
-	struct ei_device *ei_local = (struct ei_device *) netdev_priv(dev);
 	void __iomem *memr_addr = (void __iomem *)dev->base_addr + AX_MEMR;
 	unsigned int memr;
 	unsigned int result = 0;
@@ -589,12 +588,32 @@ static u32 ax_get_link(struct net_device *dev)
 	return mii_link_ok(&ax->mii);
 }
 
+#define ASIX_EEPROM_SIZE (6*sizeof(u16))     /* bytes */
+
+static int get_eeprom(struct net_device *dev, struct ethtool_eeprom *eeprom, u8 *data)
+{
+   return -ENOSYS ;
+}
+
+static int set_eeprom(struct net_device *dev, struct ethtool_eeprom *eeprom, u8 *data)
+{
+   return -ENOSYS ;
+}
+
+static int get_eeprom_len(struct net_device *dev)
+{
+   return ASIX_EEPROM_SIZE ;
+}
+
 static const struct ethtool_ops ax_ethtool_ops = {
 	.get_drvinfo		= ax_get_drvinfo,
 	.get_settings		= ax_get_settings,
 	.set_settings		= ax_set_settings,
 	.nway_reset		= ax_nway_reset,
 	.get_link		= ax_get_link,
+	.get_eeprom		= get_eeprom,
+	.set_eeprom		= set_eeprom,
+	.get_eeprom_len		= get_eeprom_len,
 };
 
 #ifdef CONFIG_AX88796_93CX6
@@ -690,6 +709,34 @@ static int ax_init_dev(struct net_device *dev, int first_init)
 
 	if (first_init && ax->plat->flags & AXFLG_HAS_EEPROM) {
 		unsigned char SA_prom[32];
+		/* Read the 16 bytes of station address PROM.
+		   We must first initialize registers, similar to
+		   NS8390_init(eifdev, 0).
+		   We can't reliably read the SAPROM address without this.
+		   (I learned the hard way!). */
+		{
+			struct {
+				unsigned char value, offset;
+			} program_seq[] = {
+							/* Select page 0 */
+				{E8390_NODMA+E8390_PAGE0+E8390_STOP, E8390_CMD},
+				{0x48,	EN0_DCFG},  /* Set byte-wide (0x49) access. */
+				{0x00,	EN0_RCNTLO},  /* Clear the count regs. */
+				{0x00,	EN0_RCNTHI},
+				{0x00,	EN0_IMR},  /* Mask completion irq. */
+				{0xFF,	EN0_ISR},
+				{E8390_RXOFF, EN0_RXCR},  /* 0x20  Set to monitor */
+				{E8390_TXOFF, EN0_TXCR},  /* 0x02  and loopback mode. */
+				{32,	EN0_RCNTLO},
+				{0x00,	EN0_RCNTHI},
+				{0x00,	EN0_RSARLO},  /* DMA starting at 0x0000. */
+				{0x00,	EN0_RSARHI},
+				{E8390_RREAD+E8390_START, E8390_CMD},
+			};
+			for (i = 0; i < ARRAY_SIZE(program_seq); i++)
+				ei_outb(program_seq[i].value, ioaddr +
+					program_seq[i].offset);
+		}
 
 		for(i = 0; i < sizeof(SA_prom); i+=2) {
 			SA_prom[i] = ei_inb(ioaddr + NE_DATAPORT);
@@ -701,6 +748,8 @@ static int ax_init_dev(struct net_device *dev, int first_init)
 				SA_prom[i] = SA_prom[i+i];
 
 		memcpy(dev->dev_addr,  SA_prom, 6);
+		if (ax->plat->wordlength == 2)
+                	ei_outb(ax->plat->dcr_val, ioaddr +EN0_DCFG);
 	}
 
 #ifdef CONFIG_AX88796_93CX6
