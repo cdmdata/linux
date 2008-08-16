@@ -102,7 +102,7 @@
 
 /* use 0 for production, 1 for verification, >2 for debug */
 #ifndef ei_debug
-int ei_debug = 1;
+int ei_debug = 0;
 #endif
 
 /* Index to functions. */
@@ -267,10 +267,23 @@ static void __ei_tx_timeout(struct net_device *dev)
 	isr = ei_inb(e8390_base+EN0_ISR);
 	spin_unlock_irqrestore(&ei_local->page_lock, flags);
 
-	printk(KERN_DEBUG "%s: Tx timed out, %s TSR=%#2x, ISR=%#2x, t=%d.\n",
+	dev_dbg(&dev->dev, "%s: Tx timed out, %s TSR=%#2x, ISR=%#2x, t=%d.\n",
 		dev->name, (txsr & ENTSR_ABT) ? "excess collisions." :
 		(isr) ? "lost interrupt?" : "cable problem?", txsr, isr, tickssofar);
 
+        if(txsr&ENTSR_PTX){
+           int ctepr = ei_inb(e8390_base+EN0_CTEPR);
+           /* packet transmitted... what happened? */
+           dev_dbg(&dev->dev, "%s: tx1(%x) tx2(%x) txing(%d) last(%x) ctepr(%x), txq(%d)\n",
+                   __func__,
+                   ei_local->tx1, ei_local->tx2, ei_local->txing, ei_local->lasttx, ctepr, ei_local->txqueue );
+           if( (0 != ei_local->txing) && (0 == isr) ){
+		spin_lock_irqsave(&ei_local->page_lock, flags);
+		ei_tx_intr(dev);
+		spin_unlock_irqrestore(&ei_local->page_lock, flags);
+		return ;
+           }
+        }
 	if (!isr && !dev->stats.tx_packets)
 	{
 		/* The 8390 probably hasn't gotten on the cable yet. */
@@ -1055,6 +1068,7 @@ static void __NS8390_init(struct net_device *dev, int startp)
 	/* Follow National Semi's recommendations for initing the DP83902. */
 	ei_outb_p(E8390_NODMA+E8390_PAGE0+E8390_STOP, e8390_base+E8390_CMD); /* 0x21 */
 	ei_outb_p(endcfg, e8390_base + EN0_DCFG);	/* 0x48 or 0x49 */
+	ei_outb_p(0x20, e8390_base + 0x15); /* force push-pull IRQ line */
 	/* Clear the remote byte count registers. */
 	ei_outb_p(0x00,  e8390_base + EN0_RCNTLO);
 	ei_outb_p(0x00,  e8390_base + EN0_RCNTHI);
