@@ -42,6 +42,41 @@ config MACH_MAINSTONE
 	bool "Intel HCDDBBVA0 Development Platform"
 	select PXA27x
 
+config MACH_ARGON
+	bool "Boundary Devices Argon board"
+	select PXA27x
+	help
+	  Select Boundary Devices 32 bit wide board using internal LCD controller
+	  and Okaya QVGA display
+
+config MACH_OXYGEN
+	bool "Boundary Devices Oxygen board"
+	select PXA27x
+	help
+	  Select Boundary Devices 32 bit wide board using internal LCD controller
+	  and Okaya 4.3" (480x272) display
+
+config MACH_NEON
+	bool "Boundary Devices Neon board"
+	select PXA25x
+	help
+	  Select Boundary Devices 32 bit wide board using SM-501 controller
+	  and SMSC Lan91C111 10/100 ethernet
+
+config MACH_NEON270
+	bool "Boundary Devices Neon-270 board"
+	select PXA27x
+	help
+	  Select Boundary Devices 32 bit wide board using SM-501 controller
+	  and SMSC Lan91C111 10/100 ethernet
+
+config MACH_HYDROGEN
+	bool "Boundary Devices Hydrogen board"
+	select PXA27x
+	help
+	  Select Boundary Devices 32 bit wide board using internal LCD controller
+	  and Okaya QVGA display
+
 config ARCH_PXA_IDP
 	bool "Accelent Xscale IDP"
 	select PXA25x
@@ -196,6 +231,13 @@ endchoice
 endif
 
 endmenu
+
+if MACH_NEON270
+        config NEON270ENC
+        	bool "Enclosure version"
+                default N
+                depends on MACH_NEON270
+endif
 
 config MACH_POODLE
 	bool "Enable Sharp SL-5600 (Poodle) Support"
