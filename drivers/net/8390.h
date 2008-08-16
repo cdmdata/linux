@@ -185,6 +185,7 @@ struct ei_device {
 #define EN0_COUNTER1	EI_SHIFT(0x0e)	/* Rcv CRC error counter RD */
 #define EN0_IMR		EI_SHIFT(0x0f)	/* Interrupt mask reg WR */
 #define EN0_COUNTER2	EI_SHIFT(0x0f)	/* Rcv missed frame error counter RD */
+#define EN0_CTEPR	EI_SHIFT(0x1c)
 
 /* Bits in EN0_ISR - Interrupt status register */
 #define ENISR_RX	0x01	/* Receiver, no error */
