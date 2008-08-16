@@ -41,6 +41,9 @@
 #define NR_SG	1
 #define CLKRT_OFF	(~0)
 
+static unsigned int use1bit = 0;
+module_param(use1bit, uint, 0444);
+
 struct pxamci_host {
 	struct mmc_host		*mmc;
 	spinlock_t		lock;
@@ -370,6 +373,12 @@ static void pxamci_request(struct mmc_host *mmc, struct mmc_request *mrq)
 	if (mrq->data) {
 		pxamci_setup_data(host, mrq->data);
 
+#ifdef CONFIG_PXA27x
+		if( !use1bit ){
+			if( MMC_BUS_WIDTH_4 == mmc->ios.bus_width )
+				cmdat |= CMDAT_SD_4DAT ;
+		}
+#endif
 		cmdat &= ~CMDAT_BUSY;
 		cmdat |= CMDAT_DATAEN | CMDAT_DMAEN;
 		if (mrq->data->flags & MMC_DATA_WRITE)
@@ -567,8 +576,12 @@ static int pxamci_probe(struct platform_device *pdev)
 			 MMC_VDD_32_33|MMC_VDD_33_34;
 	mmc->caps = 0;
 	host->cmdat = 0;
-	if (!cpu_is_pxa25x()) {
-		mmc->caps |= MMC_CAP_4_BIT_DATA | MMC_CAP_SDIO_IRQ;
+	if (!cpu_is_pxa21x() && !cpu_is_pxa25x()) {
+		mmc->caps |= MMC_CAP_SDIO_IRQ;
+#ifdef CONFIG_PXA27x
+	if( !use1bit )
+		host->mmc->caps |= MMC_CAP_4_BIT_DATA ;
+#endif
 		host->cmdat |= CMDAT_SDIO_INT_EN;
 		if (cpu_is_pxa300() || cpu_is_pxa310())
 			mmc->caps |= MMC_CAP_MMC_HIGHSPEED |
