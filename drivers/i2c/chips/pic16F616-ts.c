@@ -32,7 +32,7 @@
 /*
  * Define this if you want to talk to the input layer
  */
-#undef CONFIG_INPUT
+//#undef CONFIG_INPUT
 #ifdef CONFIG_INPUT
 #define USE_INPUT
 #else
@@ -380,7 +380,7 @@ static inline int ts_register(struct pic16f616_ts *ts)
 	}
 	ts->idev = idev;
 	idev->name      = "Touchscreen panel";
-	idev->id.product = ts->client->id;
+	idev->id.product = ts->client.addr;
 	idev->open      = ts_open;
 	idev->close     = ts_close;
 
