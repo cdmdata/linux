@@ -120,6 +120,52 @@ static inline u_int chan_to_field(u_int chan, struct fb_bitfield *bf)
 	return chan << bf->offset;
 }
 
+#define LCCR0_CONFIG_MASK (0xFFFFFFFF & ~(LCCR0_OUM|LCCR0_BM|LCCR0_QDM|LCCR0_DIS|LCCR0_EFM|LCCR0_IUM|LCCR0_SFM|LCCR0_LDM|LCCR0_ENB))
+#define LCCR3_CONFIG_MASK (0xFFFFFFFF & ~(LCCR3_HSP|LCCR3_VSP|FMsk(LCCR3_PCD)|FMsk(LCCR3_BPP)|FMsk(LCCR3_BPP3)))
+
+static void pxa_mode_from_registers(struct pxafb_mode_info *mode,struct pxafb_info *info)
+{
+	if( 0 != (lcd_readl(info,LCCR0) & LCCR0_ENB)){
+		unsigned long const lccr1 = lcd_readl(info,LCCR1);
+		unsigned long const lccr2 = lcd_readl(info,LCCR2);
+		unsigned long const lccr3 = lcd_readl(info,LCCR3);
+                unsigned long const cccr = CCCR ;
+                unsigned L = cccr & 0x1F ;
+                unsigned K ;
+                unsigned lclk ;
+                unsigned pcd = lccr3 & 0xFF ;
+     
+                if( L < 2 )
+                   L = 2 ;
+                K = ( 8 > L )
+                    ? 1
+                    : ( 16 >= L )
+                      ? 2 
+                      : 4 ;
+     
+                lclk = (13000000*L)/K ;
+		mode->pixclock = lclk/(2*(pcd+1));
+		mode->xres = (lccr1 & 0x3FF)+1 ;
+		mode->yres = (lccr2 & 0x3FF)+1 ;
+		mode->bpp	= 16 ;
+		mode->hsync_len = ((lccr1>>10)&0x3F)+1 ;
+		mode->left_margin	= (lccr1>>24)+1 ;
+		mode->right_margin = ((lccr1>>16)&0xFF)+1 ;
+		mode->vsync_len = ((lccr2>>10)&0x3f)+1 ;
+		mode->upper_margin = (lccr2>>24);
+		mode->lower_margin = ((lccr2>>16)&0xFF);
+		mode->sync = 0 ;
+		if( 0 == (lccr3 & LCCR3_HSP) )
+			mode->sync = FB_SYNC_HOR_HIGH_ACT ;
+		else
+			mode->sync = 0 ;
+		if( 0 == (lccr3 & LCCR3_VSP) )
+			mode->sync |= FB_SYNC_VERT_HIGH_ACT ;
+		info->lccr0 = lcd_readl(info,LCCR0) & LCCR0_CONFIG_MASK ;
+		info->lccr3 = (lccr3 & LCCR3_CONFIG_MASK);
+	}
+}
+
 static int
 pxafb_setpalettereg(u_int regno, u_int red, u_int green, u_int blue,
 		       u_int trans, struct fb_info *info)
@@ -422,6 +468,7 @@ static int pxafb_set_par(struct fb_info *info)
  */
 static int pxafb_blank(int blank, struct fb_info *info)
 {
+#if 0
 	struct pxafb_info *fbi = (struct pxafb_info *)info;
 	int i;
 
@@ -446,6 +493,7 @@ static int pxafb_blank(int blank, struct fb_info *info)
 			fb_set_cmap(&fbi->fb.cmap, info);
 		pxafb_schedule_work(fbi, C_ENABLE);
 	}
+#endif
 	return 0;
 }
 
@@ -508,17 +556,30 @@ static struct fb_ops pxafb_ops = {
 static inline unsigned int get_pcd(struct pxafb_info *fbi,
 				   unsigned int pixclock)
 {
-	unsigned long long pcd;
+   /*
+    *    pfreq == LCLK/(2*(PCD+1))
+    *    pfreq*(2*(PCD+1)) == LCLK
+    *    2*(PCD+1) == LCLK/pfreq
+    *    (PCD+1) == LCLK/(pfreq*2)
+    *    PCD == (LCLK/(pfreq*2)) - 1 ;
+    */
+   unsigned L = CCCR & 0x1F ;
+   unsigned K ;
+   unsigned lclk ;
+   unsigned long pcd ;
 
-	/* FIXME: Need to take into account Double Pixel Clock mode
-	 * (DPC) bit? or perhaps set it based on the various clock
-	 * speeds */
-	pcd = (unsigned long long)(clk_get_rate(fbi->clk) / 10000);
-	pcd *= pixclock;
-	do_div(pcd, 100000000 * 2);
-	/* no need for this, since we should subtract 1 anyway. they cancel */
-	/* pcd += 1; */ /* make up for integer math truncations */
-	return (unsigned int)pcd;
+   if( L < 2 )
+      L = 2 ;
+   K = ( 8 > L )
+       ? 1
+       : ( 16 >= L )
+         ? 2 
+         : 4 ;
+
+   lclk = (13000000*L)/K ;
+   pcd = (lclk/(2*pixclock)) - 1;
+   printk( KERN_ERR "%s: pixclk %lu =====> pcd %u\n", __func__, pixclock, pcd );
+   return pcd & 0xFF ;
 }
 
 /*
@@ -804,6 +865,7 @@ static void setup_parallel_timing(struct pxafb_info *fbi,
 		 LCCR3_VrtSnchH : LCCR3_VrtSnchL);
 
 	if (pcd) {
+printk( KERN_ERR "%s: would change LCCR3(pcd) from 0x%02x to 0x%02x (pcd %u)\n", __func__, fbi->reg_lccr3 & 0xff, LCCR3_PixClkDiv(pcd), pcd );
 		fbi->reg_lccr3 |= LCCR3_PixClkDiv(pcd);
 		set_hsync_time(fbi, pcd);
 	}
@@ -1721,6 +1783,8 @@ static int __init pxafb_probe(struct platform_device *dev)
 		ret = -EBUSY;
 		goto failed_free_mem;
 	}
+
+        pxa_mode_from_registers(inf->modes,fbi);
 
 #ifdef CONFIG_FB_PXA_SMARTPANEL
 	ret = pxafb_smart_init(fbi);

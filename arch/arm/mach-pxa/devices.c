@@ -128,51 +128,10 @@ struct platform_device pxa_device_fb = {
 	.resource	= pxafb_resources,
 };
 
-#define LCCR0_CONFIG_MASK (0xFFFFFFFF & ~(LCCR0_OUM|LCCR0_BM|LCCR0_QDM|LCCR0_DIS|LCCR0_EFM|LCCR0_IUM|LCCR0_SFM|LCCR0_LDM|LCCR0_ENB))
-#define LCCR3_CONFIG_MASK (0xFFFFFFFF & ~(LCCR3_HSP|LCCR3_VSP|FMsk(LCCR3_PCD)|FMsk(LCCR3_BPP)|FMsk(LCCR3_BPP3)))
-
 void __init set_pxa_fb_info(struct pxafb_mach_info *info)
 {
 	struct pxafb_mode_info *const mode = info->modes ;
 	pxa_device_fb.dev.platform_data = info;
-	if( 0 != (LCCR0 & LCCR0_ENB)){
-		unsigned long const lccr1 = LCCR1 ;
-		unsigned long const lccr2 = LCCR2 ;
-		unsigned long const lccr3 = LCCR3 ;
-                unsigned L = CCCR & 0x1F ;
-                unsigned K ;
-                unsigned lclk ;
-                unsigned pcd = lccr3 & 0xFF ;
-     
-                if( L < 2 )
-                   L = 2 ;
-                K = ( 8 > L )
-                    ? 1
-                    : ( 16 >= L )
-                      ? 2 
-                      : 4 ;
-     
-                lclk = (13000000*L)/K ;
-		mode->pixclock = lclk/(2*(pcd+1));
-		mode->xres = (lccr1 & 0x3FF)+1 ;
-		mode->yres = (lccr2 & 0x3FF)+1 ;
-		mode->bpp	= 16 ;
-		mode->hsync_len = ((lccr1>>10)&0x3F)+1 ;
-		mode->left_margin	= (lccr1>>24)+1 ;
-		mode->right_margin = ((lccr1>>16)&0xFF)+1 ;
-		mode->vsync_len = ((lccr2>>10)&0x3f)+1 ;
-		mode->upper_margin = (lccr2>>24);
-		mode->lower_margin = ((lccr2>>16)&0xFF);
-		mode->sync = 0 ;
-		if( 0 == (lccr3 & LCCR3_HSP) )
-			mode->sync = FB_SYNC_HOR_HIGH_ACT ;
-		else
-			mode->sync = 0 ;
-		if( 0 == (lccr3 & LCCR3_VSP) )
-			mode->sync |= FB_SYNC_VERT_HIGH_ACT ;
-		info->lccr0 = LCCR0 & LCCR0_CONFIG_MASK ;
-		info->lccr3 = (lccr3 & LCCR3_CONFIG_MASK);
-	}
 	pxa_register_device(&pxa_device_fb, info);
 }
 
