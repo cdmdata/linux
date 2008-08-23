@@ -616,7 +616,11 @@ static int ts_detect_client(struct i2c_adapter *adapter, int address, int kind)
 	ts->client.driver = &ts_driver;
 	ts->client.flags = 0;
 	strlcpy(ts->client.name, client_name, I2C_NAME_SIZE);
+#if 1
+	ts->irq = IRQ_GPIO(3);
+#else
 	ts->irq = IRQ_GPIO(11);
+#endif
 	i2c_set_clientdata(&ts->client, ts);
 	if ((err = i2c_attach_client(&ts->client))) {
 		printk(KERN_WARNING "%s: i2c_attach_client failed\n", client_name);
