@@ -48,6 +48,7 @@
 #include <linux/mmc/host.h>
 #include <asm/arch/irda.h>
 #include <asm/arch/ohci.h>
+#include <asm/arch/i2c.h>
 
 #include "generic.h"
 
@@ -69,6 +70,7 @@ static void __init hydrogen_init_irq(void)
         GPDR(0) = gpdr & ~(1<<12);
         set_irq_type(IRQ_GPIO(12), IRQ_TYPE_EDGE_FALLING);	/* Asix */
 	set_irq_type(IRQ_GPIO(MMC_CARD_DETECT_GP), IRQT_FALLING);	//MMC card detect
+        set_irq_type(IRQ_GPIO(3), IRQ_TYPE_EDGE_FALLING);	/* i2c touch */
 }
 
 static void __init
@@ -230,6 +232,7 @@ static void __init hydrogen_init(void)
 
 	pxa_set_mci_info(&hydrogen_mci_platform_data);
 	pxa_set_ohci_info(&hydrogen_ohci_platform_data);
+	pxa_set_i2c_info(NULL);
 }
 
 static void __init hydrogen_map_io(void)
