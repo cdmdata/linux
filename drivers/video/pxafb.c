@@ -125,11 +125,12 @@ static inline u_int chan_to_field(u_int chan, struct fb_bitfield *bf)
 
 static void pxa_mode_from_registers(struct pxafb_mode_info *mode,struct pxafb_info *info)
 {
-	if( 0 != (lcd_readl(info,LCCR0) & LCCR0_ENB)){
-		unsigned long const lccr1 = lcd_readl(info,LCCR1);
-		unsigned long const lccr2 = lcd_readl(info,LCCR2);
-		unsigned long const lccr3 = lcd_readl(info,LCCR3);
-                unsigned long const cccr = CCCR ;
+	unsigned int const lccr0 = lcd_readl(info,LCCR0);
+	if( 0 != (lccr0 & LCCR0_ENB)){
+		unsigned int const lccr1 = lcd_readl(info,LCCR1);
+		unsigned int const lccr2 = lcd_readl(info,LCCR2);
+		unsigned int const lccr3 = lcd_readl(info,LCCR3);
+                unsigned int const cccr = CCCR ;
                 unsigned L = cccr & 0x1F ;
                 unsigned K ;
                 unsigned lclk ;
@@ -161,8 +162,9 @@ static void pxa_mode_from_registers(struct pxafb_mode_info *mode,struct pxafb_in
 			mode->sync = 0 ;
 		if( 0 == (lccr3 & LCCR3_VSP) )
 			mode->sync |= FB_SYNC_VERT_HIGH_ACT ;
-		info->lccr0 = lcd_readl(info,LCCR0) & LCCR0_CONFIG_MASK ;
+		info->lccr0 = (lccr0 & LCCR0_CONFIG_MASK);
 		info->lccr3 = (lccr3 & LCCR3_CONFIG_MASK);
+        	printk(KERN_INFO "Display %ix%ix%i pixclock=%i\n", mode->xres,mode->yres,mode->bpp,mode->pixclock);
 	}
 }
 
@@ -566,7 +568,7 @@ static inline unsigned int get_pcd(struct pxafb_info *fbi,
    unsigned L = CCCR & 0x1F ;
    unsigned K ;
    unsigned lclk ;
-   unsigned long pcd ;
+   unsigned pcd ;
 
    if( L < 2 )
       L = 2 ;
@@ -578,7 +580,7 @@ static inline unsigned int get_pcd(struct pxafb_info *fbi,
 
    lclk = (13000000*L)/K ;
    pcd = (lclk/(2*pixclock)) - 1;
-   printk( KERN_ERR "%s: pixclk %lu =====> pcd %u\n", __func__, pixclock, pcd );
+   printk( KERN_ERR "%s: pixclk %u =====> pcd %u\n", __func__, pixclock, pcd );
    return pcd & 0xFF ;
 }
 
@@ -1455,8 +1457,6 @@ static struct pxafb_info * __init pxafb_init_fbinfo(struct device *dev)
 	fbi->state		= C_STARTUP;
 	fbi->task_state		= (u_char)-1;
 
-	pxafb_decode_mach_info(fbi, inf);
-
 	init_waitqueue_head(&fbi->ctrlr_wait);
 	INIT_WORK(&fbi->task, pxafb_task);
 	init_MUTEX(&fbi->ctrlr_sem);
@@ -1761,6 +1761,8 @@ static int __init pxafb_probe(struct platform_device *dev)
 		ret = -EBUSY;
 		goto failed_free_res;
 	}
+        pxa_mode_from_registers(inf->modes,fbi);
+	pxafb_decode_mach_info(fbi, inf);
 
 	/* Initialize video memory */
 	ret = pxafb_map_video_memory(fbi);
@@ -1783,8 +1785,6 @@ static int __init pxafb_probe(struct platform_device *dev)
 		ret = -EBUSY;
 		goto failed_free_mem;
 	}
-
-        pxa_mode_from_registers(inf->modes,fbi);
 
 #ifdef CONFIG_FB_PXA_SMARTPANEL
 	ret = pxafb_smart_init(fbi);
