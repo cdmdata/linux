@@ -39,6 +39,13 @@
 #undef USE_INPUT
 #endif
 
+static char const * const touch_type_names[] = {
+   "Unknown"
+,  "4-wire resistive"
+,  "5-wire resistive"
+};
+
+
 #ifndef USE_INPUT
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
@@ -130,6 +137,7 @@ static int tstype_read_proc
 	void *data )
 {
 	if (gts) {
+		int tstype=0;
 		unsigned char sumXReg[1] = { SUM_X };
 		unsigned char regAddr[] = { X_IGND};
 		unsigned char buf[32];
@@ -139,23 +147,23 @@ static int tstype_read_proc
 			{gts->client.addr, 0, 1, sumXReg}
 		};
 		int totalWritten = 0 ;
-		printk(KERN_ERR "%s\n", __FUNCTION__);
 		if  (0 < count) {
 			int rval = i2c_transfer(gts->client.adapter,
 						readReg,
 						ARRAY_SIZE(readReg));
 			if (ARRAY_SIZE(readReg) == rval) {
-				totalWritten = snprintf(page, count,
-						"%02x: %02x %s\n",
-						regAddr[0],
-						buf[0],
-						(buf[0]==0x80)? "4 wire" : (buf[0]==0x06)? "5 wire" : "no touchscreen");
-				if (totalWritten < 0) {
-					totalWritten = 0;
-				}
+				if (buf[0]==0x80)
+					tstype = 1;	/* 4 wire */
+				else if (buf[0]==0x06)
+					tstype = 2;	/* 5 wire */
 			} else
 				printk(KERN_ERR "%s: transfer error %d\n",
 					__func__, rval);
+			totalWritten = snprintf(page, count, "%s\n",
+					touch_type_names[tstype]);
+			if (totalWritten < 0) {
+				totalWritten = 0;
+			}
 		}
 		*eof = 1 ;
 		return totalWritten ;
