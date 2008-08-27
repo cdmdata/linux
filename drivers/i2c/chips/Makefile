@@ -31,7 +31,6 @@ obj-$(CONFIG_TWL4030_PWRBUTTON)	+= twl4030-pwrbutton.o
 obj-$(CONFIG_TWL4030_MADC)	+= twl4030-madc.o
 obj-$(CONFIG_RTC_X1205_I2C)	+= x1205.o
 obj-$(CONFIG_GPIOEXPANDER_DAVINCI) += gpio_expander_davinci.o
-obj-$(CONFIG_PIC16F616_TS)	+= pic16F616-ts.o
 
 ifeq ($(CONFIG_I2C_DEBUG_CHIP),y)
 EXTRA_CFLAGS += -DDEBUG

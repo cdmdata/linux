@@ -79,7 +79,8 @@ struct pic16f616_ts {
 	struct timeval	lastInterruptTime;
 #endif
 	int irq;
-   struct proc_dir_entry *procentry ;
+	struct proc_dir_entry *procentry;
+	struct proc_dir_entry *tstype_procentry;
 };
 const char *client_name = "Pic16F616-ts";
 #define PULLUP_DELAY_DEFAULT 80
@@ -95,6 +96,7 @@ static unsigned short normal_i2c[] = { 0x22,I2C_CLIENT_END };
 #define SUM_X		0x28
 #define SUM_Y		0x2b
 #define SAMPLE_CNT 	0x30
+#define X_IGND		0x31
 #define PULLUP_DELAY 0x39
 
 /* This makes all addr_data:s */
@@ -118,6 +120,49 @@ static char const procentryname[] = {
 
 static int ts_startup(struct pic16f616_ts* ts);
 static void ts_shutdown(struct pic16f616_ts* ts);
+
+static int tstype_read_proc
+(	char *page, 
+	char **start, 
+	off_t off,
+        int count, 
+	int *eof, 
+	void *data )
+{
+	if (gts) {
+		unsigned char sumXReg[1] = { SUM_X };
+		unsigned char regAddr[] = { X_IGND};
+		unsigned char buf[32];
+		struct i2c_msg readReg[] = {
+			{gts->client.addr, 0, 1, regAddr},
+			{gts->client.addr, I2C_M_RD, 1, buf},
+			{gts->client.addr, 0, 1, sumXReg}
+		};
+		int totalWritten = 0 ;
+		printk(KERN_ERR "%s\n", __FUNCTION__);
+		if  (0 < count) {
+			int rval = i2c_transfer(gts->client.adapter,
+						readReg,
+						ARRAY_SIZE(readReg));
+			if (ARRAY_SIZE(readReg) == rval) {
+				totalWritten = snprintf(page, count,
+						"%02x: %02x %s\n",
+						regAddr[0],
+						buf[0],
+						(buf[0]==0x80)? "4 wire" : (buf[0]==0x06)? "5 wire" : "no touchscreen");
+				if (totalWritten < 0) {
+					totalWritten = 0;
+				}
+			} else
+				printk(KERN_ERR "%s: transfer error %d\n",
+					__func__, rval);
+		}
+		*eof = 1 ;
+		return totalWritten ;
+	} else {
+		return -EIO ;
+	}
+}
 
 static int pic16f616_proc_read
 	(char *page,
@@ -509,8 +554,12 @@ static irqreturn_t ts_interrupt(int irq, void *id)
 	int bit;
 	{
 		int gp = IRQ_TO_GPIO(irq);
+#if 1
+		bit = gpio_get_value(gp);
+#else
 		struct gpio_controller  *__iomem g = __gpio_to_controller(gp);
 		bit = (__raw_readl(&g->in_data) >> (gp&0x1f))&1;
+#endif
 	}
 	ts->interruptCnt++;
 	if (bit==0) {
@@ -612,7 +661,11 @@ static int ts_detect_client(struct i2c_adapter *adapter, int address, int kind)
 	ts->client.driver = &ts_driver;
 	ts->client.flags = 0;
 	strlcpy(ts->client.name, client_name, I2C_NAME_SIZE);
+#if 1
+	ts->irq = IRQ_GPIO(3);
+#else
 	ts->irq = IRQ_GPIO(11);
+#endif
 	i2c_set_clientdata(&ts->client, ts);
 	if ((err = i2c_attach_client(&ts->client))) {
 		printk(KERN_WARNING "%s: i2c_attach_client failed\n", client_name);
@@ -627,6 +680,10 @@ static int ts_detect_client(struct i2c_adapter *adapter, int address, int kind)
 			ts->procentry->read_proc = pic16f616_proc_read ;
 			ts->procentry->write_proc = pic16f616_proc_write ;
 		}
+#define TSTYPE_PROCNAME "tstype"
+		ts->tstype_procentry = create_proc_entry(TSTYPE_PROCNAME, 0, 0);
+		if (ts->tstype_procentry)
+			ts->tstype_procentry->read_proc  = tstype_read_proc;
 	} else {
 		printk(KERN_WARNING "%s: ts_register failed\n", client_name);
 		ts_deregister(ts);
