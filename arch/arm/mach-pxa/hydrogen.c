@@ -24,6 +24,7 @@
 #include <linux/ioport.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
+#include <linux/backlight.h>
 #include <net/ax88796.h>
 
 #include <asm/types.h>
@@ -45,12 +46,14 @@
 #include <asm/arch/audio.h>
 #include <asm/arch/pxafb.h>
 #include <asm/arch/mmc.h>
+#include <asm/arch/gpio.h>
 #include <linux/mmc/host.h>
 #include <asm/arch/irda.h>
 #include <asm/arch/ohci.h>
 #include <asm/arch/i2c.h>
 
 #include "generic.h"
+#include "devices.h"
 
 #define MMC_CARD_DETECT_GP 36
 
@@ -152,6 +155,67 @@ static struct pxafb_mach_info fb_hw = {
 	.lccr3 = LCCR3_PCP,
 };
 
+#ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
+static int hydrogen_backlight_update_status(struct backlight_device *bl)
+{
+	int brightness = bl->props.brightness;
+	int duty;
+	if ((bl->props.power != FB_BLANK_UNBLANK) ||
+	    (bl->props.fb_blank != FB_BLANK_UNBLANK))
+		brightness = 0;
+
+	duty = brightness ^ 0x3ff;	/* on this panel the duty cycle need inverted */
+	if (duty && (duty != bl->props.max_brightness)) {
+		gpio_set_value(GPIO17_PWM1, 1);
+		pxa_gpio_mode(GPIO16_PWM0_MD);
+		pxa_gpio_mode(GPIO17_PWM1 | GPIO_OUT);
+		pxa_set_cken(CKEN_PWM0, 1);
+		PWM_CTRL0 = 0;
+		PWM_PWDUTY0 = duty;
+		PWM_PERVAL0 = bl->props.max_brightness;
+	} else {
+//value is either high or low, PWM not needed
+		PWM_CTRL0 = 0;
+		PWM_PWDUTY0 = duty;
+		PWM_PERVAL0 = bl->props.max_brightness;
+		gpio_set_value(GPIO16_PWM0, (duty)? 1 : 0);
+		gpio_set_value(GPIO17_PWM1, (brightness)? 1 : 0);
+		pxa_gpio_mode(GPIO16_PWM0 | GPIO_OUT);
+		pxa_gpio_mode(GPIO17_PWM1 | GPIO_OUT);
+		pxa_set_cken(CKEN_PWM0, 0);
+	}
+	return 0;
+}
+
+static int hydrogen_backlight_get_brightness(struct backlight_device *bl)
+{
+	return PWM_PWDUTY0 ^ 0x3ff;
+}
+
+static /*const*/ struct backlight_ops hydrogen_backlight_ops = {
+	.update_status	= hydrogen_backlight_update_status,
+	.get_brightness	= hydrogen_backlight_get_brightness,
+};
+
+static void __init hydrogen_backlight_register(void)
+{
+	struct backlight_device *bl;
+
+	bl = backlight_device_register("hydrogen-bl", &pxa_device_fb.dev,
+				       NULL, &hydrogen_backlight_ops);
+	if (IS_ERR(bl)) {
+		printk(KERN_ERR "hydrogen: unable to register backlight: %ld\n",
+		       PTR_ERR(bl));
+		return;
+	}
+	bl->props.max_brightness = 1023;
+	bl->props.brightness = 1023;
+	backlight_update_status(bl);
+}
+#else
+#define hydrogen_backlight_register()	do { } while (0)
+#endif
+
 static int hydrogen_mci_init(struct device *dev, irq_handler_t intHandler,
 			     void *data)
 {
@@ -224,11 +288,12 @@ static void __init hydrogen_init(void)
 
 	pxa_gpio_mode(GPIO45_SYSCLK_AC97_MD);
 
-   printk( KERN_ERR "%s: %u devices\n", __func__, ARRAY_SIZE(platform_devices));
+	printk( KERN_ERR "%s: %u devices\n", __func__, ARRAY_SIZE(platform_devices));
 	platform_add_devices(platform_devices, ARRAY_SIZE(platform_devices));
 
 	fb_hw.modes = &fb_modes;
 	set_pxa_fb_info(&fb_hw);
+	hydrogen_backlight_register();
 
 	pxa_set_mci_info(&hydrogen_mci_platform_data);
 	pxa_set_ohci_info(&hydrogen_ohci_platform_data);
