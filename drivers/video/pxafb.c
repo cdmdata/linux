@@ -164,7 +164,7 @@ static void pxa_mode_from_registers(struct pxafb_mode_info *mode,struct pxafb_in
 			mode->sync |= FB_SYNC_VERT_HIGH_ACT ;
 		info->lccr0 = (lccr0 & LCCR0_CONFIG_MASK);
 		info->lccr3 = (lccr3 & LCCR3_CONFIG_MASK);
-        	printk(KERN_INFO "Display %ix%ix%i pixclock=%i\n", mode->xres,mode->yres,mode->bpp,mode->pixclock);
+        	printk(KERN_INFO "Display %ix%ix%i pixclock=%lu\n", mode->xres,mode->yres,mode->bpp,mode->pixclock);
 	}
 }
 
@@ -1414,7 +1414,6 @@ static struct pxafb_info * __init pxafb_init_fbinfo(struct device *dev)
 {
 	struct pxafb_info *fbi;
 	void *addr;
-	struct pxafb_mach_info *inf = dev->platform_data;
 
 	/* Alloc the pxafb_info and pseudo_palette in one step */
 	fbi = kmalloc(sizeof(struct pxafb_info) + sizeof(u32) * 16, GFP_KERNEL);
