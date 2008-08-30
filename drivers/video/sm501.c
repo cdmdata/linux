@@ -378,12 +378,47 @@ sm501_ioctl( struct fb_info *info, unsigned int cmd, unsigned long arg)
 	return -EINVAL;
 }
 
+
+static u32 colreg[17];
+
 static int
 sm501_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 		   u_int trans, struct fb_info *info)
 {
-   DEBUGMSG( KERN_ERR "%s\n", __FUNCTION__ );
-   return 0;
+	/* only pseudo-palette (16 bpp) allowed */
+	if(regno >= 16)	 /* maximum number of palette entries */
+		return 1;
+
+	if(info->var.grayscale) {
+		/* grayscale = 0.30*R + 0.59*G + 0.11*B */
+		red = green = blue = (red * 77 + green * 151 + blue * 28) >> 8;
+	}
+
+	/* Truecolor has hardware-independent 16-entry pseudo-palette */
+	if(info->fix.visual == FB_VISUAL_TRUECOLOR) {
+		u32 v;
+
+		if(regno >= 16)
+			return 1;
+
+		red >>= (16 - info->var.red.length);
+		green >>= (16 - info->var.green.length);
+		blue >>= (16 - info->var.blue.length);
+
+		v = (red << info->var.red.offset) |
+		    (green << info->var.green.offset) | (blue << info->var.
+							 blue.offset);
+
+		switch(info->var.bits_per_pixel) {
+			case 16:
+				colreg[regno] = v;
+				break;
+			default:
+				return 1;
+		}
+		return 0;
+	}
+	return 0;
 }
 
 static int sm501_set_par(struct fb_info *info)
@@ -430,9 +465,6 @@ static int sm501_read_proc( char *page, char **start, off_t off,
                     cmdListAdd_,
                     cmdListTake_ );
 }
-
-
-static u32 colreg[17];
 
 static struct fb_info *register_fb( struct device *dev, unsigned w, unsigned h, unsigned intNum )
 {
