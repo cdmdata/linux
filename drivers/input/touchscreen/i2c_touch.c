@@ -144,7 +144,9 @@ static int tstype_read_proc
 		struct i2c_msg readReg[] = {
 			{gts->client.addr, 0, 1, regAddr},
 			{gts->client.addr, I2C_M_RD, 1, buf},
+#if 0
 			{gts->client.addr, 0, 1, sumXReg}
+#endif
 		};
 		int totalWritten = 0 ;
 		if  (0 < count) {
