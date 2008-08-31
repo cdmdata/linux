@@ -123,7 +123,7 @@ static inline u_int chan_to_field(u_int chan, struct fb_bitfield *bf)
 #define LCCR0_CONFIG_MASK (0xFFFFFFFF & ~(LCCR0_OUM|LCCR0_BM|LCCR0_QDM|LCCR0_DIS|LCCR0_EFM|LCCR0_IUM|LCCR0_SFM|LCCR0_LDM|LCCR0_ENB))
 #define LCCR3_CONFIG_MASK (0xFFFFFFFF & ~(LCCR3_HSP|LCCR3_VSP|FMsk(LCCR3_PCD)|FMsk(LCCR3_BPP)|FMsk(LCCR3_BPP3)))
 
-static void pxa_mode_from_registers(struct pxafb_mode_info *mode,struct pxafb_info *info)
+static void pxa_mode_from_registers(struct pxafb_mode_info *mode,struct pxafb_info *info,struct pxafb_mach_info *mach)
 {
 	unsigned int const lccr0 = lcd_readl(info,LCCR0);
 	if( 0 != (lccr0 & LCCR0_ENB)){
@@ -164,6 +164,10 @@ static void pxa_mode_from_registers(struct pxafb_mode_info *mode,struct pxafb_in
 			mode->sync |= FB_SYNC_VERT_HIGH_ACT ;
 		info->lccr0 = (lccr0 & LCCR0_CONFIG_MASK);
 		info->lccr3 = (lccr3 & LCCR3_CONFIG_MASK);
+		if(lccr3&LCCR3_PCP)
+			mach->lccr3 |= LCCR3_PCP ;
+		else
+			mach->lccr3 &= ~LCCR3_PCP ;
         	printk(KERN_INFO "Display %ix%ix%i pixclock=%lu\n", mode->xres,mode->yres,mode->bpp,mode->pixclock);
 	}
 }
@@ -1760,7 +1764,7 @@ static int __init pxafb_probe(struct platform_device *dev)
 		ret = -EBUSY;
 		goto failed_free_res;
 	}
-        pxa_mode_from_registers(inf->modes,fbi);
+        pxa_mode_from_registers(inf->modes,fbi,inf);
 	pxafb_decode_mach_info(fbi, inf);
 
 	/* Initialize video memory */
