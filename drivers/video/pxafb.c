@@ -164,7 +164,7 @@ static void pxa_mode_from_registers(struct pxafb_mode_info *mode,struct pxafb_in
 			mode->sync |= FB_SYNC_VERT_HIGH_ACT ;
 		info->lccr0 = (lccr0 & LCCR0_CONFIG_MASK);
 		info->lccr3 = (lccr3 & LCCR3_CONFIG_MASK);
-        	printk(KERN_INFO "Display %ix%ix%i pixclock=%i\n", mode->xres,mode->yres,mode->bpp,mode->pixclock);
+        	printk(KERN_INFO "Display %ix%ix%i pixclock=%i\n", mode->xres,mode->yres,mode->bpp,(int)mode->pixclock);
 	}
 }
 
@@ -937,7 +937,7 @@ static int pxafb_activate_var(struct fb_var_screeninfo *var,
 
 	fbi->reg_lccr0 = fbi->lccr0 |
 		(LCCR0_LDM | LCCR0_SFM | LCCR0_IUM | LCCR0_EFM |
-		 LCCR0_QDM | LCCR0_BM  | LCCR0_OUM);
+		 LCCR0_QDM | LCCR0_BM  | LCCR0_OUM | LCCR0_OUC);
 
 	fbi->reg_lccr3 |= pxafb_bpp_to_lccr3(var);
 
@@ -1414,7 +1414,6 @@ static struct pxafb_info * __init pxafb_init_fbinfo(struct device *dev)
 {
 	struct pxafb_info *fbi;
 	void *addr;
-	struct pxafb_mach_info *inf = dev->platform_data;
 
 	/* Alloc the pxafb_info and pseudo_palette in one step */
 	fbi = kmalloc(sizeof(struct pxafb_info) + sizeof(u32) * 16, GFP_KERNEL);
@@ -1673,6 +1672,13 @@ MODULE_PARM_DESC(options, "LCD parameters (see Documentation/fb/pxafb.txt)");
 #define pxafb_setup_options()		(0)
 #endif
 
+struct pxafb_info *gfbi;
+int pxafb_get_mmio(void)
+{
+	return (gfbi)? ((int)gfbi->mmio_base) : 0;
+}
+EXPORT_SYMBOL(pxafb_get_mmio);
+
 static int __init pxafb_probe(struct platform_device *dev)
 {
 	struct pxafb_info *fbi;
@@ -1734,6 +1740,7 @@ static int __init pxafb_probe(struct platform_device *dev)
 	pxafb_backlight_power = inf->pxafb_backlight_power;
 	pxafb_lcd_power = inf->pxafb_lcd_power;
 	fbi = pxafb_init_fbinfo(&dev->dev);
+	gfbi = fbi;
 	if (!fbi) {
 		/* only reason for pxafb_init_fbinfo to fail is kmalloc */
 		dev_err(&dev->dev, "Failed to initialize framebuffer device\n");

@@ -1771,6 +1771,14 @@ config FB_PXA
 
 	  If unsure, say N.
 
+config FB_PXA_YUV
+	tristate "PXA27x LCD YUV overlay support"
+	depends on FB_PXA
+	---help---
+	  Frame yuv overlay driver for the built-in LCD controller in the Intel
+	  PXA27x processor.
+	  If unsure, say N.
+
 config FB_PXA_SMARTPANEL
 	bool "PXA Smartpanel LCD support"
 	default n

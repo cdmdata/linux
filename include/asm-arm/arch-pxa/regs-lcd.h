@@ -14,10 +14,16 @@
 #define LCCR5		(0x014)	/* LCD Controller Control Register 5 */
 #define DFBR0		(0x020)	/* DMA Channel 0 Frame Branch Register */
 #define DFBR1		(0x024)	/* DMA Channel 1 Frame Branch Register */
+#define FBR2		(0x028)	/* DMA Channel 2 Frame Branch Register */
+#define FBR3		(0x02c)	/* DMA Channel 3 Frame Branch Register */
+#define FBR4		(0x030)	/* DMA Channel 4 Frame Branch Register */
 #define LCSR		(0x038)	/* LCD Controller Status Register */
 #define LIIDR		(0x03C)	/* LCD Controller Interrupt ID Register */
 #define TMEDRGBR	(0x040)	/* TMED RGB Seed Register */
 #define TMEDCR		(0x044)	/* TMED Control Register */
+
+#define OVL2C1	0x70
+#define OVL2C2	0x80
 
 #define CMDCR		(0x100)	/* Command Control Register */
 #define PRSR		(0x104)	/* Panel Read Status Register */
@@ -42,10 +48,32 @@
 #define FSADR0		(0x204)	/* DMA Channel 0 Frame Source Address Register */
 #define FIDR0		(0x208)	/* DMA Channel 0 Frame ID Register */
 #define LDCMD0		(0x20C)	/* DMA Channel 0 Command Register */
+
 #define FDADR1		(0x210)	/* DMA Channel 1 Frame Descriptor Address Register */
 #define FSADR1		(0x214)	/* DMA Channel 1 Frame Source Address Register */
 #define FIDR1		(0x218)	/* DMA Channel 1 Frame ID Register */
 #define LDCMD1		(0x21C)	/* DMA Channel 1 Command Register */
+
+#define FDADR2		(0x220)	/* DMA Channel 2 Frame Descriptor Address Register */
+#define FSADR2		(0x224)	/* DMA Channel 2 Frame Source Address Register */
+#define FIDR2		(0x228)	/* DMA Channel 2 Frame ID Register */
+#define LDCMD2		(0x22C)	/* DMA Channel 2 Command Register */
+
+#define FDADR3		(0x230)	/* DMA Channel 3 Frame Descriptor Address Register */
+#define FSADR3		(0x234)	/* DMA Channel 3 Frame Source Address Register */
+#define FIDR3		(0x238)	/* DMA Channel 3 Frame ID Register */
+#define LDCMD3		(0x23C)	/* DMA Channel 3 Command Register */
+
+#define FDADR4		(0x240)	/* DMA Channel 4 Frame Descriptor Address Register */
+#define FSADR4		(0x244)	/* DMA Channel 4 Frame Source Address Register */
+#define FIDR4		(0x248)	/* DMA Channel 4 Frame ID Register */
+#define LDCMD4		(0x24C)	/* DMA Channel 4 Command Register */
+
+#define FDADR5		(0x250)	/* DMA Channel 5 Frame Descriptor Address Register */
+#define FSADR5		(0x254)	/* DMA Channel 5 Frame Source Address Register */
+#define FIDR5		(0x258)	/* DMA Channel 5 Frame ID Register */
+#define LDCMD5		(0x25C)	/* DMA Channel 5 Command Register */
+
 #define FDADR6		(0x260) /* DMA Channel 6 Frame Descriptor Address Register */
 #define FSADR6		(0x264) /* DMA Channel 6 Frame Source Address Register */
 #define FIDR6		(0x268) /* DMA Channel 6 Frame ID Register */
