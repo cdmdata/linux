@@ -1006,6 +1006,14 @@ config GPIO_VR41XX
 	tristate "NEC VR4100 series General-purpose I/O Unit support"
 	depends on CPU_VR41XX
 
+config PXA_GPIO
+	tristate "PXA General-purpose I/O support"
+	depends on ARCH_PXA
+
+config PXA_GPIO_TRIG
+	tristate "PXA Triggered GPIO support"
+	depends on ARCH_PXA
+
 config RAW_DRIVER
 	tristate "RAW driver (/dev/raw/rawN)"
 	depends on BLOCK
