@@ -168,6 +168,28 @@ static struct platform_device davinci_fb_device = {
 
 #include <linux/usb/musb.h>
 
+static struct musb_hdrc_eps_bits musb_eps[] = {
+	{ "ep1_tx", 5,  },
+	{ "ep1_rx", 5,  },
+	{ "ep2_tx", 5,  },
+	{ "ep2_rx", 5,  },
+	{ "ep3_tx", 3,  },
+	{ "ep3_rx", 3,  },
+	{ "ep4_tx", 3,  },
+	{ "ep4_rx", 3,  },
+};
+
+static struct musb_hdrc_config musb_config = {
+	.multipoint	= 1,
+	.dyn_fifo	= 1,
+	.soft_con	= 1,
+	.dma		= 1,
+	.num_eps	= 5,
+	.dma_channels	= 4,
+	.ram_bits	= 10,
+	.eps_bits	= musb_eps,
+};
+
 static struct musb_hdrc_platform_data usb_data = {
 #if     defined(CONFIG_USB_MUSB_OTG)
 	/* OTG requires a Mini-AB connector */
@@ -180,6 +202,7 @@ static struct musb_hdrc_platform_data usb_data = {
 	/* irlml6401 switches 5V */
 	.power          = 250,          /* sustains 3.0+ Amps (!) */
 	.potpgt         = 4,            /* ~8 msec */
+	.config		= &musb_config,
 };
 
 static struct resource usb_resources [] = {
