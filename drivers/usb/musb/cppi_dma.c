@@ -9,7 +9,6 @@
 
 #include "musb_core.h"
 #include "musb_host.h"
-#include "mach/hdrc_cnf.h"
 #include "cppi_dma.h"
 
 /* CPPI DMA status 7-mar:

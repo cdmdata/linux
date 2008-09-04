@@ -149,8 +149,8 @@ struct cppi {
 	void __iomem *tibase;
 
 
-	struct cppi_channel tx[MUSB_C_NUM_EPT - 1];
-	struct cppi_channel rx[MUSB_C_NUM_EPR - 1];
+	struct cppi_channel tx[16 - 1];
+	struct cppi_channel rx[16 - 1];
 
 	struct dma_pool *pool;
 
