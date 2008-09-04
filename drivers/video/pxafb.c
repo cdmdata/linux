@@ -941,7 +941,7 @@ static int pxafb_activate_var(struct fb_var_screeninfo *var,
 
 	fbi->reg_lccr0 = fbi->lccr0 |
 		(LCCR0_LDM | LCCR0_SFM | LCCR0_IUM | LCCR0_EFM |
-		 LCCR0_QDM | LCCR0_BM  | LCCR0_OUM);
+		 LCCR0_QDM | LCCR0_BM  | LCCR0_OUM | LCCR0_OUC);
 
 	fbi->reg_lccr3 |= pxafb_bpp_to_lccr3(var);
 
@@ -1676,6 +1676,13 @@ MODULE_PARM_DESC(options, "LCD parameters (see Documentation/fb/pxafb.txt)");
 #define pxafb_setup_options()		(0)
 #endif
 
+struct pxafb_info *gfbi;
+int pxafb_get_mmio(void)
+{
+	return (gfbi)? ((int)gfbi->mmio_base) : 0;
+}
+EXPORT_SYMBOL(pxafb_get_mmio);
+
 static int __init pxafb_probe(struct platform_device *dev)
 {
 	struct pxafb_info *fbi;
@@ -1737,6 +1744,7 @@ static int __init pxafb_probe(struct platform_device *dev)
 	pxafb_backlight_power = inf->pxafb_backlight_power;
 	pxafb_lcd_power = inf->pxafb_lcd_power;
 	fbi = pxafb_init_fbinfo(&dev->dev);
+	gfbi = fbi;
 	if (!fbi) {
 		/* only reason for pxafb_init_fbinfo to fail is kmalloc */
 		dev_err(&dev->dev, "Failed to initialize framebuffer device\n");

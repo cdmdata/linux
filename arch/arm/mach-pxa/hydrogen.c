@@ -22,9 +22,11 @@
 #include <linux/bitops.h>
 #include <linux/fb.h>
 #include <linux/ioport.h>
+#include <linux/bootmem.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
 #include <linux/backlight.h>
+#include <linux/dma-mapping.h>
 #include <net/ax88796.h>
 
 #include <asm/types.h>
@@ -130,9 +132,22 @@ static struct platform_device asix_device = {
 	}
 };
 
+static u64 pxafb_yuv_dma_mask = DMA_BIT_MASK(32);
+static struct platform_device pxafb_yuv_device = {
+	.name		= "pxafb_yuv",
+	.id		= 3,
+	.num_resources	= 0,
+	.resource	= 0,
+	.dev		= {
+		.dma_mask = &pxafb_yuv_dma_mask,
+		.coherent_dma_mask = DMA_BIT_MASK(32),
+	},
+};
+
 static struct platform_device *platform_devices[] __initdata = {
-        &hydrogen_audio_device
-,       &asix_device
+        &hydrogen_audio_device,
+        &asix_device,
+        &pxafb_yuv_device
 };
 
 static struct pxafb_mode_info fb_modes __initdata = {
@@ -289,10 +304,9 @@ static void __init hydrogen_init(void)
 	pxa_gpio_mode(GPIO45_SYSCLK_AC97_MD);
 
 	printk( KERN_ERR "%s: %u devices\n", __func__, ARRAY_SIZE(platform_devices));
-	platform_add_devices(platform_devices, ARRAY_SIZE(platform_devices));
-
 	fb_hw.modes = &fb_modes;
 	set_pxa_fb_info(&fb_hw);
+	platform_add_devices(platform_devices, ARRAY_SIZE(platform_devices));
 	hydrogen_backlight_register();
 
 	pxa_set_mci_info(&hydrogen_mci_platform_data);
@@ -300,8 +314,15 @@ static void __init hydrogen_init(void)
 	pxa_set_i2c_info(NULL);
 }
 
+#define DEBUG_SIZE (PAGE_SIZE*4)
+static struct map_desc hydrogen_io_desc[] __initdata = {
+ /* virtual      	      pfn    	    length      domain       r  w  c  b */
+ { 0xfff00000, __phys_to_pfn(0x00000000), DEBUG_SIZE, MT_HIGH_VECTORS },	//DOMAIN_USER,   1, 0, 1, 1for debugging variables, DOMAIN_USER because of errata on exiting SDS
+};
 static void __init hydrogen_map_io(void)
 {
+	void* init_maps;
+	void* src=(void *)0xff000000;
 	pxa_map_io();
 
 	/* initialize sleep mode regs (wake-up sources, etc) */
@@ -312,6 +333,18 @@ static void __init hydrogen_map_io(void)
 	PWER = 0xC0000002;
 	PRER = 0x00000002;
 	PFER = 0x00000002;
+	/*
+	 * Create a mapping for 1st pages of flash and DEBUG variables
+	 * This is copied to ram to allow debugging while flash is being written.
+	 * It also allows caching, and faster access on cache miss.
+	 * Also, user mode need read access because of errata in exiting SDS
+	 */
+	init_maps = alloc_bootmem_low_pages(DEBUG_SIZE);
+	memcpy(init_maps,src,DEBUG_SIZE);
+	cpu_dcache_clean_area(init_maps,DEBUG_SIZE);
+
+	hydrogen_io_desc[0].pfn = __phys_to_pfn(virt_to_phys(init_maps));
+	iotable_init(hydrogen_io_desc,ARRAY_SIZE(hydrogen_io_desc));
 }
 
 MACHINE_START(SCANPASS, "Boundary Devices Hydrogen Board")
