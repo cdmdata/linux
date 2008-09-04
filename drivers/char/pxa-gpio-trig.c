@@ -74,6 +74,7 @@ static ssize_t gpio_read(struct file * file, char __user * buf,
 					return -EFAULT ;
 				data->take++ ;
 				count-- ;
+				buf++ ;
 				rval++ ;
 			}
 			if( (0 == rval) && (0==(file->f_flags & O_NONBLOCK)) ){
