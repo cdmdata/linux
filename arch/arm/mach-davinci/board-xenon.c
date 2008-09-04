@@ -30,6 +30,8 @@
 #include <linux/init.h>
 #include <linux/dma-mapping.h>
 #include <linux/platform_device.h>
+#include <linux/i2c.h>
+
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
 #include <linux/mtd/physmap.h>
@@ -79,6 +81,28 @@ static struct platform_device davinci_fb_device = {
 
 #include <linux/usb/musb.h>
 
+static struct musb_hdrc_eps_bits musb_eps[] = {
+	{ "ep1_tx", 5,	},
+	{ "ep1_rx", 5,	},
+	{ "ep2_tx", 5,	},
+	{ "ep2_rx", 5,	},
+	{ "ep3_tx", 3,	},
+	{ "ep3_rx", 3,	},
+	{ "ep4_tx", 3,	},
+	{ "ep4_rx", 3,	},
+};
+
+static struct musb_hdrc_config musb_config = {
+	.multipoint	= 1,
+	.dyn_fifo	= 1,
+	.soft_con	= 1,
+	.dma		= 1,
+	.num_eps	= 5,
+	.dma_channels	= 4,
+	.ram_bits	= 10,
+	.eps_bits	= musb_eps,
+};
+
 static struct musb_hdrc_platform_data usb_data = {
 #if     defined(CONFIG_USB_MUSB_OTG)
 	/* OTG requires a Mini-AB connector */
@@ -91,6 +115,7 @@ static struct musb_hdrc_platform_data usb_data = {
 	/* irlml6401 switches 5V */
 	.power		= 250,		/* sustains 3.0+ Amps (!) */
 	.potpgt         = 4,            /* ~8 msec */
+	.config		= &musb_config,
 };
 
 static struct resource usb_resources [] = {
@@ -203,6 +228,16 @@ static struct platform_device audio_dev = {
 	.id		= -1,
 };
 
+#if 0
+static struct i2c_board_info __initdata i2c_info[] =  {
+	{
+		I2C_BOARD_INFO("i2c-touch", 0x22),
+		.type		= "i2c-touch",
+		.platform_data	= &i2c_touch_data,
+	},
+};
+#endif
+
 static struct platform_device *davinci_devices[] __initdata = {
 	&nand_device,
 #if defined(CONFIG_FB_DAVINCI) || defined(CONFIG_FB_DAVINCI_MODULE)
@@ -219,6 +254,7 @@ static struct platform_device *davinci_devices[] __initdata = {
 static void __init
 map_io(void)
 {
+	printk(KERN_ERR "map_io\n");
 	davinci_map_common_io();
 }
 
@@ -232,6 +268,7 @@ static struct davinci_board_config_kernel davinci_xenon_config[] __initdata = {
 
 static __init void board_init(void)
 {
+	printk(KERN_ERR "board_init\n");
 	davinci_board_config = davinci_xenon_config;
 	davinci_board_config_size = ARRAY_SIZE(davinci_xenon_config);
 	davinci_psc_init();
@@ -250,6 +287,7 @@ static __init void board_init(void)
 
 static __init void irq_init(void)
 {
+	printk(KERN_ERR "irq_init\n");
 	davinci_init_common_hw();
 	davinci_irq_init();
 	set_irq_type(IRQ_GPIO(18), IRQ_TYPE_EDGE_RISING);
