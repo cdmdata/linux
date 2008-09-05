@@ -117,7 +117,6 @@ static int gpio_release(struct inode * inode, struct file * file)
         if(file->private_data){
 		struct gpio_data *data = (struct gpio_data *)file->private_data ;
 		struct trigger_t *pt = &data->trig ;
-		printk( KERN_ERR "%s: free irq for GPIO %u\n", __func__, pt->trigger_pin );
 		free_irq(IRQ_GPIO(pt->trigger_pin), file);
 		kfree(file->private_data);
                 file->private_data = 0 ;
