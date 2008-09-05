@@ -151,13 +151,11 @@ static irqreturn_t int_handler( int irq, void *param)
 static int gpio_ioctl(struct inode *inode, struct file *file,
 		    unsigned int cmd, unsigned long arg)
 {
-	printk( KERN_ERR "%s\n", __func__ );
 	switch (cmd){
 		case GPIO_TRIG_CFG:{
                         struct gpio_data *data = (struct gpio_data *)file->private_data ;
 			struct trigger_t *pt = &data->trig ;
         		struct trigger_t trig ;
-                        printk( KERN_ERR "%s: configure trigger here\n", __func__ );
 			if( 0 == copy_from_user(&trig, (void *)arg, sizeof(trig)) ){
 				pt = (struct trigger_t *)file->private_data ;
 				if( pt->trigger_pin ){
@@ -165,7 +163,6 @@ static int gpio_ioctl(struct inode *inode, struct file *file,
                                         pt->trigger_pin = 0 ; 
 				} // trigger previously set
 
-				printk( KERN_ERR "%p: trigger on pin %u %s\n", file, trig.trigger_pin, trig.rising_edge ? "Rising" : "Falling" );
 				set_irq_type(IRQ_GPIO(trig.trigger_pin), trig.rising_edge ? IRQT_RISING : IRQT_FALLING);	//pcmcia irq
 			        if( 0 == request_irq(IRQ_GPIO(trig.trigger_pin), int_handler, IRQF_DISABLED, driverName, file) ){
 					memcpy(pt,&trig,sizeof(trig));
@@ -216,8 +213,6 @@ static int __init gpio_init_module (void)
 	int result ;
         struct proc_dir_entry *pde ;
 
-	printk( KERN_ERR "%s\n", __func__ );
-
 	result = register_chrdev(gpio_major,driverName,&gpio_fops);
 	if (result<0) {
 		printk (KERN_WARNING __FILE__": Couldn't register device %d.\n", gpio_major);
@@ -237,7 +232,6 @@ static int __init gpio_init_module (void)
 
 static void gpio_cleanup_module (void)
 {
-	printk( KERN_ERR "%s\n", __func__ );
         remove_proc_entry("triggers", 0 );
 	unregister_chrdev(gpio_major,driverName);
 }
