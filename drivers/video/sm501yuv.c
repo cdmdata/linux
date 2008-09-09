@@ -518,7 +518,7 @@ static void sm501_pxa_dma_irq(int dma, void *dummy)
 static int yuv_open(struct inode *inode, struct file *filp)
 {
    atomic_inc(&usage);
-   printk( KERN_ERR "%s: %d uses\n", __FUNCTION__, atomic_read(&usage) );
+   printk( KERN_DEBUG "%s: %d uses\n", __FUNCTION__, atomic_read(&usage) );
    filp->private_data = 0 ;
 #ifdef SM501_USE_PXA_DMA
 	if (dmaChannel==(unsigned char)-1) {
@@ -530,7 +530,7 @@ static int yuv_open(struct inode *inode, struct file *filp)
 			dmaChannel = dma;
 		}
 	}
-        printk( KERN_ERR "SM501 using dma channel %d\n", dmaChannel );
+        printk( KERN_DEBUG "SM501 using dma channel %d\n", dmaChannel );
 #endif
    
    return 0 ;
@@ -539,7 +539,7 @@ static int yuv_open(struct inode *inode, struct file *filp)
 static int yuv_release(struct inode *inode, struct file *filp)
 {
    int uses = atomic_dec_return(&usage);
-   printk( KERN_ERR "%s: %d uses\n", __FUNCTION__, uses );
+   printk( KERN_DEBUG "%s: %d uses\n", __FUNCTION__, uses );
    if( 0 == uses ){
       destroyPlane();
 #ifdef SM501_USE_PXA_DMA
@@ -830,7 +830,7 @@ DEBUGMSG( "%s:\n", __FUNCTION__ );
             memcpy( mmioVirtual+videoRegAddr-sysRegAddr, videoRegValues, sizeof(videoRegValues));
             memset( fbYUV, 0x7f, panelWidth*panelHeight*2 );
          
-            printk (KERN_ERR "yuv::init_module from Boundary Devices, 2004\n"
+            printk (KERN_INFO "yuv::init_module from Boundary Devices, 2004\n"
                              "major device %d\n"
                              "w:%u, h:%u\n"
                              "fb:0x%lx, len 0x%lx\n"
@@ -862,13 +862,13 @@ static int __init yuvInit(void)
 {
    int rval ;
    rval = driver_register(&sm501yuv_driver);
-   printk( KERN_ERR "yuv::yuvInit: %d\n", rval ); 
+   printk( KERN_DEBUG "yuv::yuvInit: %d\n", rval ); 
    return rval ;
 }
 
 static void yuvCleanup(void)
 {
-   printk( KERN_ERR "yuv::cleanup_module\n" ); 
+   printk( KERN_DEBUG "yuv::cleanup_module\n" ); 
    if( yuvClass_ ) {
       device_destroy(yuvClass_,MKDEV(yuv_major, 0));
       class_destroy(yuvClass_);
