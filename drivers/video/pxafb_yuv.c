@@ -180,6 +180,26 @@ int create_yuv_surface(struct fb_info_yuv *yuv, struct pxa27x_overlay_t *pdata)
 		return -1;
 	width_y = pdata->width;
 	height_y = pdata->height;
+	{
+		unsigned int lccr1 = lcd_readl(mmio_base, LCCR1);
+		unsigned int lccr2 = lcd_readl(mmio_base, LCCR2);
+		int max_width = (lccr1 & 0x3ff) + 1;
+		int max_height = (lccr2 & 0x3ff) + 1;
+		if (max_width > pdata->offset_x)
+			max_width -= pdata->offset_x;
+		else
+			pdata->offset_x = 0;
+		if (max_height > pdata->offset_y)
+			max_height -= pdata->offset_y;
+		else
+			pdata->offset_y = 0;
+		if (width_y > max_width) {
+			pdata->width = width_y = max_width;
+		}
+		if (height_y > max_height) {
+			pdata->height = height_y = max_height;
+		}
+	}
 	switch (pdata->for_type) {
 	case FOR_RGB:
 		return -2;	/* not implemented */
@@ -374,6 +394,10 @@ static int pxafb_yuv_ioctl( struct inode *inode, struct file  *filp,
 				sizeof(overlay_data))) {
 			if (create_yuv_surface(yuv, &overlay_data))
 				return_val = -EINVAL;
+			else {
+				return_val = copy_to_user((void *)arg,
+						&overlay_data, sizeof(overlay_data) );
+			}
 		} else
 			return_val = -EFAULT ;
 		break;
