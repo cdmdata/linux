@@ -512,8 +512,6 @@ static int ucb1400_ts_thread(void *_ucb)
 				/* Switch back to interrupt mode. */
 				ucb1400_ts_mode_int(ucb);
 
-				msleep(10);
-
 				if (ucb1400_ts_pen_down(ucb)) {
 					ucb1400_ts_irq_enable(ucb);
 
