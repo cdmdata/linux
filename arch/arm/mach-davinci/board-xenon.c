@@ -59,21 +59,6 @@ void __init davinci_irq_init(void);
 void __init davinci_map_common_io(void);
 void __init davinci_init_common_hw(void);
 
-#if defined(CONFIG_FB_DAVINCI) || defined(CONFIG_FB_DAVINCI_MODULE)
-
-static u64 davinci_fb_dma_mask = DMA_32BIT_MASK;
-
-static struct platform_device davinci_fb_device = {
-	.name		= "davincifb",
-	.id		= -1,
-	.dev = {
-		.dma_mask		= &davinci_fb_dma_mask,
-		.coherent_dma_mask	= DMA_32BIT_MASK,
-	},
-	.num_resources = 0,
-};
-#endif
-
 /*
  * USB
  */
@@ -240,9 +225,6 @@ static struct i2c_board_info __initdata i2c_info[] =  {
 
 static struct platform_device *davinci_devices[] __initdata = {
 	&nand_device,
-#if defined(CONFIG_FB_DAVINCI) || defined(CONFIG_FB_DAVINCI_MODULE)
-	&davinci_fb_device,
-#endif
 #if defined(CONFIG_USB_MUSB_HDRC) || defined(CONFIG_USB_MUSB_HDRC_MODULE)
 	&usb_dev,
 #endif
