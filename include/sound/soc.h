@@ -396,6 +396,9 @@ struct snd_soc_device {
 	struct snd_soc_codec *codec;
 	struct snd_soc_codec_device *codec_dev;
 	void *codec_data;
+#ifdef CONFIG_DEBUG_FS
+	struct dentry	*debugfs_root;
+#endif
 };
 
 /* runtime channel data */
