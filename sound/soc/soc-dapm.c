@@ -223,6 +223,8 @@ static int dapm_update_bits(struct snd_soc_dapm_widget *widget)
 	old = snd_soc_read(codec, widget->reg);
 	new = (old & ~(0x1 << widget->shift)) | (power << widget->shift);
 
+	if (0) printk(KERN_ERR "power=%i, reg=%i shift=%i old=0x%x new=0x%x\n",
+			widget->power, widget->reg, widget->shift, old, new);
 	change = old != new;
 	if (change) {
 		pop_dbg("pop test %s : %s in %d ms\n", widget->name,
@@ -386,6 +388,9 @@ static int is_connected_output_ep(struct snd_soc_dapm_widget *widget)
 	int con = 0;
 
 	if (widget->id == snd_soc_dapm_adc && widget->active)
+		return 1;
+
+	if (widget->id == snd_soc_dapm_dac && widget->active)
 		return 1;
 
 	if (widget->connected) {
