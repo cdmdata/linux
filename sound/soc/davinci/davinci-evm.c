@@ -43,8 +43,8 @@ static int evm_hw_params(struct snd_pcm_substream *substream,
 		return ret;
 
 	/* set cpu DAI configuration */
-	ret = snd_soc_dai_set_fmt(cpu_dai, SND_SOC_DAIFMT_CBM_CFM |
-				       SND_SOC_DAIFMT_IB_NF);
+	ret = snd_soc_dai_set_fmt(cpu_dai, SND_SOC_DAIFMT_I2S |
+			SND_SOC_DAIFMT_CBM_CFM | SND_SOC_DAIFMT_IB_NF);
 	if (ret < 0)
 		return ret;
 
@@ -156,8 +156,8 @@ static struct resource evm_snd_resources[] = {
 };
 
 static struct evm_snd_platform_data evm_snd_data = {
-	.tx_dma_ch	= DM644X_DMACH_MCBSP_TX,
-	.rx_dma_ch	= DM644X_DMACH_MCBSP_RX,
+	.tx_dma_ch	= DAVINCI_DMA_MCBSP_TX,
+	.rx_dma_ch	= DAVINCI_DMA_MCBSP_RX,
 };
 
 static struct platform_device *evm_snd_device;
