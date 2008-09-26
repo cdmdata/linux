@@ -7,5 +7,7 @@ obj-$(CONFIG_SND_DAVINCI_SOC_I2S) += snd-soc-davinci-i2s.o
 
 # DAVINCI Machine Support
 snd-soc-evm-objs := davinci-evm.o
+snd-soc-xenon-objs := davinci-xenon.o davinci-spi.o
 
 obj-$(CONFIG_SND_DAVINCI_SOC_EVM) += snd-soc-evm.o
+obj-$(CONFIG_SND_DAVINCI_SOC_XENON) += snd-soc-xenon.o
