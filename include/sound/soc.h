@@ -508,6 +508,9 @@ struct snd_soc_device {
 	struct delayed_work delayed_work;
 	struct work_struct deferred_resume_work;
 	void *codec_data;
+#ifdef CONFIG_DEBUG_FS
+	struct dentry	*debugfs_root;
+#endif
 };
 
 /* runtime channel data */
