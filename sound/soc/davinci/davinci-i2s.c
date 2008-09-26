@@ -43,13 +43,18 @@
 #define DAVINCI_MCBSP_RCR_RWDLEN1(v)	((v) << 5)
 #define DAVINCI_MCBSP_RCR_RFRLEN1(v)	((v) << 8)
 #define DAVINCI_MCBSP_RCR_RDATDLY(v)	((v) << 16)
+#define DAVINCI_MCBSP_RCR_RFIG		(1 << 18)
 #define DAVINCI_MCBSP_RCR_RWDLEN2(v)	((v) << 21)
+#define DAVINCI_MCBSP_RCR_RFRLEN2(v)	((v) << 24)
+#define DAVINCI_MCBSP_RCR_RPHASE	(1 << 31)
 
 #define DAVINCI_MCBSP_XCR_XWDLEN1(v)	((v) << 5)
 #define DAVINCI_MCBSP_XCR_XFRLEN1(v)	((v) << 8)
 #define DAVINCI_MCBSP_XCR_XDATDLY(v)	((v) << 16)
 #define DAVINCI_MCBSP_XCR_XFIG		(1 << 18)
 #define DAVINCI_MCBSP_XCR_XWDLEN2(v)	((v) << 21)
+#define DAVINCI_MCBSP_XCR_XFRLEN2(v)	((v) << 24)
+#define DAVINCI_MCBSP_XCR_XPHASE	(1 << 31)
 
 #define DAVINCI_MCBSP_SRGR_FWID(v)	((v) << 8)
 #define DAVINCI_MCBSP_SRGR_FPER(v)	((v) << 16)
@@ -64,13 +69,6 @@
 #define DAVINCI_MCBSP_PCR_FSRM		(1 << 10)
 #define DAVINCI_MCBSP_PCR_FSXM		(1 << 11)
 
-#define MOD_REG_BIT(val, mask, set) do { \
-	if (set) { \
-		val |= mask; \
-	} else { \
-		val &= ~mask; \
-	} \
-} while (0)
 
 enum {
 	DAVINCI_MCBSP_WORD_8 = 0,
@@ -91,6 +89,9 @@ static struct davinci_pcm_dma_params davinci_i2s_pcm_in = {
 
 struct davinci_mcbsp_dev {
 	void __iomem			*base;
+#define MOD_I2S		0
+#define MOD_DSP		1
+	int				mode;
 	struct clk			*clk;
 	struct davinci_pcm_dma_params	*dma_params[2];
 };
@@ -110,20 +111,24 @@ static void davinci_mcbsp_start(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct davinci_mcbsp_dev *dev = rtd->dai->cpu_dai->private_data;
-	u32 w;
+	u32 w, pcr;
 
-	/* Start the sample generator and enable transmitter/receiver */
+	pcr = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_PCR_REG);
 	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
-	MOD_REG_BIT(w, DAVINCI_MCBSP_SPCR_GRST, 1);
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		MOD_REG_BIT(w, DAVINCI_MCBSP_SPCR_XRST, 1);
-	else
-		MOD_REG_BIT(w, DAVINCI_MCBSP_SPCR_RRST, 1);
-	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
+	if (pcr & (DAVINCI_MCBSP_PCR_FSXM | DAVINCI_MCBSP_PCR_FSRM |
+			DAVINCI_MCBSP_PCR_CLKXM | DAVINCI_MCBSP_PCR_CLKRM)) {
+		/* Start the sample generator */
+		w |= DAVINCI_MCBSP_SPCR_GRST;
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
+	}
+	/* Enable transmitter or receiver */ 
+	w |= (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)?
+			DAVINCI_MCBSP_SPCR_XRST : DAVINCI_MCBSP_SPCR_RRST;
 
-	/* Start frame sync */
-	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
-	MOD_REG_BIT(w, DAVINCI_MCBSP_SPCR_FRST, 1);
+	if (pcr & (DAVINCI_MCBSP_PCR_FSXM | DAVINCI_MCBSP_PCR_FSRM )) {
+		/* Start frame sync */
+		w |= DAVINCI_MCBSP_SPCR_FRST;
+	}
 	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
 }
 
@@ -135,12 +140,9 @@ static void davinci_mcbsp_stop(struct snd_pcm_substream *substream)
 
 	/* Reset transmitter/receiver and sample rate/frame sync generators */
 	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
-	MOD_REG_BIT(w, DAVINCI_MCBSP_SPCR_GRST |
-		       DAVINCI_MCBSP_SPCR_FRST, 0);
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		MOD_REG_BIT(w, DAVINCI_MCBSP_SPCR_XRST, 0);
-	else
-		MOD_REG_BIT(w, DAVINCI_MCBSP_SPCR_RRST, 0);
+	w &= ~(DAVINCI_MCBSP_SPCR_GRST | DAVINCI_MCBSP_SPCR_FRST);
+	w &= (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)?
+			~DAVINCI_MCBSP_SPCR_XRST : ~DAVINCI_MCBSP_SPCR_RRST;
 	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
 }
 
@@ -148,56 +150,68 @@ static int davinci_i2s_startup(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *cpu_dai = rtd->dai->cpu_dai;
-	struct davinci_mcbsp_dev *dev = rtd->dai->cpu_dai->private_data;
+	struct davinci_mcbsp_dev *dev = cpu_dai->private_data;
 
 	cpu_dai->dma_data = dev->dma_params[substream->stream];
 
 	return 0;
 }
 
+#define DEFAULT_BITPERSAMPLE	16
+
 static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 				   unsigned int fmt)
 {
 	struct davinci_mcbsp_dev *dev = cpu_dai->private_data;
-	u32 w;
+	unsigned int pcr;
+	unsigned int srgr;
+	srgr = DAVINCI_MCBSP_SRGR_FSGM | 
+		DAVINCI_MCBSP_SRGR_FPER(DEFAULT_BITPERSAMPLE * 2 - 1) |
+		DAVINCI_MCBSP_SRGR_FWID(DEFAULT_BITPERSAMPLE - 1);
 
+	/* set master/slave audio interface */
 	switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
-	case SND_SOC_DAIFMT_CBS_CFS:
-		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG,
-					DAVINCI_MCBSP_PCR_FSXM |
-					DAVINCI_MCBSP_PCR_FSRM |
-					DAVINCI_MCBSP_PCR_CLKXM |
-					DAVINCI_MCBSP_PCR_CLKRM);
-		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SRGR_REG,
-					DAVINCI_MCBSP_SRGR_FSGM);
-		break;
 	case SND_SOC_DAIFMT_CBM_CFM:
-		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, 0);
+		/* codec is master */
+		pcr = 0;
+		break;
+	case SND_SOC_DAIFMT_CBS_CFS:
+		/* cpu is master */
+		pcr = DAVINCI_MCBSP_PCR_FSXM |
+			DAVINCI_MCBSP_PCR_FSRM |
+			DAVINCI_MCBSP_PCR_CLKXM |
+			DAVINCI_MCBSP_PCR_CLKRM;
 		break;
 	default:
+		printk(KERN_ERR "%s:bad master\n", __func__);
 		return -EINVAL;
 	}
 
 	switch (fmt & SND_SOC_DAIFMT_INV_MASK) {
 	case SND_SOC_DAIFMT_IB_NF:
-		w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_PCR_REG);
-		MOD_REG_BIT(w, DAVINCI_MCBSP_PCR_CLKXP |
-			       DAVINCI_MCBSP_PCR_CLKRP, 1);
-		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, w);
+		/* CLKRP Receive clock polarity, 1- rising edge of CLKR 
+		 * CLKXP Transmit clock polarity, 1 - falling edge of CLKX
+		 * FSRP  Receive frame sync pol, 0 - active high
+		 * FSXP  Transmit frame sync pol, 0 - active high
+		 */
+		pcr |= (DAVINCI_MCBSP_PCR_CLKXP | DAVINCI_MCBSP_PCR_CLKRP);
 		break;
 	case SND_SOC_DAIFMT_NB_IF:
-		w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_PCR_REG);
-		MOD_REG_BIT(w, DAVINCI_MCBSP_PCR_FSXP |
-			       DAVINCI_MCBSP_PCR_FSRP, 1);
-		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, w);
+		/* CLKRP Receive clock polarity, 0- falling edge of CLKR 
+		 * CLKXP Transmit clock polarity, 0 - rising edge of CLKX
+		 * FSRP  Receive frame sync pol, 1 - active low
+		 * FSXP  Transmit frame sync pol, 1 - active low
+		 */
+		pcr |= (DAVINCI_MCBSP_PCR_FSXP | DAVINCI_MCBSP_PCR_FSRP);
 		break;
 	case SND_SOC_DAIFMT_IB_IF:
-		w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_PCR_REG);
-		MOD_REG_BIT(w, DAVINCI_MCBSP_PCR_CLKXP |
-			       DAVINCI_MCBSP_PCR_CLKRP |
-			       DAVINCI_MCBSP_PCR_FSXP |
-			       DAVINCI_MCBSP_PCR_FSRP, 1);
-		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, w);
+		/* CLKRP Receive clock polarity, 1- rising edge of CLKR 
+		 * CLKXP Transmit clock polarity, 1 - falling edge of CLKX
+		 * FSRP  Receive frame sync pol, 1 - active low
+		 * FSXP  Transmit frame sync pol, 1 - active low
+		 */
+		pcr |= (DAVINCI_MCBSP_PCR_CLKXP | DAVINCI_MCBSP_PCR_CLKRP |
+			DAVINCI_MCBSP_PCR_FSXP | DAVINCI_MCBSP_PCR_FSRP);
 		break;
 	case SND_SOC_DAIFMT_NB_NF:
 		break;
@@ -205,6 +219,20 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 		return -EINVAL;
 	}
 
+	/* interface format */
+	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
+	case SND_SOC_DAIFMT_I2S:
+		dev->mode = MOD_I2S;
+		break;
+	case SND_SOC_DAIFMT_DSP_A:
+		dev->mode = MOD_DSP;
+		break;
+	default:
+		printk(KERN_ERR "%s:bad format\n", __func__);
+		return -EINVAL;
+	}
+	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SRGR_REG, srgr);
+	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, pcr);
 	return 0;
 }
 
@@ -216,30 +244,42 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 	struct davinci_mcbsp_dev *dev = rtd->dai->cpu_dai->private_data;
 	struct snd_interval *i = NULL;
 	int mcbsp_word_length;
-	u32 w;
+	int bits_per_sample;
+	int bits_per_frame;
+	unsigned int rcr, xcr, srgr;
+
+	i = hw_param_interval(params, SNDRV_PCM_HW_PARAM_SAMPLE_BITS);
+	bits_per_sample = snd_interval_value(i);
+	i = hw_param_interval(params, SNDRV_PCM_HW_PARAM_FRAME_BITS);
+	bits_per_frame = snd_interval_value(i);
+	srgr = DAVINCI_MCBSP_SRGR_FSGM | 
+		DAVINCI_MCBSP_SRGR_FPER(bits_per_frame - 1) |
+		DAVINCI_MCBSP_SRGR_FWID(bits_per_sample - 1);
 
 	/* general line settings */
 	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG,
 				DAVINCI_MCBSP_SPCR_RINTM(3) |
 				DAVINCI_MCBSP_SPCR_XINTM(3) |
 				DAVINCI_MCBSP_SPCR_FREE);
-	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_RCR_REG,
-				DAVINCI_MCBSP_RCR_RFRLEN1(1) |
-				DAVINCI_MCBSP_RCR_RDATDLY(1));
-	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_XCR_REG,
-				DAVINCI_MCBSP_XCR_XFRLEN1(1) |
-				DAVINCI_MCBSP_XCR_XDATDLY(1) |
-				DAVINCI_MCBSP_XCR_XFIG);
 
-	i = hw_param_interval(params, SNDRV_PCM_HW_PARAM_SAMPLE_BITS);
-	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SRGR_REG);
-	MOD_REG_BIT(w, DAVINCI_MCBSP_SRGR_FWID(snd_interval_value(i) - 1), 1);
-	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SRGR_REG, w);
-
-	i = hw_param_interval(params, SNDRV_PCM_HW_PARAM_FRAME_BITS);
-	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SRGR_REG);
-	MOD_REG_BIT(w, DAVINCI_MCBSP_SRGR_FPER(snd_interval_value(i) - 1), 1);
-	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SRGR_REG, w);
+	if (dev->mode == MOD_I2S) {
+		rcr = DAVINCI_MCBSP_RCR_RFRLEN1(1) |
+			DAVINCI_MCBSP_RCR_RDATDLY(1);
+		xcr = DAVINCI_MCBSP_XCR_XFRLEN1(1) |
+			DAVINCI_MCBSP_XCR_XDATDLY(1) |
+			DAVINCI_MCBSP_XCR_XFIG;
+	} else {
+		rcr = DAVINCI_MCBSP_RCR_RFRLEN1(0) |
+			DAVINCI_MCBSP_RCR_RFRLEN2(0) |
+			DAVINCI_MCBSP_RCR_RDATDLY(0) |
+			DAVINCI_MCBSP_RCR_RPHASE |
+			DAVINCI_MCBSP_RCR_RFIG;
+		xcr = DAVINCI_MCBSP_XCR_XFRLEN1(0) |
+			DAVINCI_MCBSP_XCR_XFRLEN2(0) |
+			DAVINCI_MCBSP_XCR_XDATDLY(0) |
+			DAVINCI_MCBSP_XCR_XPHASE |
+			DAVINCI_MCBSP_XCR_XFIG;
+	}
 
 	/* Determine xfer data type */
 	switch (params_format(params)) {
@@ -260,16 +300,13 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 
-	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_RCR_REG);
-	MOD_REG_BIT(w, DAVINCI_MCBSP_RCR_RWDLEN1(mcbsp_word_length) |
-		       DAVINCI_MCBSP_RCR_RWDLEN2(mcbsp_word_length), 1);
-	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_RCR_REG, w);
-
-	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_XCR_REG);
-	MOD_REG_BIT(w, DAVINCI_MCBSP_XCR_XWDLEN1(mcbsp_word_length) |
-		       DAVINCI_MCBSP_XCR_XWDLEN2(mcbsp_word_length), 1);
-	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_XCR_REG, w);
-
+	rcr |=  DAVINCI_MCBSP_RCR_RWDLEN1(mcbsp_word_length) |
+		DAVINCI_MCBSP_RCR_RWDLEN2(mcbsp_word_length);
+	xcr |=  DAVINCI_MCBSP_XCR_XWDLEN1(mcbsp_word_length) |
+		DAVINCI_MCBSP_XCR_XWDLEN2(mcbsp_word_length);
+	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SRGR_REG, srgr);
+	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_RCR_REG, rcr);
+	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_XCR_REG, xcr);
 	return 0;
 }
 
