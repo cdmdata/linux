@@ -25,9 +25,8 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-#include <asm/arch/hardware.h>
-#include <asm/arch/mux.h>
-#include <asm/hardware.h>
+#include <mach/hardware.h>
+#include <mach/mux.h>
 #include <linux/delay.h>
 #include <linux/ioport.h>
 #include <linux/err.h>
@@ -35,11 +34,11 @@
 #include <linux/errno.h>
 #include <linux/sched.h>
 #include <linux/clk.h>
-#include <asm/arch/irqs.h>
+#include <mach/irqs.h>
 #include <asm/io.h>
 #include <asm/types.h>
 #include <linux/wait.h>
-#include <asm/semaphore.h>
+#include <linux/semaphore.h>
 //#define DEBUG
 
 #ifdef DEBUG
