@@ -3,7 +3,7 @@
  *
  * Author:      Vladimir Barinov, <vbarinov@ru.mvista.com>
  * Copyright:   (C) 2007 MontaVista Software, Inc., <source@mvista.com>
- *		(C) 2008 Troy Kisky <troy.kisky@boundarydevices.com> added IRAM support
+ * added IRAM ping/pong (C) 2008 Troy Kisky <troy.kisky@boundarydevices.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -26,7 +26,7 @@
 
 #include "davinci-pcm.h"
 
-#define DAVINCI_PCM_DEBUG 1
+#define DAVINCI_PCM_DEBUG 0
 #if DAVINCI_PCM_DEBUG
 #define DPRINTK(format, arg...) printk(KERN_DEBUG format, ## arg)
 #else
@@ -104,7 +104,7 @@ static void davinci_pcm_dma_irq(int lch, u16 ch_status, void *data)
 
 
 /*
- * This is called after dma_addr, period_bytes and data_type are valid
+ * This is called after runtime->dma_addr, period_bytes and data_type are valid
  */
 static int davinci_pcm_dma_setup(struct snd_pcm_substream *substream)
 {
@@ -373,53 +373,46 @@ davinci_pcm_pointer(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct davinci_runtime_data *prtd = runtime->private_data;
-	unsigned int offset1, offset2;
-	unsigned int count;
-	dma_addr_t asp_src1, asp_dst1;
-	dma_addr_t asp_src2, asp_dst2;
+	unsigned int offset;
+	int count_asp, count_ram;
+	int mod_ram;
 	dma_addr_t ram_src, ram_dst;
+	dma_addr_t asp_src, asp_dst;
 	unsigned int period_size = snd_pcm_lib_period_bytes(substream);
-	unsigned int ping_size = (period_size >> 1);
-	unsigned int pong;
 	
 	spin_lock(&prtd->lock);
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		davinci_dma_getposition(prtd->asp_master_lch, &asp_src1, &asp_dst1);
+		/* reading ram before asp should be safe
+		 * as long as the asp transfers less than a ping size
+		 * of bytes between the 2 reads
+		 */
 		davinci_dma_getposition(prtd->ram_master_lch, &ram_src, &ram_dst);
-		davinci_dma_getposition(prtd->asp_master_lch, &asp_src2, &asp_dst2);
-		offset1 = asp_src2 - prtd->asp_params.src;
-		offset2 = asp_src2 - prtd->asp_params.src;
-		pong = ((offset2 / ping_size) & 1);
-		if (pong != ((offset1 / ping_size) & 1)) {
-			/* changed between ping & pong, reread ram position */
-			davinci_dma_getposition(prtd->ram_master_lch, &ram_src, &ram_dst);
+		davinci_dma_getposition(prtd->asp_master_lch, &asp_src, &asp_dst);
+		count_asp = asp_src - prtd->asp_params.src;
+		count_ram = ram_src - prtd->ram_params.src;
+		mod_ram = count_ram % period_size; 
+		mod_ram -= count_asp;
+		if (mod_ram < 0)
+			mod_ram += period_size;
+		else if (mod_ram==0) {
+			if (snd_pcm_running(substream))
+				mod_ram += period_size;
 		}
-		count = ram_src - prtd->ram_params.src;
-		if (count >= period_size)
-			count -= period_size;
-		else
-			count += period_size * (runtime->periods - 1);
-		count /= ping_size;
-		if (count & 1) {
-			//transferring a pong buffer next, swap offset
-			if (pong)
-				offset2 -= ping_size;
-			else
-				offset2 += ping_size;
-		}
-		count = (count * ping_size) + offset2;
+		count_ram -= mod_ram;
+		if (count_ram < 0)
+			count_ram += period_size * runtime->periods;
 	} else {
 		davinci_dma_getposition(prtd->ram_master_lch, &ram_src, &ram_dst);
-		count = ram_dst - prtd->ram_params.dst;
+		count_ram = ram_dst - prtd->ram_params.dst;
 	}
 	spin_unlock(&prtd->lock);
 
-	count = bytes_to_frames(runtime, count);
-	DPRINTK("count=0x%x\n",count);
-	if (count >= runtime->buffer_size)
-		count = 0;
+	offset = bytes_to_frames(runtime, count_ram);
+	DPRINTK("offset=0x%x\n", offset);
+	if (offset >= runtime->buffer_size)
+		offset = 0;
 
-	return count;
+	return offset;
 }
 
 static int davinci_pcm_open(struct snd_pcm_substream *substream)
