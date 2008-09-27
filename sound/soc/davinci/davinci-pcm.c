@@ -3,7 +3,7 @@
  *
  * Author:      Vladimir Barinov, <vbarinov@ru.mvista.com>
  * Copyright:   (C) 2007 MontaVista Software, Inc., <source@mvista.com>
- *		(C) 2008 Troy Kisky <troy.kisky@boundarydevices.com> added IRAM support
+ * added IRAM ping/pong (C) 2008 Troy Kisky <troy.kisky@boundarydevices.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -27,7 +27,7 @@
 
 #include "davinci-pcm.h"
 
-#define DAVINCI_PCM_DEBUG 1
+#define DAVINCI_PCM_DEBUG 0
 #if DAVINCI_PCM_DEBUG
 #define DPRINTK(format, arg...) printk(KERN_DEBUG format, ## arg)
 #else
@@ -73,10 +73,11 @@ struct davinci_runtime_data {
 };
 
 #if DAVINCI_PCM_DEBUG
-void print_buf_info(int lch, char* name)
+void print_buf_info(int lch, char *name)
 {
 	edmacc_paramentry_regs p;
-	if (lch<0) return;
+	if (lch < 0)
+		return;
 	davinci_get_dma_params(lch, &p);
 	printk(KERN_DEBUG "%s: 0x%x, opt=%x, src=%x, a_b_cnt=%x dst=%x\n",
 			name, lch, p.opt, p.src, p.a_b_cnt, p.dst);
@@ -105,18 +106,21 @@ static void davinci_pcm_dma_irq(int lch, u16 ch_status, void *data)
 
 
 /*
- * This is called after dma_addr, period_bytes and data_type are valid
+ * This is called after runtime->dma_addr, period_bytes and data_type are valid
  */
 static int davinci_pcm_dma_setup(struct snd_pcm_substream *substream)
 {
 	unsigned short ram_src_cidx, ram_dst_cidx;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct davinci_runtime_data *prtd = runtime->private_data;
-	struct snd_dma_buffer *iram_dma = (struct snd_dma_buffer *)substream->dma_buffer.private_data;
+	struct snd_dma_buffer *iram_dma =
+		(struct snd_dma_buffer *)substream->dma_buffer.private_data;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct davinci_pcm_dma_params *dma_data = rtd->dai->cpu_dai->dma_data;
 	unsigned int data_type = dma_data->data_type;
-	unsigned int ping_size = snd_pcm_lib_period_bytes(substream) >> 1;	/* divide by 2 for ping/pong */
+	unsigned int convert_mono_stereo = dma_data->convert_mono_stereo;
+	/* divide by 2 for ping/pong */
+	unsigned int ping_size = snd_pcm_lib_period_bytes(substream) >> 1;
 	int lch = prtd->asp_link_lch[1];
 	if ((data_type == 0) || (data_type > 4)) {
 		printk(KERN_ERR "%s: data_type=%i\n", __func__, data_type);
@@ -126,40 +130,64 @@ static int davinci_pcm_dma_setup(struct snd_pcm_substream *substream)
 		dma_addr_t asp_src_pong = iram_dma->addr + ping_size;
 		ram_src_cidx = ping_size;
 		ram_dst_cidx = -ping_size;
-		davinci_set_dma_src_params(lch, asp_src_pong, INCR, W16BIT);
+		davinci_set_dma_src_params(lch, asp_src_pong, INCR, 0);
 
 		lch = prtd->asp_link_lch[0];
-		davinci_set_dma_src_index(lch, data_type, 0);
-		lch = prtd->asp_link_lch[1];
-		davinci_set_dma_src_index(lch, data_type, 0);
+		if (convert_mono_stereo) {
+			davinci_set_dma_src_index(lch, 0, data_type);
+			lch = prtd->asp_link_lch[1];
+			davinci_set_dma_src_index(lch, 0, data_type);
+		} else {
+			davinci_set_dma_src_index(lch, data_type, 0);
+			lch = prtd->asp_link_lch[1];
+			davinci_set_dma_src_index(lch, data_type, 0);
+		}
 
 		lch = prtd->ram_link_lch;
-		davinci_set_dma_src_params(lch, runtime->dma_addr, INCR, W32BIT);
+		davinci_set_dma_src_params(lch, runtime->dma_addr,
+				INCR, W32BIT);
 	} else {
 		dma_addr_t asp_dst_pong = iram_dma->addr + ping_size;
 		ram_src_cidx = -ping_size;
 		ram_dst_cidx = ping_size;
-		davinci_set_dma_dest_params(lch, asp_dst_pong, INCR, W16BIT);
+		davinci_set_dma_dest_params(lch, asp_dst_pong, INCR, 0);
 
 		lch = prtd->asp_link_lch[0];
-		davinci_set_dma_dest_index(lch, data_type, 0);
-		lch = prtd->asp_link_lch[1];
-		davinci_set_dma_dest_index(lch, data_type, 0);
-
+		if (convert_mono_stereo) {
+			davinci_set_dma_dest_index(lch, 0, data_type);
+			lch = prtd->asp_link_lch[1];
+			davinci_set_dma_dest_index(lch, 0, data_type);
+		} else {
+			davinci_set_dma_dest_index(lch, data_type, 0);
+			lch = prtd->asp_link_lch[1];
+			davinci_set_dma_dest_index(lch, data_type, 0);
+		}
 		lch = prtd->ram_link_lch;
-		davinci_set_dma_dest_params(lch, runtime->dma_addr, INCR, W32BIT);
+		davinci_set_dma_dest_params(lch, runtime->dma_addr,
+				INCR, W32BIT);
 	}
 
 	lch = prtd->asp_link_lch[0];
-	davinci_set_dma_transfer_params(lch, data_type, ping_size/data_type, 1, 0, ASYNC);
+	if (convert_mono_stereo) {
+		davinci_set_dma_transfer_params(lch, data_type,
+				2, ping_size/data_type, 2, ASYNC);
+		lch = prtd->asp_link_lch[1];
+		davinci_set_dma_transfer_params(lch, data_type,
+				2, ping_size/data_type, 2, ASYNC);
+	} else {
+		davinci_set_dma_transfer_params(lch, data_type,
+				ping_size/data_type, 1, 0, ASYNC);
+		lch = prtd->asp_link_lch[1];
+		davinci_set_dma_transfer_params(lch, data_type,
+				ping_size/data_type, 1, 0, ASYNC);
+	}
 
-	lch = prtd->asp_link_lch[1];
-	davinci_set_dma_transfer_params(lch, data_type, ping_size/data_type, 1, 0, ASYNC);
 
 	lch = prtd->ram_link_lch;
 	davinci_set_dma_src_index(lch, ping_size, ram_src_cidx);
 	davinci_set_dma_dest_index(lch, ping_size, ram_dst_cidx);
-	davinci_set_dma_transfer_params(lch, ping_size, 2, runtime->periods, 2, ASYNC);
+	davinci_set_dma_transfer_params(lch, ping_size, 2,
+			runtime->periods, 2, ASYNC);
 
 	/* init master params */
 	davinci_get_dma_params(prtd->asp_link_lch[0], &prtd->asp_params);
@@ -168,8 +196,10 @@ static int davinci_pcm_dma_setup(struct snd_pcm_substream *substream)
 		edmacc_paramentry_regs parm;
 		/* Copy entire iram buffer before playback started */
 		prtd->ram_params.a_b_cnt = (1 << 16) | (ping_size << 1);
-		prtd->ram_params.src_dst_bidx = (ping_size << 1);	/* 0 dst_bidx */
-		prtd->ram_params.src_dst_cidx = (ping_size << 1);	/* 0 dst_cidx */
+		/* 0 dst_bidx */
+		prtd->ram_params.src_dst_bidx = (ping_size << 1);
+		/* 0 dst_cidx */
+		prtd->ram_params.src_dst_cidx = (ping_size << 1);
 		prtd->ram_params.ccnt = 1;
 
 		/* Skip 1st period */
@@ -183,19 +213,20 @@ static int davinci_pcm_dma_setup(struct snd_pcm_substream *substream)
 
 /* 1 asp tx or rx channel using 2 parameter channels
  * 1 ram to/from iram channel using 1 parameter channel
- * 
+ *
  * Playback
  * ram copy channel kicks off first,
  * 1st ram copy of entire iram buffer completion kicks off asp channel
  * asp tcc always kicks off ram copy of 1/2 iram buffer
- * 
+ *
  * Record
  * asp channel starts, tcc kicks off ram copy
  */
 static int davinci_pcm_dma_request(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
-	struct snd_dma_buffer *iram_dma = (struct snd_dma_buffer *)substream->dma_buffer.private_data;
+	struct snd_dma_buffer *iram_dma =
+		(struct snd_dma_buffer *)substream->dma_buffer.private_data;
 	struct davinci_runtime_data *prtd = runtime->private_data;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct davinci_pcm_dma_params *dma_data = rtd->dai->cpu_dai->dma_data;
@@ -208,7 +239,7 @@ static int davinci_pcm_dma_request(struct snd_pcm_substream *substream)
 	int lch;
 	edmacc_paramentry_regs parm;
 
-	if ((!dma_data)||(!iram_dma))
+	if ((!dma_data) || (!iram_dma))
 		return -ENODEV;
 
 	/* Request ram master channel */
@@ -221,7 +252,8 @@ static int davinci_pcm_dma_request(struct snd_pcm_substream *substream)
 	/* Request ram link channel */
 	tcc = TCC_ANY;
 	ret = davinci_request_dma(DAVINCI_EDMA_PARAM_ANY, "audio iram link",
-				  NULL, NULL, &prtd->ram_link_lch, &tcc, EVENTQ_1);
+				  NULL, NULL,
+				  &prtd->ram_link_lch, &tcc, EVENTQ_1);
 	if (ret)
 		goto exit2;
 
@@ -235,12 +267,14 @@ static int davinci_pcm_dma_request(struct snd_pcm_substream *substream)
 	/* Request asp link channels */
 	tcc = prtd->ram_master_lch;
 	ret = davinci_request_dma(DAVINCI_EDMA_PARAM_ANY, "audio asp ping",
-				  NULL, NULL, &prtd->asp_link_lch[0], &tcc, EVENTQ_0);
+				  NULL, NULL,
+				  &prtd->asp_link_lch[0], &tcc, EVENTQ_0);
 	if (ret)
 		goto exit4;
 	tcc = prtd->ram_master_lch;
 	ret = davinci_request_dma(DAVINCI_EDMA_PARAM_ANY, "audio asp pong",
-				  NULL, NULL, &prtd->asp_link_lch[1], &tcc, EVENTQ_0);
+				  NULL, NULL,
+				  &prtd->asp_link_lch[1], &tcc, EVENTQ_0);
 	if (ret)
 		goto exit5;
 
@@ -253,14 +287,13 @@ static int davinci_pcm_dma_request(struct snd_pcm_substream *substream)
 		if (ret)
 			goto exit6;
 	}
-	
+
 	/* circle ping-pong buffers */
 	davinci_dma_link_lch(prtd->asp_link_lch[0], prtd->asp_link_lch[1]);
 	davinci_dma_link_lch(prtd->asp_link_lch[1], prtd->asp_link_lch[0]);
 	/* circle ram buffers */
 	davinci_dma_link_lch(prtd->ram_link_lch, prtd->ram_link_lch);
 
-	
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		asp_src_ping = iram_dma->addr;
 		asp_dst_ping = dma_data->dma_addr;	/* fifo */
@@ -350,10 +383,8 @@ static int davinci_pcm_prepare(struct snd_pcm_substream *substream)
 	int ret;
 	struct davinci_runtime_data *prtd = substream->runtime->private_data;
 
-	prtd->period = 0;
-
 	ret = davinci_pcm_dma_setup(substream);
-	if (ret<0)
+	if (ret < 0)
 		return ret;
 	davinci_set_dma_params(prtd->ram_master_lch, &prtd->ram_params);
 	davinci_dma_link_lch(prtd->ram_master_lch, prtd->ram_link_lch2);
@@ -376,53 +407,49 @@ davinci_pcm_pointer(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct davinci_runtime_data *prtd = runtime->private_data;
-	unsigned int offset1, offset2;
-	unsigned int count;
-	dma_addr_t asp_src1, asp_dst1;
-	dma_addr_t asp_src2, asp_dst2;
+	unsigned int offset;
+	int count_asp, count_ram;
+	int mod_ram;
 	dma_addr_t ram_src, ram_dst;
+	dma_addr_t asp_src, asp_dst;
 	unsigned int period_size = snd_pcm_lib_period_bytes(substream);
-	unsigned int ping_size = (period_size >> 1);
-	unsigned int pong;
-	
+
 	spin_lock(&prtd->lock);
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		davinci_dma_getposition(prtd->asp_master_lch, &asp_src1, &asp_dst1);
-		davinci_dma_getposition(prtd->ram_master_lch, &ram_src, &ram_dst);
-		davinci_dma_getposition(prtd->asp_master_lch, &asp_src2, &asp_dst2);
-		offset1 = asp_src2 - prtd->asp_params.src;
-		offset2 = asp_src2 - prtd->asp_params.src;
-		pong = ((offset2 / ping_size) & 1);
-		if (pong != ((offset1 / ping_size) & 1)) {
-			/* changed between ping & pong, reread ram position */
-			davinci_dma_getposition(prtd->ram_master_lch, &ram_src, &ram_dst);
+		/* reading ram before asp should be safe
+		 * as long as the asp transfers less than a ping size
+		 * of bytes between the 2 reads
+		 */
+		davinci_dma_getposition(prtd->ram_master_lch,
+				&ram_src, &ram_dst);
+		davinci_dma_getposition(prtd->asp_master_lch,
+				&asp_src, &asp_dst);
+		count_asp = asp_src - prtd->asp_params.src;
+		count_ram = ram_src - prtd->ram_params.src;
+		mod_ram = count_ram % period_size;
+		mod_ram -= count_asp;
+		if (mod_ram < 0)
+			mod_ram += period_size;
+		else if (mod_ram == 0) {
+			if (snd_pcm_running(substream))
+				mod_ram += period_size;
 		}
-		count = ram_src - prtd->ram_params.src;
-		if (count >= period_size)
-			count -= period_size;
-		else
-			count += period_size * (runtime->periods - 1);
-		count /= ping_size;
-		if (count & 1) {
-			//transferring a pong buffer next, swap offset
-			if (pong)
-				offset2 -= ping_size;
-			else
-				offset2 += ping_size;
-		}
-		count = (count * ping_size) + offset2;
+		count_ram -= mod_ram;
+		if (count_ram < 0)
+			count_ram += period_size * runtime->periods;
 	} else {
-		davinci_dma_getposition(prtd->ram_master_lch, &ram_src, &ram_dst);
-		count = ram_dst - prtd->ram_params.dst;
+		davinci_dma_getposition(prtd->ram_master_lch,
+				&ram_src, &ram_dst);
+		count_ram = ram_dst - prtd->ram_params.dst;
 	}
 	spin_unlock(&prtd->lock);
 
-	count = bytes_to_frames(runtime, count);
-	DPRINTK("count=0x%x\n",count);
-	if (count >= runtime->buffer_size)
-		count = 0;
+	offset = bytes_to_frames(runtime, count_ram);
+	DPRINTK("offset=0x%x\n", offset);
+	if (offset >= runtime->buffer_size)
+		offset = 0;
 
-	return count;
+	return offset;
 }
 
 static int davinci_pcm_open(struct snd_pcm_substream *substream)
@@ -464,8 +491,8 @@ static int davinci_pcm_close(struct snd_pcm_substream *substream)
 	davinci_free_dma(prtd->asp_master_lch);
 	davinci_free_dma(prtd->ram_link_lch);
 	if (prtd->ram_link_lch2 != -1) {
-		prtd->ram_link_lch2 = -1;
 		davinci_free_dma(prtd->ram_link_lch2);
+		prtd->ram_link_lch2 = -1;
 	}
 	davinci_free_dma(prtd->ram_master_lch);
 	kfree(prtd);
@@ -506,8 +533,6 @@ struct snd_pcm_ops davinci_pcm_ops = {
 	.pointer = 	davinci_pcm_pointer,
 	.mmap = 	davinci_pcm_mmap,
 };
-int davinci_alloc_iram(unsigned size);
-void davinci_free_iram(unsigned addr, unsigned size);
 
 static int davinci_pcm_preallocate_dma_buffer(struct snd_pcm *pcm, int stream)
 {
@@ -517,7 +542,7 @@ static int davinci_pcm_preallocate_dma_buffer(struct snd_pcm *pcm, int stream)
 	struct snd_dma_buffer *iram_dma = NULL;
 	unsigned iram_phys = 0;
 	unsigned int iram_size = davinci_pcm_hardware.period_bytes_max;
-	
+
 	buf->dev.type = SNDRV_DMA_TYPE_DEV;
 	buf->dev.dev = pcm->card->dev;
 	buf->private_data = NULL;

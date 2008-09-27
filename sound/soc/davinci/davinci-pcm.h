@@ -16,7 +16,9 @@ struct davinci_pcm_dma_params {
 	char *name;		/* stream identifier */
 	int channel;		/* sync dma channel ID */
 	dma_addr_t dma_addr;	/* device physical address for DMA */
-	unsigned int data_type;	/* xfer data type */
+	unsigned char data_type;	/* xfer data type */
+	unsigned char channels_swapped;
+	unsigned char convert_mono_stereo;
 };
 
 struct evm_snd_platform_data {
