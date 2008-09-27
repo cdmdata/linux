@@ -89,8 +89,8 @@ static struct davinci_pcm_dma_params davinci_i2s_pcm_in = {
 
 struct davinci_mcbsp_dev {
 	void __iomem			*base;
-#define MOD_I2S		0
-#define MOD_DSP		1
+#define MOD_DSP_A	0
+#define MOD_DSP_B	1
 	int				mode;
 	struct clk			*clk;
 	struct davinci_pcm_dma_params	*dma_params[2];
@@ -221,11 +221,11 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 
 	/* interface format */
 	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
-	case SND_SOC_DAIFMT_I2S:
-		dev->mode = MOD_I2S;
-		break;
 	case SND_SOC_DAIFMT_DSP_A:
-		dev->mode = MOD_DSP;
+		dev->mode = MOD_DSP_A;
+		break;
+	case SND_SOC_DAIFMT_DSP_B:
+		dev->mode = MOD_DSP_B;
 		break;
 	default:
 		printk(KERN_ERR "%s:bad format\n", __func__);
@@ -247,6 +247,7 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 	int bits_per_sample;
 	int bits_per_frame;
 	unsigned int rcr, xcr, srgr;
+	int element_cnt = 1;
 
 	i = hw_param_interval(params, SNDRV_PCM_HW_PARAM_SAMPLE_BITS);
 	bits_per_sample = snd_interval_value(i);
@@ -262,43 +263,38 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 				DAVINCI_MCBSP_SPCR_XINTM(3) |
 				DAVINCI_MCBSP_SPCR_FREE);
 
-	if (dev->mode == MOD_I2S) {
-		rcr = DAVINCI_MCBSP_RCR_RFRLEN1(1) |
-			DAVINCI_MCBSP_RCR_RDATDLY(1);
-		xcr = DAVINCI_MCBSP_XCR_XFRLEN1(1) |
-			DAVINCI_MCBSP_XCR_XDATDLY(1) |
+	if (dev->mode == MOD_DSP_B) {
+		rcr = DAVINCI_MCBSP_RCR_RDATDLY(1);
+		xcr = DAVINCI_MCBSP_XCR_XDATDLY(1) |
 			DAVINCI_MCBSP_XCR_XFIG;
 	} else {
-		rcr = DAVINCI_MCBSP_RCR_RFRLEN1(0) |
-			DAVINCI_MCBSP_RCR_RFRLEN2(0) |
-			DAVINCI_MCBSP_RCR_RDATDLY(0) |
-			DAVINCI_MCBSP_RCR_RPHASE |
+		rcr = 	DAVINCI_MCBSP_RCR_RDATDLY(0) |
 			DAVINCI_MCBSP_RCR_RFIG;
-		xcr = DAVINCI_MCBSP_XCR_XFRLEN1(0) |
-			DAVINCI_MCBSP_XCR_XFRLEN2(0) |
-			DAVINCI_MCBSP_XCR_XDATDLY(0) |
-			DAVINCI_MCBSP_XCR_XPHASE |
+		xcr =	DAVINCI_MCBSP_XCR_XDATDLY(0) |
 			DAVINCI_MCBSP_XCR_XFIG;
 	}
 
 	/* Determine xfer data type */
 	switch (params_format(params)) {
 	case SNDRV_PCM_FORMAT_S8:
-		dma_params->data_type = 1;
-		mcbsp_word_length = DAVINCI_MCBSP_WORD_8;
-		break;
-	case SNDRV_PCM_FORMAT_S16_LE:
-		dma_params->data_type = 2;
+		dma_params->data_type = 2;	/* 2 byte frame */
 		mcbsp_word_length = DAVINCI_MCBSP_WORD_16;
 		break;
+	case SNDRV_PCM_FORMAT_S16_LE:
+		dma_params->data_type = 4;	/* 4 byte frame */
+		mcbsp_word_length = DAVINCI_MCBSP_WORD_32;
+		break;
 	case SNDRV_PCM_FORMAT_S32_LE:
-		dma_params->data_type = 4;
+		element_cnt = 2;
+		dma_params->data_type = 4;	/* 4 byte element */
 		mcbsp_word_length = DAVINCI_MCBSP_WORD_32;
 		break;
 	default:
 		printk(KERN_WARNING "davinci-i2s: unsupported PCM format");
 		return -EINVAL;
 	}
+	rcr |=	DAVINCI_MCBSP_RCR_RFRLEN1(element_cnt - 1);
+	xcr |=  DAVINCI_MCBSP_XCR_XFRLEN1(element_cnt - 1);
 
 	rcr |=  DAVINCI_MCBSP_RCR_RWDLEN1(mcbsp_word_length) |
 		DAVINCI_MCBSP_RCR_RWDLEN2(mcbsp_word_length);
