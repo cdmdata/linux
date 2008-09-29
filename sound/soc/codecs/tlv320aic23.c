@@ -602,7 +602,12 @@ static int aic23_init(struct snd_soc_device *socdev)
 	int ret = 0;
 
 	aic23_write(codec, AIC23_RESET, 0);
-	/* all off */
+	/* all off
+	 * This addresses the problem of the digital filters
+	 * not being initialized when MCLK is removed
+	 * slea037.pdf section 2 
+	 * "Noise Fixed by Toggling Bit D7 of Power-Down Control"
+	 */
 	aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0x01ff);
 	msleep(1);
 
@@ -614,6 +619,7 @@ static int aic23_init(struct snd_soc_device *socdev)
 	}
 
 	/* power on device, only oscillator is on */
+	aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0x00df);
 	aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0x005f);
 	aic23_write(codec, AIC23_DIGITAL_INTERFACE_ACT, 0x0000);
 
