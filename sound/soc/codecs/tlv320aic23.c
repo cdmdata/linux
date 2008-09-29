@@ -2,8 +2,9 @@
  * Texas Instruments TLV320AIC23 low power audio CODEC
  * ALSA SoC CODEC driver
  * Copyright (C) 2008 Boundary Devices
- * based on	wm8732.c by Richard Purdie
+ * based on	wm8731.c by Richard Purdie
  * Copyright 2005 Openedhand Ltd.
+ * which was based on wm8753.c by Liam Girdwood
  */
 
 #include <linux/module.h>
@@ -231,6 +232,7 @@ static int aic23_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 	data |= DAF_MASTER(aic23->master) | aic23->datfm;
+	data |= aic23_read_cache(codec, AIC23_DIGITAL_AUDIO_FORMAT) & DAF_LRSWAP_ON;
 	aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT, data);
 	return 0;
 }
@@ -238,9 +240,13 @@ static int aic23_hw_params(struct snd_pcm_substream *substream,
 static int aic23_modify(struct snd_soc_codec *codec, unsigned int reg,
 		unsigned int clear, unsigned int set)
 {
-	unsigned val;
-	val = aic23_read_cache(codec, reg);
-	aic23_write(codec, reg, (val & ~clear) | set);
+	unsigned old, new;
+	old = aic23_read_cache(codec, reg);
+	new = (old & ~clear) | set;
+	if (old != new) {
+		aic23_write(codec, reg, new);
+		printk(KERN_ERR "code_reg:%x, was %x now %x\n", reg, old, new);
+	}
 	return 0;
 }
 static int aic23_pcm_prepare(struct snd_pcm_substream *substream)
@@ -249,12 +255,17 @@ static int aic23_pcm_prepare(struct snd_pcm_substream *substream)
 	struct snd_soc_device *socdev = rtd->socdev;
 	struct snd_soc_codec *codec = socdev->codec;
 	/* set active */
-	aic23_modify(codec, AIC23_ANALOG_AUDIO_CONTROL, 
-		AAC_MIC_MUTE | (1<<AAC_BYPASS_BIT), AAC_DAC_ON | AAC_INSEL_MIC);
-	aic23_modify(codec, AIC23_LEFT_OUTPUT_VOLUME, 0, LROV_ZERO_CROSS);
-	aic23_modify(codec, AIC23_RIGHT_OUTPUT_VOLUME, 0, LROV_ZERO_CROSS);
-	aic23_modify(codec, AIC23_DIGITAL_AUDIO_CONTROL, 0, DAC_DEEMP_44K);
-	aic23_modify(codec, AIC23_POWER_DOWN_CONTROL, 0, (1<<PDC_LINE_BIT));
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		aic23_modify(codec, AIC23_ANALOG_AUDIO_CONTROL, 
+			0, AAC_DAC_ON);
+		aic23_modify(codec, AIC23_POWER_DOWN_CONTROL, 
+			(1<<PDC_OUT_BIT)|(1<<PDC_DAC_BIT), 0);
+	} else {
+		aic23_modify(codec, AIC23_ANALOG_AUDIO_CONTROL, 
+			AAC_MIC_MUTE, 0);
+		aic23_modify(codec, AIC23_POWER_DOWN_CONTROL,
+			(1<<PDC_LINE_BIT)|(1<<PDC_MIC_BIT)|(1<<PDC_ADC_BIT), 0);
+	}
 	aic23_write(codec, AIC23_DIGITAL_INTERFACE_ACT, 0x0001);
 	return 0;
 }
@@ -409,14 +420,16 @@ struct snd_soc_dai aic23_dai = {
 	.name = "tlv320aic23",
 	.playback = {
 		.stream_name = "HiFi Playback",
-		.channels_min = 2,
+		/* fixme, codecs shouldn't need to lie */
+		.channels_min = 1, /* lie, I2S dma will convert to stereo*/
 		.channels_max = 2,
 		.rates = AIC23_RATES,
 		.formats = AIC23_FORMATS,
 	},
 	.capture = {
 		.stream_name = "HiFi Capture",
-		.channels_min = 2,
+		/* fixme, codecs shouldn't need to lie */
+		.channels_min = 1, /* lie, I2S dma will convert from stereo */
 		.channels_max = 2,
 		.rates = AIC23_RATES,
 		.formats = AIC23_FORMATS,
@@ -589,6 +602,9 @@ static int aic23_init(struct snd_soc_device *socdev)
 	int ret = 0;
 
 	aic23_write(codec, AIC23_RESET, 0);
+	/* all off */
+	aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0x01ff);
+	msleep(1);
 
 	/* register pcms */
 	ret = snd_soc_new_pcms(socdev, SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1);
@@ -604,12 +620,16 @@ static int aic23_init(struct snd_soc_device *socdev)
 	/* set the update bits */
 	aic23_write(codec, AIC23_LEFT_INPUT_VOLUME, LRIV_DEFAULT | LRIV_MUTE);
 	aic23_write(codec, AIC23_RIGHT_INPUT_VOLUME, LRIV_DEFAULT | LRIV_MUTE);
-	aic23_write(codec, AIC23_LEFT_OUTPUT_VOLUME, LROV_DEFAULT);
-	aic23_write(codec, AIC23_RIGHT_OUTPUT_VOLUME, LROV_DEFAULT);
-	aic23_write(codec, AIC23_ANALOG_AUDIO_CONTROL, AAC_BYPASS_ON | AAC_MIC_MUTE);
-	aic23_write(codec, AIC23_DIGITAL_AUDIO_CONTROL, DAC_SOFT_MUTE);
-	aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT, DAF_IWL_16 | DAF_FOR_DSP | DAF_MASTER_MODE);
-	aic23_write(codec, AIC23_SAMPLE_RATE_CONTROL, 0x0000);
+	aic23_write(codec, AIC23_LEFT_OUTPUT_VOLUME,
+			LROV_DEFAULT | LROV_ZERO_CROSS);
+	aic23_write(codec, AIC23_RIGHT_OUTPUT_VOLUME,
+			LROV_DEFAULT | LROV_ZERO_CROSS);
+	aic23_write(codec, AIC23_ANALOG_AUDIO_CONTROL,
+			AAC_MIC_BOOST_20DB | AAC_MIC_MUTE | AAC_INSEL_MIC);
+	aic23_write(codec, AIC23_DIGITAL_AUDIO_CONTROL,
+			DAC_SOFT_MUTE | DAC_DEEMP_44K);
+	aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT,
+			DAF_IWL_16 | DAF_FOR_DSP | DAF_MASTER_MODE);
 	set_sample_rate_control(codec, 0, 44100, 44100);
 
 	aic23_add_controls(codec);
