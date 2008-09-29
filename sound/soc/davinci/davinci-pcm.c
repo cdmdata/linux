@@ -26,7 +26,7 @@
 
 #include "davinci-pcm.h"
 
-#define DAVINCI_PCM_DEBUG 0
+#define DAVINCI_PCM_DEBUG 1
 #if DAVINCI_PCM_DEBUG
 #define DPRINTK(format, arg...) printk(KERN_DEBUG format, ## arg)
 #else
@@ -115,6 +115,7 @@ static int davinci_pcm_dma_setup(struct snd_pcm_substream *substream)
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct davinci_pcm_dma_params *dma_data = rtd->dai->cpu_dai->dma_data;
 	unsigned int data_type = dma_data->data_type;
+	unsigned int convert_mono_stereo = dma_data->convert_mono_stereo;
 	unsigned int ping_size = snd_pcm_lib_period_bytes(substream) >> 1;	/* divide by 2 for ping/pong */
 	int lch = prtd->asp_link_lch[1];
 	if ((data_type == 0) || (data_type > 4)) {
@@ -125,12 +126,18 @@ static int davinci_pcm_dma_setup(struct snd_pcm_substream *substream)
 		dma_addr_t asp_src_pong = iram_dma->addr + ping_size;
 		ram_src_cidx = ping_size;
 		ram_dst_cidx = -ping_size;
-		davinci_set_dma_src_params(lch, asp_src_pong, INCR, W16BIT);
+		davinci_set_dma_src_params(lch, asp_src_pong, INCR, 0);
 
 		lch = prtd->asp_link_lch[0];
-		davinci_set_dma_src_index(lch, data_type, 0);
-		lch = prtd->asp_link_lch[1];
-		davinci_set_dma_src_index(lch, data_type, 0);
+		if (convert_mono_stereo) {
+			davinci_set_dma_src_index(lch, 0, data_type);
+			lch = prtd->asp_link_lch[1];
+			davinci_set_dma_src_index(lch, 0, data_type);
+		} else {
+			davinci_set_dma_src_index(lch, data_type, 0);
+			lch = prtd->asp_link_lch[1];
+			davinci_set_dma_src_index(lch, data_type, 0);
+		}
 
 		lch = prtd->ram_link_lch;
 		davinci_set_dma_src_params(lch, runtime->dma_addr, INCR, W32BIT);
@@ -138,22 +145,37 @@ static int davinci_pcm_dma_setup(struct snd_pcm_substream *substream)
 		dma_addr_t asp_dst_pong = iram_dma->addr + ping_size;
 		ram_src_cidx = -ping_size;
 		ram_dst_cidx = ping_size;
-		davinci_set_dma_dest_params(lch, asp_dst_pong, INCR, W16BIT);
+		davinci_set_dma_dest_params(lch, asp_dst_pong, INCR, 0);
 
 		lch = prtd->asp_link_lch[0];
-		davinci_set_dma_dest_index(lch, data_type, 0);
-		lch = prtd->asp_link_lch[1];
-		davinci_set_dma_dest_index(lch, data_type, 0);
-
+		if (convert_mono_stereo) {
+			davinci_set_dma_dest_index(lch, 0, data_type);
+			lch = prtd->asp_link_lch[1];
+			davinci_set_dma_dest_index(lch, 0, data_type);
+		} else {
+			davinci_set_dma_dest_index(lch, data_type, 0);
+			lch = prtd->asp_link_lch[1];
+			davinci_set_dma_dest_index(lch, data_type, 0);
+		}
 		lch = prtd->ram_link_lch;
 		davinci_set_dma_dest_params(lch, runtime->dma_addr, INCR, W32BIT);
 	}
 
 	lch = prtd->asp_link_lch[0];
-	davinci_set_dma_transfer_params(lch, data_type, ping_size/data_type, 1, 0, ASYNC);
+	if (convert_mono_stereo) {
+		davinci_set_dma_transfer_params(lch, data_type,
+				2, ping_size/data_type, 2, ASYNC);
+		lch = prtd->asp_link_lch[1];
+		davinci_set_dma_transfer_params(lch, data_type,
+				2, ping_size/data_type, 2, ASYNC);
+	} else {
+		davinci_set_dma_transfer_params(lch, data_type,
+				ping_size/data_type, 1, 0, ASYNC);
+		lch = prtd->asp_link_lch[1];
+		davinci_set_dma_transfer_params(lch, data_type,
+				ping_size/data_type, 1, 0, ASYNC);
+	}
 
-	lch = prtd->asp_link_lch[1];
-	davinci_set_dma_transfer_params(lch, data_type, ping_size/data_type, 1, 0, ASYNC);
 
 	lch = prtd->ram_link_lch;
 	davinci_set_dma_src_index(lch, ping_size, ram_src_cidx);
@@ -454,8 +476,8 @@ static int davinci_pcm_close(struct snd_pcm_substream *substream)
 	davinci_free_dma(prtd->asp_master_lch);
 	davinci_free_dma(prtd->ram_link_lch);
 	if (prtd->ram_link_lch2 != -1) {
-		prtd->ram_link_lch2 = -1;
 		davinci_free_dma(prtd->ram_link_lch2);
+		prtd->ram_link_lch2 = -1;
 	}
 	davinci_free_dma(prtd->ram_master_lch);
 	kfree(prtd);
