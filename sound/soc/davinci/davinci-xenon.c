@@ -35,23 +35,27 @@
 #define MUTED 0
 #define NOTMUTED 1
 
-#if 0
-#define USE_FORMAT SND_SOC_DAIFMT_DSP_B | SND_SOC_DAIFMT_CBM_CFM
-#else
+#if 1
 #define USE_FORMAT SND_SOC_DAIFMT_DSP_A | SND_SOC_DAIFMT_CBM_CFM
+#else
+#define USE_FORMAT SND_SOC_DAIFMT_DSP_B | SND_SOC_DAIFMT_CBM_CFM
 #endif
 
 static int xenon_startup(struct snd_pcm_substream *substream)
 {
-	gpio_direction_output(MUTE_GPIO,NOTMUTED);
-	printk(KERN_ERR "unmuted\n");
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		gpio_direction_output(MUTE_GPIO,NOTMUTED);
+		printk(KERN_ERR "unmuted\n");
+	}
 	return 0;
 }
 
 static void xenon_shutdown(struct snd_pcm_substream *substream)
 {
-	gpio_direction_output(MUTE_GPIO,MUTED);
-	printk(KERN_ERR "muted\n");
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		gpio_direction_output(MUTE_GPIO,MUTED);
+		printk(KERN_ERR "muted\n");
+	}
 }
 
 static int xenon_hw_params(struct snd_pcm_substream *substream,
