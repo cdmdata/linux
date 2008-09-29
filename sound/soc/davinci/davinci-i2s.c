@@ -189,24 +189,36 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 
 	switch (fmt & SND_SOC_DAIFMT_INV_MASK) {
 	case SND_SOC_DAIFMT_IB_NF:
-		/* CLKRP Receive clock polarity, 1- rising edge of CLKR 
-		 * CLKXP Transmit clock polarity, 1 - falling edge of CLKX
+		/* CLKRP Receive clock polarity,
+		 *	1 - sampled on rising edge of CLKR 
+		 *	valid on rising edge
+		 * CLKXP Transmit clock polarity,
+		 *	1 - clocked on falling edge of CLKX
+		 *	valid on rising edge
 		 * FSRP  Receive frame sync pol, 0 - active high
 		 * FSXP  Transmit frame sync pol, 0 - active high
 		 */
 		pcr |= (DAVINCI_MCBSP_PCR_CLKXP | DAVINCI_MCBSP_PCR_CLKRP);
 		break;
 	case SND_SOC_DAIFMT_NB_IF:
-		/* CLKRP Receive clock polarity, 0- falling edge of CLKR 
-		 * CLKXP Transmit clock polarity, 0 - rising edge of CLKX
+		/* CLKRP Receive clock polarity,
+		 *	0 - sampled on falling edge of CLKR 
+		 *	valid on falling edge
+		 * CLKXP Transmit clock polarity,
+		 *	0 - clocked on rising edge of CLKX
+		 *	valid on falling edge
 		 * FSRP  Receive frame sync pol, 1 - active low
 		 * FSXP  Transmit frame sync pol, 1 - active low
 		 */
 		pcr |= (DAVINCI_MCBSP_PCR_FSXP | DAVINCI_MCBSP_PCR_FSRP);
 		break;
 	case SND_SOC_DAIFMT_IB_IF:
-		/* CLKRP Receive clock polarity, 1- rising edge of CLKR 
-		 * CLKXP Transmit clock polarity, 1 - falling edge of CLKX
+		/* CLKRP Receive clock polarity,
+		 *	1 - sampled on rising edge of CLKR 
+		 *	valid on rising edge
+		 * CLKXP Transmit clock polarity,
+		 *	1 - clocked on falling edge of CLKX
+		 *	valid on rising edge
 		 * FSRP  Receive frame sync pol, 1 - active low
 		 * FSXP  Transmit frame sync pol, 1 - active low
 		 */
@@ -247,6 +259,8 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 	int bits_per_sample;
 	int bits_per_frame;
 	unsigned int rcr, xcr, srgr;
+	int channels;
+	int format;
 	int element_cnt = 1;
 
 	i = hw_param_interval(params, SNDRV_PCM_HW_PARAM_SAMPLE_BITS);
@@ -263,35 +277,69 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 				DAVINCI_MCBSP_SPCR_XINTM(3) |
 				DAVINCI_MCBSP_SPCR_FREE);
 
-	if (dev->mode == MOD_DSP_B) {
-		rcr = DAVINCI_MCBSP_RCR_RDATDLY(1);
-		xcr = DAVINCI_MCBSP_XCR_XDATDLY(1) |
-			DAVINCI_MCBSP_XCR_XFIG;
+	rcr = DAVINCI_MCBSP_RCR_RFIG;
+	xcr = DAVINCI_MCBSP_XCR_XFIG;
+	if (dev->mode == MOD_DSP_A) {
+		rcr |= DAVINCI_MCBSP_RCR_RDATDLY(1);
+		xcr |= DAVINCI_MCBSP_XCR_XDATDLY(1);
 	} else {
-		rcr = 	DAVINCI_MCBSP_RCR_RDATDLY(0) |
-			DAVINCI_MCBSP_RCR_RFIG;
-		xcr =	DAVINCI_MCBSP_XCR_XDATDLY(0) |
-			DAVINCI_MCBSP_XCR_XFIG;
+		rcr |= DAVINCI_MCBSP_RCR_RDATDLY(2);
+		xcr |= DAVINCI_MCBSP_XCR_XDATDLY(2);
 	}
-
+	channels = params_channels(params);
+	format = params_format(params); 
 	/* Determine xfer data type */
-	switch (params_format(params)) {
-	case SNDRV_PCM_FORMAT_S8:
-		dma_params->data_type = 2;	/* 2 byte frame */
-		mcbsp_word_length = DAVINCI_MCBSP_WORD_16;
-		break;
-	case SNDRV_PCM_FORMAT_S16_LE:
-		dma_params->data_type = 4;	/* 4 byte frame */
-		mcbsp_word_length = DAVINCI_MCBSP_WORD_32;
-		break;
-	case SNDRV_PCM_FORMAT_S32_LE:
-		element_cnt = 2;
-		dma_params->data_type = 4;	/* 4 byte element */
-		mcbsp_word_length = DAVINCI_MCBSP_WORD_32;
-		break;
-	default:
-		printk(KERN_WARNING "davinci-i2s: unsupported PCM format");
-		return -EINVAL;
+	if (channels==2) {
+		/* Combining both channels into 1 element will double the
+		 * amount of time between servicing the dma channel, increase
+		 * effiency, and reduce the chance of overrun/underrun. But,
+		 * it will result in the left & right channels being swapped.
+		 * So, let the codec know to swap them back.
+		 */
+		dma_params->channels_swapped = 1;
+		dma_params->convert_mono_stereo = 0;
+		switch (format) {
+		case SNDRV_PCM_FORMAT_S8:
+			dma_params->data_type = 2;	/* 2 byte frame */
+			mcbsp_word_length = DAVINCI_MCBSP_WORD_16;
+			break;
+		case SNDRV_PCM_FORMAT_S16_LE:
+			dma_params->data_type = 4;	/* 4 byte frame */
+			mcbsp_word_length = DAVINCI_MCBSP_WORD_32;
+			break;
+		case SNDRV_PCM_FORMAT_S32_LE:
+			dma_params->channels_swapped = 0;
+			element_cnt = 2;
+			dma_params->data_type = 4;	/* 4 byte element */
+			mcbsp_word_length = DAVINCI_MCBSP_WORD_32;
+			break;
+		default:
+			printk(KERN_WARNING
+					"davinci-i2s: unsupported PCM format");
+			return -EINVAL;
+		}
+	} else {
+		dma_params->channels_swapped = 0;
+		dma_params->convert_mono_stereo = 1;
+		element_cnt = 2;	/* 1 element in ram becomes 2 for stereo */
+		switch (format) {
+		case SNDRV_PCM_FORMAT_S8:
+			dma_params->data_type = 1;	/* 1 byte frame in ram */
+			mcbsp_word_length = DAVINCI_MCBSP_WORD_8;
+			break;
+		case SNDRV_PCM_FORMAT_S16_LE:
+			dma_params->data_type = 2;	/* 2 byte frame in ram */
+			mcbsp_word_length = DAVINCI_MCBSP_WORD_16;
+			break;
+		case SNDRV_PCM_FORMAT_S32_LE:
+			dma_params->data_type = 4;	/* 4 byte element */
+			mcbsp_word_length = DAVINCI_MCBSP_WORD_32;
+			break;
+		default:
+			printk(KERN_WARNING
+					"davinci-i2s: unsupported PCM format");
+			return -EINVAL;
+		}
 	}
 	rcr |=	DAVINCI_MCBSP_RCR_RFRLEN1(element_cnt - 1);
 	xcr |=  DAVINCI_MCBSP_XCR_XFRLEN1(element_cnt - 1);
@@ -418,12 +466,14 @@ struct snd_soc_dai davinci_i2s_dai = {
 	.probe = davinci_i2s_probe,
 	.remove = davinci_i2s_remove,
 	.playback = {
-		.channels_min = 2,
+		/* fixme, codecs shouldn't need to lie */
+		.channels_min = 1, /* lie, I2S dma will convert to stereo*/
 		.channels_max = 2,
 		.rates = DAVINCI_I2S_RATES,
 		.formats = SNDRV_PCM_FMTBIT_S16_LE,},
 	.capture = {
-		.channels_min = 2,
+		/* fixme, codecs shouldn't need to lie */
+		.channels_min = 1, /* lie, I2S dma will convert from stereo */
 		.channels_max = 2,
 		.rates = DAVINCI_I2S_RATES,
 		.formats = SNDRV_PCM_FMTBIT_S16_LE,},
