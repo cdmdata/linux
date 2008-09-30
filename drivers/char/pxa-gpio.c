@@ -875,8 +875,11 @@ static ssize_t gpio_read (struct file *filp, char *buffer,size_t count, loff_t *
 		struct dev_gpio* dev= GetAllocGpioDev(gpio,0,0,IRQT_BOTHEDGE);
 		if (dev) {
 			char ch;
-			if (dev->gpio_direction!=IN)
-                           return -EFAULT ;
+			if (dev->gpio_direction!=IN){
+				printk( KERN_ERR "%s: gpio %d not an input\n", __func__, gpio );
+				return -EFAULT ;
+			}
+
 			if ((filp->f_flags & O_NONBLOCK)==0) {
 				if (dev->gpio_transitions_read==dev->gpio_transitions) {
 					return_val = wait_event_interruptible(dev->gpio_wait_queue,
