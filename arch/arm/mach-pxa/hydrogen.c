@@ -276,10 +276,6 @@ static struct pxamci_platform_data hydrogen_mci_platform_data = {
 
 static int hydrogen_ohci_init(struct device *dev)
 {
-	/* setup Port1 GPIO pin. */
-	pxa_gpio_mode(88 | GPIO_ALT_FN_1_IN);	/* USBHPWR1 */
-	pxa_gpio_mode(89 | GPIO_ALT_FN_2_OUT);	/* USBHPEN1 */
-
 	/* Set the Power Control Polarity Low and Power Sense
 	   Polarity Low to active low. */
 	UHCHR = (UHCHR | UHCHR_PCPL | UHCHR_PSPL) &
