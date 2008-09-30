@@ -280,11 +280,11 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 	rcr = DAVINCI_MCBSP_RCR_RFIG;
 	xcr = DAVINCI_MCBSP_XCR_XFIG;
 	if (dev->mode == MOD_DSP_A) {
+		rcr |= DAVINCI_MCBSP_RCR_RDATDLY(0);
+		xcr |= DAVINCI_MCBSP_XCR_XDATDLY(0);
+	} else {
 		rcr |= DAVINCI_MCBSP_RCR_RDATDLY(1);
 		xcr |= DAVINCI_MCBSP_XCR_XDATDLY(1);
-	} else {
-		rcr |= DAVINCI_MCBSP_RCR_RDATDLY(2);
-		xcr |= DAVINCI_MCBSP_XCR_XDATDLY(2);
 	}
 	channels = params_channels(params);
 	format = params_format(params); 
