@@ -434,7 +434,6 @@ static int soc_pcm_prepare(struct snd_pcm_substream *substream)
 		else {
 			codec_dai->pop_wait = 0;
 			cancel_delayed_work(&socdev->delayed_work);
-			snd_soc_dai_digital_mute(codec_dai, 0);
 		}
 	} else {
 		/* no delayed work - do we need to power up codec */
@@ -453,7 +452,6 @@ static int soc_pcm_prepare(struct snd_pcm_substream *substream)
 					SND_SOC_DAPM_STREAM_START);
 
 			snd_soc_dapm_set_bias_level(socdev, SND_SOC_BIAS_ON);
-			snd_soc_dai_digital_mute(codec_dai, 0);
 
 		} else {
 			/* codec already powered - power on widgets */
@@ -465,8 +463,6 @@ static int soc_pcm_prepare(struct snd_pcm_substream *substream)
 				snd_soc_dapm_stream_event(codec,
 					codec_dai->capture.stream_name,
 					SND_SOC_DAPM_STREAM_START);
-
-			snd_soc_dai_digital_mute(codec_dai, 0);
 		}
 	}
 
