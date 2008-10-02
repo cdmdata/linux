@@ -249,23 +249,27 @@ static int aic23_modify(struct snd_soc_codec *codec, unsigned int reg,
 	}
 	return 0;
 }
+/*
+ * aic23_mute - Mute control to reduce noise when changing audio format
+ */
+static int aic23_mute_codec(struct snd_soc_codec *codec, int mute)
+{
+	u16 reg = aic23_read_cache(codec, AIC23_DIGITAL_AUDIO_CONTROL);
+	if (mute)
+		reg |= DAC_SOFT_MUTE;
+	else
+		reg &= ~DAC_SOFT_MUTE;
+	aic23_write(codec, AIC23_DIGITAL_AUDIO_CONTROL, reg);
+	printk(KERN_ERR "%s:%i\n", __func__,mute);
+	return 0;
+}
+
 static int aic23_pcm_prepare(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
 	struct snd_soc_codec *codec = socdev->codec;
 	/* set active */
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		aic23_modify(codec, AIC23_ANALOG_AUDIO_CONTROL, 
-			0, AAC_DAC_ON);
-		aic23_modify(codec, AIC23_POWER_DOWN_CONTROL, 
-			(1<<PDC_OUT_BIT)|(1<<PDC_DAC_BIT), 0);
-	} else {
-		aic23_modify(codec, AIC23_ANALOG_AUDIO_CONTROL, 
-			AAC_MIC_MUTE, 0);
-		aic23_modify(codec, AIC23_POWER_DOWN_CONTROL,
-			(1<<PDC_LINE_BIT)|(1<<PDC_MIC_BIT)|(1<<PDC_ADC_BIT), 0);
-	}
 	aic23_write(codec, AIC23_DIGITAL_INTERFACE_ACT, 0x0001);
 	return 0;
 }
@@ -288,14 +292,7 @@ static void aic23_shutdown(struct snd_pcm_substream *substream)
  */
 static int aic23_mute(struct snd_soc_dai *dai, int mute)
 {
-	struct snd_soc_codec *codec = dai->codec;
-	u16 reg = aic23_read_cache(codec, AIC23_DIGITAL_AUDIO_CONTROL);
-	if (mute)
-		reg |= DAC_SOFT_MUTE;
-	else
-		reg &= ~DAC_SOFT_MUTE;
-	aic23_write(codec, AIC23_DIGITAL_AUDIO_CONTROL, reg);
-	return 0;
+	return aic23_mute_codec(dai->codec, mute);
 }
 
 static int aic23_set_sysclk(struct snd_soc_dai *codec_dai,
@@ -414,7 +411,7 @@ static int aic23_set_bias_level(struct snd_soc_codec *codec,
 			 SNDRV_PCM_FMTBIT_S24_BE |\
 			 SNDRV_PCM_FMTBIT_S32_BE)
 
-#define AIC23_FORMATS AIC23_FORMATS_LE
+#define AIC23_FORMATS AIC23_FORMATS_LE | AIC23_FORMATS_BE
 
 struct snd_soc_dai aic23_dai = {
 	.name = "tlv320aic23",
@@ -513,21 +510,21 @@ static const struct snd_kcontrol_new aic23_input_mux_controls =
 SOC_DAPM_ENUM("Input Select", aic23_enum[0]);
 
 static const struct snd_soc_dapm_widget aic23_dapm_widgets[] = {
+SND_SOC_DAPM_DAC("DAC", "HiFi Playback", AIC23_POWER_DOWN_CONTROL, PDC_DAC_BIT, 1),
+SND_SOC_DAPM_ADC("ADC", "HiFi Capture", AIC23_POWER_DOWN_CONTROL, PDC_ADC_BIT, 1),
 SND_SOC_DAPM_MIXER("Output Mixer", AIC23_POWER_DOWN_CONTROL, PDC_OUT_BIT, 1,
 	aic23_output_mixer_controls,
 	ARRAY_SIZE(aic23_output_mixer_controls)),
-SND_SOC_DAPM_DAC("DAC", "HiFi Playback", AIC23_POWER_DOWN_CONTROL, PDC_DAC_BIT, 1),
-SND_SOC_DAPM_OUTPUT("LOUT"),
-SND_SOC_DAPM_OUTPUT("LHPOUT"),
-SND_SOC_DAPM_OUTPUT("ROUT"),
-SND_SOC_DAPM_OUTPUT("RHPOUT"),
-SND_SOC_DAPM_ADC("ADC", "HiFi Capture", AIC23_POWER_DOWN_CONTROL, PDC_ADC_BIT, 1),
-SND_SOC_DAPM_MUX("Input Mux", SND_SOC_NOPM, 0, 0, &aic23_input_mux_controls),
-SND_SOC_DAPM_PGA("Line Input", AIC23_POWER_DOWN_CONTROL, PDC_LINE_BIT, 1, NULL, 0),
+SND_SOC_DAPM_MUX("Capture Source", AIC23_POWER_DOWN_CONTROL, PDC_LINE_BIT, 1, &aic23_input_mux_controls),
+SND_SOC_DAPM_PGA("Line Input", SND_SOC_NOPM, 0, 0, NULL, 0),
 SND_SOC_DAPM_MICBIAS("Mic Bias", AIC23_POWER_DOWN_CONTROL, PDC_MIC_BIT, 1),
-SND_SOC_DAPM_INPUT("MICIN"),
-SND_SOC_DAPM_INPUT("RLINEIN"),
+SND_SOC_DAPM_OUTPUT("LHPOUT"),
+SND_SOC_DAPM_OUTPUT("RHPOUT"),
+SND_SOC_DAPM_OUTPUT("LOUT"),
+SND_SOC_DAPM_OUTPUT("ROUT"),
 SND_SOC_DAPM_INPUT("LLINEIN"),
+SND_SOC_DAPM_INPUT("RLINEIN"),
+SND_SOC_DAPM_INPUT("MICIN"),
 };
 
 static const struct snd_soc_dapm_route intercon[] = {
@@ -537,20 +534,20 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"Output Mixer", "Mic Sidetone Switch", "Mic Bias"},
 
 	/* outputs */
-	{"RHPOUT", NULL, "Output Mixer"},
-	{"ROUT", NULL, "Output Mixer"},
 	{"LHPOUT", NULL, "Output Mixer"},
+	{"RHPOUT", NULL, "Output Mixer"},
 	{"LOUT", NULL, "Output Mixer"},
-
-	/* input mux */
-	{"Input Mux", "Line In", "Line Input"},
-	{"Input Mux", "Mic", "Mic Bias"},
-	{"ADC", NULL, "Input Mux"},
+	{"ROUT", NULL, "Output Mixer"},
 
 	/* inputs */
 	{"Line Input", NULL, "LLINEIN"},
 	{"Line Input", NULL, "RLINEIN"},
 	{"Mic Bias", NULL, "MICIN"},
+
+	/* input mux */
+	{"Capture Source", "Line In", "Line Input"},
+	{"Capture Source", "Mic", "Mic Bias"},
+	{"ADC", NULL, "Capture Source"},
 };
 
 static int aic23_add_widgets(struct snd_soc_codec *codec)
@@ -609,7 +606,6 @@ static int aic23_init(struct snd_soc_device *socdev)
 	 * "Noise Fixed by Toggling Bit D7 of Power-Down Control"
 	 */
 	aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0x01ff);
-	msleep(1);
 
 	/* register pcms */
 	ret = snd_soc_new_pcms(socdev, SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1);
@@ -631,7 +627,7 @@ static int aic23_init(struct snd_soc_device *socdev)
 	aic23_write(codec, AIC23_RIGHT_OUTPUT_VOLUME,
 			LROV_DEFAULT | LROV_ZERO_CROSS);
 	aic23_write(codec, AIC23_ANALOG_AUDIO_CONTROL,
-			AAC_MIC_BOOST_20DB | AAC_MIC_MUTE | AAC_INSEL_MIC);
+			AAC_DAC_ON | AAC_MIC_BOOST_20DB | AAC_INSEL_MIC);
 	aic23_write(codec, AIC23_DIGITAL_AUDIO_CONTROL,
 			DAC_SOFT_MUTE | DAC_DEEMP_44K);
 	aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT,
