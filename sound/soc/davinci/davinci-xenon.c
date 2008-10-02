@@ -45,7 +45,6 @@ static int xenon_startup(struct snd_pcm_substream *substream)
 {
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		gpio_direction_output(MUTE_GPIO,NOTMUTED);
-		printk(KERN_ERR "unmuted\n");
 	}
 	return 0;
 }
@@ -54,7 +53,6 @@ static void xenon_shutdown(struct snd_pcm_substream *substream)
 {
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		gpio_direction_output(MUTE_GPIO,MUTED);
-		printk(KERN_ERR "muted\n");
 	}
 }
 
