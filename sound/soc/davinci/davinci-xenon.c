@@ -96,7 +96,6 @@ static const struct snd_soc_dapm_widget aic23_dapm_widgets[] = {
 	SND_SOC_DAPM_HP("Headphone Jack", NULL),
 	SND_SOC_DAPM_SPK("Ext Spk", NULL),
 	SND_SOC_DAPM_MIC("Mic Jack", NULL),
-	SND_SOC_DAPM_LINE("Line Jack", NULL),
 };
 
 /* davinci-xenon machine audio_mapnections to the codec pins */
@@ -111,9 +110,6 @@ static const struct snd_soc_dapm_route audio_map[] = {
 
 	/* mic is connected to MICIN (via right channel of headphone jack) */
 	{"MICIN", NULL, "Mic Jack"},
-
-	/* Same as the above but no mic bias for line signals */
-	{"MICIN", NULL, "Line Jack"},
 };
 
 /* Logic for a aic23 as connected on a davinci-xenon */
@@ -133,7 +129,6 @@ static int xenon_aic23_init(struct snd_soc_codec *codec)
 	snd_soc_dapm_enable_pin(codec, "Headphone Jack");
 	snd_soc_dapm_enable_pin(codec, "Mic Jack");
 	snd_soc_dapm_enable_pin(codec, "Ext Spk");
-	snd_soc_dapm_enable_pin(codec, "Line Jack");
 	snd_soc_dapm_sync(codec);
 	return 0;
 }
