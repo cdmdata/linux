@@ -94,6 +94,9 @@ struct davinci_mcbsp_dev {
 	int				mode;
 	struct clk			*clk;
 	struct davinci_pcm_dma_params	*dma_params[2];
+	struct snd_soc_dai *codec_dai;
+	int dac_active;
+	struct work_struct deferred_mute_work;
 };
 
 static inline void davinci_mcbsp_write_reg(struct davinci_mcbsp_dev *dev,
@@ -107,10 +110,8 @@ static inline u32 davinci_mcbsp_read_reg(struct davinci_mcbsp_dev *dev, int reg)
 	return __raw_readl(dev->base + reg);
 }
 
-static void davinci_mcbsp_start(struct snd_pcm_substream *substream)
+static void davinci_mcbsp_start(struct davinci_mcbsp_dev *dev, int playback)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct davinci_mcbsp_dev *dev = rtd->dai->cpu_dai->private_data;
 	u32 w, pcr;
 
 	pcr = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_PCR_REG);
@@ -122,8 +123,7 @@ static void davinci_mcbsp_start(struct snd_pcm_substream *substream)
 		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
 	}
 	/* Enable transmitter or receiver */ 
-	w |= (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)?
-			DAVINCI_MCBSP_SPCR_XRST : DAVINCI_MCBSP_SPCR_RRST;
+	w |= (playback)? DAVINCI_MCBSP_SPCR_XRST : DAVINCI_MCBSP_SPCR_RRST;
 
 	if (pcr & (DAVINCI_MCBSP_PCR_FSXM | DAVINCI_MCBSP_PCR_FSRM )) {
 		/* Start frame sync */
@@ -132,30 +132,17 @@ static void davinci_mcbsp_start(struct snd_pcm_substream *substream)
 	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
 }
 
-static void davinci_mcbsp_stop(struct snd_pcm_substream *substream)
+static void davinci_mcbsp_stop(struct davinci_mcbsp_dev *dev, int playback)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct davinci_mcbsp_dev *dev = rtd->dai->cpu_dai->private_data;
 	u32 w;
 
 	/* Reset transmitter/receiver and sample rate/frame sync generators */
 	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
 	w &= ~(DAVINCI_MCBSP_SPCR_GRST | DAVINCI_MCBSP_SPCR_FRST);
-	w &= (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)?
-			~DAVINCI_MCBSP_SPCR_XRST : ~DAVINCI_MCBSP_SPCR_RRST;
+	w &= (playback)? ~DAVINCI_MCBSP_SPCR_XRST : ~DAVINCI_MCBSP_SPCR_RRST;
 	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
 }
 
-static int davinci_i2s_startup(struct snd_pcm_substream *substream)
-{
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *cpu_dai = rtd->dai->cpu_dai;
-	struct davinci_mcbsp_dev *dev = cpu_dai->private_data;
-
-	cpu_dai->dma_data = dev->dma_params[substream->stream];
-
-	return 0;
-}
 
 #define DEFAULT_BITPERSAMPLE	16
 
@@ -245,6 +232,17 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 	}
 	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SRGR_REG, srgr);
 	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, pcr);
+	return 0;
+}
+
+static int davinci_i2s_startup(struct snd_pcm_substream *substream)
+{
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_dai *cpu_dai = rtd->dai->cpu_dai;
+	struct davinci_mcbsp_dev *dev = cpu_dai->private_data;
+
+	cpu_dai->dma_data = dev->dma_params[substream->stream];
+
 	return 0;
 }
 
@@ -354,25 +352,51 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 	return 0;
 }
 
+static void codec_mute_deferred(struct work_struct *work)
+{
+	struct davinci_mcbsp_dev *dev = container_of(work,
+			struct davinci_mcbsp_dev, deferred_mute_work);
+	struct snd_soc_dai *codec_dai = dev->codec_dai;
+
+	snd_soc_dai_digital_mute(codec_dai, dev->dac_active ^ 1);
+
+	if (!dev->dac_active) {
+		davinci_mcbsp_stop(dev, 1);
+	}
+}
+
 static int davinci_i2s_trigger(struct snd_pcm_substream *substream, int cmd)
 {
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct davinci_mcbsp_dev *dev = rtd->dai->cpu_dai->private_data;
 	int ret = 0;
+	int dac_active = 1;
+	int playback = (substream->stream == SNDRV_PCM_STREAM_PLAYBACK);
 
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_RESUME:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
-		davinci_mcbsp_start(substream);
+		davinci_mcbsp_start(dev, playback);
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
 	case SNDRV_PCM_TRIGGER_SUSPEND:
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
-		davinci_mcbsp_stop(substream);
+		/* don't stop driving data lines
+		 * until digital_mute done
+		 */
+		dac_active = 0;
+		if (!playback)
+			davinci_mcbsp_stop(dev, playback);
 		break;
 	default:
 		ret = -EINVAL;
 	}
 
+	if (playback) {
+		dev->dac_active = dac_active;
+		schedule_work(&dev->deferred_mute_work);
+	}
 	return ret;
 }
 
@@ -382,6 +406,7 @@ static int davinci_i2s_probe(struct platform_device *pdev,
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
 	struct snd_soc_machine *machine = socdev->machine;
 	struct snd_soc_dai *cpu_dai = machine->dai_link[pdev->id].cpu_dai;
+	struct snd_soc_dai *codec_dai = machine->dai_link[pdev->id].codec_dai;
 	struct davinci_mcbsp_dev *dev;
 	struct resource *mem, *ioarea;
 	struct evm_snd_platform_data *pdata;
@@ -405,6 +430,8 @@ static int davinci_i2s_probe(struct platform_device *pdev,
 		ret = -ENOMEM;
 		goto err_release_region;
 	}
+	INIT_WORK(&dev->deferred_mute_work, codec_mute_deferred);
+	dev->codec_dai = codec_dai;
 
 	cpu_dai->private_data = dev;
 
@@ -450,6 +477,7 @@ static void davinci_i2s_remove(struct platform_device *pdev,
 	clk_disable(dev->clk);
 	clk_put(dev->clk);
 	dev->clk = NULL;
+	cancel_work_sync(&dev->deferred_mute_work);
 
 	kfree(dev);
 
