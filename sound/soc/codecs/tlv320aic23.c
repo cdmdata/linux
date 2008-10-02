@@ -260,7 +260,6 @@ static int aic23_mute_codec(struct snd_soc_codec *codec, int mute)
 	else
 		reg &= ~DAC_SOFT_MUTE;
 	aic23_write(codec, AIC23_DIGITAL_AUDIO_CONTROL, reg);
-	printk(KERN_ERR "%s:%i\n", __func__,mute);
 	return 0;
 }
 
