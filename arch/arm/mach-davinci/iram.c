@@ -14,7 +14,7 @@
 #include <mach/memory.h>
 
 //2**14 (16K) / 2**5 (32) = 2**9 (512 bytes per bit)
-static atomic_t iram_mask = ATOMIC_INIT(1);	/* low 512 bytes used elsewhere (video) */
+static atomic_t iram_mask;
 int davinci_alloc_iram(unsigned size)
 {
 	unsigned int mask;
