@@ -26,7 +26,7 @@
 
 #include "davinci-pcm.h"
 
-#define DAVINCI_PCM_DEBUG 1
+#define DAVINCI_PCM_DEBUG 0
 #if DAVINCI_PCM_DEBUG
 #define DPRINTK(format, arg...) printk(KERN_DEBUG format, ## arg)
 #else
