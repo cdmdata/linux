@@ -21,6 +21,7 @@
 
 #include <asm/dma.h>
 #include <mach/hardware.h>
+#include <mach/edma.h>
 
 #include "../codecs/tlv320aic3x.h"
 #include "davinci-pcm.h"
