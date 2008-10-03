@@ -2,6 +2,7 @@
  * linux/arch/arm/mach-davinci/iram.c
  *
  * DaVinci iram allocation/free
+ * Copyright (C) 2008 Boundary Devices.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +14,9 @@
 #include <linux/init.h>
 #include <mach/memory.h>
 
-//2**14 (16K) / 2**5 (32) = 2**9 (512 bytes per bit)
+/*
+ * 2**14 (16K) / 2**5 (32) = 2**9 (512 bytes per bit)
+ */
 static atomic_t iram_mask;
 int davinci_alloc_iram(unsigned size)
 {
@@ -39,6 +42,8 @@ int davinci_alloc_iram(unsigned size)
 	} while (mask != mask_prior);
 	return addr;
 }
+EXPORT_SYMBOL(davinci_alloc_iram);
+
 void davinci_free_iram(unsigned addr, unsigned size)
 {
 	unsigned mask;
@@ -50,5 +55,4 @@ void davinci_free_iram(unsigned addr, unsigned size)
 	mask = ((1 << size) - 1) << addr;
 	atomic_clear_mask(mask, (unsigned long *)&iram_mask.counter);
 }
-EXPORT_SYMBOL(davinci_alloc_iram);
 EXPORT_SYMBOL(davinci_free_iram);
