@@ -84,15 +84,24 @@ static int aic23_write(struct snd_soc_codec *codec, unsigned int reg,
 }
 
 /*
- * USB BOSR 0-250/2 = 125, 1-272/2 = 136
+ * Common Crystals used
+ * 11.2896 Mhz /128 = *88.2k  /192 = 58.8k
+ * 12.0000 Mhz /125 = *96k    /136 = 88.235K
+ * 12.2880 Mhz /128 = *96k    /192 = 64k
+ * 16.9344 Mhz /128 = 132.3k /192 = *88.2k
+ * 18.4320 Mhz /128 = 144k   /192 = *96k
+ */
+
+/*
  * Normal BOSR 0-256/2 = 128, 1-384/2 = 192
+ * USB BOSR 0-250/2 = 125, 1-272/2 = 136
  */
 static const int bosr_usb_divisor_table[] = {
 	128, 125, 192, 136
 };
 #define LOWER_GROUP (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<6)|(1<<7)
 #define UPPER_GROUP (1<<8)|(1<<9)|(1<<10)|(1<<11)     |(1<<15)
-static const short sr_valid_mask[] = {
+static const unsigned short sr_valid_mask[] = {
 	LOWER_GROUP|UPPER_GROUP,	/* Normal, bosr - 0*/
 	LOWER_GROUP|UPPER_GROUP,	/* Normal, bosr - 1*/
 	LOWER_GROUP,			/* Usb, bosr - 0*/
@@ -103,23 +112,15 @@ static const short sr_valid_mask[] = {
  */
 #define SR_MULT (11*12)
 #define A(x) (x)? (SR_MULT/x) : 0
-static const int sr_adc_mult_table[] = {
+static const unsigned char sr_adc_mult_table[] = {
 	A(2), A(2), A(12), A(12),  A(0), A(0), A(3), A(1),
 	A(2), A(2), A(11), A(11),  A(0), A(0), A(0), A(1)
 };
-static const int sr_dac_mult_table[] = {
+static const unsigned char sr_dac_mult_table[] = {
 	A(2), A(12), A(2), A(12),  A(0), A(0), A(3), A(1),
 	A(2), A(11), A(2), A(11),  A(0), A(0), A(0), A(1)
 };
 
-/*
- * Common Crystals used
- * 11.2896 Mhz /128 = *88.2k  /192 = 58.8k
- * 12.0000 Mhz /125 = *96k    /136 = 88.235K
- * 12.2880 Mhz /128 = *96k    /192 = 64k
- * 16.9344 Mhz /128 = 132.3k /192 = *88.2k
- * 18.4320 Mhz /128 = 144k   /192 = *96k
- */
 unsigned get_score(int adc, int adc_l, int adc_h, int need_adc,
 		int dac, int dac_l, int dac_h, int need_dac)
 {
@@ -505,8 +506,8 @@ SND_SOC_DAPM_ADC("ADC", "HiFi Capture", AIC23_POWER_DOWN_CONTROL, PDC_ADC_BIT, 1
 SND_SOC_DAPM_MIXER("Output Mixer", AIC23_POWER_DOWN_CONTROL, PDC_OUT_BIT, 1,
 	aic23_output_mixer_controls,
 	ARRAY_SIZE(aic23_output_mixer_controls)),
-SND_SOC_DAPM_MUX("Capture Source", AIC23_POWER_DOWN_CONTROL, PDC_LINE_BIT, 1, &aic23_input_mux_controls),
-SND_SOC_DAPM_PGA("Line Input", SND_SOC_NOPM, 0, 0, NULL, 0),
+SND_SOC_DAPM_MUX("Capture Source", SND_SOC_NOPM, 0, 0, &aic23_input_mux_controls),
+SND_SOC_DAPM_PGA("Line Input", AIC23_POWER_DOWN_CONTROL, PDC_LINE_BIT, 1, NULL, 0),
 SND_SOC_DAPM_MICBIAS("Mic Bias", AIC23_POWER_DOWN_CONTROL, PDC_MIC_BIT, 1),
 SND_SOC_DAPM_OUTPUT("LHPOUT"),
 SND_SOC_DAPM_OUTPUT("RHPOUT"),
