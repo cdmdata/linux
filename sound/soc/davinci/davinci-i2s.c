@@ -122,10 +122,10 @@ static void davinci_mcbsp_start(struct davinci_mcbsp_dev *dev, int playback)
 		w |= DAVINCI_MCBSP_SPCR_GRST;
 		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
 	}
-	/* Enable transmitter or receiver */ 
-	w |= (playback)? DAVINCI_MCBSP_SPCR_XRST : DAVINCI_MCBSP_SPCR_RRST;
+	/* Enable transmitter or receiver */
+	w |= (playback) ? DAVINCI_MCBSP_SPCR_XRST : DAVINCI_MCBSP_SPCR_RRST;
 
-	if (pcr & (DAVINCI_MCBSP_PCR_FSXM | DAVINCI_MCBSP_PCR_FSRM )) {
+	if (pcr & (DAVINCI_MCBSP_PCR_FSXM | DAVINCI_MCBSP_PCR_FSRM)) {
 		/* Start frame sync */
 		w |= DAVINCI_MCBSP_SPCR_FRST;
 	}
@@ -139,7 +139,7 @@ static void davinci_mcbsp_stop(struct davinci_mcbsp_dev *dev, int playback)
 	/* Reset transmitter/receiver and sample rate/frame sync generators */
 	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
 	w &= ~(DAVINCI_MCBSP_SPCR_GRST | DAVINCI_MCBSP_SPCR_FRST);
-	w &= (playback)? ~DAVINCI_MCBSP_SPCR_XRST : ~DAVINCI_MCBSP_SPCR_RRST;
+	w &= (playback) ? ~DAVINCI_MCBSP_SPCR_XRST : ~DAVINCI_MCBSP_SPCR_RRST;
 	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
 }
 
@@ -152,7 +152,7 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 	struct davinci_mcbsp_dev *dev = cpu_dai->private_data;
 	unsigned int pcr;
 	unsigned int srgr;
-	srgr = DAVINCI_MCBSP_SRGR_FSGM | 
+	srgr = DAVINCI_MCBSP_SRGR_FSGM |
 		DAVINCI_MCBSP_SRGR_FPER(DEFAULT_BITPERSAMPLE * 2 - 1) |
 		DAVINCI_MCBSP_SRGR_FWID(DEFAULT_BITPERSAMPLE - 1);
 
@@ -177,7 +177,7 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 	switch (fmt & SND_SOC_DAIFMT_INV_MASK) {
 	case SND_SOC_DAIFMT_IB_NF:
 		/* CLKRP Receive clock polarity,
-		 *	1 - sampled on rising edge of CLKR 
+		 *	1 - sampled on rising edge of CLKR
 		 *	valid on rising edge
 		 * CLKXP Transmit clock polarity,
 		 *	1 - clocked on falling edge of CLKX
@@ -189,7 +189,7 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 		break;
 	case SND_SOC_DAIFMT_NB_IF:
 		/* CLKRP Receive clock polarity,
-		 *	0 - sampled on falling edge of CLKR 
+		 *	0 - sampled on falling edge of CLKR
 		 *	valid on falling edge
 		 * CLKXP Transmit clock polarity,
 		 *	0 - clocked on rising edge of CLKX
@@ -201,7 +201,7 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 		break;
 	case SND_SOC_DAIFMT_IB_IF:
 		/* CLKRP Receive clock polarity,
-		 *	1 - sampled on rising edge of CLKR 
+		 *	1 - sampled on rising edge of CLKR
 		 *	valid on rising edge
 		 * CLKXP Transmit clock polarity,
 		 *	1 - clocked on falling edge of CLKX
@@ -265,7 +265,7 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 	bits_per_sample = snd_interval_value(i);
 	i = hw_param_interval(params, SNDRV_PCM_HW_PARAM_FRAME_BITS);
 	bits_per_frame = snd_interval_value(i);
-	srgr = DAVINCI_MCBSP_SRGR_FSGM | 
+	srgr = DAVINCI_MCBSP_SRGR_FSGM |
 		DAVINCI_MCBSP_SRGR_FPER(bits_per_frame - 1) |
 		DAVINCI_MCBSP_SRGR_FWID(bits_per_sample - 1);
 
@@ -285,14 +285,19 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 		xcr |= DAVINCI_MCBSP_XCR_XDATDLY(1);
 	}
 	channels = params_channels(params);
-	format = params_format(params); 
+	format = params_format(params);
 	/* Determine xfer data type */
-	if (channels==2) {
-		/* Combining both channels into 1 element will double the
+	if (channels == 2) {
+		/* Combining both channels into 1 element will x10 the
 		 * amount of time between servicing the dma channel, increase
 		 * effiency, and reduce the chance of overrun/underrun. But,
 		 * it will result in the left & right channels being swapped.
 		 * So, let the codec know to swap them back.
+		 *
+		 * It is x10 instead of x2 because the clock from the codec
+		 * runs at mclk speed, independent of the sample rate.
+		 * So, having an entire frame at once means it has to be
+		 * serviced at the sample rate instead of the mclk speed.
 		 */
 		dma_params->channels_swapped = 1;
 		dma_params->convert_mono_stereo = 0;
@@ -319,18 +324,22 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 	} else {
 		dma_params->channels_swapped = 0;
 		dma_params->convert_mono_stereo = 1;
-		element_cnt = 2;	/* 1 element in ram becomes 2 for stereo */
+		/* 1 element in ram becomes 2 for stereo */
+		element_cnt = 2;
 		switch (format) {
 		case SNDRV_PCM_FORMAT_S8:
-			dma_params->data_type = 1;	/* 1 byte frame in ram */
+			/* 1 byte frame in ram */
+			dma_params->data_type = 1;
 			mcbsp_word_length = DAVINCI_MCBSP_WORD_8;
 			break;
 		case SNDRV_PCM_FORMAT_S16_LE:
-			dma_params->data_type = 2;	/* 2 byte frame in ram */
+			/* 2 byte frame in ram */
+			dma_params->data_type = 2;
 			mcbsp_word_length = DAVINCI_MCBSP_WORD_16;
 			break;
 		case SNDRV_PCM_FORMAT_S32_LE:
-			dma_params->data_type = 4;	/* 4 byte element */
+			/* 4 byte element */
+			dma_params->data_type = 4;
 			mcbsp_word_length = DAVINCI_MCBSP_WORD_32;
 			break;
 		default:
@@ -360,9 +369,8 @@ static void codec_mute_deferred(struct work_struct *work)
 
 	snd_soc_dai_digital_mute(codec_dai, dev->dac_active ^ 1);
 
-	if (!dev->dac_active) {
+	if (!dev->dac_active)
 		davinci_mcbsp_stop(dev, 1);
-	}
 }
 
 static int davinci_i2s_trigger(struct snd_pcm_substream *substream, int cmd)
@@ -484,8 +492,8 @@ static void davinci_i2s_remove(struct platform_device *pdev,
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	release_mem_region(mem->start, (mem->end - mem->start) + 1);
 }
-#define DAVINCI_I2S_RATES	SNDRV_PCM_RATE_8000_96000 |\
-	SNDRV_PCM_RATE_5512 | SNDRV_PCM_RATE_KNOT | SNDRV_PCM_RATE_CONTINUOUS
+#define DAVINCI_I2S_RATES	(SNDRV_PCM_RATE_8000_96000 |\
+	SNDRV_PCM_RATE_5512 | SNDRV_PCM_RATE_KNOT | SNDRV_PCM_RATE_CONTINUOUS)
 
 struct snd_soc_dai davinci_i2s_dai = {
 	.name = "davinci-i2s",
