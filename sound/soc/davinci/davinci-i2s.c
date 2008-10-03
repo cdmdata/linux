@@ -484,8 +484,8 @@ static void davinci_i2s_remove(struct platform_device *pdev,
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	release_mem_region(mem->start, (mem->end - mem->start) + 1);
 }
-
-#define DAVINCI_I2S_RATES	SNDRV_PCM_RATE_8000_96000
+#define DAVINCI_I2S_RATES	SNDRV_PCM_RATE_8000_96000 |\
+	SNDRV_PCM_RATE_5512 | SNDRV_PCM_RATE_KNOT | SNDRV_PCM_RATE_CONTINUOUS
 
 struct snd_soc_dai davinci_i2s_dai = {
 	.name = "davinci-i2s",
