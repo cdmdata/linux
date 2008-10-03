@@ -28,7 +28,6 @@
 struct aic23 {
 	struct snd_soc_codec codec;
 	int mclk;
-	int ri_index;
 	int master;
 	int datfm;
 	u16 reg_cache[AIC23_NUM_CACHE_REGS];	/* shadow registers */
@@ -84,113 +83,139 @@ static int aic23_write(struct snd_soc_codec *codec, unsigned int reg,
 		return -EIO;
 }
 
-struct sample_rate_reg_info {
-	u32 sample_rate_adc;
-	u32 sample_rate_dac;
-	int control;		/* SR3, SR2, SR1, SR0 and BOSR */
+/*
+ * USB BOSR 0-250/2 = 125, 1-272/2 = 136
+ * Normal BOSR 0-256/2 = 128, 1-384/2 = 192
+ */
+static const int bosr_usb_divisor_table[] = {
+	128, 125, 192, 136
+};
+#define LOWER_GROUP (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<6)|(1<<7)
+#define UPPER_GROUP (1<<8)|(1<<9)|(1<<10)|(1<<11)     |(1<<15)
+static const short sr_valid_mask[] = {
+	LOWER_GROUP|UPPER_GROUP,	/* Normal, bosr - 0*/
+	LOWER_GROUP|UPPER_GROUP,	/* Normal, bosr - 1*/
+	LOWER_GROUP,			/* Usb, bosr - 0*/
+	UPPER_GROUP,			/* Usb, bosr - 1*/
+};
+/*
+ * Every divisor is a factor of 11*12
+ */
+#define SR_MULT (11*12)
+#define A(x) (x)? (SR_MULT/x) : 0
+static const int sr_adc_mult_table[] = {
+	A(2), A(2), A(12), A(12),  A(0), A(0), A(3), A(1),
+	A(2), A(2), A(11), A(11),  A(0), A(0), A(0), A(1)
+};
+static const int sr_dac_mult_table[] = {
+	A(2), A(12), A(2), A(12),  A(0), A(0), A(3), A(1),
+	A(2), A(11), A(2), A(11),  A(0), A(0), A(0), A(1)
 };
 
-static const struct sample_rate_reg_info rate_info_usb[] = {
-	{96000, 96000, 0x0E},
-	{88200, 88200, 0x1F},
-	{48000, 48000, 0x00},
-	{44100, 44100, 0x11},
-	{32000, 32000, 0x0C},
-	{ 8021,  8021, 0x17},
-	{ 8000,  8000, 0x06},
-	{48000,  8000, 0x02},
-	{44100,  8021, 0x13},
-	{ 8000, 48000, 0x04},
-	{ 8021, 44100, 0x15},
-	{    0,     0, 0}
-};
-static const struct sample_rate_reg_info rate_info_122880[] = {
-	{96000, 96000, 0x0E},
-	{48000, 48000, 0x00},
-	{32000, 32000, 0x0C},
-	{ 8000,  8000, 0x06},
-	{48000,  8000, 0x02},
-	{ 8000, 48000, 0x04},
-	{    0,     0, 0}
-};
-static const struct sample_rate_reg_info rate_info_112896[] = {
-	{88200, 88200, 0x1E},
-	{44100, 44100, 0x10},
-	{ 8021,  8021, 0x16},
-	{44100,  8021, 0x12},
-	{ 8021, 44100, 0x14},
-	{    0,     0, 0}
-};
-static const struct sample_rate_reg_info rate_info_184320[] = {
-	{96000, 96000, 0x0F},
-	{48000, 48000, 0x01},
-	{32000, 32000, 0x0D},
-	{ 8000,  8000, 0x07},
-	{48000,  8000, 0x03},
-	{ 8000, 48000, 0x05},
-	{    0,     0, 0}
-};
-static const struct sample_rate_reg_info rate_info_169344[] = {
-	{88200, 88200, 0x1F},
-	{44100, 44100, 0x11},
-	{ 8021,  8021, 0x17},
-	{44100,  8021, 0x13},
-	{ 8021, 44100, 0x15},
-	{    0,     0, 0}
-};
-
-#define RI_USB 0
-#define RI_122880 1
-#define RI_112896 2
-#define RI_184320 3
-#define RI_169344 4
-static const struct sample_rate_reg_info* rate_info[] = {
-	rate_info_usb,
-	rate_info_122880,
-	rate_info_112896,
-	rate_info_184320,
-	rate_info_169344,
-	NULL
-};
-unsigned find_rate(const struct sample_rate_reg_info* ri, u32 sample_rate_adc,
-		u32 sample_rate_dac)
+/*
+ * Common Crystals used
+ * 11.2896 Mhz /128 = *88.2k  /192 = 58.8k
+ * 12.0000 Mhz /125 = *96k    /136 = 88.235K
+ * 12.2880 Mhz /128 = *96k    /192 = 64k
+ * 16.9344 Mhz /128 = 132.3k /192 = *88.2k
+ * 18.4320 Mhz /128 = 144k   /192 = *96k
+ */
+unsigned get_score(int adc, int adc_l, int adc_h, int need_adc,
+		int dac, int dac_l, int dac_h, int need_dac)
 {
-	do {
-		if ((ri->sample_rate_adc == sample_rate_adc) &&
-				(ri->sample_rate_dac == sample_rate_dac)) {
-			return ri->control;
+	if ((adc >= adc_l) && (adc <= adc_h) &&
+			(dac >= dac_l) && (dac <= dac_h)) {
+		unsigned diff_adc = need_adc - adc;
+		unsigned diff_dac = need_dac - dac;
+		unsigned score;
+		if (((int)diff_adc) < 0)
+			diff_adc = -diff_adc;
+		if (((int)diff_dac) < 0)
+			diff_dac = -diff_dac;
+		score = diff_adc + diff_dac;
+		return score;
+	}
+	return 0xffffffff;
+}
+int find_rate(int mclk, u32 need_adc, u32 need_dac)
+{
+	int i,j;
+	int best_i = -1;
+	int best_j = -1;
+	int best_div = 0;
+	unsigned best_score = 0xffffffff;
+	int adc_l, adc_h, dac_l, dac_h;
+
+	need_adc *= SR_MULT;
+	need_dac *= SR_MULT;
+//	printk(KERN_ERR "need_adc=%i need_dac=%i\n", need_adc/SR_MULT, need_dac/SR_MULT);
+	/*
+	 * rates given are +/- 1/16
+	 */
+	adc_l = need_adc - (need_adc >> 4);
+	adc_h = need_adc + (need_adc >> 4);
+	dac_l = need_dac - (need_dac >> 4);
+	dac_h = need_dac + (need_dac >> 4);
+	for (i = 0; i < 4; i++) {
+		int base = mclk / bosr_usb_divisor_table[i];
+		int mask = sr_valid_mask[i];
+		for (j = 0; j < 16; j++, mask >>= 1) {
+			int adc; 
+			int dac;
+			int score;
+			if ((mask & 1) == 0)
+				continue;
+			adc = base * sr_adc_mult_table[j]; 
+			dac = base * sr_dac_mult_table[j];
+			score = get_score(adc, adc_l, adc_h, need_adc,
+					dac, dac_l, dac_h, need_dac);
+			if (best_score > score) {
+//				printk(KERN_ERR "adc=%i dac=%i\n", adc/SR_MULT, dac/SR_MULT);
+//				printk(KERN_ERR "best_score=%u score=%u\n", best_score, score);
+				best_score = score;
+				best_i = i;
+				best_j = j;
+				best_div = 0;
+			}
+			score = get_score((adc >> 1), adc_l, adc_h, need_adc,
+					(dac >> 1), dac_l, dac_h, need_dac);
+			/* prefer to have a /2 */
+			if ((score != 0xffffffff) && (best_score >= score)) {
+//				printk(KERN_ERR "adc=%i dac=%i\n", adc/SR_MULT, dac/SR_MULT);
+//				printk(KERN_ERR "best_score=%u score=%u\n", best_score, score);
+				best_score = score;
+				best_i = i;
+				best_j = j;
+				best_div = 1;
+			}
 		}
-		if (!ri->sample_rate_adc)
-			break;
-		ri++;
-	} while (1);
-	return -1;
+	}
+	return (best_j << 2) | best_i | SRC_CLKIN(best_div);
 }
 
-static int set_sample_rate_control(struct snd_soc_codec *codec, int ri_index,
+static int set_sample_rate_control(struct snd_soc_codec *codec, int mclk,
 		u32 sample_rate_adc, u32 sample_rate_dac)
 {
-	const struct sample_rate_reg_info* ri = rate_info[ri_index];
-	int divider = 0;
-	unsigned data;
-	
 	/* Search for the right sample rate */
-	int control = find_rate(ri,sample_rate_adc,sample_rate_dac);
-	if (control < 0) {
-		control = find_rate(ri,sample_rate_adc<<1,sample_rate_dac<<1);
-		if (control < 0) {
-			printk(KERN_ERR "%s:Invalid rate %ud,%ud requested\n",
-					__func__, sample_rate_adc,sample_rate_dac);
-			return -EINVAL;
-		}
-		divider = 1;
+	int data = find_rate(mclk, sample_rate_adc, sample_rate_dac);
+	if (data < 0) {
+		printk(KERN_ERR "%s:Invalid rate %u,%u requested\n",
+				__func__, sample_rate_adc,sample_rate_dac);
+		return -EINVAL;
 	}
-	data = SRC_CLKIN(divider) | (control<<1);
-	if (ri_index == RI_USB) data |= SRC_USB_MODE;
-
 	aic23_write(codec, AIC23_SAMPLE_RATE_CONTROL, data);
-	printk(KERN_DEBUG "samplerate = %u,%u reg=%x\n", 
-			sample_rate_adc, sample_rate_dac, data);
+	if (1) {
+		int sr = (data >> 2) & 0x0f;
+		int val = (mclk / bosr_usb_divisor_table[data & 3]);
+		int adc = (val * sr_adc_mult_table[sr]) / SR_MULT;
+		int dac = (val * sr_dac_mult_table[sr]) / SR_MULT;
+		if (data & SRC_CLKIN_HALF) {
+			adc >>= 1;
+			dac >>= 1;
+		}
+		printk(KERN_ERR "actual samplerate = %u,%u reg=%x\n", 
+			adc, dac, data);
+	}
 	return 0;
 }
 /* ---------------------------------------------------------------------
@@ -206,7 +231,7 @@ static int aic23_hw_params(struct snd_pcm_substream *substream,
 
 	unsigned data;
 	u32 sample_rate = params_rate(params);
-	int ret = set_sample_rate_control(codec, aic23->ri_index, sample_rate, sample_rate);
+	int ret = set_sample_rate_control(codec, aic23->mclk, sample_rate, sample_rate);
 	if (ret < 0)
 		return ret;
 	/* bit size */
@@ -237,18 +262,6 @@ static int aic23_hw_params(struct snd_pcm_substream *substream,
 	return 0;
 }
 
-static int aic23_modify(struct snd_soc_codec *codec, unsigned int reg,
-		unsigned int clear, unsigned int set)
-{
-	unsigned old, new;
-	old = aic23_read_cache(codec, reg);
-	new = (old & ~clear) | set;
-	if (old != new) {
-		aic23_write(codec, reg, new);
-		printk(KERN_ERR "code_reg:%x, was %x now %x\n", reg, old, new);
-	}
-	return 0;
-}
 /*
  * aic23_mute - Mute control to reduce noise when changing audio format
  */
@@ -299,25 +312,6 @@ static int aic23_set_sysclk(struct snd_soc_dai *codec_dai,
 {
 	struct snd_soc_codec *codec = codec_dai->codec;
 	struct aic23 *aic23 = codec->private_data;
-	switch (freq) {
-	case 12000000:
-		aic23->ri_index = RI_USB;
-		break;
-	case 12288000:
-		aic23->ri_index = RI_122880;
-		break;
-	case 11289600:
-		aic23->ri_index = RI_112896;
-		break;
-	case 18432000:
-		aic23->ri_index = RI_184320;
-		break;
-	case 16934400:
-		aic23->ri_index = RI_169344;
-		break;
-	default:
-		return -EINVAL;
-	}
 	aic23->mclk = freq;
 	return 0;
 }
@@ -394,11 +388,8 @@ static int aic23_set_bias_level(struct snd_soc_codec *codec,
 /* ---------------------------------------------------------------------
  * Digital Audio Interface Definition
  */
-#define AIC23_RATES	(SNDRV_PCM_RATE_8000  | SNDRV_PCM_RATE_11025 |\
-			 SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_22050 |\
-			 SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |\
-			 SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |\
-			 SNDRV_PCM_RATE_96000)
+#define AIC23_RATES	SNDRV_PCM_RATE_8000_96000 |\
+	SNDRV_PCM_RATE_5512 | SNDRV_PCM_RATE_KNOT | SNDRV_PCM_RATE_CONTINUOUS
 
 #define AIC23_FORMATS_LE (SNDRV_PCM_FMTBIT_S16_LE |\
 			 SNDRV_PCM_FMTBIT_S20_3LE |\
@@ -592,11 +583,8 @@ static int aic23_resume(struct platform_device *pdev)
  * initialise the aic23 driver
  * register the mixer and dsp interfaces with the kernel
  */
-static int aic23_init(struct snd_soc_device *socdev)
+static int aic23_init(struct snd_soc_codec *codec, struct aic23 *aic23)
 {
-	struct snd_soc_codec *codec = socdev->codec;
-	int ret = 0;
-
 	aic23_write(codec, AIC23_RESET, 0);
 	/* all off
 	 * This addresses the problem of the digital filters
@@ -605,13 +593,6 @@ static int aic23_init(struct snd_soc_device *socdev)
 	 * "Noise Fixed by Toggling Bit D7 of Power-Down Control"
 	 */
 	aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0x01ff);
-
-	/* register pcms */
-	ret = snd_soc_new_pcms(socdev, SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1);
-	if (ret < 0) {
-		printk(KERN_ERR "aic23: failed to create pcms\n");
-		goto pcm_err;
-	}
 
 	/* power on device, only oscillator is on */
 	aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0x00df);
@@ -631,23 +612,8 @@ static int aic23_init(struct snd_soc_device *socdev)
 			DAC_SOFT_MUTE | DAC_DEEMP_44K);
 	aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT,
 			DAF_IWL_16 | DAF_FOR_DSP | DAF_MASTER_MODE);
-	set_sample_rate_control(codec, 0, 44100, 44100);
-
-	aic23_add_controls(codec);
-	aic23_add_widgets(codec);
-	ret = snd_soc_register_card(socdev);
-	if (ret < 0) {
-		printk(KERN_ERR "aic23: failed to register card\n");
-		goto card_err;
-	}
-	return ret;
-
-card_err:
-	snd_soc_free_pcms(socdev);
-	snd_soc_dapm_free(socdev);
-pcm_err:
-	kfree(codec->reg_cache);
-	return ret;
+	set_sample_rate_control(codec, aic23->mclk, 44100, 44100);
+	return 0;
 }
 
 
@@ -661,16 +627,19 @@ static int aic23_probe(struct platform_device *pdev)
 
 	pr_info("aic23 Audio Codec");
 	codec = kzalloc(sizeof(struct snd_soc_codec), GFP_KERNEL);
-	if (codec == NULL)
-		return -ENOMEM;
+	if (!codec) {
+		ret = -ENOMEM;
+		goto exit1;
+	}
 
 	aic23 = kzalloc(sizeof(struct aic23), GFP_KERNEL);
-	if (aic23 == NULL) {
-		kfree(codec);
-		return -ENOMEM;
+	if (!aic23) {
+		ret = -ENOMEM;
+		goto exit2;
 	}
 	aic23->master = 1;
 	aic23->datfm = DAF_FOR_DSP;
+	aic23->mclk = 12000000;
 
 	codec->name = "aic23";
 	codec->owner = THIS_MODULE;
@@ -689,7 +658,33 @@ static int aic23_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&codec->dapm_widgets);
 	INIT_LIST_HEAD(&codec->dapm_paths);
 
-	ret = aic23_init(socdev);
+	ret = aic23_init(codec, aic23);
+	if (ret < 0)
+		goto exit3;
+	/* register pcms */
+	ret = snd_soc_new_pcms(socdev, SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1);
+	if (ret < 0) {
+		printk(KERN_ERR "aic23: failed to create pcms\n");
+		goto exit3;
+	}
+	aic23_add_controls(codec);
+	aic23_add_widgets(codec);
+	ret = snd_soc_register_card(socdev);
+	if (ret < 0) {
+		printk(KERN_ERR "aic23: failed to register card\n");
+		goto exit4;
+	}
+	return ret;
+exit4:
+	snd_soc_free_pcms(socdev);
+	snd_soc_dapm_free(socdev);
+exit3:
+	codec->private_data = NULL;
+	kfree(aic23);
+exit2:
+	socdev->codec = NULL;
+	kfree(codec);
+exit1:
 	return ret;
 }
 
