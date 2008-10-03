@@ -725,6 +725,7 @@ static void davincifb_dma_callback(int lch, unsigned short ch_status, void *data
 }
 
 unsigned long* gDavinciIRam;
+int g_davinci_iram_phys;
 /*
  * Fill an on-screen window. 
  */
@@ -741,7 +742,7 @@ static int davincifb_fill_rect(struct fb_info *info, struct fb_fillrect *r)
 		return -EINVAL;
 
 	regs.opt = 0x0010020D | dmatcc ;    // OPT:  transfer complete int enable, static, AB-synchronized, fifo 32-bits
-	regs.src = DAVINCI_IRAM_BASE ;
+	regs.src = g_davinci_iram_phys;
 	regs.src_dst_bidx = (info->fix.line_length<<16) | 4 ;
 	regs.link_bcntrld = 0x0000ffff ; // BCNT Reload 0, LINK invalid
 	regs.src_dst_cidx = 0 ;
@@ -2934,7 +2935,12 @@ static int __init davincifb_init(void)
 	struct device *dev = &davincifb_device.dev;
 	init_MUTEX(&resizer_sem);
 
-	gDavinciIRam = (unsigned long*)ioremap(DAVINCI_IRAM_BASE, 4);
+	g_davinci_iram_phys = davinci_alloc_iram(4);
+	if (g_davinci_iram_phys<=0) {
+		r = -1;
+		goto vpbe_init_exit;
+	}
+	gDavinciIRam = (unsigned long*)ioremap(g_davinci_iram_phys, 4);
 	/* Allocate memory for struc 'vpbe_dm_win_info' for all the windows */
 	if (vpbe_mem_alloc_struct(&dm->vid0) < 0) {
 		r = -1;
@@ -2996,12 +3002,17 @@ static int __init davincifb_init(void)
 		kfree(dm->osd0);
 	if (dm->osd1)
 		kfree(dm->osd1);
+	if (g_davinci_iram_phys > 0) {
+		davinci_free_iram(g_davinci_iram_phys, 4);
+		g_davinci_iram_phys = 0;
+	}
 	return r;
 }
 
 static void __exit davincifb_cleanup(void)
 {
 	iounmap((void*)gDavinciIRam);
+	if (g_davinci_iram_phys > 0) davinci_free_iram(g_davinci_iram_phys, 4);
 	driver_unregister(&davincifb_driver);
 	platform_device_unregister(&davincifb_device);
 }
