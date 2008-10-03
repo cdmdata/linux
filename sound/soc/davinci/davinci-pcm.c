@@ -518,8 +518,6 @@ struct snd_pcm_ops davinci_pcm_ops = {
 	.pointer = 	davinci_pcm_pointer,
 	.mmap = 	davinci_pcm_mmap,
 };
-int davinci_alloc_iram(unsigned size);
-void davinci_free_iram(unsigned addr, unsigned size);
 
 static int davinci_pcm_preallocate_dma_buffer(struct snd_pcm *pcm, int stream)
 {
