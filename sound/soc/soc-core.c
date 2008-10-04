@@ -972,12 +972,12 @@ static ssize_t codec_reg_show(struct device *dev,
 
 	return count;
 }
+
 static ssize_t codec_reg_write(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
-	char* start = (char*)buf;
-	char* end;
-	unsigned int reg, value;
+	char *start = (char *)buf;
+	unsigned long reg, value;
 	int step = 1;
 	struct snd_soc_device *devdata = dev_get_drvdata(dev);
 	struct snd_soc_codec *codec = devdata->codec;
@@ -985,14 +985,17 @@ static ssize_t codec_reg_write(struct device *dev,
 	if (codec->reg_cache_step)
 		step = codec->reg_cache_step;
 
-	while (*start == ' ') start++;
+	while (*start == ' ')
+		start++;
 	reg = simple_strtoul(start, &start, 16);
-	while (*start == ' ') start++;
-	value = simple_strtoul(start, &end, 16);
-	if ((start == end) || (reg >= codec->reg_cache_size) || (reg % step))
+	if ((reg >= codec->reg_cache_size) || (reg % step))
 		return -EINVAL;
-	codec->write(codec, reg,value);
-	return (start - buf);
+	while (*start == ' ')
+		start++;
+	if (strict_strtoul(start, 16, &value))
+		return -EINVAL;
+	codec->write(codec, reg, value);
+	return start - buf;
 }
 
 static DEVICE_ATTR(codec_reg, 0644, codec_reg_show, codec_reg_write);
