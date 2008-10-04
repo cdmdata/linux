@@ -351,6 +351,7 @@ struct snd_soc_dai_ops {
 
 	/* digital mute */
 	int (*digital_mute)(struct snd_soc_dai *dai, int mute);
+	int (*inform_channel_order)(struct snd_soc_dai *dai, int right_first);
 };
 
 /* SoC  DAI (Digital Audio Interface) */
