@@ -30,6 +30,8 @@ struct aic23 {
 	int mclk;
 	int master;
 	int datfm;
+	int requested_adc;
+	int requested_dac;
 	u16 reg_cache[AIC23_NUM_CACHE_REGS];	/* shadow registers */
 };
 
@@ -151,12 +153,12 @@ int find_rate(int mclk, u32 need_adc, u32 need_dac)
 	need_dac *= SR_MULT;
 //	printk(KERN_ERR "need_adc=%i need_dac=%i\n", need_adc/SR_MULT, need_dac/SR_MULT);
 	/*
-	 * rates given are +/- 1/16
+	 * rates given are +/- 1/32
 	 */
-	adc_l = need_adc - (need_adc >> 4);
-	adc_h = need_adc + (need_adc >> 4);
-	dac_l = need_dac - (need_dac >> 4);
-	dac_h = need_dac + (need_dac >> 4);
+	adc_l = need_adc - (need_adc >> 5);
+	adc_h = need_adc + (need_adc >> 5);
+	dac_l = need_dac - (need_dac >> 5);
+	dac_h = need_dac + (need_dac >> 5);
 	for (i = 0; i < 4; i++) {
 		int base = mclk / bosr_usb_divisor_table[i];
 		int mask = sr_valid_mask[i];
@@ -194,6 +196,22 @@ int find_rate(int mclk, u32 need_adc, u32 need_dac)
 	return (best_j << 2) | best_i | SRC_CLKIN(best_div);
 }
 
+static void get_current_sample_rates(struct snd_soc_codec *codec, int mclk,
+		u32 *sample_rate_adc, u32 *sample_rate_dac)
+{
+	int src = aic23_read_cache(codec, AIC23_SAMPLE_RATE_CONTROL);
+	int sr = (src >> 2) & 0x0f;
+	int val = (mclk / bosr_usb_divisor_table[src & 3]);
+	int adc = (val * sr_adc_mult_table[sr]) / SR_MULT;
+	int dac = (val * sr_dac_mult_table[sr]) / SR_MULT;
+	if (src & SRC_CLKIN_HALF) {
+		adc >>= 1;
+		dac >>= 1;
+	}
+	*sample_rate_adc = adc;
+	*sample_rate_dac = dac;
+}
+
 static int set_sample_rate_control(struct snd_soc_codec *codec, int mclk,
 		u32 sample_rate_adc, u32 sample_rate_dac)
 {
@@ -206,14 +224,8 @@ static int set_sample_rate_control(struct snd_soc_codec *codec, int mclk,
 	}
 	aic23_write(codec, AIC23_SAMPLE_RATE_CONTROL, data);
 	if (1) {
-		int sr = (data >> 2) & 0x0f;
-		int val = (mclk / bosr_usb_divisor_table[data & 3]);
-		int adc = (val * sr_adc_mult_table[sr]) / SR_MULT;
-		int dac = (val * sr_dac_mult_table[sr]) / SR_MULT;
-		if (data & SRC_CLKIN_HALF) {
-			adc >>= 1;
-			dac >>= 1;
-		}
+		int adc,dac;
+		get_current_sample_rates(codec, mclk, &adc, &dac);
 		printk(KERN_ERR "actual samplerate = %u,%u reg=%x\n", 
 			adc, dac, data);
 	}
@@ -225,14 +237,26 @@ static int set_sample_rate_control(struct snd_soc_codec *codec, int mclk,
 static int aic23_hw_params(struct snd_pcm_substream *substream,
 			   struct snd_pcm_hw_params *params)
 {
+	int ret;
+	unsigned data;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
 	struct snd_soc_codec *codec = socdev->codec;
 	struct aic23 *aic23 = codec->private_data;
-
-	unsigned data;
+	u32 sample_rate_adc = aic23->requested_adc;
+	u32 sample_rate_dac = aic23->requested_dac;
 	u32 sample_rate = params_rate(params);
-	int ret = set_sample_rate_control(codec, aic23->mclk, sample_rate, sample_rate);
+
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		aic23->requested_dac = sample_rate_dac = sample_rate; 
+		if (!sample_rate_adc)
+			sample_rate_adc = sample_rate;
+	} else {
+		aic23->requested_adc = sample_rate_adc = sample_rate;
+		if (!sample_rate_dac)
+			sample_rate_dac = sample_rate;
+	}
+	ret = set_sample_rate_control(codec, aic23->mclk, sample_rate_adc, sample_rate_dac);
 	if (ret < 0)
 		return ret;
 	/* bit size */
@@ -292,12 +316,17 @@ static void aic23_shutdown(struct snd_pcm_substream *substream)
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
 	struct snd_soc_codec *codec = socdev->codec;
+	struct aic23 *aic23 = codec->private_data;
 
 	/* deactivate */
 	if (!codec->active) {
 		udelay(50);
 		aic23_write(codec, AIC23_DIGITAL_INTERFACE_ACT, 0x0);
 	}
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+		aic23->requested_dac = 0;
+	else
+		aic23->requested_adc = 0;
 }
 
 /*
