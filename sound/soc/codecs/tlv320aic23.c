@@ -32,6 +32,7 @@ struct aic23 {
 	int datfm;
 	int requested_adc;
 	int requested_dac;
+	int right_first;
 	u16 reg_cache[AIC23_NUM_CACHE_REGS];	/* shadow registers */
 };
 
@@ -282,7 +283,8 @@ static int aic23_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 	data |= DAF_MASTER(aic23->master) | aic23->datfm;
-	data |= aic23_read_cache(codec, AIC23_DIGITAL_AUDIO_FORMAT) & DAF_LRSWAP_ON;
+	if (aic23->right_first)
+		data |= DAF_LRSWAP_ON;
 	aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT, data);
 	return 0;
 }
@@ -335,6 +337,13 @@ static void aic23_shutdown(struct snd_pcm_substream *substream)
 static int aic23_mute(struct snd_soc_dai *dai, int mute)
 {
 	return aic23_mute_codec(dai->codec, mute);
+}
+static int aic23_inform_channel_order(struct snd_soc_dai *codec_dai, int right_first)
+{
+	struct snd_soc_codec *codec = codec_dai->codec;
+	struct aic23 *aic23 = codec->private_data;
+	aic23->right_first = right_first;
+	return 0;
 }
 
 static int aic23_set_sysclk(struct snd_soc_dai *codec_dai,
@@ -460,6 +469,7 @@ struct snd_soc_dai aic23_dai = {
 		.digital_mute = aic23_mute,
 		.set_sysclk = aic23_set_sysclk,
 		.set_fmt = aic23_set_fmt,
+		.inform_channel_order = aic23_inform_channel_order,
 	},
 };
 EXPORT_SYMBOL_GPL(aic23_dai);

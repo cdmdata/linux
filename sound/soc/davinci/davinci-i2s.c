@@ -252,6 +252,7 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct davinci_pcm_dma_params *dma_params = rtd->dai->cpu_dai->dma_data;
 	struct davinci_mcbsp_dev *dev = rtd->dai->cpu_dai->private_data;
+	struct snd_soc_dai *codec_dai = dev->codec_dai;
 	struct snd_interval *i = NULL;
 	int mcbsp_word_length;
 	int bits_per_sample;
@@ -260,6 +261,7 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 	int channels;
 	int format;
 	int element_cnt = 1;
+	int right_first = 0;
 
 	i = hw_param_interval(params, SNDRV_PCM_HW_PARAM_SAMPLE_BITS);
 	bits_per_sample = snd_interval_value(i);
@@ -299,7 +301,7 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 		 * So, having an entire frame at once means it has to be
 		 * serviced at the sample rate instead of the mclk speed.
 		 */
-		dma_params->channels_swapped = 1;
+		right_first = 1;
 		dma_params->convert_mono_stereo = 0;
 		switch (format) {
 		case SNDRV_PCM_FORMAT_S8:
@@ -311,7 +313,7 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 			mcbsp_word_length = DAVINCI_MCBSP_WORD_32;
 			break;
 		case SNDRV_PCM_FORMAT_S32_LE:
-			dma_params->channels_swapped = 0;
+			right_first = 0;
 			element_cnt = 2;
 			dma_params->data_type = 4;	/* 4 byte element */
 			mcbsp_word_length = DAVINCI_MCBSP_WORD_32;
@@ -322,7 +324,6 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 			return -EINVAL;
 		}
 	} else {
-		dma_params->channels_swapped = 0;
 		dma_params->convert_mono_stereo = 1;
 		/* 1 element in ram becomes 2 for stereo */
 		element_cnt = 2;
@@ -348,6 +349,8 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 			return -EINVAL;
 		}
 	}
+	if (codec_dai->dai_ops.inform_channel_order)
+		codec_dai->dai_ops.inform_channel_order(codec_dai, right_first);
 	rcr |=	DAVINCI_MCBSP_RCR_RFRLEN1(element_cnt - 1);
 	xcr |=  DAVINCI_MCBSP_XCR_XFRLEN1(element_cnt - 1);
 
