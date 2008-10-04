@@ -1,5 +1,5 @@
 /*
- * linux/sound/oss/davinci-spi.c
+ * linux/sound/soc/davinci/davinci-spi.c
  *
  * spi driver for davinci audio
  *
@@ -51,7 +51,7 @@
 #define DAVINCI_SPI_TIMEOUT     (1*HZ)
 
 
-#define    SPI_REG_BASE           IO_ADDRESS(0x01c66800)
+#define    SPI_REG_BASE           IO_ADDRESS(DAVINCI_SPI_BASE)
 struct spiRegs {			/* 0x01c66800*/
 	volatile u32 gcr0;		/* 0x00 */
 	volatile u32 gcr1;		/* 0x04 */
