@@ -21,6 +21,14 @@ if SND_SOC
 config SND_SOC_AC97_BUS
 	bool
 
+config SND_SOC_DEBUG_FS
+	boolean "changing codec registers through debugfs (DEVELOPMENT)"
+	depends on DEBUG_FS
+	help
+	   The ability to directly write codec registers through
+	   /sys/kernel/debug/xx/codec_regs is useful when developing
+	   a new codec.
+
 # All the supported Soc's
 source "sound/soc/at32/Kconfig"
 source "sound/soc/at91/Kconfig"

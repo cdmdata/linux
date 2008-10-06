@@ -973,6 +973,9 @@ static ssize_t codec_reg_show(struct device *dev,
 	return count;
 }
 
+static DEVICE_ATTR(codec_reg, 0444, codec_reg_show, NULL);
+
+#ifdef SND_SOC_DEBUG_FS
 static ssize_t codec_reg_write(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -998,7 +1001,93 @@ static ssize_t codec_reg_write(struct device *dev,
 	return start - buf;
 }
 
+static int open_file_generic(struct inode *inode, struct file *file)
+{
+	file->private_data = inode->u.generic_ip;
+	return 0;
+}
+static ssize_t misc_read_file(struct file *file, char __user *userbuf,
+			       size_t count, loff_t *ppos)
+{
+}
+
+static ssize_t write_file_dummy(struct file *file, const char __user *buf,
+				size_t count, loff_t *ppos)
+{
+	return count;
+}
+
+static int eps_dbg_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, eps_dbg_show, inode->i_private);
+}
+static const struct file_operations misc_fops = {
+	.read = misc_read_file,
+	.write = write_file_dummy,
+	.open = open_file_generic,
+};
+
 static DEVICE_ATTR(codec_reg, 0644, codec_reg_show, codec_reg_write);
+static void soc_init_debugfs(struct snd_soc_device *socdev)
+{
+	struct dentry *root, *state, *queues, *eps;
+
+	root = debugfs_create_dir(udc->gadget.name, NULL);
+	if (IS_ERR(root) || !root)
+		goto err_root;
+
+	dbg->misc = debugfs_create_file("misc", 0444, dbg->dir,
+					fbi, &misc_fops);
+
+	state = debugfs_create_file("udcstate", 0400, root, udc,
+			&state_dbg_fops);
+	if (!state)
+		goto err_state;
+	queues = debugfs_create_file("queues", 0400, root, udc,
+			&queues_dbg_fops);
+	if (!queues)
+		goto err_queues;
+	eps = debugfs_create_file("epstate", 0400, root, udc,
+			&eps_dbg_fops);
+	if (!queues)
+		goto err_eps;
+
+	udc->debugfs_root = root;
+	udc->debugfs_state = state;
+	udc->debugfs_queues = queues;
+	udc->debugfs_eps = eps;
+	return;
+err_eps:
+	debugfs_remove(eps);
+err_queues:
+	debugfs_remove(queues);
+err_state:
+	debugfs_remove(root);
+err_root:
+	dev_err(udc->dev, "debugfs is not available\n");
+}
+
+static void soc_cleanup_debugfs(struct snd_soc_device *socdev)
+{
+	debugfs_remove(udc->debugfs_eps);
+	debugfs_remove(udc->debugfs_queues);
+	debugfs_remove(udc->debugfs_state);
+	debugfs_remove(udc->debugfs_root);
+	udc->debugfs_eps = NULL;
+	udc->debugfs_queues = NULL;
+	udc->debugfs_state = NULL;
+	udc->debugfs_root = NULL;
+}
+
+#else
+static inline void soc_init_debugfs(struct snd_soc_device *socdev)
+{
+}
+
+static inline void soc_cleanup_debugfs(struct snd_soc_device *socdev)
+{
+}
+#endif
 
 /**
  * snd_soc_new_ac97_codec - initailise AC97 device
@@ -1212,7 +1301,7 @@ int snd_soc_register_card(struct snd_soc_device *socdev)
 	err = device_create_file(socdev->dev, &dev_attr_codec_reg);
 	if (err < 0)
 		printk(KERN_WARNING "asoc: failed to add codec sysfs files\n");
-
+	soc_init_debugfs(socdev);
 	mutex_unlock(&codec->mutex);
 
 out:
