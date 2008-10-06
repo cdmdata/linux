@@ -276,11 +276,17 @@ static struct pxamci_platform_data hydrogen_mci_platform_data = {
 
 static int hydrogen_ohci_init(struct device *dev)
 {
+	unsigned uhchr = UHCHR;
+	unsigned gpdr = GPDR(88);
 	/* Set the Power Control Polarity Low and Power Sense
 	   Polarity Low to active low. */
-	UHCHR = (UHCHR | UHCHR_PCPL | UHCHR_PSPL) &
-	    ~(UHCHR_SSEP1 | UHCHR_SSEP2 | UHCHR_SSEP3 | UHCHR_SSE);
-
+	uhchr = (uhchr | UHCHR_PCPL | UHCHR_PSPL);
+	uhchr &= ~(UHCHR_SSEP1 | UHCHR_SSEP2 | UHCHR_SSEP3 | UHCHR_SSE);
+	if (gpdr & (1 << (88 & 0x1f))) {
+		/* Output, Power sense not used, make active high */
+		uhchr &= ~(UHCHR_PCPL | UHCHR_PSPL);
+	}
+	UHCHR = uhchr;
 	return 0;
 }
 
