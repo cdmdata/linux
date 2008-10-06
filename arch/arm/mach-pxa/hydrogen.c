@@ -28,6 +28,7 @@
 #include <linux/backlight.h>
 #include <linux/dma-mapping.h>
 #include <net/ax88796.h>
+#include <sound/ac97_codec.h>
 
 #include <asm/types.h>
 #include <asm/setup.h>
@@ -58,6 +59,14 @@
 #include "devices.h"
 
 #define MMC_CARD_DETECT_GP 36
+/* UCB1400 registers */
+#define AC97_IO_DATA_REG          0x005A
+#define AC97_IO_DIRECTION_REG     0x005C
+#define BOUNDARY_AC97_MUTE        (0+(1<<4))
+#define BOUNDARY_AC97_UNMUTE      ((1<<8)+(1<<4))
+#define BOUNDARY_AC97_OUTPUTS 0x0101
+
+extern struct snd_ac97 *pxa2xx_ac97_ac97;
 
 static void __init hydrogen_init_irq(void)
 {
@@ -93,9 +102,43 @@ fixup_hydrogen(struct machine_desc *desc, struct tag *t,
 	}
 }
 
+static int audio_startup(struct snd_pcm_substream *substream, void *priv)
+{
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK){
+		snd_ac97_write(pxa2xx_ac97_ac97, AC97_IO_DIRECTION_REG, BOUNDARY_AC97_OUTPUTS );
+		snd_ac97_write(pxa2xx_ac97_ac97, AC97_IO_DATA_REG, BOUNDARY_AC97_UNMUTE );
+	}
+	return 0;
+}
+
+static void audio_shutdown(struct snd_pcm_substream *substream, void *priv)
+{
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK){
+		snd_ac97_write(pxa2xx_ac97_ac97, AC97_IO_DATA_REG, BOUNDARY_AC97_MUTE );
+	}
+}
+
+static void audio_suspend(void *priv)
+{
+	snd_ac97_write(pxa2xx_ac97_ac97, AC97_IO_DATA_REG, BOUNDARY_AC97_MUTE );
+}
+
+static void audio_resume(void *priv)
+{
+	snd_ac97_write(pxa2xx_ac97_ac97, AC97_IO_DATA_REG, BOUNDARY_AC97_UNMUTE );
+}
+
+static pxa2xx_audio_ops_t audio_ops = {
+	.startup	= audio_startup,
+	.shutdown	= audio_shutdown,
+	.suspend	= audio_suspend,
+	.resume		= audio_resume,
+};
+
 static struct platform_device hydrogen_audio_device = {
 	.name		= "pxa2xx-ac97",
 	.id		= -1,
+	.dev		= { .platform_data = &audio_ops },
 };
 
 /* Asix AX88796 10/100 ethernet controller */
