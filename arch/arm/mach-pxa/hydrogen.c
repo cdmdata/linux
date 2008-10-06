@@ -66,8 +66,6 @@
 #define BOUNDARY_AC97_UNMUTE      ((1<<8)+(1<<4))
 #define BOUNDARY_AC97_OUTPUTS 0x0101
 
-extern struct snd_ac97 *pxa2xx_ac97_ac97;
-
 static void __init hydrogen_init_irq(void)
 {
 	int gpdr = GPDR(0);	//0-31
@@ -101,6 +99,9 @@ fixup_hydrogen(struct machine_desc *desc, struct tag *t,
 		mi->nr_banks = 1;
 	}
 }
+
+#ifdef CONFIG_SND_AC97_CODEC
+extern struct snd_ac97 *pxa2xx_ac97_ac97;
 
 static int audio_startup(struct snd_pcm_substream *substream, void *priv)
 {
@@ -140,6 +141,7 @@ static struct platform_device hydrogen_audio_device = {
 	.id		= -1,
 	.dev		= { .platform_data = &audio_ops },
 };
+#endif
 
 /* Asix AX88796 10/100 ethernet controller */
 
@@ -188,7 +190,9 @@ static struct platform_device pxafb_yuv_device = {
 };
 
 static struct platform_device *platform_devices[] __initdata = {
+#ifdef CONFIG_SND_AC97_CODEC
         &hydrogen_audio_device,
+#endif
         &asix_device,
         &pxafb_yuv_device
 };
