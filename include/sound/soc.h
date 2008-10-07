@@ -509,6 +509,10 @@ struct snd_soc_device {
 	struct delayed_work delayed_work;
 	struct work_struct deferred_resume_work;
 	void *codec_data;
+#ifdef CONFIG_SND_SOC_DEBUG_FS
+	struct dentry	*debugfs_root;
+	struct dentry	*debugfs_codec_reg;
+#endif
 };
 
 /* runtime channel data */

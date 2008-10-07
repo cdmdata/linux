@@ -27,6 +27,7 @@
 #include <linux/delay.h>
 #include <linux/pm.h>
 #include <linux/bitops.h>
+#include <linux/debugfs.h>
 #include <linux/platform_device.h>
 #include <sound/core.h>
 #include <sound/pcm.h>
@@ -952,10 +953,9 @@ static int soc_new_pcm(struct snd_soc_device *socdev,
 }
 
 /* codec register dump */
-static ssize_t codec_reg_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
+static ssize_t soc_codec_reg_show(struct snd_soc_device *devdata,
+	char *buf)
 {
-	struct snd_soc_device *devdata = dev_get_drvdata(dev);
 	struct snd_soc_codec *codec = devdata->codec;
 	int i, step = 1, count = 0;
 
@@ -972,18 +972,50 @@ static ssize_t codec_reg_show(struct device *dev,
 
 	return count;
 }
+static ssize_t codec_reg_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct snd_soc_device *devdata = dev_get_drvdata(dev);
+	return soc_codec_reg_show(devdata, buf);
+}
 
 static DEVICE_ATTR(codec_reg, 0444, codec_reg_show, NULL);
 
-#ifdef SND_SOC_DEBUG_FS
-static ssize_t codec_reg_write(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t count)
+#ifdef CONFIG_SND_SOC_DEBUG_FS
+static int code_reg_open_file(struct inode *inode, struct file *file)
 {
-	char *start = (char *)buf;
+	file->private_data = inode->i_private;
+	return 0;
+}
+
+static ssize_t code_reg_read_file(struct file *file, char __user *user_buf,
+			       size_t count, loff_t *ppos)
+{
+	ssize_t res;
+	struct snd_soc_device *devdata = file->private_data;
+	char *buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
+
+	res = soc_codec_reg_show(devdata, buf);
+	res = simple_read_from_buffer(user_buf, count, ppos, buf, res);
+	kfree(buf);
+	return res;
+}
+
+static ssize_t code_reg_write_file(struct file *file, const char __user *user_buf,
+				size_t count, loff_t *ppos)
+{
+	char buf[32];
+	int buf_size;
+	char *start = buf;
 	unsigned long reg, value;
 	int step = 1;
-	struct snd_soc_device *devdata = dev_get_drvdata(dev);
+	struct snd_soc_device *devdata = file->private_data;
 	struct snd_soc_codec *codec = devdata->codec;
+
+	buf_size = min(count, (sizeof(buf)-1));
+	if (copy_from_user(buf, user_buf, buf_size))
+	        return -EFAULT;
+	buf[buf_size] = 0;
 
 	if (codec->reg_cache_step)
 		step = codec->reg_cache_step;
@@ -998,88 +1030,46 @@ static ssize_t codec_reg_write(struct device *dev,
 	if (strict_strtoul(start, 16, &value))
 		return -EINVAL;
 	codec->write(codec, reg, value);
-	return start - buf;
+	return buf_size;
 }
 
-static int open_file_generic(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->u.generic_ip;
-	return 0;
-}
-static ssize_t misc_read_file(struct file *file, char __user *userbuf,
-			       size_t count, loff_t *ppos)
-{
-}
-
-static ssize_t write_file_dummy(struct file *file, const char __user *buf,
-				size_t count, loff_t *ppos)
-{
-	return count;
-}
-
-static int eps_dbg_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, eps_dbg_show, inode->i_private);
-}
-static const struct file_operations misc_fops = {
-	.read = misc_read_file,
-	.write = write_file_dummy,
-	.open = open_file_generic,
+static const struct file_operations codec_reg_fops = {
+	.open = code_reg_open_file,
+	.read = code_reg_read_file,
+	.write = code_reg_write_file,
 };
 
-static DEVICE_ATTR(codec_reg, 0644, codec_reg_show, codec_reg_write);
 static void soc_init_debugfs(struct snd_soc_device *socdev)
 {
-	struct dentry *root, *state, *queues, *eps;
-
-	root = debugfs_create_dir(udc->gadget.name, NULL);
+	struct dentry *root, *debugfs_codec_reg;
+	root = debugfs_create_dir(dev_name(socdev->dev), NULL);
 	if (IS_ERR(root) || !root)
-		goto err_root;
+		goto exit1;
 
-	dbg->misc = debugfs_create_file("misc", 0444, dbg->dir,
-					fbi, &misc_fops);
+	debugfs_codec_reg = debugfs_create_file("codec_reg", 0644,
+			root, socdev, &codec_reg_fops);
+	if (!debugfs_codec_reg)
+		goto exit2;
 
-	state = debugfs_create_file("udcstate", 0400, root, udc,
-			&state_dbg_fops);
-	if (!state)
-		goto err_state;
-	queues = debugfs_create_file("queues", 0400, root, udc,
-			&queues_dbg_fops);
-	if (!queues)
-		goto err_queues;
-	eps = debugfs_create_file("epstate", 0400, root, udc,
-			&eps_dbg_fops);
-	if (!queues)
-		goto err_eps;
-
-	udc->debugfs_root = root;
-	udc->debugfs_state = state;
-	udc->debugfs_queues = queues;
-	udc->debugfs_eps = eps;
+	socdev->debugfs_root = root;
+	socdev->debugfs_codec_reg = debugfs_codec_reg;
 	return;
-err_eps:
-	debugfs_remove(eps);
-err_queues:
-	debugfs_remove(queues);
-err_state:
+exit2:
 	debugfs_remove(root);
-err_root:
-	dev_err(udc->dev, "debugfs is not available\n");
+exit1:
+	dev_err(socdev->dev, "debugfs is not available\n");
 }
 
 static void soc_cleanup_debugfs(struct snd_soc_device *socdev)
 {
-	debugfs_remove(udc->debugfs_eps);
-	debugfs_remove(udc->debugfs_queues);
-	debugfs_remove(udc->debugfs_state);
-	debugfs_remove(udc->debugfs_root);
-	udc->debugfs_eps = NULL;
-	udc->debugfs_queues = NULL;
-	udc->debugfs_state = NULL;
-	udc->debugfs_root = NULL;
+	debugfs_remove(socdev->debugfs_codec_reg);
+	debugfs_remove(socdev->debugfs_root);
+	socdev->debugfs_codec_reg = NULL;
+	socdev->debugfs_root = NULL;
 }
 
 #else
+
 static inline void soc_init_debugfs(struct snd_soc_device *socdev)
 {
 }
@@ -1339,6 +1329,7 @@ free_card:
 	if (codec->card)
 		snd_card_free(codec->card);
 	device_remove_file(socdev->dev, &dev_attr_codec_reg);
+	soc_cleanup_debugfs(socdev);
 	mutex_unlock(&codec->mutex);
 }
 EXPORT_SYMBOL_GPL(snd_soc_free_pcms);
