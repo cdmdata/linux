@@ -981,28 +981,30 @@ static ssize_t codec_reg_show(struct device *dev,
 
 static DEVICE_ATTR(codec_reg, 0444, codec_reg_show, NULL);
 
-#ifdef CONFIG_SND_SOC_DEBUG_FS
-static int code_reg_open_file(struct inode *inode, struct file *file)
+#ifdef CONFIG_DEBUG_FS
+static int codec_reg_open_file(struct inode *inode, struct file *file)
 {
 	file->private_data = inode->i_private;
 	return 0;
 }
 
-static ssize_t code_reg_read_file(struct file *file, char __user *user_buf,
+static ssize_t codec_reg_read_file(struct file *file, char __user *user_buf,
 			       size_t count, loff_t *ppos)
 {
-	ssize_t res;
+	ssize_t ret;
 	struct snd_soc_device *devdata = file->private_data;
 	char *buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
-
-	res = soc_codec_reg_show(devdata, buf);
-	res = simple_read_from_buffer(user_buf, count, ppos, buf, res);
+	if (!buf)
+		return -ENOMEM;
+	ret = soc_codec_reg_show(devdata, buf);
+	if (ret >= 0)
+		ret = simple_read_from_buffer(user_buf, count, ppos, buf, ret);
 	kfree(buf);
-	return res;
+	return ret;
 }
 
-static ssize_t code_reg_write_file(struct file *file, const char __user *user_buf,
-				size_t count, loff_t *ppos)
+static ssize_t codec_reg_write_file(struct file *file,
+		const char __user *user_buf, size_t count, loff_t *ppos)
 {
 	char buf[32];
 	int buf_size;
@@ -1014,7 +1016,7 @@ static ssize_t code_reg_write_file(struct file *file, const char __user *user_bu
 
 	buf_size = min(count, (sizeof(buf)-1));
 	if (copy_from_user(buf, user_buf, buf_size))
-	        return -EFAULT;
+		return -EFAULT;
 	buf[buf_size] = 0;
 
 	if (codec->reg_cache_step)
@@ -1034,12 +1036,12 @@ static ssize_t code_reg_write_file(struct file *file, const char __user *user_bu
 }
 
 static const struct file_operations codec_reg_fops = {
-	.open = code_reg_open_file,
-	.read = code_reg_read_file,
-	.write = code_reg_write_file,
+	.open = codec_reg_open_file,
+	.read = codec_reg_read_file,
+	.write = codec_reg_write_file,
 };
 
-static void soc_init_debugfs(struct snd_soc_device *socdev)
+static void soc_init_codec_debugfs(struct snd_soc_device *socdev)
 {
 	struct dentry *root, *debugfs_codec_reg;
 	root = debugfs_create_dir(dev_name(socdev->dev), NULL);
@@ -1052,7 +1054,6 @@ static void soc_init_debugfs(struct snd_soc_device *socdev)
 		goto exit2;
 
 	socdev->debugfs_root = root;
-	socdev->debugfs_codec_reg = debugfs_codec_reg;
 	return;
 exit2:
 	debugfs_remove(root);
@@ -1060,21 +1061,19 @@ exit1:
 	dev_err(socdev->dev, "debugfs is not available\n");
 }
 
-static void soc_cleanup_debugfs(struct snd_soc_device *socdev)
+static void soc_cleanup_codec_debugfs(struct snd_soc_device *socdev)
 {
-	debugfs_remove(socdev->debugfs_codec_reg);
-	debugfs_remove(socdev->debugfs_root);
-	socdev->debugfs_codec_reg = NULL;
+	debugfs_remove_recursive(socdev->debugfs_root);
 	socdev->debugfs_root = NULL;
 }
 
 #else
 
-static inline void soc_init_debugfs(struct snd_soc_device *socdev)
+static inline void soc_init_codec_debugfs(struct snd_soc_device *socdev)
 {
 }
 
-static inline void soc_cleanup_debugfs(struct snd_soc_device *socdev)
+static inline void soc_cleanup_codec_debugfs(struct snd_soc_device *socdev)
 {
 }
 #endif
@@ -1291,7 +1290,7 @@ int snd_soc_register_card(struct snd_soc_device *socdev)
 	err = device_create_file(socdev->dev, &dev_attr_codec_reg);
 	if (err < 0)
 		printk(KERN_WARNING "asoc: failed to add codec sysfs files\n");
-	soc_init_debugfs(socdev);
+	soc_init_codec_debugfs(socdev);
 	mutex_unlock(&codec->mutex);
 
 out:
@@ -1315,6 +1314,7 @@ void snd_soc_free_pcms(struct snd_soc_device *socdev)
 #endif
 
 	mutex_lock(&codec->mutex);
+	soc_cleanup_codec_debugfs(socdev);
 #ifdef CONFIG_SND_SOC_AC97_BUS
 	for (i = 0; i < codec->num_dai; i++) {
 		codec_dai = &codec->dai[i];
@@ -1329,7 +1329,6 @@ free_card:
 	if (codec->card)
 		snd_card_free(codec->card);
 	device_remove_file(socdev->dev, &dev_attr_codec_reg);
-	soc_cleanup_debugfs(socdev);
 	mutex_unlock(&codec->mutex);
 }
 EXPORT_SYMBOL_GPL(snd_soc_free_pcms);
