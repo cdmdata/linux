@@ -60,78 +60,6 @@ void __init davinci_irq_init(void);
 void __init davinci_map_common_io(void);
 void __init davinci_init_common_hw(void);
 
-/*
- * USB
- */
-#if defined(CONFIG_USB_MUSB_HDRC) || defined(CONFIG_USB_MUSB_HDRC_MODULE)
-
-#include <linux/usb/musb.h>
-
-static struct musb_hdrc_eps_bits musb_eps[] = {
-	{ "ep1_tx", 5,	},
-	{ "ep1_rx", 5,	},
-	{ "ep2_tx", 5,	},
-	{ "ep2_rx", 5,	},
-	{ "ep3_tx", 3,	},
-	{ "ep3_rx", 3,	},
-	{ "ep4_tx", 3,	},
-	{ "ep4_rx", 3,	},
-};
-
-static struct musb_hdrc_config musb_config = {
-	.multipoint	= 1,
-	.dyn_fifo	= 1,
-	.soft_con	= 1,
-	.dma		= 1,
-	.num_eps	= 5,
-	.dma_channels	= 4,
-	.ram_bits	= 10,
-	.eps_bits	= musb_eps,
-};
-
-static struct musb_hdrc_platform_data usb_data = {
-#if     defined(CONFIG_USB_MUSB_OTG)
-	/* OTG requires a Mini-AB connector */
-	.mode           = MUSB_OTG,
-#elif   defined(CONFIG_USB_MUSB_PERIPHERAL)
-	.mode           = MUSB_PERIPHERAL,
-#elif   defined(CONFIG_USB_MUSB_HOST)
-	.mode           = MUSB_HOST,
-#endif
-	/* irlml6401 switches 5V */
-	.power		= 250,		/* sustains 3.0+ Amps (!) */
-	.potpgt         = 4,            /* ~8 msec */
-	.config		= &musb_config,
-};
-
-static struct resource usb_resources [] = {
-	{
-		/* physical address */
-		.start          = DAVINCI_USB_OTG_BASE,
-		.end            = DAVINCI_USB_OTG_BASE + 0x5ff,
-		.flags          = IORESOURCE_MEM,
-	},
-	{
-		.start          = IRQ_USBINT,
-		.flags          = IORESOURCE_IRQ,
-	},
-};
-
-static u64 usb_dmamask = DMA_32BIT_MASK;
-
-static struct platform_device usb_dev = {
-	.name           = "musb_hdrc",
-	.id             = -1,
-	.dev = {
-		.platform_data		= &usb_data,
-		.dma_mask		= &usb_dmamask,
-		.coherent_dma_mask      = DMA_32BIT_MASK,
-	},
-	.resource       = usb_resources,
-	.num_resources  = ARRAY_SIZE(usb_resources),
-};
-
-#endif  /* CONFIG_USB_MUSB_HDRC */
 
 #if 0
 static struct mtd_partition nand_partitions[] = {
@@ -228,9 +156,6 @@ static struct i2c_board_info __initdata i2c_info[] =  {
 
 static struct platform_device *davinci_devices[] __initdata = {
 	&nand_device,
-#if defined(CONFIG_USB_MUSB_HDRC) || defined(CONFIG_USB_MUSB_HDRC_MODULE)
-	&usb_dev,
-#endif
 	&rtc_dev,
         &audio_dev
 };
@@ -268,6 +193,7 @@ static __init void board_init(void)
 	platform_add_devices(davinci_devices,
 			     ARRAY_SIZE(davinci_devices));
 	davinci_serial_init();
+	setup_usb(500, 8);
 }
 
 static __init void irq_init(void)
@@ -283,7 +209,7 @@ static __init void irq_init(void)
 MACHINE_START(XENON, "Xenon")
 	/* Maintainer: Boundary Devices */
 	.phys_io	= IO_PHYS,
-	.io_pg_offst	= (io_p2v(IO_PHYS) >> 18) & 0xfffc,
+	.io_pg_offst	= (__IO_ADDRESS(IO_PHYS) >> 18) & 0xfffc,
 	.boot_params	= (DAVINCI_DDR_BASE + 0x100),
 	.map_io		= map_io,
 	.init_irq	= irq_init,
