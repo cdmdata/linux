@@ -253,17 +253,6 @@ void davinci_init_emac(struct emac_platform_data *pdata)
 		dm644x_init_emac(pdata);
 	else if (cpu_is_davinci_dm646x())
 		dm646x_init_emac(pdata);
-
-	/* if valid MAC exists, don't re-register */
-	if (is_valid_ether_addr(pdata->mac_addr))
-		return;
-	else {
-		/* Use random MAC if none passed */
-		random_ether_addr(pdata->mac_addr);
-
-		printk(KERN_WARNING "%s: using random MAC addr: %s\n",
-		       __func__, print_mac(buf, pdata->mac_addr));
-	}
 }
 
 #else
