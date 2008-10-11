@@ -1874,11 +1874,11 @@ static void emac_cleanup_rxch(struct emac_priv *priv, u32 ch)
 static void emac_set_type0addr(struct emac_priv *priv, u32 ch, char *mac_addr)
 {
 	u32 val;
-	val = ((mac_addr[0] << 8) | (mac_addr[1]));
+	val = ((mac_addr[5] << 8) | (mac_addr[4]));
 	emac_write(EMAC_MACSRCADDRLO, val);
 
-	val = ((mac_addr[2] << 24) | (mac_addr[3] << 16) | \
-	       (mac_addr[4] << 8) | (mac_addr[5]));
+	val = ((mac_addr[3] << 24) | (mac_addr[2] << 16) | \
+	       (mac_addr[1] << 8) | (mac_addr[0]));
 	emac_write(EMAC_MACSRCADDRHI, val);
 	val = emac_read(EMAC_RXUNICASTSET);
 	val |= (1 << ch);
@@ -2654,15 +2654,15 @@ static int __devinit davinci_emac_probe(struct platform_device *pdev)
 		goto probe_quit;
 	}
 	priv->emac_base_regs = base_res->start;
-	ndev->base_addr = IO_ADDRESS(base_res->start);
+	ndev->base_addr = (int)IO_ADDRESS(base_res->start);
 	emac_base_addr = (u32)ndev->base_addr; /* need to check virt2phys */
 	ndev->irq = (int) irq_res->start;
 	priv->emac_ctrl_regs = ((u32)(base_res->start) +
 				EMAC_CONTROL_REGS_OFFSET);
 
 	rc = ((u32)(priv->emac_base_regs) + EMAC_CONTROL_RAM_OFFSET);
-	priv->emac_ctrl_ram = IO_ADDRESS(rc);
-	priv->mdio_regs = IO_ADDRESS(((u32)(priv->emac_base_regs) +
+	priv->emac_ctrl_ram = (int)IO_ADDRESS(rc);
+	priv->mdio_regs = (int)IO_ADDRESS(((u32)(priv->emac_base_regs) +
 				     EMAC_MDIO_REGS_OFFSET));
 
 	/* Note that DaVinci EMAC address region is contingous */
@@ -2672,6 +2672,25 @@ static int __devinit davinci_emac_probe(struct platform_device *pdev)
 		dev_err(EMAC_DEV, "DaVinci EMAC: failed request_mem_region()");
 		rc = -ENXIO;
 		goto probe_quit;
+	}
+
+	if (!is_valid_ether_addr(priv->mac_addr)) {
+		u32 val;
+		val = emac_read(EMAC_MACSRCADDRHI);
+		priv->mac_addr[0] = (char)(val);
+		priv->mac_addr[1] = (char)(val>>8);
+		priv->mac_addr[2] = (char)(val>>16);
+		priv->mac_addr[3] = (char)(val>>24);
+		val = emac_read(EMAC_MACSRCADDRLO);
+		priv->mac_addr[4] = (char)(val);
+		priv->mac_addr[5] = (char)(val>>8);
+	}
+	if (!is_valid_ether_addr(priv->mac_addr)) {
+		DECLARE_MAC_BUF(buf);
+		/* Use random MAC if none passed */
+		random_ether_addr(priv->mac_addr);
+		printk(KERN_WARNING "%s: using random MAC addr: %s\n",
+				__func__, print_mac(buf, priv->mac_addr));
 	}
 
 	/* populate the device structure */
