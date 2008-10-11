@@ -162,21 +162,12 @@ static struct platform_device dm646x_emac_device = {
 
 void davinci_init_emac(char *mac_addr)
 {
-	DECLARE_MAC_BUF(buf);
-
 	/* if valid MAC exists, don't re-register */
 	if (is_valid_ether_addr(emac_pdata.mac_addr))
 		return;
 
 	if (mac_addr && is_valid_ether_addr(mac_addr))
 		memcpy(emac_pdata.mac_addr, mac_addr, 6);
-	else {
-		/* Use random MAC if none passed */
-		random_ether_addr(emac_pdata.mac_addr);
-
-		printk(KERN_WARNING "%s: using random MAC addr: %s\n",
-		       __func__, print_mac(buf, emac_pdata.mac_addr));
-	}
 	if ((cpu_is_davinci_dm644x()))
 		(void) platform_device_register(&davinci_emac_device);
 	else
