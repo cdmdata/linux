@@ -48,6 +48,7 @@
 #include <mach/hardware.h>
 #include <mach/common.h>
 #include <mach/board.h>
+#include <mach/i2c.h>
 #include <mach/psc.h>
 #include <mach/nand.h>
 #include <mach/gpio.h>
@@ -183,6 +184,7 @@ static __init void board_init(void)
 	davinci_board_config_size = ARRAY_SIZE(davinci_xenon_config);
 	davinci_psc_init();
 	gpio_direction_output(50, 1);	/* turn off USB power */
+	davinci_init_i2c(NULL);
 #if defined(CONFIG_BLK_DEV_DAVINCI) || defined(CONFIG_BLK_DEV_DAVINCI_MODULE)
 	printk(KERN_WARNING "WARNING: both IDE and NOR flash are enabled, "
 	       "but share pins.\n\t Disable IDE for NOR support.\n");
