@@ -953,8 +953,7 @@ static int soc_new_pcm(struct snd_soc_device *socdev,
 }
 
 /* codec register dump */
-static ssize_t soc_codec_reg_show(struct snd_soc_device *devdata,
-	char *buf)
+static ssize_t soc_codec_reg_show(struct snd_soc_device *devdata, char *buf)
 {
 	struct snd_soc_codec *codec = devdata->codec;
 	int i, step = 1, count = 0;
@@ -1041,27 +1040,32 @@ static const struct file_operations codec_reg_fops = {
 	.write = codec_reg_write_file,
 };
 
-static void soc_init_codec_debugfs(struct snd_soc_device *socdev)
+static void soc_init_debugfs(struct snd_soc_device *socdev)
 {
-	struct dentry *root, *debugfs_codec_reg;
+	struct dentry *root, *file;
+	struct snd_soc_codec *codec = socdev->codec;
 	root = debugfs_create_dir(dev_name(socdev->dev), NULL);
 	if (IS_ERR(root) || !root)
 		goto exit1;
 
-	debugfs_codec_reg = debugfs_create_file("codec_reg", 0644,
+	file = debugfs_create_file("codec_reg", 0644,
 			root, socdev, &codec_reg_fops);
-	if (!debugfs_codec_reg)
+	if (!file)
 		goto exit2;
 
+	file = debugfs_create_u32("dapm_pop_time", 0744,
+			root, &codec->pop_time);
+	if (!file)
+		goto exit2;
 	socdev->debugfs_root = root;
 	return;
 exit2:
-	debugfs_remove(root);
+	debugfs_remove_recursive(root);
 exit1:
 	dev_err(socdev->dev, "debugfs is not available\n");
 }
 
-static void soc_cleanup_codec_debugfs(struct snd_soc_device *socdev)
+static void soc_cleanup_debugfs(struct snd_soc_device *socdev)
 {
 	debugfs_remove_recursive(socdev->debugfs_root);
 	socdev->debugfs_root = NULL;
@@ -1069,11 +1073,11 @@ static void soc_cleanup_codec_debugfs(struct snd_soc_device *socdev)
 
 #else
 
-static inline void soc_init_codec_debugfs(struct snd_soc_device *socdev)
+static inline void soc_init_debugfs(struct snd_soc_device *socdev)
 {
 }
 
-static inline void soc_cleanup_codec_debugfs(struct snd_soc_device *socdev)
+static inline void soc_cleanup_debugfs(struct snd_soc_device *socdev)
 {
 }
 #endif
@@ -1290,7 +1294,8 @@ int snd_soc_register_card(struct snd_soc_device *socdev)
 	err = device_create_file(socdev->dev, &dev_attr_codec_reg);
 	if (err < 0)
 		printk(KERN_WARNING "asoc: failed to add codec sysfs files\n");
-	soc_init_codec_debugfs(socdev);
+
+	soc_init_debugfs(socdev);
 	mutex_unlock(&codec->mutex);
 
 out:
@@ -1314,7 +1319,7 @@ void snd_soc_free_pcms(struct snd_soc_device *socdev)
 #endif
 
 	mutex_lock(&codec->mutex);
-	soc_cleanup_codec_debugfs(socdev);
+	soc_cleanup_debugfs(socdev);
 #ifdef CONFIG_SND_SOC_AC97_BUS
 	for (i = 0; i < codec->num_dai; i++) {
 		codec_dai = &codec->dai[i];

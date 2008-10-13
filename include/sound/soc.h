@@ -424,6 +424,7 @@ struct snd_soc_codec {
 	short reg_cache_step;
 
 	/* dapm */
+	u32 pop_time;
 	struct list_head dapm_widgets;
 	struct list_head dapm_paths;
 	enum snd_soc_bias_level bias_level;
