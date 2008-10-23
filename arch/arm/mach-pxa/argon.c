@@ -24,6 +24,10 @@
 #include <linux/ioport.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
+#include <linux/backlight.h>
+#include <linux/dma-mapping.h>
+#include <net/ax88796.h>
+#include <sound/ac97_codec.h>
 
 #include <asm/types.h>
 #include <asm/setup.h>
@@ -39,16 +43,27 @@
 #include <asm/mach/flash.h>
 
 #include <asm/arch/pxa-regs.h>
+#include <asm/arch/pxa2xx-regs.h>
+#include <asm/arch/pxa2xx-gpio.h>
 #include <asm/arch/audio.h>
 #include <asm/arch/pxafb.h>
 #include <asm/arch/mmc.h>
+#include <asm/arch/gpio.h>
 #include <linux/mmc/host.h>
 #include <asm/arch/irda.h>
 #include <asm/arch/ohci.h>
+#include <asm/arch/i2c.h>
 
 #include "generic.h"
+#include "devices.h"
 
 #define MMC_CARD_DETECT_GP 36
+/* UCB1400 registers */
+#define AC97_IO_DATA_REG          0x005A
+#define AC97_IO_DIRECTION_REG     0x005C
+#define BOUNDARY_AC97_MUTE        (0+(1<<4))
+#define BOUNDARY_AC97_UNMUTE      ((1<<8)+(1<<4))
+#define BOUNDARY_AC97_OUTPUTS 0x0101
 
 static void __init argon_init_irq(void)
 {
@@ -81,13 +96,64 @@ fixup_argon(struct machine_desc *desc, struct tag *t,
 	}
 }
 
-static struct platform_device argon_audio_device = {
+#ifdef CONFIG_SND_AC97_CODEC
+extern struct snd_ac97 *pxa2xx_ac97_ac97;
+
+static int audio_startup(struct snd_pcm_substream *substream, void *priv)
+{
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK){
+		snd_ac97_write(pxa2xx_ac97_ac97, AC97_IO_DIRECTION_REG, BOUNDARY_AC97_OUTPUTS );
+		snd_ac97_write(pxa2xx_ac97_ac97, AC97_IO_DATA_REG, BOUNDARY_AC97_UNMUTE );
+	}
+	return 0;
+}
+
+static void audio_shutdown(struct snd_pcm_substream *substream, void *priv)
+{
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK){
+		snd_ac97_write(pxa2xx_ac97_ac97, AC97_IO_DATA_REG, BOUNDARY_AC97_MUTE );
+	}
+}
+
+static void audio_suspend(void *priv)
+{
+	snd_ac97_write(pxa2xx_ac97_ac97, AC97_IO_DATA_REG, BOUNDARY_AC97_MUTE );
+}
+
+static void audio_resume(void *priv)
+{
+	snd_ac97_write(pxa2xx_ac97_ac97, AC97_IO_DATA_REG, BOUNDARY_AC97_UNMUTE );
+}
+
+static pxa2xx_audio_ops_t audio_ops = {
+	.startup	= audio_startup,
+	.shutdown	= audio_shutdown,
+	.suspend	= audio_suspend,
+	.resume		= audio_resume,
+};
+
+static struct platform_device audio_device = {
 	.name		= "pxa2xx-ac97",
 	.id		= -1,
+	.dev		= { .platform_data = &audio_ops },
+};
+#endif
+
+static u64 pxafb_yuv_dma_mask = DMA_BIT_MASK(32);
+static struct platform_device pxafb_yuv_device = {
+	.name		= "pxafb_yuv",
+	.id		= 3,
+	.num_resources	= 0,
+	.resource	= 0,
+	.dev		= {
+		.dma_mask = &pxafb_yuv_dma_mask,
+		.coherent_dma_mask = DMA_BIT_MASK(32),
+	},
 };
 
 static struct platform_device *platform_devices[] __initdata = {
-        &argon_audio_device,
+        &audio_device,
+        &pxafb_yuv_device
 };
 
 static struct pxafb_mode_info fb_modes __initdata = {
@@ -109,6 +175,67 @@ static struct pxafb_mach_info fb_hw = {
 	.lccr0 = LCCR0_Act,
 	.lccr3 = LCCR3_PCP,
 };
+
+#ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
+static int backlight_update_status(struct backlight_device *bl)
+{
+	int brightness = bl->props.brightness;
+	int duty;
+	if ((bl->props.power != FB_BLANK_UNBLANK) ||
+	    (bl->props.fb_blank != FB_BLANK_UNBLANK))
+		brightness = 0;
+
+	duty = brightness ^ 0x3ff;	/* on this panel the duty cycle need inverted */
+	if (duty && (duty != bl->props.max_brightness)) {
+		gpio_set_value(GPIO17_PWM1, 1);
+		pxa_gpio_mode(GPIO16_PWM0_MD);
+		pxa_gpio_mode(GPIO17_PWM1 | GPIO_OUT);
+		pxa_set_cken(CKEN_PWM0, 1);
+		PWM_CTRL0 = 0;
+		PWM_PWDUTY0 = duty;
+		PWM_PERVAL0 = bl->props.max_brightness;
+	} else {
+//value is either high or low, PWM not needed
+		PWM_CTRL0 = 0;
+		PWM_PWDUTY0 = duty;
+		PWM_PERVAL0 = bl->props.max_brightness;
+		gpio_set_value(GPIO16_PWM0, (duty)? 1 : 0);
+		gpio_set_value(GPIO17_PWM1, (brightness)? 1 : 0);
+		pxa_gpio_mode(GPIO16_PWM0 | GPIO_OUT);
+		pxa_gpio_mode(GPIO17_PWM1 | GPIO_OUT);
+		pxa_set_cken(CKEN_PWM0, 0);
+	}
+	return 0;
+}
+
+static int backlight_get_brightness(struct backlight_device *bl)
+{
+	return PWM_PWDUTY0 ^ 0x3ff;
+}
+
+static /*const*/ struct backlight_ops backlight_ops = {
+	.update_status	= backlight_update_status,
+	.get_brightness	= backlight_get_brightness,
+};
+
+static void __init backlight_register(void)
+{
+	struct backlight_device *bl;
+
+	bl = backlight_device_register("hydrogen-bl", &pxa_device_fb.dev,
+				       NULL, &backlight_ops);
+	if (IS_ERR(bl)) {
+		printk(KERN_ERR "hydrogen: unable to register backlight: %ld\n",
+		       PTR_ERR(bl));
+		return;
+	}
+	bl->props.max_brightness = 1023;
+	bl->props.brightness = 1023;
+	backlight_update_status(bl);
+}
+#else
+#define backlight_register()	do { } while (0)
+#endif
 
 static int argon_mci_init(struct device *dev, irq_handler_t intHandler,
 			     void *data)
@@ -186,6 +313,8 @@ static void __init argon_init(void)
 
 	fb_hw.modes = &fb_modes;
 	set_pxa_fb_info(&fb_hw);
+	backlight_register();
+
 
 	pxa_set_mci_info(&argon_mci_platform_data);
 	pxa_set_ohci_info(&argon_ohci_platform_data);
