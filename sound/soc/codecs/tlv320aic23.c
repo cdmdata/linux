@@ -26,15 +26,25 @@
 
 /* AIC23 driver private data */
 struct aic23 {
-	struct snd_soc_codec codec;
+	struct snd_soc_codec* codec;
 	int mclk;
 	int master;
-	int datfm;
+	unsigned short datfm;
+	unsigned short digital_audio_format;
+	unsigned short sample_rate_control;
+	unsigned short left_output_volume;
+	unsigned short right_output_volume;
 	int requested_adc;
 	int requested_dac;
-	int right_first;
+	struct work_struct deferred_trigger_work;
+	unsigned char right_first;
+#define ACTIVE_PLAYBACK 1
+#define ACTIVE_CAPTURE 2
+	unsigned char active_mask;
+	unsigned char volume_mute;
 	u16 reg_cache[AIC23_NUM_CACHE_REGS];	/* shadow registers */
 };
+
 
 /* ---------------------------------------------------------------------
  * Register access routines
@@ -58,17 +68,11 @@ static unsigned int aic23_read(struct snd_soc_codec *codec,
 }
 */
 
-static int aic23_write(struct snd_soc_codec *codec, unsigned int reg,
+static int aic23_write1(struct snd_soc_codec *codec, unsigned int reg,
 			   unsigned int value)
 {
 	u8 data[2];
-
-	if (reg >= AIC23_NUM_REGS) {
-		printk(KERN_ERR "%s: Invalid register %i\n", __func__, reg);
-		return -EINVAL;
-	}
-	value &= 0x1ff;
-	if (0) printk(KERN_ERR "%s: reg=%i val=0x%x\n", __func__, reg, value);
+	printk(KERN_DEBUG "\n%s: reg=%i val=0x%x\n", __func__, reg, value);
 	/* update cache */
 	if (reg < AIC23_NUM_CACHE_REGS)
 		((u16*)codec->reg_cache)[reg] = value;
@@ -76,16 +80,58 @@ static int aic23_write(struct snd_soc_codec *codec, unsigned int reg,
 	 *   D15..D9 WM8731 register offset
 	 *   D8...D0 register data
 	 */
+	value &= 0x1ff;
 	value |= (reg<<9);
 	/* store high order byte 1st, (big endian mode) */
 	data[0] = (u8)(value>>8);
 	data[1] = (u8)(value);
+
 	if (codec->hw_write(codec->control_data, data, 2) == 2)
 		return 0;
 	else
 		return -EIO;
 }
 
+static int aic23_write(struct snd_soc_codec *codec, unsigned int reg,
+			   unsigned int value)
+{
+	struct aic23 *aic23 = codec->private_data;
+
+	if (reg >= AIC23_NUM_REGS) {
+		printk(KERN_ERR "%s: Invalid register %i\n", __func__, reg);
+		return -EINVAL;
+	}
+	if (reg==AIC23_LEFT_OUTPUT_VOLUME) {
+		aic23->volume_mute = 0;
+		aic23->left_output_volume = value;
+	} else if (reg==AIC23_RIGHT_OUTPUT_VOLUME) {
+		aic23->volume_mute = 0;
+		aic23->right_output_volume = value;
+	}
+	return aic23_write1(codec, reg, value);
+}
+
+static int aic23_set(struct snd_soc_codec *codec, unsigned int reg, unsigned int new)
+{
+	unsigned int prev = aic23_read_cache(codec, reg);
+	if (new != prev) {
+		aic23_write1(codec, reg, new);
+		return 1;
+	}
+	return 0;
+}
+
+static int aic23_modify(struct snd_soc_codec *codec, unsigned int reg,
+		unsigned int clear, unsigned int set)
+{
+	unsigned int prev = aic23_read_cache(codec, reg);
+	unsigned int new = (prev & ~clear) | set; 
+	if (new != prev) {
+		aic23_write1(codec, reg, new);
+		return 1;
+	}
+	return 0;
+}
 /*
  * Common Crystals used
  * 11.2896 Mhz /128 = *88.2k  /192 = 58.8k
@@ -200,7 +246,8 @@ int find_rate(int mclk, u32 need_adc, u32 need_dac)
 static void get_current_sample_rates(struct snd_soc_codec *codec, int mclk,
 		u32 *sample_rate_adc, u32 *sample_rate_dac)
 {
-	int src = aic23_read_cache(codec, AIC23_SAMPLE_RATE_CONTROL);
+	struct aic23 *aic23 = codec->private_data;
+	int src = aic23->sample_rate_control;
 	int sr = (src >> 2) & 0x0f;
 	int val = (mclk / bosr_usb_divisor_table[src & 3]);
 	int adc = (val * sr_adc_mult_table[sr]) / SR_MULT;
@@ -216,6 +263,7 @@ static void get_current_sample_rates(struct snd_soc_codec *codec, int mclk,
 static int set_sample_rate_control(struct snd_soc_codec *codec, int mclk,
 		u32 sample_rate_adc, u32 sample_rate_dac)
 {
+	struct aic23 *aic23 = codec->private_data;
 	/* Search for the right sample rate */
 	int data = find_rate(mclk, sample_rate_adc, sample_rate_dac);
 	if (data < 0) {
@@ -223,11 +271,13 @@ static int set_sample_rate_control(struct snd_soc_codec *codec, int mclk,
 				__func__, sample_rate_adc,sample_rate_dac);
 		return -EINVAL;
 	}
-	aic23_write(codec, AIC23_SAMPLE_RATE_CONTROL, data);
+	aic23->sample_rate_control = data;
+	if (aic23->active_mask)
+		aic23_write(codec, AIC23_SAMPLE_RATE_CONTROL, data);
 	if (1) {
 		int adc,dac;
 		get_current_sample_rates(codec, mclk, &adc, &dac);
-		printk(KERN_ERR "actual samplerate = %u,%u reg=%x\n", 
+		printk(KERN_DEBUG "actual samplerate = %u,%u reg=%x\n", 
 			adc, dac, data);
 	}
 	return 0;
@@ -283,9 +333,15 @@ static int aic23_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 	data |= DAF_MASTER(aic23->master) | aic23->datfm;
-	if (aic23->right_first)
-		data |= DAF_LRSWAP_ON;
-	aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT, data);
+	if (1) {
+		if (aic23->right_first)
+			data |= DAF_LRSWAP_ON;
+	} else {
+		data |= (aic23_read_cache(codec, AIC23_DIGITAL_AUDIO_FORMAT) & DAF_LRSWAP_ON);
+	}
+	aic23->digital_audio_format = data;
+	if (aic23->active_mask)
+		aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT, data);
 	return 0;
 }
 
@@ -303,14 +359,99 @@ static int aic23_mute_codec(struct snd_soc_codec *codec, int mute)
 	return 0;
 }
 
-static int aic23_pcm_prepare(struct snd_pcm_substream *substream)
+#define VOLUME_MUTE 0x180
+
+/*
+ * aic23_mute_volume - Mute control to reduce noise when starting/stopping streams
+ */
+static int aic23_mute_volume(struct snd_soc_codec *codec, int mute)
+{
+	struct aic23 *aic23 = codec->private_data;
+	if (0) if (aic23->volume_mute != mute) {
+		aic23->volume_mute = mute;
+		if (mute) {
+			aic23_write1(codec, AIC23_LEFT_OUTPUT_VOLUME, VOLUME_MUTE);
+			aic23_write1(codec, AIC23_RIGHT_OUTPUT_VOLUME, VOLUME_MUTE);
+		} else {
+			aic23_write1(codec, AIC23_LEFT_OUTPUT_VOLUME, aic23->left_output_volume);
+			aic23_write1(codec, AIC23_RIGHT_OUTPUT_VOLUME, aic23->right_output_volume);
+		}
+		return 1;
+	}
+	return 0;
+}
+
+static int aic23_prepare(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
 	struct snd_soc_codec *codec = socdev->codec;
+	struct aic23 *aic23 = codec->private_data;
+	u16 daf_prev = aic23_read_cache(codec, AIC23_DIGITAL_AUDIO_FORMAT);
+	u16 src_prev = aic23_read_cache(codec, AIC23_SAMPLE_RATE_CONTROL);
 	/* set active */
-	aic23_write(codec, AIC23_DIGITAL_INTERFACE_ACT, 0x0001);
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		aic23_mute_volume(codec, 1);
+		aic23_mute_codec(codec, 0);
+	}
+	if (aic23->digital_audio_format != daf_prev)
+		aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT, aic23->digital_audio_format);
+	if (aic23->sample_rate_control != src_prev)
+		aic23_write(codec, AIC23_SAMPLE_RATE_CONTROL, aic23->sample_rate_control);
 	return 0;
+}
+
+static void codec_trigger_deferred(struct work_struct *work)
+{
+	struct aic23 *aic23 = container_of(work, struct aic23,
+			deferred_trigger_work);
+	struct snd_soc_codec *codec = aic23->codec;
+	int playback = aic23->active_mask & ACTIVE_PLAYBACK;
+	u16 dia = (aic23->active_mask) ? 1 : 0;
+	if (playback) {
+		aic23_set(codec, AIC23_DIGITAL_INTERFACE_ACT, 1);
+		aic23_modify(codec, AIC23_ANALOG_AUDIO_CONTROL, 0, AAC_DAC_ON);
+		aic23_mute_volume(codec, 0);
+	} else {
+		aic23_mute_volume(codec, 1);
+		if (dia)
+			aic23_set(codec, AIC23_DIGITAL_INTERFACE_ACT, dia);
+		aic23_modify(codec, AIC23_ANALOG_AUDIO_CONTROL, AAC_DAC_ON, 0);
+		if (!dia)
+			aic23_set(codec, AIC23_DIGITAL_INTERFACE_ACT, dia);
+	}
+}
+
+static int aic23_trigger(struct snd_pcm_substream *substream, int cmd)
+{
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_device *socdev = rtd->socdev;
+	struct snd_soc_codec *codec = socdev->codec;
+	struct aic23 *aic23 = codec->private_data;
+	int ret = 0;
+	int playback = (substream->stream == SNDRV_PCM_STREAM_PLAYBACK);
+	unsigned char mask = (playback)? ACTIVE_PLAYBACK : ACTIVE_CAPTURE;
+
+	switch (cmd) {
+	case SNDRV_PCM_TRIGGER_START:
+	case SNDRV_PCM_TRIGGER_RESUME:
+	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
+		aic23->active_mask |= mask;
+		schedule_work(&aic23->deferred_trigger_work);
+		break;
+	case SNDRV_PCM_TRIGGER_STOP:
+	case SNDRV_PCM_TRIGGER_SUSPEND:
+	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
+		aic23->active_mask &= ~mask;
+		schedule_work(&aic23->deferred_trigger_work);
+		/* don't stop driving data lines
+		 * until digital_mute done
+		 */
+		break;
+	default:
+		ret = -EINVAL;
+	}
+	return ret;
 }
 
 static void aic23_shutdown(struct snd_pcm_substream *substream)
@@ -322,13 +463,16 @@ static void aic23_shutdown(struct snd_pcm_substream *substream)
 
 	/* deactivate */
 	if (!codec->active) {
-		udelay(50);
-		aic23_write(codec, AIC23_DIGITAL_INTERFACE_ACT, 0x0);
+		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+			aic23->active_mask &= ~ACTIVE_PLAYBACK;
+		else
+			aic23->active_mask &= ~ACTIVE_CAPTURE;
 	}
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 		aic23->requested_dac = 0;
 	else
 		aic23->requested_adc = 0;
+	schedule_work(&aic23->deferred_trigger_work);
 }
 
 /*
@@ -416,6 +560,7 @@ static int aic23_set_bias_level(struct snd_soc_codec *codec,
 		break;
 	case SND_SOC_BIAS_OFF:
 		/* everything off, dac mute, inactive */
+		aic23_mute_codec(codec, 1);
 		aic23_write(codec, AIC23_DIGITAL_INTERFACE_ACT, 0x0);
 		aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0xffff);
 		break;
@@ -461,7 +606,8 @@ struct snd_soc_dai aic23_dai = {
 		.formats = AIC23_FORMATS,
 	},
 	.ops = {
-		.prepare = aic23_pcm_prepare,
+		.prepare = aic23_prepare,
+		.trigger = aic23_trigger,
 		.hw_params = aic23_hw_params,
 		.shutdown = aic23_shutdown,
 	},
@@ -505,6 +651,7 @@ static const struct snd_kcontrol_new aic23_snd_controls[] = {
 		AAC_MIC_MUTE_BIT, 1, 1),
 	SOC_ENUM("Sidetone Playback Volume", aic23_enum[1]),
 
+	SOC_SINGLE("Digital Playback Switch", AIC23_DIGITAL_AUDIO_CONTROL, DAC_SOFT_MUTE_BIT, 1, 1),
 	SOC_SINGLE("ADC High Pass Filter Switch", AIC23_DIGITAL_AUDIO_CONTROL, \
 		DAC_HIGH_PASS_FILTER_BIT, 1, 1),
 	SOC_ENUM("Playback De-emphasis", aic23_enum[2]),
@@ -525,10 +672,11 @@ static int aic23_add_controls(struct snd_soc_codec *codec)
 	return 0;
 }
 
+#define FAKE_DAC_ON_BIT 9
 /* Output Mixer */
 static const struct snd_kcontrol_new aic23_output_mixer_controls[] = {
 SOC_DAPM_SINGLE("HiFi Playback Switch", AIC23_ANALOG_AUDIO_CONTROL, \
-	AAC_DAC_BIT, 1, 0),
+	FAKE_DAC_ON_BIT, 1, 0), /* use a fake bit(9), and control in driver */
 SOC_DAPM_SINGLE("Line Bypass Switch", AIC23_ANALOG_AUDIO_CONTROL, \
 	AAC_BYPASS_BIT, 1, 0),
 SOC_DAPM_SINGLE("Mic Sidetone Switch", AIC23_ANALOG_AUDIO_CONTROL, \
@@ -597,6 +745,7 @@ static int aic23_suspend(struct platform_device *pdev, pm_message_t state)
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
 	struct snd_soc_codec *codec = socdev->codec;
 
+	aic23_mute_codec(codec, 1);
 	aic23_write(codec, AIC23_DIGITAL_INTERFACE_ACT, 0x0);
 	aic23_set_bias_level(codec, SND_SOC_BIAS_OFF);
 	return 0;
@@ -647,9 +796,9 @@ static int aic23_init(struct snd_soc_codec *codec, struct aic23 *aic23)
 	aic23_write(codec, AIC23_RIGHT_OUTPUT_VOLUME,
 			LROV_DEFAULT | LROV_ZERO_CROSS);
 	aic23_write(codec, AIC23_ANALOG_AUDIO_CONTROL,
-			AAC_DAC_ON | AAC_MIC_BOOST_20DB | AAC_INSEL_MIC);
+			(1<<FAKE_DAC_ON_BIT) | AAC_MIC_BOOST_20DB | AAC_INSEL_MIC);
 	aic23_write(codec, AIC23_DIGITAL_AUDIO_CONTROL,
-			DAC_SOFT_MUTE | DAC_DEEMP_44K);
+			DAC_SOFT_MUTE | DAC_DEEMP_NONE);
 	aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT,
 			DAF_IWL_16 | DAF_FOR_DSP | DAF_MASTER_MODE);
 	set_sample_rate_control(codec, aic23->mclk, 44100, 44100);
@@ -677,10 +826,12 @@ static int aic23_probe(struct platform_device *pdev)
 		ret = -ENOMEM;
 		goto exit2;
 	}
+	aic23->codec = codec;
+	INIT_WORK(&aic23->deferred_trigger_work, codec_trigger_deferred);
 	aic23->master = 1;
 	aic23->datfm = DAF_FOR_DSP;
 	aic23->mclk = 12000000;
-
+	aic23->volume_mute = 1;
 	codec->name = "aic23";
 	codec->owner = THIS_MODULE;
 	codec->private_data = aic23;
@@ -733,11 +884,13 @@ static int aic23_remove(struct platform_device *pdev)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
 	struct snd_soc_codec *codec = socdev->codec;
+	struct aic23 *aic23 = codec->private_data;
 
 	aic23_set_bias_level(codec, SND_SOC_BIAS_OFF);
+	cancel_work_sync(&aic23->deferred_trigger_work);
 	snd_soc_free_pcms(socdev);
 	snd_soc_dapm_free(socdev);
-	kfree(codec->private_data);
+	kfree(aic23);
 	kfree(codec);
 	return 0;
 }

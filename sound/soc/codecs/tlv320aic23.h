@@ -82,9 +82,11 @@
 #define DAC_HIGH_PASS_FILTER_BIT	0
 #define DAC_HIGH_PASS_FILTER		0x0001
 #define DAC_DEEMP_BIT 			1
+#define DAC_DEEMP_NONE			0x0000
 #define DAC_DEEMP_32K			0x0002
 #define DAC_DEEMP_44K			0x0004
 #define DAC_DEEMP_48K			0x0006
+#define DAC_SOFT_MUTE_BIT		3
 #define DAC_SOFT_MUTE			0x0008
 
 /* Power control down register */
