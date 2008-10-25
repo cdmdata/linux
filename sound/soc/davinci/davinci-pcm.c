@@ -345,39 +345,6 @@ exit1:
 	return ret;
 }
 
-static int davinci_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
-{
-	struct davinci_runtime_data *prtd = substream->runtime->private_data;
-	int ret = 0;
-
-	spin_lock(&prtd->lock);
-
-	switch (cmd) {
-	case SNDRV_PCM_TRIGGER_START:
-		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-			/* copy 1st iram buffer */
-			davinci_start_dma(prtd->ram_master_lch);
-		}
-	case SNDRV_PCM_TRIGGER_RESUME:
-	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
-		davinci_start_dma(prtd->asp_master_lch);
-		break;
-	case SNDRV_PCM_TRIGGER_STOP:
-		davinci_stop_dma(prtd->ram_master_lch);
-	case SNDRV_PCM_TRIGGER_SUSPEND:
-	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
-		davinci_stop_dma(prtd->asp_master_lch);
-		break;
-	default:
-		ret = -EINVAL;
-		break;
-	}
-
-	spin_unlock(&prtd->lock);
-
-	return ret;
-}
-
 static int davinci_pcm_prepare(struct snd_pcm_substream *substream)
 {
 	int ret;
@@ -399,6 +366,11 @@ static int davinci_pcm_prepare(struct snd_pcm_substream *substream)
 		print_buf_info(prtd->asp_link_lch[1], "asp_link_lch[1]");
 	}
 #endif
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		/* copy 1st iram buffer */
+		davinci_start_dma(prtd->ram_master_lch);
+	}
+	davinci_start_dma(prtd->asp_master_lch);
 	return 0;
 }
 
@@ -482,6 +454,8 @@ static int davinci_pcm_close(struct snd_pcm_substream *substream)
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct davinci_runtime_data *prtd = runtime->private_data;
 
+	davinci_stop_dma(prtd->ram_master_lch);
+	davinci_stop_dma(prtd->asp_master_lch);
 	davinci_dma_unlink_lch(prtd->asp_link_lch[0], prtd->asp_link_lch[0]);
 	davinci_dma_unlink_lch(prtd->asp_link_lch[1], prtd->asp_link_lch[1]);
 	davinci_dma_unlink_lch(prtd->ram_link_lch, prtd->ram_link_lch);
@@ -529,7 +503,6 @@ struct snd_pcm_ops davinci_pcm_ops = {
 	.hw_params = 	davinci_pcm_hw_params,
 	.hw_free = 	davinci_pcm_hw_free,
 	.prepare = 	davinci_pcm_prepare,
-	.trigger = 	davinci_pcm_trigger,
 	.pointer = 	davinci_pcm_pointer,
 	.mmap = 	davinci_pcm_mmap,
 };
