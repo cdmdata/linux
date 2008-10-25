@@ -344,7 +344,12 @@ exit2:
 exit1:
 	return ret;
 }
-
+/* I2S master (codec/cpudai) should start/stop dma request,
+ *  we shouldn't ignore them
+ *  codec AIC33 needs fixed
+ */
+#define BROKEN_MASTER 1
+#ifdef BROKEN_MASTER
 static int davinci_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 {
 	struct davinci_runtime_data *prtd = substream->runtime->private_data;
@@ -377,6 +382,7 @@ static int davinci_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 
 	return ret;
 }
+#endif
 
 static int davinci_pcm_prepare(struct snd_pcm_substream *substream)
 {
@@ -398,6 +404,13 @@ static int davinci_pcm_prepare(struct snd_pcm_substream *substream)
 		print_buf_info(prtd->asp_link_lch[0], "asp_link_lch[0]");
 		print_buf_info(prtd->asp_link_lch[1], "asp_link_lch[1]");
 	}
+#endif
+#ifndef BROKEN_MASTER
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		/* copy 1st iram buffer */
+		davinci_start_dma(prtd->ram_master_lch);
+	}
+	davinci_start_dma(prtd->asp_master_lch);
 #endif
 	return 0;
 }
@@ -482,6 +495,8 @@ static int davinci_pcm_close(struct snd_pcm_substream *substream)
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct davinci_runtime_data *prtd = runtime->private_data;
 
+	davinci_stop_dma(prtd->ram_master_lch);
+	davinci_stop_dma(prtd->asp_master_lch);
 	davinci_dma_unlink_lch(prtd->asp_link_lch[0], prtd->asp_link_lch[0]);
 	davinci_dma_unlink_lch(prtd->asp_link_lch[1], prtd->asp_link_lch[1]);
 	davinci_dma_unlink_lch(prtd->ram_link_lch, prtd->ram_link_lch);
@@ -529,7 +544,9 @@ struct snd_pcm_ops davinci_pcm_ops = {
 	.hw_params = 	davinci_pcm_hw_params,
 	.hw_free = 	davinci_pcm_hw_free,
 	.prepare = 	davinci_pcm_prepare,
-	.trigger = 	davinci_pcm_trigger,
+#ifdef BROKEN_MASTER
+	.trigger =	davinci_pcm_trigger,
+#endif
 	.pointer = 	davinci_pcm_pointer,
 	.mmap = 	davinci_pcm_mmap,
 };
