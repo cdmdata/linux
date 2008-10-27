@@ -953,8 +953,7 @@ static int soc_new_pcm(struct snd_soc_device *socdev,
 }
 
 /* codec register dump */
-static ssize_t soc_codec_reg_show(struct snd_soc_device *devdata,
-	char *buf)
+static ssize_t soc_codec_reg_show(struct snd_soc_device *devdata, char *buf)
 {
 	struct snd_soc_codec *codec = devdata->codec;
 	int i, step = 1, count = 0;
@@ -1041,27 +1040,32 @@ static const struct file_operations codec_reg_fops = {
 	.write = codec_reg_write_file,
 };
 
-static void soc_init_codec_debugfs(struct snd_soc_device *socdev)
+static void soc_init_debugfs(struct snd_soc_device *socdev)
 {
-	struct dentry *root, *debugfs_codec_reg;
+	struct dentry *root, *file;
+	struct snd_soc_codec *codec = socdev->codec;
 	root = debugfs_create_dir(dev_name(socdev->dev), NULL);
 	if (IS_ERR(root) || !root)
 		goto exit1;
 
-	debugfs_codec_reg = debugfs_create_file("codec_reg", 0644,
+	file = debugfs_create_file("codec_reg", 0644,
 			root, socdev, &codec_reg_fops);
-	if (!debugfs_codec_reg)
+	if (!file)
 		goto exit2;
 
+	file = debugfs_create_u32("dapm_pop_time", 0744,
+			root, &codec->pop_time);
+	if (!file)
+		goto exit2;
 	socdev->debugfs_root = root;
 	return;
 exit2:
-	debugfs_remove(root);
+	debugfs_remove_recursive(root);
 exit1:
 	dev_err(socdev->dev, "debugfs is not available\n");
 }
 
-static void soc_cleanup_codec_debugfs(struct snd_soc_device *socdev)
+static void soc_cleanup_debugfs(struct snd_soc_device *socdev)
 {
 	debugfs_remove_recursive(socdev->debugfs_root);
 	socdev->debugfs_root = NULL;
@@ -1069,11 +1073,11 @@ static void soc_cleanup_codec_debugfs(struct snd_soc_device *socdev)
 
 #else
 
-static inline void soc_init_codec_debugfs(struct snd_soc_device *socdev)
+static inline void soc_init_debugfs(struct snd_soc_device *socdev)
 {
 }
 
-static inline void soc_cleanup_codec_debugfs(struct snd_soc_device *socdev)
+static inline void soc_cleanup_debugfs(struct snd_soc_device *socdev)
 {
 }
 #endif
@@ -1290,7 +1294,8 @@ int snd_soc_register_card(struct snd_soc_device *socdev)
 	err = device_create_file(socdev->dev, &dev_attr_codec_reg);
 	if (err < 0)
 		printk(KERN_WARNING "asoc: failed to add codec sysfs files\n");
-	soc_init_codec_debugfs(socdev);
+
+	soc_init_debugfs(socdev);
 	mutex_unlock(&codec->mutex);
 
 out:
@@ -1314,7 +1319,7 @@ void snd_soc_free_pcms(struct snd_soc_device *socdev)
 #endif
 
 	mutex_lock(&codec->mutex);
-	soc_cleanup_codec_debugfs(socdev);
+	soc_cleanup_debugfs(socdev);
 #ifdef CONFIG_SND_SOC_AC97_BUS
 	for (i = 0; i < codec->num_dai; i++) {
 		codec_dai = &codec->dai[i];
@@ -1397,10 +1402,10 @@ int snd_soc_info_enum_double(struct snd_kcontrol *kcontrol,
 
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_ENUMERATED;
 	uinfo->count = e->shift_l == e->shift_r ? 1 : 2;
-	uinfo->value.enumerated.items = e->mask;
+	uinfo->value.enumerated.items = e->max;
 
-	if (uinfo->value.enumerated.item > e->mask - 1)
-		uinfo->value.enumerated.item = e->mask - 1;
+	if (uinfo->value.enumerated.item > e->max - 1)
+		uinfo->value.enumerated.item = e->max - 1;
 	strcpy(uinfo->value.enumerated.name,
 		e->texts[uinfo->value.enumerated.item]);
 	return 0;
@@ -1423,7 +1428,7 @@ int snd_soc_get_enum_double(struct snd_kcontrol *kcontrol,
 	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
 	unsigned short val, bitmask;
 
-	for (bitmask = 1; bitmask < e->mask; bitmask <<= 1)
+	for (bitmask = 1; bitmask < e->max; bitmask <<= 1)
 		;
 	val = snd_soc_read(codec, e->reg);
 	ucontrol->value.enumerated.item[0]
@@ -1453,14 +1458,14 @@ int snd_soc_put_enum_double(struct snd_kcontrol *kcontrol,
 	unsigned short val;
 	unsigned short mask, bitmask;
 
-	for (bitmask = 1; bitmask < e->mask; bitmask <<= 1)
+	for (bitmask = 1; bitmask < e->max; bitmask <<= 1)
 		;
-	if (ucontrol->value.enumerated.item[0] > e->mask - 1)
+	if (ucontrol->value.enumerated.item[0] > e->max - 1)
 		return -EINVAL;
 	val = ucontrol->value.enumerated.item[0] << e->shift_l;
 	mask = (bitmask - 1) << e->shift_l;
 	if (e->shift_l != e->shift_r) {
-		if (ucontrol->value.enumerated.item[1] > e->mask - 1)
+		if (ucontrol->value.enumerated.item[1] > e->max - 1)
 			return -EINVAL;
 		val |= ucontrol->value.enumerated.item[1] << e->shift_r;
 		mask |= (bitmask - 1) << e->shift_r;
@@ -1487,10 +1492,10 @@ int snd_soc_info_enum_ext(struct snd_kcontrol *kcontrol,
 
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_ENUMERATED;
 	uinfo->count = 1;
-	uinfo->value.enumerated.items = e->mask;
+	uinfo->value.enumerated.items = e->max;
 
-	if (uinfo->value.enumerated.item > e->mask - 1)
-		uinfo->value.enumerated.item = e->mask - 1;
+	if (uinfo->value.enumerated.item > e->max - 1)
+		uinfo->value.enumerated.item = e->max - 1;
 	strcpy(uinfo->value.enumerated.name,
 		e->texts[uinfo->value.enumerated.item]);
 	return 0;
@@ -1535,9 +1540,11 @@ EXPORT_SYMBOL_GPL(snd_soc_info_volsw_ext);
 int snd_soc_info_volsw(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_info *uinfo)
 {
-	int max = (kcontrol->private_value >> 16) & 0xff;
-	int shift = (kcontrol->private_value >> 8) & 0x0f;
-	int rshift = (kcontrol->private_value >> 12) & 0x0f;
+	struct soc_mixer_control *mc =
+		(struct soc_mixer_control *)kcontrol->private_value;
+	int max = mc->max;
+	unsigned int shift = mc->min;
+	unsigned int rshift = mc->rshift;
 
 	if (max == 1)
 		uinfo->type = SNDRV_CTL_ELEM_TYPE_BOOLEAN;
@@ -1563,13 +1570,15 @@ EXPORT_SYMBOL_GPL(snd_soc_info_volsw);
 int snd_soc_get_volsw(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
+	struct soc_mixer_control *mc =
+		(struct soc_mixer_control *)kcontrol->private_value;
 	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
-	int reg = kcontrol->private_value & 0xff;
-	int shift = (kcontrol->private_value >> 8) & 0x0f;
-	int rshift = (kcontrol->private_value >> 12) & 0x0f;
-	int max = (kcontrol->private_value >> 16) & 0xff;
-	int mask = (1 << fls(max)) - 1;
-	int invert = (kcontrol->private_value >> 24) & 0x01;
+	unsigned int reg = mc->reg;
+	unsigned int shift = mc->shift;
+	unsigned int rshift = mc->rshift;
+	int max = mc->max;
+	unsigned int mask = (1 << fls(max)) - 1;
+	unsigned int invert = mc->invert;
 
 	ucontrol->value.integer.value[0] =
 		(snd_soc_read(codec, reg) >> shift) & mask;
@@ -1600,13 +1609,15 @@ EXPORT_SYMBOL_GPL(snd_soc_get_volsw);
 int snd_soc_put_volsw(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
+	struct soc_mixer_control *mc =
+		(struct soc_mixer_control *)kcontrol->private_value;
 	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
-	int reg = kcontrol->private_value & 0xff;
-	int shift = (kcontrol->private_value >> 8) & 0x0f;
-	int rshift = (kcontrol->private_value >> 12) & 0x0f;
-	int max = (kcontrol->private_value >> 16) & 0xff;
-	int mask = (1 << fls(max)) - 1;
-	int invert = (kcontrol->private_value >> 24) & 0x01;
+	unsigned int reg = mc->reg;
+	unsigned int shift = mc->shift;
+	unsigned int rshift = mc->rshift;
+	int max = mc->max;
+	unsigned int mask = (1 << fls(max)) - 1;
+	unsigned int invert = mc->invert;
 	unsigned short val, val2, val_mask;
 
 	val = (ucontrol->value.integer.value[0] & mask);
@@ -1638,7 +1649,9 @@ EXPORT_SYMBOL_GPL(snd_soc_put_volsw);
 int snd_soc_info_volsw_2r(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_info *uinfo)
 {
-	int max = (kcontrol->private_value >> 12) & 0xff;
+	struct soc_mixer_control *mc =
+		(struct soc_mixer_control *)kcontrol->private_value;
+	int max = mc->max;
 
 	if (max == 1)
 		uinfo->type = SNDRV_CTL_ELEM_TYPE_BOOLEAN;
@@ -1664,13 +1677,15 @@ EXPORT_SYMBOL_GPL(snd_soc_info_volsw_2r);
 int snd_soc_get_volsw_2r(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
+	struct soc_mixer_control *mc =
+		(struct soc_mixer_control *)kcontrol->private_value;
 	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
-	int reg = kcontrol->private_value & 0xff;
-	int reg2 = (kcontrol->private_value >> 24) & 0xff;
-	int shift = (kcontrol->private_value >> 8) & 0x0f;
-	int max = (kcontrol->private_value >> 12) & 0xff;
-	int mask = (1<<fls(max))-1;
-	int invert = (kcontrol->private_value >> 20) & 0x01;
+	unsigned int reg = mc->reg;
+	unsigned int reg2 = mc->rreg;
+	unsigned int shift = mc->shift;
+	int max = mc->max;
+	unsigned int mask = (1<<fls(max))-1;
+	unsigned int invert = mc->invert;
 
 	ucontrol->value.integer.value[0] =
 		(snd_soc_read(codec, reg) >> shift) & mask;
@@ -1699,13 +1714,15 @@ EXPORT_SYMBOL_GPL(snd_soc_get_volsw_2r);
 int snd_soc_put_volsw_2r(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
+	struct soc_mixer_control *mc =
+		(struct soc_mixer_control *)kcontrol->private_value;
 	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
-	int reg = kcontrol->private_value & 0xff;
-	int reg2 = (kcontrol->private_value >> 24) & 0xff;
-	int shift = (kcontrol->private_value >> 8) & 0x0f;
-	int max = (kcontrol->private_value >> 12) & 0xff;
-	int mask = (1 << fls(max)) - 1;
-	int invert = (kcontrol->private_value >> 20) & 0x01;
+	unsigned int reg = mc->reg;
+	unsigned int reg2 = mc->rreg;
+	unsigned int shift = mc->shift;
+	int max = mc->max;
+	unsigned int mask = (1 << fls(max)) - 1;
+	unsigned int invert = mc->invert;
 	int err;
 	unsigned short val, val2, val_mask;
 
@@ -1742,8 +1759,10 @@ EXPORT_SYMBOL_GPL(snd_soc_put_volsw_2r);
 int snd_soc_info_volsw_s8(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_info *uinfo)
 {
-	int max = (signed char)((kcontrol->private_value >> 16) & 0xff);
-	int min = (signed char)((kcontrol->private_value >> 24) & 0xff);
+	struct soc_mixer_control *mc =
+		(struct soc_mixer_control *)kcontrol->private_value;
+	int max = mc->max;
+	int min = mc->min;
 
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
 	uinfo->count = 2;
@@ -1765,9 +1784,11 @@ EXPORT_SYMBOL_GPL(snd_soc_info_volsw_s8);
 int snd_soc_get_volsw_s8(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
+	struct soc_mixer_control *mc =
+		(struct soc_mixer_control *)kcontrol->private_value;
 	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
-	int reg = kcontrol->private_value & 0xff;
-	int min = (signed char)((kcontrol->private_value >> 24) & 0xff);
+	unsigned int reg = mc->reg;
+	int min = mc->min;
 	int val = snd_soc_read(codec, reg);
 
 	ucontrol->value.integer.value[0] =
@@ -1790,9 +1811,11 @@ EXPORT_SYMBOL_GPL(snd_soc_get_volsw_s8);
 int snd_soc_put_volsw_s8(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
+	struct soc_mixer_control *mc =
+		(struct soc_mixer_control *)kcontrol->private_value;
 	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
-	int reg = kcontrol->private_value & 0xff;
-	int min = (signed char)((kcontrol->private_value >> 24) & 0xff);
+	unsigned int reg = mc->reg;
+	int min = mc->min;
 	unsigned short val;
 
 	val = (ucontrol->value.integer.value[0]+min) & 0xff;
