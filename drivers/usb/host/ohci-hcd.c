@@ -995,7 +995,7 @@ MODULE_LICENSE ("GPL");
 #endif
 
 #if defined(CONFIG_PXA27x) || defined(CONFIG_PXA3xx)
-#if !defined(CONFIG_MACH_NEON270)
+#if !defined(CONFIG_USB_OHCI_SM501)
 #include "ohci-pxa27x.c"
 #define PLATFORM_DRIVER		ohci_hcd_pxa27x_driver
 #endif
