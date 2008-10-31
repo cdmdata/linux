@@ -177,7 +177,7 @@ static struct pxafb_mach_info fb_hw = {
 };
 
 #ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
-static int backlight_update_status(struct backlight_device *bl)
+static int argon_backlight_update_status(struct backlight_device *bl)
 {
 	int brightness = bl->props.brightness;
 	int duty;
@@ -208,14 +208,14 @@ static int backlight_update_status(struct backlight_device *bl)
 	return 0;
 }
 
-static int backlight_get_brightness(struct backlight_device *bl)
+static int argon_backlight_get_brightness(struct backlight_device *bl)
 {
 	return PWM_PWDUTY0 ^ 0x3ff;
 }
 
 static /*const*/ struct backlight_ops backlight_ops = {
-	.update_status	= backlight_update_status,
-	.get_brightness	= backlight_get_brightness,
+	.update_status	= argon_backlight_update_status,
+	.get_brightness	= argon_backlight_get_brightness,
 };
 
 static void __init backlight_register(void)
