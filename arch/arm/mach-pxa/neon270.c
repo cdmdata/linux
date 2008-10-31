@@ -49,6 +49,7 @@
 #include <linux/mmc/host.h>
 #include <asm/arch/irda.h>
 #include <asm/arch/ohci.h>
+#include <asm/arch/i2c.h>
 #include <asm/arch/udc.h>
 #include <asm/arch/pxa2xx-gpio.h>
 #include <asm/arch/pxa2xx-regs.h>
@@ -386,6 +387,7 @@ static void __init neon_init(void)
 	
         neon_pxafb_info.modes = &display_mode;
 	set_pxa_fb_info(&neon_pxafb_info);
+	pxa_set_i2c_info(NULL);
 }
 
 #define DEBUG_SIZE (PAGE_SIZE*4)
