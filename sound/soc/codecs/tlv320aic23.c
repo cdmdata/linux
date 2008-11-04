@@ -26,7 +26,7 @@
 
 /* AIC23 driver private data */
 struct aic23 {
-	struct snd_soc_codec* codec;
+	struct snd_soc_codec codec;
 	int mclk;
 	int master;
 	unsigned short datfm;
@@ -95,7 +95,7 @@ static int aic23_write1(struct snd_soc_codec *codec, unsigned int reg,
 static int aic23_write(struct snd_soc_codec *codec, unsigned int reg,
 			   unsigned int value)
 {
-	struct aic23 *aic23 = codec->private_data;
+	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
 
 	if (reg >= AIC23_NUM_REGS) {
 		printk(KERN_ERR "%s: Invalid register %i\n", __func__, reg);
@@ -148,8 +148,8 @@ static int aic23_modify(struct snd_soc_codec *codec, unsigned int reg,
 static const int bosr_usb_divisor_table[] = {
 	128, 125, 192, 136
 };
-#define LOWER_GROUP (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<6)|(1<<7)
-#define UPPER_GROUP (1<<8)|(1<<9)|(1<<10)|(1<<11)     |(1<<15)
+#define LOWER_GROUP ((1<<0) | (1<<1) | (1<<2) | (1<<3) | (1<<6) | (1<<7))
+#define UPPER_GROUP ((1<<8) | (1<<9) | (1<<10) | (1<<11)        | (1<<15))
 static const unsigned short sr_valid_mask[] = {
 	LOWER_GROUP|UPPER_GROUP,	/* Normal, bosr - 0*/
 	LOWER_GROUP|UPPER_GROUP,	/* Normal, bosr - 1*/
@@ -198,7 +198,6 @@ int find_rate(int mclk, u32 need_adc, u32 need_dac)
 
 	need_adc *= SR_MULT;
 	need_dac *= SR_MULT;
-//	printk(KERN_ERR "need_adc=%i need_dac=%i\n", need_adc/SR_MULT, need_dac/SR_MULT);
 	/*
 	 * rates given are +/- 1/32
 	 */
@@ -220,8 +219,6 @@ int find_rate(int mclk, u32 need_adc, u32 need_dac)
 			score = get_score(adc, adc_l, adc_h, need_adc,
 					dac, dac_l, dac_h, need_dac);
 			if (best_score > score) {
-//				printk(KERN_ERR "adc=%i dac=%i\n", adc/SR_MULT, dac/SR_MULT);
-//				printk(KERN_ERR "best_score=%u score=%u\n", best_score, score);
 				best_score = score;
 				best_i = i;
 				best_j = j;
@@ -231,8 +228,6 @@ int find_rate(int mclk, u32 need_adc, u32 need_dac)
 					(dac >> 1), dac_l, dac_h, need_dac);
 			/* prefer to have a /2 */
 			if ((score != 0xffffffff) && (best_score >= score)) {
-//				printk(KERN_ERR "adc=%i dac=%i\n", adc/SR_MULT, dac/SR_MULT);
-//				printk(KERN_ERR "best_score=%u score=%u\n", best_score, score);
 				best_score = score;
 				best_i = i;
 				best_j = j;
@@ -246,7 +241,7 @@ int find_rate(int mclk, u32 need_adc, u32 need_dac)
 static void get_current_sample_rates(struct snd_soc_codec *codec, int mclk,
 		u32 *sample_rate_adc, u32 *sample_rate_dac)
 {
-	struct aic23 *aic23 = codec->private_data;
+	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
 	int src = aic23->sample_rate_control;
 	int sr = (src >> 2) & 0x0f;
 	int val = (mclk / bosr_usb_divisor_table[src & 3]);
@@ -263,7 +258,7 @@ static void get_current_sample_rates(struct snd_soc_codec *codec, int mclk,
 static int set_sample_rate_control(struct snd_soc_codec *codec, int mclk,
 		u32 sample_rate_adc, u32 sample_rate_dac)
 {
-	struct aic23 *aic23 = codec->private_data;
+	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
 	/* Search for the right sample rate */
 	int data = find_rate(mclk, sample_rate_adc, sample_rate_dac);
 	if (data < 0) {
@@ -293,7 +288,7 @@ static int aic23_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
 	struct snd_soc_codec *codec = socdev->codec;
-	struct aic23 *aic23 = codec->private_data;
+	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
 	u32 sample_rate_adc = aic23->requested_adc;
 	u32 sample_rate_dac = aic23->requested_dac;
 	u32 sample_rate = params_rate(params);
@@ -366,7 +361,7 @@ static int aic23_mute_codec(struct snd_soc_codec *codec, int mute)
  */
 static int aic23_mute_volume(struct snd_soc_codec *codec, int mute)
 {
-	struct aic23 *aic23 = codec->private_data;
+	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
 	if (0) if (aic23->volume_mute != mute) {
 		aic23->volume_mute = mute;
 		if (mute) {
@@ -386,7 +381,7 @@ static int aic23_prepare(struct snd_pcm_substream *substream)
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
 	struct snd_soc_codec *codec = socdev->codec;
-	struct aic23 *aic23 = codec->private_data;
+	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
 	u16 daf_prev = aic23_read_cache(codec, AIC23_DIGITAL_AUDIO_FORMAT);
 	u16 src_prev = aic23_read_cache(codec, AIC23_SAMPLE_RATE_CONTROL);
 	/* set active */
@@ -405,7 +400,7 @@ static void codec_trigger_deferred(struct work_struct *work)
 {
 	struct aic23 *aic23 = container_of(work, struct aic23,
 			deferred_trigger_work);
-	struct snd_soc_codec *codec = aic23->codec;
+	struct snd_soc_codec *codec = &aic23->codec;
 	int playback = aic23->active_mask & ACTIVE_PLAYBACK;
 	u16 dia = (aic23->active_mask) ? 1 : 0;
 	if (playback) {
@@ -427,7 +422,7 @@ static int aic23_trigger(struct snd_pcm_substream *substream, int cmd)
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
 	struct snd_soc_codec *codec = socdev->codec;
-	struct aic23 *aic23 = codec->private_data;
+	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
 	int ret = 0;
 	int playback = (substream->stream == SNDRV_PCM_STREAM_PLAYBACK);
 	unsigned char mask = (playback)? ACTIVE_PLAYBACK : ACTIVE_CAPTURE;
@@ -459,7 +454,7 @@ static void aic23_shutdown(struct snd_pcm_substream *substream)
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
 	struct snd_soc_codec *codec = socdev->codec;
-	struct aic23 *aic23 = codec->private_data;
+	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
 
 	/* deactivate */
 	if (!codec->active) {
@@ -485,7 +480,7 @@ static int aic23_mute(struct snd_soc_dai *dai, int mute)
 static int aic23_inform_channel_order(struct snd_soc_dai *codec_dai, int right_first)
 {
 	struct snd_soc_codec *codec = codec_dai->codec;
-	struct aic23 *aic23 = codec->private_data;
+	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
 	aic23->right_first = right_first;
 	return 0;
 }
@@ -494,7 +489,7 @@ static int aic23_set_sysclk(struct snd_soc_dai *codec_dai,
 			    int clk_id, unsigned int freq, int dir)
 {
 	struct snd_soc_codec *codec = codec_dai->codec;
-	struct aic23 *aic23 = codec->private_data;
+	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
 	aic23->mclk = freq;
 	return 0;
 }
@@ -502,7 +497,7 @@ static int aic23_set_sysclk(struct snd_soc_dai *codec_dai,
 static int aic23_set_fmt(struct snd_soc_dai *codec_dai, unsigned int fmt)
 {
 	struct snd_soc_codec *codec = codec_dai->codec;
-	struct aic23 *aic23 = codec->private_data;
+	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
 
 	/* set master/slave audio interface */
 	switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
@@ -815,18 +810,12 @@ static int aic23_probe(struct platform_device *pdev)
 	int ret = 0;
 
 	pr_info("aic23 Audio Codec");
-	codec = kzalloc(sizeof(struct snd_soc_codec), GFP_KERNEL);
-	if (!codec) {
-		ret = -ENOMEM;
-		goto exit1;
-	}
-
 	aic23 = kzalloc(sizeof(struct aic23), GFP_KERNEL);
 	if (!aic23) {
 		ret = -ENOMEM;
-		goto exit2;
+		goto exit1;
 	}
-	aic23->codec = codec;
+	codec = &aic23->codec;
 	INIT_WORK(&aic23->deferred_trigger_work, codec_trigger_deferred);
 	aic23->master = 1;
 	aic23->datfm = DAF_FOR_DSP;
@@ -870,11 +859,8 @@ exit4:
 	snd_soc_free_pcms(socdev);
 	snd_soc_dapm_free(socdev);
 exit3:
-	codec->private_data = NULL;
-	kfree(aic23);
-exit2:
 	socdev->codec = NULL;
-	kfree(codec);
+	kfree(aic23);
 exit1:
 	return ret;
 }
@@ -884,14 +870,13 @@ static int aic23_remove(struct platform_device *pdev)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
 	struct snd_soc_codec *codec = socdev->codec;
-	struct aic23 *aic23 = codec->private_data;
+	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
 
 	aic23_set_bias_level(codec, SND_SOC_BIAS_OFF);
 	cancel_work_sync(&aic23->deferred_trigger_work);
 	snd_soc_free_pcms(socdev);
 	snd_soc_dapm_free(socdev);
 	kfree(aic23);
-	kfree(codec);
 	return 0;
 }
 
