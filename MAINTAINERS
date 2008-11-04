@@ -4290,14 +4290,6 @@ M:	dedekind@infradead.org
 W:	http://www.linux-mtd.infradead.org/
 L:	linux-mtd@lists.infradead.org
 T:	git git://git.infradead.org/~dedekind/ubi-2.6.git
-
-UNIONFS
-P:	Erez Zadok
-M:	ezk@cs.sunysb.edu
-P:	Josef "Jeff" Sipek
-M:	jsipek@cs.sunysb.edu
-L:	unionfs@filesystems.org
-W:	http://unionfs.filesystems.org
 S:	Maintained
 
 USB ACM DRIVER
