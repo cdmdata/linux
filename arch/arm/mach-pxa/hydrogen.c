@@ -199,8 +199,8 @@ static struct platform_device *platform_devices[] __initdata = {
 
 static struct pxafb_mode_info fb_modes __initdata = {
 	.pixclock = 7400000,	//(3-1)
-	.xres = 320,
-	.yres = 240,
+	.xres = 480,
+	.yres = 272,
 	.bpp = 16,
 	.hsync_len = 30,
 	.left_margin = 20,
