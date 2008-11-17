@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2007 Erez Zadok
+ * Copyright (c) 2003-2008 Erez Zadok
  * Copyright (c) 2003-2006 Charles P. Wright
  * Copyright (c) 2005-2007 Josef 'Jeff' Sipek
  * Copyright (c) 2005-2006 Junjiro Okajima
@@ -8,8 +8,8 @@
  * Copyright (c) 2003-2004 Mohammad Nayyer Zubair
  * Copyright (c) 2003      Puja Gupta
  * Copyright (c) 2003      Harikesavan Krishnan
- * Copyright (c) 2003-2007 Stony Brook University
- * Copyright (c) 2003-2007 The Research Foundation of SUNY
+ * Copyright (c) 2003-2008 Stony Brook University
+ * Copyright (c) 2003-2008 The Research Foundation of SUNY
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -135,6 +135,7 @@ static int copyup_permissions(struct super_block *sb,
 	newattrs.ia_valid = ATTR_CTIME | ATTR_ATIME | ATTR_MTIME |
 		ATTR_ATIME_SET | ATTR_MTIME_SET | ATTR_FORCE |
 		ATTR_GID | ATTR_UID;
+	mutex_lock(&new_lower_dentry->d_inode->i_mutex);
 	err = notify_change(new_lower_dentry, &newattrs);
 	if (err)
 		goto out;
@@ -152,6 +153,7 @@ static int copyup_permissions(struct super_block *sb,
 	}
 
 out:
+	mutex_unlock(&new_lower_dentry->d_inode->i_mutex);
 	return err;
 }
 
@@ -182,7 +184,6 @@ static int __copyup_ndentry(struct dentry *old_lower_dentry,
 		args.symlink.parent = new_lower_parent_dentry->d_inode;
 		args.symlink.dentry = new_lower_dentry;
 		args.symlink.symbuf = symbuf;
-		args.symlink.mode = old_mode;
 
 		run_sioq(__unionfs_symlink, &args);
 		err = args.err;
@@ -352,8 +353,8 @@ static void __clear(struct dentry *dentry, struct dentry *old_lower_dentry,
 {
 	/* get rid of the lower dentry and all its traces */
 	unionfs_set_lower_dentry_idx(dentry, new_bindex, NULL);
-	set_dbstart(dentry, old_bstart);
-	set_dbend(dentry, old_bend);
+	dbstart(dentry) = old_bstart;
+	dbend(dentry) = old_bend;
 
 	dput(new_lower_dentry);
 	dput(old_lower_dentry);
@@ -631,8 +632,8 @@ static void __cleanup_dentry(struct dentry *dentry, int bindex,
 		new_bstart = bindex;
 	if (new_bend < 0)
 		new_bend = bindex;
-	set_dbstart(dentry, new_bstart);
-	set_dbend(dentry, new_bend);
+	dbstart(dentry) = new_bstart;
+	dbend(dentry) = new_bend;
 
 }
 
@@ -655,9 +656,9 @@ static void __set_dentry(struct dentry *upper, struct dentry *lower,
 {
 	unionfs_set_lower_dentry_idx(upper, bindex, lower);
 	if (likely(dbstart(upper) > bindex))
-		set_dbstart(upper, bindex);
+		dbstart(upper) = bindex;
 	if (likely(dbend(upper) < bindex))
-		set_dbend(upper, bindex);
+		dbend(upper) = bindex;
 }
 
 /*
@@ -864,23 +865,15 @@ void unionfs_postcopyup_setmnt(struct dentry *dentry)
  */
 void unionfs_postcopyup_release(struct dentry *dentry)
 {
-	int bindex;
+	int bstart, bend;
 
 	BUG_ON(S_ISDIR(dentry->d_inode->i_mode));
-	for (bindex = dbstart(dentry)+1; bindex <= dbend(dentry); bindex++) {
-		if (unionfs_lower_mnt_idx(dentry, bindex)) {
-			unionfs_mntput(dentry, bindex);
-			unionfs_set_lower_mnt_idx(dentry, bindex, NULL);
-		}
-		if (unionfs_lower_dentry_idx(dentry, bindex)) {
-			dput(unionfs_lower_dentry_idx(dentry, bindex));
-			unionfs_set_lower_dentry_idx(dentry, bindex, NULL);
-			iput(unionfs_lower_inode_idx(dentry->d_inode, bindex));
-			unionfs_set_lower_inode_idx(dentry->d_inode, bindex,
-						    NULL);
-		}
-	}
-	bindex = dbstart(dentry);
-	set_dbend(dentry, bindex);
-	ibend(dentry->d_inode) = ibstart(dentry->d_inode) = bindex;
+	bstart = dbstart(dentry);
+	bend = dbend(dentry);
+
+	path_put_lowers(dentry, bstart + 1, bend, false);
+	iput_lowers(dentry->d_inode, bstart + 1, bend, false);
+
+	dbend(dentry) = bstart;
+	ibend(dentry->d_inode) = ibstart(dentry->d_inode) = bstart;
 }
