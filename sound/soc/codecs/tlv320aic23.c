@@ -170,30 +170,25 @@ static const unsigned char sr_dac_mult_table[] = {
 	A(2), A(11), A(2), A(11),  A(0), A(0), A(0), A(1)
 };
 
-unsigned get_score(int adc, int adc_l, int adc_h, int need_adc,
+static unsigned get_score(int adc, int adc_l, int adc_h, int need_adc,
 		int dac, int dac_l, int dac_h, int need_dac)
 {
 	if ((adc >= adc_l) && (adc <= adc_h) &&
 			(dac >= dac_l) && (dac <= dac_h)) {
-		unsigned diff_adc = need_adc - adc;
-		unsigned diff_dac = need_dac - dac;
-		unsigned score;
-		if (((int)diff_adc) < 0)
-			diff_adc = -diff_adc;
-		if (((int)diff_dac) < 0)
-			diff_dac = -diff_dac;
-		score = diff_adc + diff_dac;
-		return score;
+		int diff_adc = need_adc - adc;
+		int diff_dac = need_dac - dac;
+		return abs(diff_adc) + abs(diff_dac);
 	}
-	return 0xffffffff;
+	return UINT_MAX;
 }
-int find_rate(int mclk, u32 need_adc, u32 need_dac)
+
+static int find_rate(int mclk, u32 need_adc, u32 need_dac)
 {
-	int i,j;
+	int i, j;
 	int best_i = -1;
 	int best_j = -1;
 	int best_div = 0;
-	unsigned best_score = 0xffffffff;
+	unsigned best_score = UINT_MAX;
 	int adc_l, adc_h, dac_l, dac_h;
 
 	need_adc *= SR_MULT;
@@ -205,10 +200,11 @@ int find_rate(int mclk, u32 need_adc, u32 need_dac)
 	adc_h = need_adc + (need_adc >> 5);
 	dac_l = need_dac - (need_dac >> 5);
 	dac_h = need_dac + (need_dac >> 5);
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < ARRAY_SIZE(bosr_usb_divisor_table); i++) {
 		int base = mclk / bosr_usb_divisor_table[i];
 		int mask = sr_valid_mask[i];
-		for (j = 0; j < 16; j++, mask >>= 1) {
+		for (j = 0; j < ARRAY_SIZE(sr_adc_mult_table);
+				j++, mask >>= 1) {
 			int adc; 
 			int dac;
 			int score;
@@ -227,7 +223,7 @@ int find_rate(int mclk, u32 need_adc, u32 need_dac)
 			score = get_score((adc >> 1), adc_l, adc_h, need_adc,
 					(dac >> 1), dac_l, dac_h, need_dac);
 			/* prefer to have a /2 */
-			if ((score != 0xffffffff) && (best_score >= score)) {
+			if ((score != UINT_MAX) && (best_score >= score)) {
 				best_score = score;
 				best_i = i;
 				best_j = j;
@@ -238,22 +234,22 @@ int find_rate(int mclk, u32 need_adc, u32 need_dac)
 	return (best_j << 2) | best_i | SRC_CLKIN(best_div);
 }
 
-static void get_current_sample_rates(struct snd_soc_codec *codec, int mclk,
+#ifdef DEBUG
+static void get_current_sample_rates(int sample_rate_control, int mclk,
 		u32 *sample_rate_adc, u32 *sample_rate_dac)
 {
-	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
-	int src = aic23->sample_rate_control;
-	int sr = (src >> 2) & 0x0f;
-	int val = (mclk / bosr_usb_divisor_table[src & 3]);
+	int sr = (sample_rate_control >> 2) & 0x0f;
+	int val = (mclk / bosr_usb_divisor_table[sample_rate_control & 3]);
 	int adc = (val * sr_adc_mult_table[sr]) / SR_MULT;
 	int dac = (val * sr_dac_mult_table[sr]) / SR_MULT;
-	if (src & SRC_CLKIN_HALF) {
+	if (sample_rate_control & SRC_CLKIN_HALF) {
 		adc >>= 1;
 		dac >>= 1;
 	}
 	*sample_rate_adc = adc;
 	*sample_rate_dac = dac;
 }
+#endif
 
 static int set_sample_rate_control(struct snd_soc_codec *codec, int mclk,
 		u32 sample_rate_adc, u32 sample_rate_dac)
@@ -269,12 +265,14 @@ static int set_sample_rate_control(struct snd_soc_codec *codec, int mclk,
 	aic23->sample_rate_control = data;
 	if (aic23->active_mask)
 		aic23_write(codec, AIC23_SAMPLE_RATE_CONTROL, data);
-	if (1) {
+#ifdef DEBUG
+	{
 		int adc,dac;
-		get_current_sample_rates(codec, mclk, &adc, &dac);
+		get_current_sample_rates(data, mclk, &adc, &dac);
 		printk(KERN_DEBUG "actual samplerate = %u,%u reg=%x\n", 
 			adc, dac, data);
 	}
+#endif
 	return 0;
 }
 /* ---------------------------------------------------------------------
