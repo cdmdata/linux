@@ -1,10 +1,21 @@
 /*
- * Texas Instruments TLV320AIC23 low power audio CODEC
- * ALSA SoC CODEC driver
- * Copyright (C) 2008 Boundary Devices
- * based on	wm8731.c by Richard Purdie
- * Copyright 2005 Openedhand Ltd.
- * which was based on wm8753.c by Liam Girdwood
+ * ALSA SoC TLV320AIC23 codec driver
+ *
+ * Author:      Arun KS, <arunks@mistralsolutions.com>
+ * Copyright:   (C) 2008 Mistral Solutions Pvt Ltd.,
+ *
+ * Based on sound/soc/codecs/wm8731.c by Richard Purdie
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Notes:
+ *  The AIC23 is a driver for a low power stereo audio
+ *  codec tlv320aic23
+ *
+ *  The machine layer should disable unsupported inputs/outputs by
+ *  snd_soc_dapm_disable_pin(codec, "LHPOUT"), etc.
  */
 
 #include <linux/module.h>
@@ -12,9 +23,7 @@
 #include <linux/init.h>
 #include <linux/delay.h>
 #include <linux/pm.h>
-#include <linux/device.h>
-#include <linux/sysfs.h>
-#include <linux/spi/spi.h>
+#include <linux/platform_device.h>
 #include <sound/core.h>
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
@@ -23,6 +32,8 @@
 #include <sound/initval.h>
 
 #include "tlv320aic23.h"
+
+#define AIC23_VERSION "0.1"
 
 /* AIC23 driver private data */
 struct aic23 {
@@ -49,7 +60,7 @@ struct aic23 {
 /* ---------------------------------------------------------------------
  * Register access routines
  */
-static unsigned int aic23_read_cache(struct snd_soc_codec *codec,
+static unsigned int tlv320aic23_read_cache(struct snd_soc_codec *codec,
 					 unsigned int reg)
 {
 	if (reg >= AIC23_NUM_CACHE_REGS) {
@@ -61,14 +72,14 @@ static unsigned int aic23_read_cache(struct snd_soc_codec *codec,
 
 /* This is a write-only codec */
 /*
-static unsigned int aic23_read(struct snd_soc_codec *codec,
+static unsigned int tlv320aic23_read(struct snd_soc_codec *codec,
 				   unsigned int reg)
 {
-	return aic23_read_cache(codec,reg);
+	return tlv320aic23_read_cache(codec,reg);
 }
 */
 
-static int aic23_write1(struct snd_soc_codec *codec, unsigned int reg,
+static int tlv320aic23_write1(struct snd_soc_codec *codec, unsigned int reg,
 			   unsigned int value)
 {
 	u8 data[2];
@@ -92,7 +103,7 @@ static int aic23_write1(struct snd_soc_codec *codec, unsigned int reg,
 		return -EIO;
 }
 
-static int aic23_write(struct snd_soc_codec *codec, unsigned int reg,
+static int tlv320aic23_write(struct snd_soc_codec *codec, unsigned int reg,
 			   unsigned int value)
 {
 	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
@@ -108,30 +119,31 @@ static int aic23_write(struct snd_soc_codec *codec, unsigned int reg,
 		aic23->volume_mute = 0;
 		aic23->right_output_volume = value;
 	}
-	return aic23_write1(codec, reg, value);
+	return tlv320aic23_write1(codec, reg, value);
 }
 
-static int aic23_set(struct snd_soc_codec *codec, unsigned int reg, unsigned int new)
+static int tlv320aic23_set(struct snd_soc_codec *codec, unsigned int reg, unsigned int new)
 {
-	unsigned int prev = aic23_read_cache(codec, reg);
+	unsigned int prev = tlv320aic23_read_cache(codec, reg);
 	if (new != prev) {
-		aic23_write1(codec, reg, new);
+		tlv320aic23_write1(codec, reg, new);
 		return 1;
 	}
 	return 0;
 }
 
-static int aic23_modify(struct snd_soc_codec *codec, unsigned int reg,
+static int tlv320aic23_modify(struct snd_soc_codec *codec, unsigned int reg,
 		unsigned int clear, unsigned int set)
 {
-	unsigned int prev = aic23_read_cache(codec, reg);
+	unsigned int prev = tlv320aic23_read_cache(codec, reg);
 	unsigned int new = (prev & ~clear) | set; 
 	if (new != prev) {
-		aic23_write1(codec, reg, new);
+		tlv320aic23_write1(codec, reg, new);
 		return 1;
 	}
 	return 0;
 }
+
 /*
  * Common Crystals used
  * 11.2896 Mhz /128 = *88.2k  /192 = 58.8k
@@ -264,7 +276,7 @@ static int set_sample_rate_control(struct snd_soc_codec *codec, int mclk,
 	}
 	aic23->sample_rate_control = data;
 	if (aic23->active_mask)
-		aic23_write(codec, AIC23_SAMPLE_RATE_CONTROL, data);
+		tlv320aic23_write(codec, AIC23_SAMPLE_RATE_CONTROL, data);
 #ifdef DEBUG
 	{
 		int adc,dac;
@@ -275,10 +287,128 @@ static int set_sample_rate_control(struct snd_soc_codec *codec, int mclk,
 #endif
 	return 0;
 }
+
+/* ---------------------------------------------------------------------
+ * ALSA controls
+ */
+static const char *tlv320aic23_capture_src_text[] = {"Line In", "Mic"};
+static const char *tlv320aic23_deemph[] = {"None", "32Khz", "44.1Khz", "48Khz"};
+static const char *tlv320aic23_sidetone[] = {"-6db","-9db","-12db","-18db","0db"};
+
+static const struct soc_enum tlv320aic23_enum[] = {
+	SOC_ENUM_SINGLE(AIC23_ANALOG_AUDIO_CONTROL, AAC_INSEL_BIT, \
+			2, tlv320aic23_capture_src_text),
+	SOC_ENUM_SINGLE(AIC23_ANALOG_AUDIO_CONTROL, AAC_SIDE_TONE_VOL_BIT, \
+			5, tlv320aic23_sidetone),
+	SOC_ENUM_SINGLE(AIC23_DIGITAL_AUDIO_CONTROL, DAC_DEEMP_BIT, \
+			4, tlv320aic23_deemph),
+};
+
+static const struct snd_kcontrol_new tlv320aic23_snd_controls[] = {
+	SOC_DOUBLE_R("Capture Volume", AIC23_LEFT_INPUT_VOLUME, \
+		AIC23_RIGHT_INPUT_VOLUME, 0, 0x1f, 0),
+	SOC_DOUBLE_R("Line Capture Switch", AIC23_LEFT_INPUT_VOLUME, \
+		AIC23_RIGHT_INPUT_VOLUME, LRIV_MUTE_BIT, 1, 1),
+	SOC_DOUBLE_R("Master Playback Volume", AIC23_LEFT_OUTPUT_VOLUME, \
+		AIC23_RIGHT_OUTPUT_VOLUME, 0, 0x7f, 0),
+	SOC_DOUBLE_R("Master Playback ZC Switch", AIC23_LEFT_OUTPUT_VOLUME, \
+		AIC23_RIGHT_INPUT_VOLUME, LROV_ZERO_CROSS_BIT, 1, 0),
+	SOC_SINGLE("Mic Boost (+20dB)", AIC23_ANALOG_AUDIO_CONTROL,
+		AAC_MIC_BOOST_BIT, 1, 0),
+	SOC_SINGLE("Capture Mic Switch", AIC23_ANALOG_AUDIO_CONTROL, \
+		AAC_MIC_MUTE_BIT, 1, 1),
+	SOC_ENUM("Sidetone Playback Volume", tlv320aic23_enum[1]),
+
+	SOC_SINGLE("Digital Playback Switch", AIC23_DIGITAL_AUDIO_CONTROL, DAC_SOFT_MUTE_BIT, 1, 1),
+	SOC_SINGLE("ADC High Pass Filter Switch", AIC23_DIGITAL_AUDIO_CONTROL, \
+		DAC_HIGH_PASS_FILTER_BIT, 1, 1),
+	SOC_ENUM("Playback De-emphasis", tlv320aic23_enum[2]),
+};
+
+/* add non dapm controls */
+static int tlv320aic23_add_controls(struct snd_soc_codec *codec)
+{
+	int err, i;
+
+	for (i = 0; i < ARRAY_SIZE(tlv320aic23_snd_controls); i++) {
+		err = snd_ctl_add(codec->card,
+				  snd_soc_cnew(&tlv320aic23_snd_controls[i],
+						codec, NULL));
+		if (err < 0)
+			return err;
+	}
+	return 0;
+}
+
+#define FAKE_DAC_ON_BIT 9
+/* Output Mixer */
+static const struct snd_kcontrol_new tlv320aic23_output_mixer_controls[] = {
+SOC_DAPM_SINGLE("HiFi Playback Switch", AIC23_ANALOG_AUDIO_CONTROL, \
+	FAKE_DAC_ON_BIT, 1, 0), /* use a fake bit(9), and control in driver */
+SOC_DAPM_SINGLE("Line Bypass Switch", AIC23_ANALOG_AUDIO_CONTROL, \
+	AAC_BYPASS_BIT, 1, 0),
+SOC_DAPM_SINGLE("Mic Sidetone Switch", AIC23_ANALOG_AUDIO_CONTROL, \
+	AAC_SIDE_TONE_ENABLE_BIT, 1, 0),
+};
+
+/* Input mux */
+static const struct snd_kcontrol_new tlv320aic23_input_mux_controls =
+SOC_DAPM_ENUM("Input Select", tlv320aic23_enum[0]);
+
+static const struct snd_soc_dapm_widget tlv320aic23_dapm_widgets[] = {
+SND_SOC_DAPM_DAC("DAC", "HiFi Playback", AIC23_POWER_DOWN_CONTROL, PDC_DAC_BIT, 1),
+SND_SOC_DAPM_ADC("ADC", "HiFi Capture", AIC23_POWER_DOWN_CONTROL, PDC_ADC_BIT, 1),
+SND_SOC_DAPM_MIXER("Output Mixer", AIC23_POWER_DOWN_CONTROL, PDC_OUT_BIT, 1,
+	tlv320aic23_output_mixer_controls,
+	ARRAY_SIZE(tlv320aic23_output_mixer_controls)),
+SND_SOC_DAPM_MUX("Capture Source", SND_SOC_NOPM, 0, 0, &tlv320aic23_input_mux_controls),
+SND_SOC_DAPM_PGA("Line Input", AIC23_POWER_DOWN_CONTROL, PDC_LINE_BIT, 1, NULL, 0),
+SND_SOC_DAPM_MICBIAS("Mic Bias", AIC23_POWER_DOWN_CONTROL, PDC_MIC_BIT, 1),
+SND_SOC_DAPM_OUTPUT("LHPOUT"),
+SND_SOC_DAPM_OUTPUT("RHPOUT"),
+SND_SOC_DAPM_OUTPUT("LOUT"),
+SND_SOC_DAPM_OUTPUT("ROUT"),
+SND_SOC_DAPM_INPUT("LLINEIN"),
+SND_SOC_DAPM_INPUT("RLINEIN"),
+SND_SOC_DAPM_INPUT("MICIN"),
+};
+
+static const struct snd_soc_dapm_route intercon[] = {
+	/* output mixer */
+	{"Output Mixer", "HiFi Playback Switch", "DAC"},
+	{"Output Mixer", "Line Bypass Switch", "Line Input"},
+	{"Output Mixer", "Mic Sidetone Switch", "Mic Bias"},
+
+	/* outputs */
+	{"LHPOUT", NULL, "Output Mixer"},
+	{"RHPOUT", NULL, "Output Mixer"},
+	{"LOUT", NULL, "Output Mixer"},
+	{"ROUT", NULL, "Output Mixer"},
+
+	/* inputs */
+	{"Line Input", NULL, "LLINEIN"},
+	{"Line Input", NULL, "RLINEIN"},
+	{"Mic Bias", NULL, "MICIN"},
+
+	/* input mux */
+	{"Capture Source", "Line In", "Line Input"},
+	{"Capture Source", "Mic", "Mic Bias"},
+	{"ADC", NULL, "Capture Source"},
+};
+
+static int tlv320aic23_add_widgets(struct snd_soc_codec *codec)
+{
+	snd_soc_dapm_new_controls(codec, tlv320aic23_dapm_widgets,
+				  ARRAY_SIZE(tlv320aic23_dapm_widgets));
+	snd_soc_dapm_add_routes(codec, intercon, ARRAY_SIZE(intercon));
+	snd_soc_dapm_new_widgets(codec);
+	return 0;
+}
+
 /* ---------------------------------------------------------------------
  * Digital Audio Interface Operations
  */
-static int aic23_hw_params(struct snd_pcm_substream *substream,
+static int tlv320aic23_hw_params(struct snd_pcm_substream *substream,
 			   struct snd_pcm_hw_params *params)
 {
 	int ret;
@@ -330,67 +460,67 @@ static int aic23_hw_params(struct snd_pcm_substream *substream,
 		if (aic23->right_first)
 			data |= DAF_LRSWAP_ON;
 	} else {
-		data |= (aic23_read_cache(codec, AIC23_DIGITAL_AUDIO_FORMAT) & DAF_LRSWAP_ON);
+		data |= (tlv320aic23_read_cache(codec, AIC23_DIGITAL_AUDIO_FORMAT) & DAF_LRSWAP_ON);
 	}
 	aic23->digital_audio_format = data;
 	if (aic23->active_mask)
-		aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT, data);
+		tlv320aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT, data);
 	return 0;
 }
 
 /*
- * aic23_mute - Mute control to reduce noise when changing audio format
+ * tlv320aic23_mute - Mute control to reduce noise when changing audio format
  */
-static int aic23_mute_codec(struct snd_soc_codec *codec, int mute)
+static int tlv320aic23_mute_codec(struct snd_soc_codec *codec, int mute)
 {
-	u16 reg = aic23_read_cache(codec, AIC23_DIGITAL_AUDIO_CONTROL);
+	u16 reg = tlv320aic23_read_cache(codec, AIC23_DIGITAL_AUDIO_CONTROL);
 	if (mute)
 		reg |= DAC_SOFT_MUTE;
 	else
 		reg &= ~DAC_SOFT_MUTE;
-	aic23_write(codec, AIC23_DIGITAL_AUDIO_CONTROL, reg);
+	tlv320aic23_write(codec, AIC23_DIGITAL_AUDIO_CONTROL, reg);
 	return 0;
 }
 
 #define VOLUME_MUTE 0x180
 
 /*
- * aic23_mute_volume - Mute control to reduce noise when starting/stopping streams
+ * tlv320aic23_mute_volume - Mute control to reduce noise when starting/stopping streams
  */
-static int aic23_mute_volume(struct snd_soc_codec *codec, int mute)
+static int tlv320aic23_mute_volume(struct snd_soc_codec *codec, int mute)
 {
 	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
 	if (0) if (aic23->volume_mute != mute) {
 		aic23->volume_mute = mute;
 		if (mute) {
-			aic23_write1(codec, AIC23_LEFT_OUTPUT_VOLUME, VOLUME_MUTE);
-			aic23_write1(codec, AIC23_RIGHT_OUTPUT_VOLUME, VOLUME_MUTE);
+			tlv320aic23_write1(codec, AIC23_LEFT_OUTPUT_VOLUME, VOLUME_MUTE);
+			tlv320aic23_write1(codec, AIC23_RIGHT_OUTPUT_VOLUME, VOLUME_MUTE);
 		} else {
-			aic23_write1(codec, AIC23_LEFT_OUTPUT_VOLUME, aic23->left_output_volume);
-			aic23_write1(codec, AIC23_RIGHT_OUTPUT_VOLUME, aic23->right_output_volume);
+			tlv320aic23_write1(codec, AIC23_LEFT_OUTPUT_VOLUME, aic23->left_output_volume);
+			tlv320aic23_write1(codec, AIC23_RIGHT_OUTPUT_VOLUME, aic23->right_output_volume);
 		}
 		return 1;
 	}
 	return 0;
 }
 
-static int aic23_prepare(struct snd_pcm_substream *substream)
+static int tlv320aic23_prepare(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
 	struct snd_soc_codec *codec = socdev->codec;
 	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
-	u16 daf_prev = aic23_read_cache(codec, AIC23_DIGITAL_AUDIO_FORMAT);
-	u16 src_prev = aic23_read_cache(codec, AIC23_SAMPLE_RATE_CONTROL);
+	u16 daf_prev = tlv320aic23_read_cache(codec, AIC23_DIGITAL_AUDIO_FORMAT);
+	u16 src_prev = tlv320aic23_read_cache(codec, AIC23_SAMPLE_RATE_CONTROL);
 	/* set active */
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		aic23_mute_volume(codec, 1);
-		aic23_mute_codec(codec, 0);
+		tlv320aic23_mute_volume(codec, 1);
+		tlv320aic23_mute_codec(codec, 0);
 	}
 	if (aic23->digital_audio_format != daf_prev)
-		aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT, aic23->digital_audio_format);
+		tlv320aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT, aic23->digital_audio_format);
 	if (aic23->sample_rate_control != src_prev)
-		aic23_write(codec, AIC23_SAMPLE_RATE_CONTROL, aic23->sample_rate_control);
+		tlv320aic23_write(codec, AIC23_SAMPLE_RATE_CONTROL, aic23->sample_rate_control);
 	return 0;
 }
 
@@ -402,20 +532,20 @@ static void codec_trigger_deferred(struct work_struct *work)
 	int playback = aic23->active_mask & ACTIVE_PLAYBACK;
 	u16 dia = (aic23->active_mask) ? 1 : 0;
 	if (playback) {
-		aic23_set(codec, AIC23_DIGITAL_INTERFACE_ACT, 1);
-		aic23_modify(codec, AIC23_ANALOG_AUDIO_CONTROL, 0, AAC_DAC_ON);
-		aic23_mute_volume(codec, 0);
+		tlv320aic23_set(codec, AIC23_DIGITAL_INTERFACE_ACT, 1);
+		tlv320aic23_modify(codec, AIC23_ANALOG_AUDIO_CONTROL, 0, AAC_DAC_ON);
+		tlv320aic23_mute_volume(codec, 0);
 	} else {
-		aic23_mute_volume(codec, 1);
+		tlv320aic23_mute_volume(codec, 1);
 		if (dia)
-			aic23_set(codec, AIC23_DIGITAL_INTERFACE_ACT, dia);
-		aic23_modify(codec, AIC23_ANALOG_AUDIO_CONTROL, AAC_DAC_ON, 0);
+			tlv320aic23_set(codec, AIC23_DIGITAL_INTERFACE_ACT, dia);
+		tlv320aic23_modify(codec, AIC23_ANALOG_AUDIO_CONTROL, AAC_DAC_ON, 0);
 		if (!dia)
-			aic23_set(codec, AIC23_DIGITAL_INTERFACE_ACT, dia);
+			tlv320aic23_set(codec, AIC23_DIGITAL_INTERFACE_ACT, dia);
 	}
 }
 
-static int aic23_trigger(struct snd_pcm_substream *substream, int cmd)
+static int tlv320aic23_trigger(struct snd_pcm_substream *substream, int cmd)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
@@ -447,7 +577,7 @@ static int aic23_trigger(struct snd_pcm_substream *substream, int cmd)
 	return ret;
 }
 
-static void aic23_shutdown(struct snd_pcm_substream *substream)
+static void tlv320aic23_shutdown(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
@@ -469,13 +599,13 @@ static void aic23_shutdown(struct snd_pcm_substream *substream)
 }
 
 /*
- * aic23_mute - Mute control to reduce noise when changing audio format
+ * tlv320aic23_mute - Mute control to reduce noise when changing audio format
  */
-static int aic23_mute(struct snd_soc_dai *dai, int mute)
+static int tlv320aic23_mute(struct snd_soc_dai *dai, int mute)
 {
-	return aic23_mute_codec(dai->codec, mute);
+	return tlv320aic23_mute_codec(dai->codec, mute);
 }
-static int aic23_inform_channel_order(struct snd_soc_dai *codec_dai, int right_first)
+static int tlv320aic23_inform_channel_order(struct snd_soc_dai *codec_dai, int right_first)
 {
 	struct snd_soc_codec *codec = codec_dai->codec;
 	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
@@ -483,7 +613,7 @@ static int aic23_inform_channel_order(struct snd_soc_dai *codec_dai, int right_f
 	return 0;
 }
 
-static int aic23_set_sysclk(struct snd_soc_dai *codec_dai,
+static int tlv320aic23_set_sysclk(struct snd_soc_dai *codec_dai,
 			    int clk_id, unsigned int freq, int dir)
 {
 	struct snd_soc_codec *codec = codec_dai->codec;
@@ -492,7 +622,7 @@ static int aic23_set_sysclk(struct snd_soc_dai *codec_dai,
 	return 0;
 }
 
-static int aic23_set_fmt(struct snd_soc_dai *codec_dai, unsigned int fmt)
+static int tlv320aic23_set_fmt(struct snd_soc_dai *codec_dai, unsigned int fmt)
 {
 	struct snd_soc_codec *codec = codec_dai->codec;
 	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
@@ -534,28 +664,28 @@ static int aic23_set_fmt(struct snd_soc_dai *codec_dai, unsigned int fmt)
 	return 0;
 }
 
-static int aic23_set_bias_level(struct snd_soc_codec *codec,
+static int tlv320aic23_set_bias_level(struct snd_soc_codec *codec,
 				 enum snd_soc_bias_level level)
 {
-	u16 reg = aic23_read_cache(codec, AIC23_POWER_DOWN_CONTROL) & 0x7f;
+	u16 reg = tlv320aic23_read_cache(codec, AIC23_POWER_DOWN_CONTROL) & 0x7f;
 
 	switch (level) {
 	case SND_SOC_BIAS_ON:
 		/* vref/mid, osc on, dac unmute */
-		aic23_write(codec, AIC23_POWER_DOWN_CONTROL, reg);
+		tlv320aic23_write(codec, AIC23_POWER_DOWN_CONTROL, reg);
 		break;
 	case SND_SOC_BIAS_PREPARE:
 		break;
 	case SND_SOC_BIAS_STANDBY:
 		/* power down clock output */
-		aic23_write(codec, AIC23_POWER_DOWN_CONTROL,
+		tlv320aic23_write(codec, AIC23_POWER_DOWN_CONTROL,
 				reg | (1<<PDC_CLK_BIT));
 		break;
 	case SND_SOC_BIAS_OFF:
 		/* everything off, dac mute, inactive */
-		aic23_mute_codec(codec, 1);
-		aic23_write(codec, AIC23_DIGITAL_INTERFACE_ACT, 0x0);
-		aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0xffff);
+		tlv320aic23_mute_codec(codec, 1);
+		tlv320aic23_write(codec, AIC23_DIGITAL_INTERFACE_ACT, 0x0);
+		tlv320aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0xffff);
 		break;
 	}
 	codec->bias_level = level;
@@ -580,7 +710,7 @@ static int aic23_set_bias_level(struct snd_soc_codec *codec,
 
 #define AIC23_FORMATS AIC23_FORMATS_LE | AIC23_FORMATS_BE
 
-struct snd_soc_dai aic23_dai = {
+struct snd_soc_dai tlv320aic23_dai = {
 	.name = "tlv320aic23",
 	.playback = {
 		.stream_name = "HiFi Playback",
@@ -599,152 +729,35 @@ struct snd_soc_dai aic23_dai = {
 		.formats = AIC23_FORMATS,
 	},
 	.ops = {
-		.prepare = aic23_prepare,
-		.trigger = aic23_trigger,
-		.hw_params = aic23_hw_params,
-		.shutdown = aic23_shutdown,
+		.prepare = tlv320aic23_prepare,
+		.trigger = tlv320aic23_trigger,
+		.hw_params = tlv320aic23_hw_params,
+		.shutdown = tlv320aic23_shutdown,
 	},
 	.dai_ops = {
-		.digital_mute = aic23_mute,
-		.set_sysclk = aic23_set_sysclk,
-		.set_fmt = aic23_set_fmt,
-		.inform_channel_order = aic23_inform_channel_order,
+		.digital_mute = tlv320aic23_mute,
+		.set_sysclk = tlv320aic23_set_sysclk,
+		.set_fmt = tlv320aic23_set_fmt,
+		.inform_channel_order = tlv320aic23_inform_channel_order,
 	},
 };
-EXPORT_SYMBOL_GPL(aic23_dai);
-
-/* ---------------------------------------------------------------------
- * ALSA controls
- */
-static const char *aic23_capture_src_text[] = {"Line In", "Mic"};
-static const char *aic23_deemph[] = {"None", "32Khz", "44.1Khz", "48Khz"};
-static const char *aic23_sidetone[] = {"-6db","-9db","-12db","-18db","0db"};
-
-static const struct soc_enum aic23_enum[] = {
-	SOC_ENUM_SINGLE(AIC23_ANALOG_AUDIO_CONTROL, AAC_INSEL_BIT, \
-			2, aic23_capture_src_text),
-	SOC_ENUM_SINGLE(AIC23_ANALOG_AUDIO_CONTROL, AAC_SIDE_TONE_VOL_BIT, \
-			5, aic23_sidetone),
-	SOC_ENUM_SINGLE(AIC23_DIGITAL_AUDIO_CONTROL, DAC_DEEMP_BIT, \
-			4, aic23_deemph),
-};
-
-static const struct snd_kcontrol_new aic23_snd_controls[] = {
-	SOC_DOUBLE_R("Capture Volume", AIC23_LEFT_INPUT_VOLUME, \
-		AIC23_RIGHT_INPUT_VOLUME, 0, 0x1f, 0),
-	SOC_DOUBLE_R("Line Capture Switch", AIC23_LEFT_INPUT_VOLUME, \
-		AIC23_RIGHT_INPUT_VOLUME, LRIV_MUTE_BIT, 1, 1),
-	SOC_DOUBLE_R("Master Playback Volume", AIC23_LEFT_OUTPUT_VOLUME, \
-		AIC23_RIGHT_OUTPUT_VOLUME, 0, 0x7f, 0),
-	SOC_DOUBLE_R("Master Playback ZC Switch", AIC23_LEFT_OUTPUT_VOLUME, \
-		AIC23_RIGHT_INPUT_VOLUME, LROV_ZERO_CROSS_BIT, 1, 0),
-	SOC_SINGLE("Mic Boost (+20dB)", AIC23_ANALOG_AUDIO_CONTROL,
-		AAC_MIC_BOOST_BIT, 1, 0),
-	SOC_SINGLE("Capture Mic Switch", AIC23_ANALOG_AUDIO_CONTROL, \
-		AAC_MIC_MUTE_BIT, 1, 1),
-	SOC_ENUM("Sidetone Playback Volume", aic23_enum[1]),
-
-	SOC_SINGLE("Digital Playback Switch", AIC23_DIGITAL_AUDIO_CONTROL, DAC_SOFT_MUTE_BIT, 1, 1),
-	SOC_SINGLE("ADC High Pass Filter Switch", AIC23_DIGITAL_AUDIO_CONTROL, \
-		DAC_HIGH_PASS_FILTER_BIT, 1, 1),
-	SOC_ENUM("Playback De-emphasis", aic23_enum[2]),
-};
-
-/* add non dapm controls */
-static int aic23_add_controls(struct snd_soc_codec *codec)
-{
-	int err, i;
-
-	for (i = 0; i < ARRAY_SIZE(aic23_snd_controls); i++) {
-		err = snd_ctl_add(codec->card,
-				  snd_soc_cnew(&aic23_snd_controls[i],
-						codec, NULL));
-		if (err < 0)
-			return err;
-	}
-	return 0;
-}
-
-#define FAKE_DAC_ON_BIT 9
-/* Output Mixer */
-static const struct snd_kcontrol_new aic23_output_mixer_controls[] = {
-SOC_DAPM_SINGLE("HiFi Playback Switch", AIC23_ANALOG_AUDIO_CONTROL, \
-	FAKE_DAC_ON_BIT, 1, 0), /* use a fake bit(9), and control in driver */
-SOC_DAPM_SINGLE("Line Bypass Switch", AIC23_ANALOG_AUDIO_CONTROL, \
-	AAC_BYPASS_BIT, 1, 0),
-SOC_DAPM_SINGLE("Mic Sidetone Switch", AIC23_ANALOG_AUDIO_CONTROL, \
-	AAC_SIDE_TONE_ENABLE_BIT, 1, 0),
-};
-
-/* Input mux */
-static const struct snd_kcontrol_new aic23_input_mux_controls =
-SOC_DAPM_ENUM("Input Select", aic23_enum[0]);
-
-static const struct snd_soc_dapm_widget aic23_dapm_widgets[] = {
-SND_SOC_DAPM_DAC("DAC", "HiFi Playback", AIC23_POWER_DOWN_CONTROL, PDC_DAC_BIT, 1),
-SND_SOC_DAPM_ADC("ADC", "HiFi Capture", AIC23_POWER_DOWN_CONTROL, PDC_ADC_BIT, 1),
-SND_SOC_DAPM_MIXER("Output Mixer", AIC23_POWER_DOWN_CONTROL, PDC_OUT_BIT, 1,
-	aic23_output_mixer_controls,
-	ARRAY_SIZE(aic23_output_mixer_controls)),
-SND_SOC_DAPM_MUX("Capture Source", SND_SOC_NOPM, 0, 0, &aic23_input_mux_controls),
-SND_SOC_DAPM_PGA("Line Input", AIC23_POWER_DOWN_CONTROL, PDC_LINE_BIT, 1, NULL, 0),
-SND_SOC_DAPM_MICBIAS("Mic Bias", AIC23_POWER_DOWN_CONTROL, PDC_MIC_BIT, 1),
-SND_SOC_DAPM_OUTPUT("LHPOUT"),
-SND_SOC_DAPM_OUTPUT("RHPOUT"),
-SND_SOC_DAPM_OUTPUT("LOUT"),
-SND_SOC_DAPM_OUTPUT("ROUT"),
-SND_SOC_DAPM_INPUT("LLINEIN"),
-SND_SOC_DAPM_INPUT("RLINEIN"),
-SND_SOC_DAPM_INPUT("MICIN"),
-};
-
-static const struct snd_soc_dapm_route intercon[] = {
-	/* output mixer */
-	{"Output Mixer", "HiFi Playback Switch", "DAC"},
-	{"Output Mixer", "Line Bypass Switch", "Line Input"},
-	{"Output Mixer", "Mic Sidetone Switch", "Mic Bias"},
-
-	/* outputs */
-	{"LHPOUT", NULL, "Output Mixer"},
-	{"RHPOUT", NULL, "Output Mixer"},
-	{"LOUT", NULL, "Output Mixer"},
-	{"ROUT", NULL, "Output Mixer"},
-
-	/* inputs */
-	{"Line Input", NULL, "LLINEIN"},
-	{"Line Input", NULL, "RLINEIN"},
-	{"Mic Bias", NULL, "MICIN"},
-
-	/* input mux */
-	{"Capture Source", "Line In", "Line Input"},
-	{"Capture Source", "Mic", "Mic Bias"},
-	{"ADC", NULL, "Capture Source"},
-};
-
-static int aic23_add_widgets(struct snd_soc_codec *codec)
-{
-	snd_soc_dapm_new_controls(codec, aic23_dapm_widgets,
-				  ARRAY_SIZE(aic23_dapm_widgets));
-	snd_soc_dapm_add_routes(codec, intercon, ARRAY_SIZE(intercon));
-	snd_soc_dapm_new_widgets(codec);
-	return 0;
-}
+EXPORT_SYMBOL_GPL(tlv320aic23_dai);
 
 /* ---------------------------------------------------------------------
  */
 
-static int aic23_suspend(struct platform_device *pdev, pm_message_t state)
+static int tlv320aic23_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
 	struct snd_soc_codec *codec = socdev->codec;
 
-	aic23_mute_codec(codec, 1);
-	aic23_write(codec, AIC23_DIGITAL_INTERFACE_ACT, 0x0);
-	aic23_set_bias_level(codec, SND_SOC_BIAS_OFF);
+	tlv320aic23_mute_codec(codec, 1);
+	tlv320aic23_write(codec, AIC23_DIGITAL_INTERFACE_ACT, 0x0);
+	tlv320aic23_set_bias_level(codec, SND_SOC_BIAS_OFF);
 	return 0;
 }
 
-static int aic23_resume(struct platform_device *pdev)
+static int tlv320aic23_resume(struct platform_device *pdev)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
 	struct snd_soc_codec *codec = socdev->codec;
@@ -752,62 +765,63 @@ static int aic23_resume(struct platform_device *pdev)
 
 	/* Sync reg_cache with the hardware */
 	for (reg = 0; reg < AIC23_NUM_CACHE_REGS; reg++) {
-		unsigned val = aic23_read_cache(codec, reg);
-		aic23_write(codec, reg, val);
+		unsigned val = tlv320aic23_read_cache(codec, reg);
+		tlv320aic23_write(codec, reg, val);
 	}
-	aic23_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
-	aic23_set_bias_level(codec, codec->suspend_bias_level);
+	tlv320aic23_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
+	tlv320aic23_set_bias_level(codec, codec->suspend_bias_level);
 	return 0;
 }
 /* ************************************ */
 
 /*
- * initialise the aic23 driver
+ * initialise the tlv320aic23 driver
  * register the mixer and dsp interfaces with the kernel
  */
-static int aic23_init(struct snd_soc_codec *codec, struct aic23 *aic23)
+static int tlv320aic23_init(struct snd_soc_codec *codec, struct aic23 *aic23)
 {
-	aic23_write(codec, AIC23_RESET, 0);
+	tlv320aic23_write(codec, AIC23_RESET, 0);
 	/* all off
 	 * This addresses the problem of the digital filters
 	 * not being initialized when MCLK is removed
 	 * slea037.pdf section 2 
 	 * "Noise Fixed by Toggling Bit D7 of Power-Down Control"
 	 */
-	aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0x01ff);
+	tlv320aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0x01ff);
 
 	/* power on device, only oscillator is on */
-	aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0x00df);
-	aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0x005f);
-	aic23_write(codec, AIC23_DIGITAL_INTERFACE_ACT, 0x0000);
+	tlv320aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0x00df);
+	tlv320aic23_write(codec, AIC23_POWER_DOWN_CONTROL, 0x005f);
+	tlv320aic23_write(codec, AIC23_DIGITAL_INTERFACE_ACT, 0x0000);
 
 	/* set the update bits */
-	aic23_write(codec, AIC23_LEFT_INPUT_VOLUME, LRIV_DEFAULT | LRIV_MUTE);
-	aic23_write(codec, AIC23_RIGHT_INPUT_VOLUME, LRIV_DEFAULT | LRIV_MUTE);
-	aic23_write(codec, AIC23_LEFT_OUTPUT_VOLUME,
+	tlv320aic23_write(codec, AIC23_LEFT_INPUT_VOLUME, LRIV_DEFAULT | LRIV_MUTE);
+	tlv320aic23_write(codec, AIC23_RIGHT_INPUT_VOLUME, LRIV_DEFAULT | LRIV_MUTE);
+	tlv320aic23_write(codec, AIC23_LEFT_OUTPUT_VOLUME,
 			LROV_DEFAULT | LROV_ZERO_CROSS);
-	aic23_write(codec, AIC23_RIGHT_OUTPUT_VOLUME,
+	tlv320aic23_write(codec, AIC23_RIGHT_OUTPUT_VOLUME,
 			LROV_DEFAULT | LROV_ZERO_CROSS);
-	aic23_write(codec, AIC23_ANALOG_AUDIO_CONTROL,
+	tlv320aic23_write(codec, AIC23_ANALOG_AUDIO_CONTROL,
 			(1<<FAKE_DAC_ON_BIT) | AAC_MIC_BOOST_20DB | AAC_INSEL_MIC);
-	aic23_write(codec, AIC23_DIGITAL_AUDIO_CONTROL,
+	tlv320aic23_write(codec, AIC23_DIGITAL_AUDIO_CONTROL,
 			DAC_SOFT_MUTE | DAC_DEEMP_NONE);
-	aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT,
+	tlv320aic23_write(codec, AIC23_DIGITAL_AUDIO_FORMAT,
 			DAF_IWL_16 | DAF_FOR_DSP | DAF_MASTER_MODE);
 	set_sample_rate_control(codec, aic23->mclk, 44100, 44100);
 	return 0;
 }
 
 
-static int aic23_probe(struct platform_device *pdev)
+static int tlv320aic23_probe(struct platform_device *pdev)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
-	struct aic23_setup_data *setup_data = socdev->codec_data;
+	struct tlv320aic23_setup_data *setup_data = socdev->codec_data;
 	struct snd_soc_codec *codec;
 	struct aic23 *aic23;
 	int ret = 0;
 
-	pr_info("aic23 Audio Codec");
+	printk(KERN_INFO "AIC23 Audio Codec %s\n", AIC23_VERSION);
+
 	aic23 = kzalloc(sizeof(struct aic23), GFP_KERNEL);
 	if (!aic23) {
 		ret = -ENOMEM;
@@ -819,15 +833,15 @@ static int aic23_probe(struct platform_device *pdev)
 	aic23->datfm = DAF_FOR_DSP;
 	aic23->mclk = 12000000;
 	aic23->volume_mute = 1;
-	codec->name = "aic23";
+	codec->name = "tlv320aic23";
 	codec->owner = THIS_MODULE;
 	codec->private_data = aic23;
 	codec->reg_cache_size = AIC23_NUM_CACHE_REGS;
 	codec->reg_cache = aic23->reg_cache;
-	codec->read = aic23_read_cache;
-	codec->write = aic23_write;
-	codec->set_bias_level = aic23_set_bias_level;
-	codec->dai = &aic23_dai;
+	codec->read = tlv320aic23_read_cache;
+	codec->write = tlv320aic23_write;
+	codec->set_bias_level = tlv320aic23_set_bias_level;
+	codec->dai = &tlv320aic23_dai;
 	codec->num_dai = 1;
 	codec->hw_write = setup_data->hw_write;
 
@@ -836,20 +850,20 @@ static int aic23_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&codec->dapm_widgets);
 	INIT_LIST_HEAD(&codec->dapm_paths);
 
-	ret = aic23_init(codec, aic23);
+	ret = tlv320aic23_init(codec, aic23);
 	if (ret < 0)
 		goto exit3;
 	/* register pcms */
 	ret = snd_soc_new_pcms(socdev, SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1);
 	if (ret < 0) {
-		printk(KERN_ERR "aic23: failed to create pcms\n");
+		printk(KERN_ERR "tlv320aic23: failed to create pcms\n");
 		goto exit3;
 	}
-	aic23_add_controls(codec);
-	aic23_add_widgets(codec);
+	tlv320aic23_add_controls(codec);
+	tlv320aic23_add_widgets(codec);
 	ret = snd_soc_register_card(socdev);
 	if (ret < 0) {
-		printk(KERN_ERR "aic23: failed to register card\n");
+		printk(KERN_ERR "tlv320aic23: failed to register card\n");
 		goto exit4;
 	}
 	return ret;
@@ -864,13 +878,13 @@ exit1:
 }
 
 /* power down chip */
-static int aic23_remove(struct platform_device *pdev)
+static int tlv320aic23_remove(struct platform_device *pdev)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
 	struct snd_soc_codec *codec = socdev->codec;
 	struct aic23 *aic23 = container_of(codec, struct aic23, codec);
 
-	aic23_set_bias_level(codec, SND_SOC_BIAS_OFF);
+	tlv320aic23_set_bias_level(codec, SND_SOC_BIAS_OFF);
 	cancel_work_sync(&aic23->deferred_trigger_work);
 	snd_soc_free_pcms(socdev);
 	snd_soc_dapm_free(socdev);
@@ -878,13 +892,13 @@ static int aic23_remove(struct platform_device *pdev)
 	return 0;
 }
 
-struct snd_soc_codec_device aic23_soc_codec_dev = {
-	.probe = 	aic23_probe,
-	.remove = 	aic23_remove,
-	.suspend = 	aic23_suspend,
-	.resume =	aic23_resume,
+struct snd_soc_codec_device tlv320aic23_soc_codec_dev = {
+	.probe = 	tlv320aic23_probe,
+	.remove = 	tlv320aic23_remove,
+	.suspend = 	tlv320aic23_suspend,
+	.resume =	tlv320aic23_resume,
 };
-EXPORT_SYMBOL_GPL(aic23_soc_codec_dev);
+EXPORT_SYMBOL_GPL(tlv320aic23_soc_codec_dev);
 
 MODULE_DESCRIPTION("ASoC TLV320AIC23 codec driver");
 MODULE_AUTHOR("Troy Kisky <troy.kisky@boundarydevices.com>");

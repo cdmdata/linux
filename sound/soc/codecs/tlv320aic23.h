@@ -129,10 +129,10 @@
 /* Digital interface register */
 #define DIA_ACTIVATE			0x0001
 
-struct aic23_setup_data {
+struct tlv320aic23_setup_data {
 	hw_write_t hw_write;
 };
-extern struct snd_soc_dai aic23_dai;
-extern struct snd_soc_codec_device aic23_soc_codec_dev;
+extern struct snd_soc_dai tlv320aic23_dai;
+extern struct snd_soc_codec_device tlv320aic23_soc_codec_dev;
 
 #endif /* __SOUND_CODECS_TLV320AIC23_H */
