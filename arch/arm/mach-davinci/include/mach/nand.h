@@ -81,6 +81,7 @@ struct davinci_nand_pdata {		/* platform_data */
 
 struct davinci_flash_platform_data {
 	unsigned int	options;
+	unsigned int	timings;
 	unsigned int	chip_num;	/* 0-3 : cs2-cs5 */
 	char		*name;
 	struct mtd_partition *parts;
