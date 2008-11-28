@@ -421,22 +421,13 @@ static int request_dma_interrupt(int lch,
 	}
 	if (lch >= DAVINCI_EDMA_NUM_DMACH && lch <
 	    (DAVINCI_EDMA_NUM_DMACH + DAVINCI_EDMA_NUM_QDMACH)) {
-		if (free_intr_no < 32) {
-			ptr_edmacc_regs->dra[0].drae =
-			    ptr_edmacc_regs->dra[0].drae | (1 << free_intr_no);
-		} else {
-			ptr_edmacc_regs->dra[0].draeh =
-			    ptr_edmacc_regs->dra[0].
-			    draeh | (1 << (free_intr_no - 32));
-		}
+		ptr_edmacc_regs->dra[0].drae[free_intr_no >> 5] |= (1 << (free_intr_no & 0x1f));
 	}
 	if (free_intr_no >= 0 && free_intr_no < 64) {
-		(free_intr_no < 32) ?
-		    (ptr_edmacc_regs->shadow[0].iesr |= (1UL << free_intr_no))
-		    : (ptr_edmacc_regs->shadow[0].iesrh |=
-		       (1UL << (free_intr_no - 32)));
 		intr_data[free_intr_no].callback = callback;
 		intr_data[free_intr_no].data = data;
+		ptr_edmacc_regs->shadow[0].iesr[free_intr_no >> 5] =
+			(1 << (free_intr_no & 0x1f));
 	}
 	return free_intr_no;
 }
@@ -454,14 +445,11 @@ static int request_dma_interrupt(int lch,
 static void free_dma_interrupt(int intr_no)
 {
 	if (intr_no >= 0 && intr_no < 64) {
-		(intr_no < 32) ? (ptr_edmacc_regs->shadow[0].icr |=
-				  (1UL << (intr_no))) : (ptr_edmacc_regs->
-							 shadow[0].icrh |=
-							 (1UL <<
-							  (intr_no - 32)));
+		ptr_edmacc_regs->shadow[0].icr[intr_no >> 5] =
+			(1 << (intr_no & 0x1f));
 		LOCK;
 		/* Global structure and could be modified by several task */
-		dma_intr_use_status[intr_no / 32] |= (1 << (intr_no % 32));
+		dma_intr_use_status[intr_no >> 5] |= (1 << (intr_no & 0x1f));
 		UNLOCK;
 		intr_data[intr_no].callback = NULL;
 		intr_data[intr_no].data = NULL;
@@ -499,50 +487,29 @@ static void dma_irq_handler(void)
 	int i;
 	unsigned int cnt;
 	cnt = 0;
-	if ((ptr_edmacc_regs->shadow[0].ipr == 0)
-	    && (ptr_edmacc_regs->shadow[0].iprh == 0))
+	if ((ptr_edmacc_regs->shadow[0].ipr[0] == 0)
+	    && (ptr_edmacc_regs->shadow[0].ipr[1] == 0))
 		return;
 	while (1) {
-		if (ptr_edmacc_regs->shadow[0].ipr) {
-			dev_dbg(&edma_dev.dev, "IPR =%d\r\n",
-				ptr_edmacc_regs->shadow[0].ipr);
-			for (i = 0; i < 32; i++) {
-				if (ptr_edmacc_regs->shadow[0].ipr & (1 << i)) {
-					/* Clear the corresponding IPR bits */
-					ptr_edmacc_regs->shadow[0].icr |=
-					    (1 << i);
-					if (intr_data[i].callback) {
-						intr_data[i].callback(i,
-								      DMA_COMPLETE,
-								      intr_data
-								      [i].data);
-
-					}
-				}
-			}
-		} else if (ptr_edmacc_regs->shadow[0].iprh) {
-			dev_dbg(&edma_dev.dev, "IPRH =%d\r\n",
-				ptr_edmacc_regs->shadow[0].iprh);
-			for (i = 0; i < 32; i++) {
-				if (ptr_edmacc_regs->shadow[0].iprh & (1 << i)) {
-					/* Clear the corresponding IPR bits */
-					ptr_edmacc_regs->shadow[0].icrh |=
-					    (1 << i);
-					if (intr_data[32 + i].callback) {
-						intr_data[32 + i].callback(32 +
-									   i,
-									   DMA_COMPLETE,
-									   intr_data
-									   [32 +
-									    i].
-									   data);
-					}
-				}
-			}
-		}
-		if ((ptr_edmacc_regs->shadow[0].ipr == 0)
-		    && (ptr_edmacc_regs->shadow[0].iprh == 0)) {
+		int j;
+		if (ptr_edmacc_regs->shadow[0].ipr[0])
+			j = 0;
+		else if (ptr_edmacc_regs->shadow[0].ipr[1])
+			j = 1;
+		else
 			break;
+		dev_dbg(&edma_dev.dev, "IPR%d =%x\r\n", j,
+				ptr_edmacc_regs->shadow[0].ipr[j]);
+		for (i = 0; i < 32; i++) {
+			int k = (j << 5) + i;
+			if (ptr_edmacc_regs->shadow[0].ipr[j] & (1 << i)) {
+				/* Clear the corresponding IPR bits */
+				ptr_edmacc_regs->shadow[0].icr[j] = (1 << i);
+				if (intr_data[k].callback) {
+					intr_data[k].callback(k, DMA_COMPLETE,
+						intr_data[k].data);
+				}
+			}
 		}
 		cnt++;
 		if (cnt > 10) {
@@ -562,68 +529,57 @@ static void dma_ccerr_handler(void)
 	int i;
 	unsigned int cnt;
 	cnt = 0;
-	if ((ptr_edmacc_regs->emr == 0) && (ptr_edmacc_regs->emr == 0) &&
+	if ((ptr_edmacc_regs->emr[0] == 0) && (ptr_edmacc_regs->emr[1] == 0) &&
 	    (ptr_edmacc_regs->qemr == 0) && (ptr_edmacc_regs->ccerr == 0))
 		return;
 	while (1) {
-		if (ptr_edmacc_regs->emr) {
-			dev_dbg(&edma_dev.dev, "EMR =%d\r\n", ptr_edmacc_regs->emr);
+		int j = -1;
+		if (ptr_edmacc_regs->emr[0])
+			j = 0;
+		else if (ptr_edmacc_regs->emr[1])
+			j = 1;
+		if (j>=0) {
+			dev_dbg(&edma_dev.dev, "EMR%d =%d\r\n", j, ptr_edmacc_regs->emr[j]);
 			for (i = 0; i < 32; i++) {
-				if (ptr_edmacc_regs->emr & (1 << i)) {
+				int k = (j << 5) + i;
+				if (ptr_edmacc_regs->emr[j] & (1 << i)) {
 					/* Clear the corresponding EMR bits */
-					ptr_edmacc_regs->emcr |= (1 << i);
+					ptr_edmacc_regs->emcr[j] = (1 << i);
 					/* Clear any SER */
-					ptr_edmacc_regs->shadow[0].secr |=
-					    (1 << i);
-					if (intr_data[i].callback) {
-						intr_data[i].callback(i,
+					ptr_edmacc_regs->shadow[0].secr[j] = (1 << i);
+					if (intr_data[k].callback) {
+						intr_data[k].callback(k,
 								      DMA_CC_ERROR,
 								      intr_data
-								      [i].data);
+								      [k].data);
 					}
 				}
 			}
-		} else if (ptr_edmacc_regs->emrh) {
-			dev_dbg(&edma_dev.dev, "EMRH =%d\r\n",
-				ptr_edmacc_regs->emrh);
-			for (i = 0; i < 32; i++) {
-				if (ptr_edmacc_regs->emrh & (1 << i)) {
-					/* Clear the corresponding IPR bits */
-					ptr_edmacc_regs->emcrh |= (1 << i);
-					/* Clear any SER */
-					ptr_edmacc_regs->shadow[0].secrh |=
-					    (1 << i);
-					if (intr_data[i].callback) {
-						intr_data[i].callback(i,
-								      DMA_CC_ERROR,
-								      intr_data
-								      [i].data);
-					}
-				}
-			}
-		} else if (ptr_edmacc_regs->qemr) {
+		}
+		if (ptr_edmacc_regs->qemr) {
 			dev_dbg(&edma_dev.dev, "QEMR =%d\r\n",
 				ptr_edmacc_regs->qemr);
 			for (i = 0; i < 8; i++) {
 				if (ptr_edmacc_regs->qemr & (1 << i)) {
 					/* Clear the corresponding IPR bits */
-					ptr_edmacc_regs->qemcr |= (1 << i);
-					ptr_edmacc_regs->shadow[0].qsecr |=
+					ptr_edmacc_regs->qemcr = (1 << i);
+					ptr_edmacc_regs->shadow[0].qsecr =
 					    (1 << i);
 				}
 			}
-		} else if (ptr_edmacc_regs->ccerr) {
+		}
+		if (ptr_edmacc_regs->ccerr) {
 			dev_dbg(&edma_dev.dev, "CCERR =%d\r\n",
 				ptr_edmacc_regs->ccerr);
 			for (i = 0; i < 8; i++) {
 				if (ptr_edmacc_regs->ccerr & (1 << i)) {
 					/* Clear the corresponding IPR bits */
-					ptr_edmacc_regs->ccerrclr |= (1 << i);
+					ptr_edmacc_regs->ccerrclr = (1 << i);
 				}
 			}
 		}
-		if ((ptr_edmacc_regs->emr == 0)
-		    && (ptr_edmacc_regs->emrh == 0)
+		if ((ptr_edmacc_regs->emr[0] == 0)
+		    && (ptr_edmacc_regs->emr[1] == 0)
 		    && (ptr_edmacc_regs->qemr == 0)
 		    && (ptr_edmacc_regs->ccerr == 0)) {
 			break;
@@ -695,8 +651,8 @@ int __init arch_dma_init(void)
 		i++;
 	}
 	for (i = 0; i < DAVINCI_EDMA_NUM_REGIONS; i++) {
-		ptr_edmacc_regs->dra[i].drae = 0x0;
-		ptr_edmacc_regs->dra[i].draeh = 0x0;
+		ptr_edmacc_regs->dra[i].drae[0] = 0x0;
+		ptr_edmacc_regs->dra[i].drae[1] = 0x0;
 		ptr_edmacc_regs->qrae[i] = 0x0;
 	}
 	LOCK_INIT;
@@ -763,25 +719,16 @@ int davinci_request_dma(int dev_id, const char *name,
 		}
 	}
 
-	if ((dev_id != DAVINCI_DMA_CHANNEL_ANY)
-	    && (dev_id != DAVINCI_EDMA_PARAM_ANY)) {
-		if (dev_id >= DAVINCI_EDMA_NUM_DMACH
-		    &&
-		    dev_id < (DAVINCI_EDMA_NUM_DMACH + DAVINCI_EDMA_NUM_QDMACH)
-		    ) {
-			ptr_edmacc_regs->qrae[0] =
-			    ptr_edmacc_regs->qrae[0] |
+	if ((dev_id != DAVINCI_DMA_CHANNEL_ANY) &&
+	    (dev_id != DAVINCI_EDMA_PARAM_ANY)) {
+		if ((dev_id >= DAVINCI_EDMA_NUM_DMACH) &&
+		    (dev_id < (DAVINCI_EDMA_NUM_DMACH
+				    + DAVINCI_EDMA_NUM_QDMACH))) {
+			ptr_edmacc_regs->qrae[0] |=
 			    (1 << (dev_id - DAVINCI_EDMA_NUM_DMACH));
 		} else {
-			if (dev_id < 32) {
-				ptr_edmacc_regs->dra[0].drae =
-				    ptr_edmacc_regs->dra[0].drae |
-				    (1 << dev_id);
-			} else {
-				ptr_edmacc_regs->dra[0].draeh =
-				    ptr_edmacc_regs->dra[0].draeh |
-				    (1 << (dev_id - 32));
-			}
+			ptr_edmacc_regs->dra[0].drae[dev_id >> 5] |=
+				(1 << (dev_id & 0x1f));
 		}
 	}
 
@@ -872,51 +819,29 @@ int davinci_request_dma(int dev_id, const char *name,
 		ret_val = 0;
 		while (dma_chan_no_event[i] != -1) {
 			if (!dma_chan[dma_chan_no_event[i]].in_use) {
+				int k;
 				*lch = dma_chan_no_event[i];
-				dma_chan[*lch].param_no =
+				k = dma_chan[*lch].param_no =
 				    request_param(*lch, dev_id);
-				if (dma_chan[*lch].param_no == -1) {
+				if (k == -1) {
 					return -EINVAL;
 				}
-				dev_dbg(&edma_dev.dev, "param_no=%d\r\n",
-					dma_chan[*lch].param_no);
-				if (dma_chan[*lch].param_no >=
-				    DAVINCI_EDMA_NUM_DMACH
-				    &&
-				    dma_chan[*lch].param_no <
-				    (DAVINCI_EDMA_NUM_DMACH +
-				     DAVINCI_EDMA_NUM_QDMACH)
-				    ) {
-
-					ptr_edmacc_regs->qrae[0] =
-					    ptr_edmacc_regs->qrae[0] |
-					    (1 << (dma_chan[*lch].param_no -
-						   DAVINCI_EDMA_NUM_DMACH));
+				dev_dbg(&edma_dev.dev, "param_no=%d\r\n", k);
+				if ((k >= DAVINCI_EDMA_NUM_DMACH) &&
+				    (k < (DAVINCI_EDMA_NUM_DMACH +
+						    DAVINCI_EDMA_NUM_QDMACH))) {
+					ptr_edmacc_regs->qrae[0] |=
+					    (1 << (k - DAVINCI_EDMA_NUM_DMACH));
 
 				} else {
-					if (dma_chan[*lch].param_no < 32) {
-						ptr_edmacc_regs->dra[0].drae =
-						    ptr_edmacc_regs->dra[0].drae
-						    |
-						    (1 << dma_chan[*lch].
-						     param_no);
-					} else {
-						ptr_edmacc_regs->dra[0].draeh =
-						    ptr_edmacc_regs->dra[0].
-						    draeh | (1 <<
-							     (dma_chan[*lch].
-							      param_no - 32));
-					}
+					ptr_edmacc_regs->dra[0].drae[k >> 5] |=
+						    (1 << (k & 0x1f));
 				}
 				if (callback) {
-					dma_chan[*lch].tcc =
-					    request_dma_interrupt(*lch,
-								  callback,
-								  data,
-								  dma_chan
-								  [*lch].
-								  param_no,
-								  *tcc);
+					dma_chan[*lch].tcc = 
+						request_dma_interrupt(*lch,
+								callback,
+								data, k, *tcc);
 					if (dma_chan[*lch].tcc == -1) {
 						return -EINVAL;
 					} else {
@@ -1005,6 +930,7 @@ int davinci_request_dma(int dev_id, const char *name,
 						    param_no].
 			    link_bcntrld |= 0xffff;
 		} else {
+			int k;
 			/* Slave Channel */
 			LOCK;
 			/* Global structure to identify whether resoures is
@@ -1012,26 +938,18 @@ int davinci_request_dma(int dev_id, const char *name,
 			dma_chan[*lch].in_use = 1;
 			UNLOCK;
 			dma_chan[*lch].dev_id = *lch;
+			k = dma_chan[*lch].param_no;
 			if (dma_chan[*lch].tcc != -1) {
-				ptr_edmacc_regs->paramentry[dma_chan[*lch].
-							    param_no].opt &=
-				    (~TCC);
-				ptr_edmacc_regs->paramentry[dma_chan[*lch].
-							    param_no].opt |=
+				ptr_edmacc_regs->paramentry[k].opt &= (~TCC);
+				ptr_edmacc_regs->paramentry[k].opt |=
 				    ((0x3f & dma_chan[*lch].tcc) << 12);
 				/* set TCINTEN bit in PARAM entry */
-				ptr_edmacc_regs->paramentry[dma_chan[*lch].
-							    param_no].opt |=
-				    TCINTEN;
+				ptr_edmacc_regs->paramentry[k].opt |= TCINTEN;
 			} else {
-				ptr_edmacc_regs->paramentry[dma_chan[*lch].
-							    param_no].opt &=
-				    ~TCINTEN;
+				ptr_edmacc_regs->paramentry[k].opt &= ~TCINTEN;
 			}
 			/* assign the link field to no link. i.e 0xffff */
-			ptr_edmacc_regs->paramentry[dma_chan[*lch].
-						    param_no].
-			    link_bcntrld |= 0xffff;
+			ptr_edmacc_regs->paramentry[k].link_bcntrld |= 0xffff;
 		}
 	}
 	return ret_val;
@@ -1283,9 +1201,34 @@ void davinci_get_dma_params(int lch, edmacc_paramentry_regs * temp)
 	}
 }
 
+/*
+ * DMA pause - pauses the dma on the channel passed
+ */
+void davinci_pause_dma(int lch)
+{
+	if (lch < 0)
+		return;
+	if (lch < DAVINCI_EDMA_NUM_DMACH) {
+		unsigned int mask = (1 << (lch & 0x1f));
+		ptr_edmacc_regs->shadow[0].eecr[lch >> 5] = mask;
+	}
+}
+/*
+ * DMA resume - resumes the dma on the channel passed
+ */
+void davinci_resume_dma(int lch)
+{
+	if (lch < 0)
+		return;
+	if (lch < DAVINCI_EDMA_NUM_DMACH) {
+		unsigned int mask = (1 << (lch & 0x1f));
+		ptr_edmacc_regs->shadow[0].eesr[lch >> 5] = mask;
+		ptr_edmacc_regs->shadow[0].esr[lch >> 5] = mask;
+	}
+}
 /******************************************************************************
  *
- * DMA Strat - Starts the dma on the channel passed
+ * DMA Start - Starts the dma on the channel passed
  * ARGUMENTS:
  *      lch - logical channel number
  *
@@ -1298,53 +1241,35 @@ int davinci_start_dma(int lch)
 	if (lch < DAVINCI_EDMA_NUM_DMACH) {
 		int i = 0;
 		unsigned int mask = (1 << (lch & 0x1f));
+		int j = lch >> 5;
 		/* If the dma start request is for the unused events */
 		while (dma_chan_no_event[i] != -1) {
 			if (dma_chan_no_event[i] == lch) {
 				/* EDMA channels without event association */
-				dev_dbg(&edma_dev.dev, "ESR=%x\r\n",
-					ptr_edmacc_regs->shadow[0].esr);
-				if (lch < 32) {
-					ptr_edmacc_regs->shadow[0].ecr = mask;
-					ptr_edmacc_regs->shadow[0].secr = mask;
-					ptr_edmacc_regs->emcr = mask;
-					ptr_edmacc_regs->shadow[0].esr = mask;
-				} else {
-					ptr_edmacc_regs->shadow[0].ecr = mask;
-					ptr_edmacc_regs->shadow[0].secrh = mask;
-					ptr_edmacc_regs->emcrh = mask;
-					ptr_edmacc_regs->shadow[0].esrh = mask;
-				}
+				dev_dbg(&edma_dev.dev, "ESR%d=%x\r\n", j,
+					ptr_edmacc_regs->shadow[0].esr[j]);
+				ptr_edmacc_regs->shadow[0].ecr[j] = mask;
+				ptr_edmacc_regs->shadow[0].secr[j] = mask;
+				ptr_edmacc_regs->emcr[j] = mask;
+				ptr_edmacc_regs->shadow[0].esr[j] = mask;
 				return ret_val;
 			}
 			i++;
 		}
 		/* EDMA channel with event association */
-		if (lch < 32) {
-			dev_dbg(&edma_dev.dev, "ER=%d\r\n",
-				ptr_edmacc_regs->shadow[0].er);
-			/* Clear any pending error */
-			ptr_edmacc_regs->emcr = mask;
-			/* Clear any SER */
-			ptr_edmacc_regs->shadow[0].secr = mask;
-			ptr_edmacc_regs->shadow[0].eesr = mask;
-			dev_dbg(&edma_dev.dev, "EER=%d\r\n",
-				ptr_edmacc_regs->shadow[0].eer);
-		} else {
-			dev_dbg(&edma_dev.dev, "ERH=%d\r\n",
-				ptr_edmacc_regs->shadow[0].erh);
-			/* Clear any pending error */
-			ptr_edmacc_regs->emcrh = mask;
-			/* Clear any SER */
-			ptr_edmacc_regs->shadow[0].secrh = mask;
-			ptr_edmacc_regs->shadow[0].eesrh = mask;
-			dev_dbg(&edma_dev.dev, "EERH=%d\r\n",
-				ptr_edmacc_regs->shadow[0].eerh);
-		}
+		dev_dbg(&edma_dev.dev, "ER%d=%d\r\n", j,
+			ptr_edmacc_regs->shadow[0].er[j]);
+		/* Clear any pending error */
+		ptr_edmacc_regs->emcr[j] = mask;
+		/* Clear any SER */
+		ptr_edmacc_regs->shadow[0].secr[j] = mask;
+		ptr_edmacc_regs->shadow[0].eesr[j] = mask;
+		dev_dbg(&edma_dev.dev, "EER%d=%d\r\n", j,
+			ptr_edmacc_regs->shadow[0].eer[j]);
 	} else if ((lch >= DAVINCI_EDMA_NUM_DMACH)
 		   && (lch <
 		       (DAVINCI_EDMA_NUM_DMACH + DAVINCI_EDMA_NUM_QDMACH))) {
-		ptr_edmacc_regs->shadow[0].qeesr |=
+		ptr_edmacc_regs->shadow[0].qeesr =
 		    (1 << (lch - DAVINCI_EDMA_NUM_DMACH));
 		ret_val = 0;
 	} else {		/* for slaveChannels */
@@ -1367,6 +1292,7 @@ void davinci_stop_dma(int lch)
 	if (lch < DAVINCI_EDMA_NUM_DMACH) {
 		int i = 0;
 		unsigned int mask = (1 << (lch & 0x1f));
+		int j = lch >> 5;
 		/* If the dma stop request is for the unused events */
 		if (0) while (dma_chan_no_event[i] != -1) {
 			if (dma_chan_no_event[i] == lch) {
@@ -1374,51 +1300,29 @@ void davinci_stop_dma(int lch)
 				/* if the requested channel is one of the
 				   unused channels then reset the coresponding
 				   bit of ESR-Event Set Register */
-				if (lch < 32)
-					ptr_edmacc_regs->shadow[0].ecr = mask;
-				else
-					ptr_edmacc_regs->shadow[0].ecrh = mask;
+				ptr_edmacc_regs->shadow[0].ecr[j] = mask;
 				return;
 			}
 			i++;
 		}
 		/* EDMA channel with event association */
-		if (lch < 32) {
-			ptr_edmacc_regs->shadow[0].eecr = mask;
-			if (ptr_edmacc_regs->shadow[0].er & mask) {
-				dev_dbg(&edma_dev.dev, "ER=%x\n",
-					ptr_edmacc_regs->shadow[0].er);
-				ptr_edmacc_regs->shadow[0].ecr = mask;
-			}
-			if (ptr_edmacc_regs->shadow[0].ser & mask) {
-				dev_dbg(&edma_dev.dev, "SER=%x\n",
-					ptr_edmacc_regs->shadow[0].ser);
-				ptr_edmacc_regs->shadow[0].secr = mask;
-			}
-			if (ptr_edmacc_regs->emr & mask) {
-				dev_dbg(&edma_dev.dev, "EMR=%x\n",
-					ptr_edmacc_regs->emr);
-				ptr_edmacc_regs->emcr = mask;
-			}
-		} else {
-			ptr_edmacc_regs->shadow[0].eecrh = mask;
-			if (ptr_edmacc_regs->shadow[0].erh & mask) {
-				dev_dbg(&edma_dev.dev, "ERH=%x\n",
-					ptr_edmacc_regs->shadow[0].erh);
-				ptr_edmacc_regs->shadow[0].ecrh = mask;
-			}
-			if (ptr_edmacc_regs->shadow[0].serh & mask) {
-				dev_dbg(&edma_dev.dev, "SERH=%x\n",
-					ptr_edmacc_regs->shadow[0].serh);
-				ptr_edmacc_regs->shadow[0].secrh = mask;
-			}
-			if (ptr_edmacc_regs->emrh & mask) {
-				dev_dbg(&edma_dev.dev, "EMRH=%x\n",
-					ptr_edmacc_regs->emrh);
-				ptr_edmacc_regs->emcrh = mask;
-			}
+		ptr_edmacc_regs->shadow[0].eecr[j] = mask;
+		if (ptr_edmacc_regs->shadow[0].er[j] & mask) {
+			dev_dbg(&edma_dev.dev, "ER%d=%x\n", j,
+				ptr_edmacc_regs->shadow[0].er[j]);
+			ptr_edmacc_regs->shadow[0].ecr[j] = mask;
 		}
-		dev_dbg(&edma_dev.dev, "EER=%d\r\n", ptr_edmacc_regs->shadow[0].eer);
+		if (ptr_edmacc_regs->shadow[0].ser[j] & mask) {
+			dev_dbg(&edma_dev.dev, "SER%d=%x\n", j,
+				ptr_edmacc_regs->shadow[0].ser[j]);
+			ptr_edmacc_regs->shadow[0].secr[j] = mask;
+		}
+		if (ptr_edmacc_regs->emr[j] & mask) {
+			dev_dbg(&edma_dev.dev, "EMR%d=%x\n", j,
+				ptr_edmacc_regs->emr[j]);
+			ptr_edmacc_regs->emcr[j] = mask;
+		}
+		dev_dbg(&edma_dev.dev, "EER%d=%d\r\n", ptr_edmacc_regs->shadow[0].eer[j]);
 		/*
 		 * if the requested channel is one of the event channels
 		 * then just set the link field of the corresponding
@@ -1598,24 +1502,17 @@ void davinci_dma_unchain_lch(int lch_head, int lch_queue)
 void davinci_clean_channel(int ch_no)
 {
 	unsigned int mask = (1 << (ch_no & 0x1f));
-	if (ch_no < 32) {
-		dev_dbg(&edma_dev.dev, "EMR =%d\r\n", ptr_edmacc_regs->emr);
-		ptr_edmacc_regs->shadow[0].ecr = mask;
-		/* Clear the corresponding EMR bits */
-		ptr_edmacc_regs->emcr = mask;
-		/* Clear any SER */
-		ptr_edmacc_regs->shadow[0].secr = mask;
-	} else if (ch_no < 64) {
-		dev_dbg(&edma_dev.dev, "EMRH =%d\r\n", ptr_edmacc_regs->emrh);
-		ptr_edmacc_regs->shadow[0].ecrh = mask;
-		/* Clear the corresponding IPR bits */
-		ptr_edmacc_regs->emcrh = mask;
-		/* Clear any SER */
-		ptr_edmacc_regs->shadow[0].secrh = mask;
-	} else {
+	int j;
+	if (((unsigned)ch_no) >= 64)
 		return;
-	}
-	ptr_edmacc_regs->ccerrclr |= ((1 << 16) | 0x3);
+	j = ch_no >> 5;
+	dev_dbg(&edma_dev.dev, "EMR%d =%d\r\n", j, ptr_edmacc_regs->emr[j]);
+	ptr_edmacc_regs->shadow[0].ecr[j] = mask;
+	/* Clear the corresponding EMR bits */
+	ptr_edmacc_regs->emcr[j] = mask;
+	/* Clear any SER */
+	ptr_edmacc_regs->shadow[0].secr[j] = mask;
+	ptr_edmacc_regs->ccerrclr = ((1 << 16) | 0x3);
 }
 
 /******************************************************************************
