@@ -359,19 +359,14 @@ static int davinci_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
-		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-			/* copy 1st iram buffer */
-			davinci_start_dma(prtd->ram_master_lch);
-		}
 	case SNDRV_PCM_TRIGGER_RESUME:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
-		davinci_start_dma(prtd->asp_master_lch);
+		davinci_resume_dma(prtd->asp_master_lch);
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
-		davinci_stop_dma(prtd->ram_master_lch);
 	case SNDRV_PCM_TRIGGER_SUSPEND:
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
-		davinci_stop_dma(prtd->asp_master_lch);
+		davinci_pause_dma(prtd->asp_master_lch);
 		break;
 	default:
 		ret = -EINVAL;
@@ -405,13 +400,11 @@ static int davinci_pcm_prepare(struct snd_pcm_substream *substream)
 		print_buf_info(prtd->asp_link_lch[1], "asp_link_lch[1]");
 	}
 #endif
-#ifndef BROKEN_MASTER
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		/* copy 1st iram buffer */
 		davinci_start_dma(prtd->ram_master_lch);
 	}
 	davinci_start_dma(prtd->asp_master_lch);
-#endif
 	return 0;
 }
 
