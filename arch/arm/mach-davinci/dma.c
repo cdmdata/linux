@@ -1321,7 +1321,7 @@ void davinci_stop_dma(int lch)
 				ptr_edmacc_regs->emr[j]);
 			ptr_edmacc_regs->emcr[j] = mask;
 		}
-		dev_dbg(&edma_dev.dev, "EER%d=%d\r\n", ptr_edmacc_regs->shadow[0].eer[j]);
+		dev_dbg(&edma_dev.dev, "EER%d=%d\r\n", j, ptr_edmacc_regs->shadow[0].eer[j]);
 		/*
 		 * if the requested channel is one of the event channels
 		 * then just set the link field of the corresponding
