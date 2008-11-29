@@ -35,6 +35,7 @@
 #define DAVINCI_MCBSP_SPCR_RRST		(1 << 0)
 #define DAVINCI_MCBSP_SPCR_RINTM(v)	((v) << 4)
 #define DAVINCI_MCBSP_SPCR_XRST		(1 << 16)
+#define DAVINCI_MCBSP_SPCR_XSYNCERR	(1 << 19)
 #define DAVINCI_MCBSP_SPCR_XINTM(v)	((v) << 20)
 #define DAVINCI_MCBSP_SPCR_GRST		(1 << 22)
 #define DAVINCI_MCBSP_SPCR_FRST		(1 << 23)
@@ -93,6 +94,7 @@ struct davinci_mcbsp_dev {
 #define MOD_DSP_A	0
 #define MOD_DSP_B	1
 	int				mode;
+	u32				pcr;
 	struct clk			*clk;
 	struct davinci_pcm_dma_params	*dma_params[2];
 	struct snd_soc_dai *codec_dai;
@@ -114,16 +116,22 @@ static void davinci_mcbsp_start(struct davinci_mcbsp_dev *dev, struct snd_pcm_su
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
 	struct snd_soc_platform *platform = socdev->platform;
-	u32 w, pcr;
+	u32 w;
 	u32 mask = (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) ?
 			DAVINCI_MCBSP_SPCR_XRST : DAVINCI_MCBSP_SPCR_RRST;
+	u32 m = (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) ?
+			DAVINCI_MCBSP_PCR_CLKXP : DAVINCI_MCBSP_PCR_CLKRP;
 	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
 	if (w & mask) {
 		/* start off disabled */
 		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w & ~mask);
+		/* The clock needs to toggle to complete reset.
+		 * So, fake it by toggling the clk polarity.
+		 */
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, dev->pcr ^ m);
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, dev->pcr);
 	}
-	pcr = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_PCR_REG);
-	if (pcr & (DAVINCI_MCBSP_PCR_FSXM | DAVINCI_MCBSP_PCR_FSRM |
+	if (dev->pcr & (DAVINCI_MCBSP_PCR_FSXM | DAVINCI_MCBSP_PCR_FSRM |
 			DAVINCI_MCBSP_PCR_CLKXM | DAVINCI_MCBSP_PCR_CLKRM)) {
 		/* Start the sample generator */
 		w |= DAVINCI_MCBSP_SPCR_GRST;
@@ -152,6 +160,11 @@ static void davinci_mcbsp_start(struct davinci_mcbsp_dev *dev, struct snd_pcm_su
 		w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
 		w &= ~DAVINCI_MCBSP_SPCR_XRST;
 		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
+		/* The clock needs to toggle to complete reset.
+		 * So, fake it by toggling the clk polarity.
+		 */
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, dev->pcr ^ m);
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, dev->pcr);
 
 		/* Restart the DMA */
 		if (platform->pcm_ops->trigger) {
@@ -166,7 +179,7 @@ static void davinci_mcbsp_start(struct davinci_mcbsp_dev *dev, struct snd_pcm_su
 	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
 	w |= mask;
 
-	if (pcr & (DAVINCI_MCBSP_PCR_FSXM | DAVINCI_MCBSP_PCR_FSRM)) {
+	if (dev->pcr & (DAVINCI_MCBSP_PCR_FSXM | DAVINCI_MCBSP_PCR_FSRM)) {
 		/* Start frame sync */
 		w |= DAVINCI_MCBSP_SPCR_FRST;
 	}
@@ -176,12 +189,18 @@ static void davinci_mcbsp_start(struct davinci_mcbsp_dev *dev, struct snd_pcm_su
 static void davinci_mcbsp_stop(struct davinci_mcbsp_dev *dev, int playback)
 {
 	u32 w;
+	u32 m = playback ? DAVINCI_MCBSP_PCR_CLKXP : DAVINCI_MCBSP_PCR_CLKRP;
 
 	/* Reset transmitter/receiver and sample rate/frame sync generators */
 	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
 	w &= ~(DAVINCI_MCBSP_SPCR_GRST | DAVINCI_MCBSP_SPCR_FRST);
 	w &= (playback) ? ~DAVINCI_MCBSP_SPCR_XRST : ~DAVINCI_MCBSP_SPCR_RRST;
 	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
+	/* The clock needs to toggle to complete reset.
+	 * So, fake it by toggling the clk polarity.
+	 */
+	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, dev->pcr ^ m);
+	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, dev->pcr);
 }
 
 static int davinci_i2s_startup(struct snd_pcm_substream *substream)
@@ -290,6 +309,7 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 		return -EINVAL;
 	}
 	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SRGR_REG, srgr);
+	dev->pcr = pcr;
 	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, pcr);
 	return 0;
 }
@@ -426,9 +446,8 @@ static int davinci_i2s_prepare(struct snd_pcm_substream *substream)
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct davinci_mcbsp_dev *dev = rtd->dai->cpu_dai->private_data;
 	int playback = (substream->stream == SNDRV_PCM_STREAM_PLAYBACK);
-	u32 pcr = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_PCR_REG);
 	davinci_mcbsp_stop(dev, playback);
-	if ((pcr & DAVINCI_MCBSP_PCR_FSXM)==0) {
+	if ((dev->pcr & DAVINCI_MCBSP_PCR_FSXM)==0) {
 		/* codec is master */
 		davinci_mcbsp_start(dev, substream);
 	}
@@ -440,8 +459,7 @@ static int davinci_i2s_trigger(struct snd_pcm_substream *substream, int cmd)
 	struct davinci_mcbsp_dev *dev = rtd->dai->cpu_dai->private_data;
 	int ret = 0;
 	int playback = (substream->stream == SNDRV_PCM_STREAM_PLAYBACK);
-	u32 pcr = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_PCR_REG);
-	if ((pcr & DAVINCI_MCBSP_PCR_FSXM)==0)
+	if ((dev->pcr & DAVINCI_MCBSP_PCR_FSXM)==0)
 		return 0;	/* return if codec is master */
 
 	switch (cmd) {
