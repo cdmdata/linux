@@ -1223,7 +1223,6 @@ void davinci_resume_dma(int lch)
 	if (lch < DAVINCI_EDMA_NUM_DMACH) {
 		unsigned int mask = (1 << (lch & 0x1f));
 		ptr_edmacc_regs->shadow[0].eesr[lch >> 5] = mask;
-		ptr_edmacc_regs->shadow[0].esr[lch >> 5] = mask;
 	}
 }
 /******************************************************************************
