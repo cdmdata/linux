@@ -205,6 +205,10 @@ typedef struct {
 
 #define DAVINCI_EDMA_NUM_DMACH           64
 #define DAVINCI_EDMA_NUM_QDMACH           8
+#define DAVINCI_EDMA_QSTART DAVINCI_EDMA_NUM_DMACH
+#define DAVINCI_EDMA_QEND (DAVINCI_EDMA_QSTART + DAVINCI_EDMA_NUM_QDMACH)
+#define DAVINCI_EDMA_IS_Q(ch_no) \
+	((ch_no >= DAVINCI_EDMA_QSTART) && (ch_no < DAVINCI_EDMA_QEND))
 #define DAVINCI_EDMA_NUM_PARAMENTRY     128
 #define DAVINCI_EDMA_NUM_EVQUE            2
 #define DAVINCI_EDMA_CHMAPEXIST           0
@@ -429,9 +433,6 @@ void davinci_set_dma_params(int lch, edmacc_paramentry_regs * temp);
  *****************************************************************************/
 void davinci_get_dma_params(int lch, edmacc_paramentry_regs * temp);
 
-void davinci_pause_dma(int lch);
-void davinci_resume_dma(int lch);
-
 /******************************************************************************
  * davinci_start_dma -  Starts the dma on the channel passed
  *
@@ -521,19 +522,6 @@ void davinci_dma_unchain_lch(int lch_head, int lch_queue);
  *
  *****************************************************************************/
 void davinci_free_dma(int lch);
-/**
- * davinci_dma_getposition - returns the current transfer points
- * @lch: logical channel number
- * @src: source port position
- * @dst: destination port position
- *
- * Returns current source and destination address of a paticular
- * DMA channel
- **/
-void davinci_dma_getposition(int lch, dma_addr_t *src, dma_addr_t *dst);
-void davinci_clean_channel(int ch_no);
-int davinci_alloc_iram(unsigned size);
-void davinci_free_iram(unsigned addr, unsigned size);
 
 /**
  * davinci_dma_getposition - returns the current transfer points
@@ -545,6 +533,9 @@ void davinci_free_iram(unsigned addr, unsigned size);
  * DMA channel
  **/
 void davinci_dma_getposition(int lch, dma_addr_t *src, dma_addr_t *dst);
+void davinci_clean_channel(int lch);
+void davinci_pause_dma(int lch);
+void davinci_resume_dma(int lch);
 
 int davinci_alloc_iram(unsigned size);
 void davinci_free_iram(unsigned addr, unsigned size);
