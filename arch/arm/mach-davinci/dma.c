@@ -37,6 +37,85 @@
 
 #include <mach/edma.h>
 
+/**************************************************************************\
+* Register Overlay Structure for SHADOW
+\**************************************************************************/
+typedef struct {
+	unsigned int er[2];
+	unsigned int ecr[2];
+	unsigned int esr[2];
+	unsigned int cer[2];
+	unsigned int eer[2];
+	unsigned int eecr[2];
+	unsigned int eesr[2];
+	unsigned int ser[2];
+	unsigned int secr[2];
+	unsigned char rsvd0[8];
+	unsigned int ier[2];
+	unsigned int iecr[2];
+	unsigned int iesr[2];
+	unsigned int ipr[2];
+	unsigned int icr[2];
+	unsigned int ieval;
+	unsigned char rsvd1[4];
+	unsigned int qer;
+	unsigned int qeer;
+	unsigned int qeecr;
+	unsigned int qeesr;
+	unsigned int qser;
+	unsigned int qsecr;
+	unsigned char rsvd2[360];
+} edmacc_shadow_regs;
+
+/**************************************************************************\
+* Register Overlay Structure
+\**************************************************************************/
+typedef struct {
+	unsigned int rev;
+	unsigned int cccfg;
+	unsigned char rsvd0[504];
+	unsigned int qchmap[8];
+	unsigned char rsvd1[32];
+	unsigned int dmaqnum[8];
+	unsigned int qdmaqnum;
+	unsigned char rsvd2[28];
+	unsigned int quetcmap;
+	unsigned int quepri;
+	unsigned char rsvd3[120];
+	unsigned int emr[2];
+	unsigned int emcr[2];
+	unsigned int qemr;
+	unsigned int qemcr;
+	unsigned int ccerr;
+	unsigned int ccerrclr;
+	unsigned int eeval;
+	unsigned char rsvd4[28];
+	unsigned int drae[4][2];
+	unsigned char rsvd5[32];
+	unsigned int qrae[4];
+	unsigned char rsvd6[112];
+	unsigned int queevtentry[2][16];
+	unsigned char rsvd7[384];
+	unsigned int qstat[2];
+	unsigned char rsvd8[24];
+	unsigned int qwmthra;
+	unsigned int qwmthrb;
+	unsigned char rsvd9[24];
+	unsigned int ccstat;
+	unsigned char rsvd10[188];
+	unsigned int aetctl;
+	unsigned int aetstat;
+	unsigned int aetcmd;
+	unsigned char rsvd11[2292];
+	edmacc_shadow_regs m;
+	unsigned char rsvd14[0xe00];
+	edmacc_shadow_regs shadow[4];
+	unsigned char rsvd15[0x1800];
+	edmacc_paramentry_regs paramentry[128];
+} edmacc_regs;
+
+volatile edmacc_regs *ptr_edmacc_regs = NULL;
+
 #define DAVINCI_DMA_3PCC_BASE 0x01C00000
 
 static spinlock_t dma_chan_lock;
@@ -150,7 +229,6 @@ static int queue_priority_mapping[DAVINCI_EDMA_NUM_EVQUE + 1][2] = {
 
 static int qdam_to_param_mapping[8] = { 0 };
 
-volatile edmacc_regs *ptr_edmacc_regs = NULL;
 
 /*****************************************************************************/
 
@@ -414,7 +492,7 @@ static int request_dma_interrupt(int lch,
 		dev_dbg(&edma_dev.dev, "While allocating EDMA channel for QDMA");
 	}
 	if (DAVINCI_EDMA_IS_Q(lch)) {
-		ptr_edmacc_regs->dra[0].drae[free_intr_no >> 5] |=
+		ptr_edmacc_regs->drae[0][free_intr_no >> 5] |=
 			(1 << (free_intr_no & 0x1f));
 	}
 	if (free_intr_no >= 0 && free_intr_no < 64) {
@@ -648,8 +726,8 @@ int __init arch_dma_init(void)
 		i++;
 	}
 	for (i = 0; i < DAVINCI_EDMA_NUM_REGIONS; i++) {
-		ptr_edmacc_regs->dra[i].drae[0] = 0x0;
-		ptr_edmacc_regs->dra[i].drae[1] = 0x0;
+		ptr_edmacc_regs->drae[i][0] = 0x0;
+		ptr_edmacc_regs->drae[i][1] = 0x0;
 		ptr_edmacc_regs->qrae[i] = 0x0;
 	}
 	LOCK_INIT;
@@ -719,7 +797,7 @@ int davinci_request_dma(int dev_id, const char *name,
 			ptr_edmacc_regs->qrae[0] |=
 			    (1 << (dev_id - DAVINCI_EDMA_QSTART));
 		} else {
-			ptr_edmacc_regs->dra[0].drae[dev_id >> 5] |=
+			ptr_edmacc_regs->drae[0][dev_id >> 5] |=
 				(1 << (dev_id & 0x1f));
 		}
 	}
@@ -815,7 +893,7 @@ int davinci_request_dma(int dev_id, const char *name,
 					ptr_edmacc_regs->qrae[0] |=
 					    (1 << (j - DAVINCI_EDMA_QSTART));
 				} else {
-					ptr_edmacc_regs->dra[0].drae[j >> 5] |=
+					ptr_edmacc_regs->drae[0][j >> 5] |=
 							(1 << (j & 0x1f));
 				}
 				if (callback) {
@@ -1206,7 +1284,6 @@ void davinci_stop_dma(int lch)
 	if ((lch >= 0) && (lch < DAVINCI_EDMA_NUM_DMACH)) {
 		int j = lch >> 5;
 		unsigned int mask = (1 << (lch & 0x1f));
-		int i = 0;
 		ptr_edmacc_regs->shadow[0].eecr[j] = mask;
 		if (ptr_edmacc_regs->shadow[0].er[j] & mask) {
 			dev_dbg(&edma_dev.dev, "ER%d=%x\n", j,
@@ -1233,9 +1310,9 @@ void davinci_stop_dma(int lch)
 		ptr_edmacc_regs->paramentry[lch].link_bcntrld |= 0xffff;
 	} else if (DAVINCI_EDMA_IS_Q(lch)) {
 		/* for QDMA channels */
-		ptr_edmacc_regs->qeecr = (1 << (lch - DAVINCI_EDMA_QSTART));
-		dev_dbg(&edma_dev.dev, "QER=%x\r\n", ptr_edmacc_regs->qer);
-		dev_dbg(&edma_dev.dev, "QEER=%x\r\n", ptr_edmacc_regs->qeer);
+		ptr_edmacc_regs->shadow[0].qeecr = (1 << (lch - DAVINCI_EDMA_QSTART));
+		dev_dbg(&edma_dev.dev, "QER=%x\r\n", ptr_edmacc_regs->shadow[0].qer);
+		dev_dbg(&edma_dev.dev, "QEER=%x\r\n", ptr_edmacc_regs->shadow[0].qeer);
 	} else if ((lch >= DAVINCI_EDMA_QEND) &&
 		   (lch < DAVINCI_EDMA_NUM_PARAMENTRY)) {
 		/* for slaveChannels */
