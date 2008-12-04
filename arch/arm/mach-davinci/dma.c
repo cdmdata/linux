@@ -36,86 +36,170 @@
 #include <mach/irqs.h>
 
 #include <mach/edma.h>
+/**************************************************************************\
+* Register Overlay Structure for PARAMENTRY
+\**************************************************************************/
+#define PARM_OPT		0x00
+#define PARM_SRC		0x04
+#define PARM_A_B_CNT		0x08
+#define PARM_DST		0x0c
+#define PARM_SRC_DST_BIDX	0x10
+#define PARM_LINK_BCNTRLD	0x14
+#define PARM_SRC_DST_CIDX	0x18
+#define PARM_CCNT		0x1c
+#define PARM_SIZE		0x20
 
 /**************************************************************************\
 * Register Overlay Structure for SHADOW
 \**************************************************************************/
-typedef struct {
-	unsigned int er[2];
-	unsigned int ecr[2];
-	unsigned int esr[2];
-	unsigned int cer[2];
-	unsigned int eer[2];
-	unsigned int eecr[2];
-	unsigned int eesr[2];
-	unsigned int ser[2];
-	unsigned int secr[2];
-	unsigned char rsvd0[8];
-	unsigned int ier[2];
-	unsigned int iecr[2];
-	unsigned int iesr[2];
-	unsigned int ipr[2];
-	unsigned int icr[2];
-	unsigned int ieval;
-	unsigned char rsvd1[4];
-	unsigned int qer;
-	unsigned int qeer;
-	unsigned int qeecr;
-	unsigned int qeesr;
-	unsigned int qser;
-	unsigned int qsecr;
-	unsigned char rsvd2[360];
-} edmacc_shadow_regs;
+#define SH_ER		0x00	/* 64 bits */
+#define SH_ECR		0x08	/* 64 bits */
+#define SH_ESR		0x10	/* 64 bits */
+#define SH_CER		0x18	/* 64 bits */
+#define SH_EER		0x20	/* 64 bits */
+#define SH_EECR		0x28	/* 64 bits */
+#define SH_EESR		0x30	/* 64 bits */
+#define SH_SER		0x38	/* 64 bits */
+#define SH_SECR		0x40	/* 64 bits */
+#define SH_IER		0x50	/* 64 bits */
+#define SH_IECR		0x58	/* 64 bits */
+#define SH_IESR		0x60	/* 64 bits */
+#define SH_IPR		0x68	/* 64 bits */
+#define SH_ICR		0x70	/* 64 bits */
+#define SH_IEVAL	0x78
+#define SH_QER		0x80
+#define SH_QEER		0x84
+#define SH_QEECR	0x88
+#define SH_QEESR	0x8c
+#define SH_QSER		0x90
+#define SH_QSECR	0x94
+#define SH_SIZE		0x200
 
 /**************************************************************************\
 * Register Overlay Structure
 \**************************************************************************/
-typedef struct {
-	unsigned int rev;
-	unsigned int cccfg;
-	unsigned char rsvd0[504];
-	unsigned int qchmap[8];
-	unsigned char rsvd1[32];
-	unsigned int dmaqnum[8];
-	unsigned int qdmaqnum;
-	unsigned char rsvd2[28];
-	unsigned int quetcmap;
-	unsigned int quepri;
-	unsigned char rsvd3[120];
-	unsigned int emr[2];
-	unsigned int emcr[2];
-	unsigned int qemr;
-	unsigned int qemcr;
-	unsigned int ccerr;
-	unsigned int ccerrclr;
-	unsigned int eeval;
-	unsigned char rsvd4[28];
-	unsigned int drae[4][2];
-	unsigned char rsvd5[32];
-	unsigned int qrae[4];
-	unsigned char rsvd6[112];
-	unsigned int queevtentry[2][16];
-	unsigned char rsvd7[384];
-	unsigned int qstat[2];
-	unsigned char rsvd8[24];
-	unsigned int qwmthra;
-	unsigned int qwmthrb;
-	unsigned char rsvd9[24];
-	unsigned int ccstat;
-	unsigned char rsvd10[188];
-	unsigned int aetctl;
-	unsigned int aetstat;
-	unsigned int aetcmd;
-	unsigned char rsvd11[2292];
-	edmacc_shadow_regs m;
-	unsigned char rsvd14[0xe00];
-	edmacc_shadow_regs shadow[4];
-	unsigned char rsvd15[0x1800];
-	edmacc_paramentry_regs paramentry[128];
-} edmacc_regs;
+#define EDMA_REV	0x0000
+#define EDMA_CCCFG	0x0004
+#define EDMA_QCHMAP	0x0200	/* 8 registers */
+#define EDMA_DMAQNUM	0x0240	/* 8 registers */
+#define EDMA_QDMAQNUM	0x0260
+#define EDMA_QUETCMAP	0x0280
+#define EDMA_QUEPRI	0x0284
+#define EDMA_EMR	0x0300	/* 64 bits */
+#define EDMA_EMCR	0x0308	/* 64 bits */
+#define EDMA_QEMR	0x0310
+#define EDMA_QEMCR	0x0314
+#define EDMA_CCERR	0x0318
+#define EDMA_CCERRCLR	0x031c
+#define EDMA_EEVAL	0x0320
+#define EDMA_DRAE	0x0340	/* 4 x 64 bits*/
+#define EDMA_QRAE	0x0380	/* 4 registers */
+#define EDMA_QUEEVTENTRY	0x0400	/* 2 x 16 registers */
+#define EDMA_QSTAT	0x0600	/* 2 registers */
+#define EDMA_QWMTHRA	0x0620
+#define EDMA_QWMTHRB	0x0624
+#define EDMA_CCSTAT	0x0640
+#define EDMA_AETCTL	0x0700
+#define EDMA_AETSTAT	0x0704
+#define EDMA_AETCMD	0x0708
+#define EDMA_M		0x1000	/* not referenced */
+#define EDMA_SHADOW0	0x2000	/* 4 shadow regions */
+#define EDMA_PARM	0x4000	/* 128 param entries */
 
-volatile edmacc_regs *ptr_edmacc_regs = NULL;
+#define PARM_OFFSET(param_no)	(EDMA_PARM + ((param_no) << 5))
 
+unsigned int edmacc_regs_base;
+
+static inline unsigned int edma_read(int offset)
+{
+	return (unsigned int)__raw_readl(edmacc_regs_base + offset);
+}
+
+static inline void edma_write(int offset, int val)
+{
+	__raw_writel(val, edmacc_regs_base + offset);
+}
+static inline void edma_modify(int offset, unsigned and, unsigned or)
+{
+	unsigned val = edma_read(offset);
+	val &= and;
+	val |= or;
+	edma_write(offset, val);
+}
+static inline void edma_and(int offset, unsigned and)
+{
+	unsigned val = edma_read(offset);
+	val &= and;
+	edma_write(offset, val);
+}
+static inline void edma_or(int offset, unsigned or)
+{
+	unsigned val = edma_read(offset);
+	val |= or;
+	edma_write(offset, val);
+}
+static inline unsigned int edma_read_array(int offset, int i)
+{
+	return edma_read(offset + (i << 2));
+}
+static inline void edma_write_array(int offset, int i, unsigned val)
+{
+	edma_write(offset + (i << 2), val);
+}
+static inline void edma_modify_array(int offset, int i,
+		unsigned and, unsigned or)
+{
+	edma_modify(offset + (i << 2), and, or);
+}
+static inline void edma_or_array(int offset, int i, unsigned or)
+{
+	edma_or(offset + (i << 2), or);
+}
+static inline void edma_or_array2(int offset, int i, int j, unsigned or)
+{
+	edma_or(offset + ((i*2 + j) << 2), or);
+}
+static inline void edma_write_array2(int offset, int i, int j, unsigned val)
+{
+	edma_write(offset + ((i*2 + j) << 2), val);
+}
+static inline unsigned int edma_shadow0_read(int offset)
+{
+	return edma_read(EDMA_SHADOW0 + offset);
+}
+static inline unsigned int edma_shadow0_read_array(int offset, int i)
+{
+	return edma_read(EDMA_SHADOW0 + offset + (i << 2));
+}
+static inline void edma_shadow0_write(int offset, unsigned val)
+{
+	edma_write(EDMA_SHADOW0 + offset, val);
+}
+static inline void edma_shadow0_write_array(int offset, int i, unsigned val)
+{
+	edma_write(EDMA_SHADOW0 + offset + (i << 2), val);
+}
+static inline unsigned int edma_parm_read(int offset, int param_no)
+{
+	return edma_read(EDMA_PARM + offset + (param_no << 5));
+}
+static inline void edma_parm_write(int offset, int param_no, unsigned val)
+{
+	edma_write(EDMA_PARM + offset + (param_no << 5), val);
+}
+static inline void edma_parm_modify(int offset, int param_no,
+		unsigned and, unsigned or)
+{
+	edma_modify(EDMA_PARM + offset + (param_no << 5), and, or);
+}
+static inline void edma_parm_and(int offset, int param_no, unsigned and)
+{
+	edma_and(EDMA_PARM + offset + (param_no << 5), and);
+}
+static inline void edma_parm_or(int offset, int param_no, unsigned or)
+{
+	edma_or(EDMA_PARM + offset + (param_no << 5), or);
+}
 #define DAVINCI_DMA_3PCC_BASE 0x01C00000
 
 static spinlock_t dma_chan_lock;
@@ -130,9 +214,9 @@ typedef void (*intr_callback) (void);
 static int register_dma_interrupts(intr_callback, intr_callback, intr_callback,
 				   intr_callback);
 
-static edmacc_regs *get_edma_base(void)
+static unsigned int get_edma_base(void)
 {
-	return (edmacc_regs *) IO_ADDRESS(DAVINCI_DMA_3PCC_BASE);
+	return (unsigned int) IO_ADDRESS(DAVINCI_DMA_3PCC_BASE);
 }
 
 static intr_callback cb[4];
@@ -234,15 +318,14 @@ static int qdam_to_param_mapping[8] = { 0 };
 
 static void map_dmach_queue(int ch_no, int queue_no)
 {
+	queue_no &= 7;
 	if (ch_no < DAVINCI_EDMA_NUM_DMACH) {
-		int bit_start = (ch_no % 8) * 4;
-		ptr_edmacc_regs->dmaqnum[ch_no >> 3] &= (~(0x7 << bit_start));
-		ptr_edmacc_regs->dmaqnum[ch_no >> 3] |=
-		    ((queue_no & 0x7) << bit_start);
+		int bit = (ch_no & 0x7) * 4;
+		edma_modify_array(EDMA_DMAQNUM, (ch_no >> 3),
+				~(0x7 << bit), queue_no << bit);
 	} else if (DAVINCI_EDMA_IS_Q(ch_no)) {
-		int bit_start = (ch_no - DAVINCI_EDMA_QSTART) * 4;
-		ptr_edmacc_regs->qdmaqnum &= (~(0x7 << bit_start));
-		ptr_edmacc_regs->qdmaqnum |= ((queue_no & 0x7) << bit_start);
+		int bit = (ch_no - DAVINCI_EDMA_QSTART) * 4;
+		edma_modify(EDMA_QDMAQNUM, ~(0x7 << bit), queue_no << bit);
 	}
 }
 
@@ -251,25 +334,22 @@ static void map_dmach_queue(int ch_no, int queue_no)
 static void map_dmach_param(int ch_no, int param_no)
 {
 	if (DAVINCI_EDMA_IS_Q(ch_no)) {
-		ptr_edmacc_regs->qchmap[ch_no - DAVINCI_EDMA_QSTART] &=
-		    ~(PAENTRY | TRWORD);
-		ptr_edmacc_regs->qchmap[ch_no - DAVINCI_EDMA_QSTART] |=
-		    (((param_no & 0x1ff) << 5) | (QDMA_TRWORD << 2));
+		edma_modify_array(EDMA_QCHMAP, ch_no - DAVINCI_EDMA_QSTART,
+				~(PAENTRY | TRWORD),
+				((param_no & 0x1ff) << 5) | (QDMA_TRWORD << 2));
 	}
 }
 
 static void map_queue_tc(int queue_no, int tc_no)
 {
-	int bit_start = queue_no * 4;
-	ptr_edmacc_regs->quetcmap &= ~(0x7 << bit_start);
-	ptr_edmacc_regs->quetcmap |= ((tc_no & 0x7) << bit_start);
+	int bit = queue_no * 4;
+	edma_modify(EDMA_QUETCMAP, ~(0x7 << bit), ((tc_no & 0x7) << bit));
 }
 
 static void assign_priority_to_queue(int queue_no, int priority)
 {
-	int bit_start = queue_no * 4;
-	ptr_edmacc_regs->quepri &= ~(0x7 << bit_start);
-	ptr_edmacc_regs->quepri |= ((priority & 0x7) << bit_start);
+	int bit = queue_no * 4;
+	edma_modify(EDMA_QUEPRI, ~(0x7 << bit), ((priority & 0x7) << bit));
 }
 
 /******************************************************************************
@@ -492,14 +572,14 @@ static int request_dma_interrupt(int lch,
 		dev_dbg(&edma_dev.dev, "While allocating EDMA channel for QDMA");
 	}
 	if (DAVINCI_EDMA_IS_Q(lch)) {
-		ptr_edmacc_regs->drae[0][free_intr_no >> 5] |=
-			(1 << (free_intr_no & 0x1f));
+		edma_or_array2(EDMA_DRAE, 0, free_intr_no >> 5,
+				(1 << (free_intr_no & 0x1f)));
 	}
 	if (free_intr_no >= 0 && free_intr_no < 64) {
 		intr_data[free_intr_no].callback = callback;
 		intr_data[free_intr_no].data = data;
-		ptr_edmacc_regs->shadow[0].iesr[free_intr_no >> 5] =
-			(1 << (free_intr_no & 0x1f));
+		edma_shadow0_write_array(SH_IESR, free_intr_no >> 5,
+				(1 << (free_intr_no & 0x1f)));
 	}
 	return free_intr_no;
 }
@@ -517,8 +597,8 @@ static int request_dma_interrupt(int lch,
 static void free_dma_interrupt(int intr_no)
 {
 	if (intr_no >= 0 && intr_no < 64) {
-		ptr_edmacc_regs->shadow[0].icr[intr_no >> 5] =
-			(1 << (intr_no & 0x1f));
+		edma_shadow0_write_array(SH_ICR, intr_no >> 5,
+				(1 << (intr_no & 0x1f)));
 		LOCK;
 		/* Global structure and could be modified by several task */
 		dma_intr_use_status[intr_no >> 5] |= (1 << (intr_no & 0x1f));
@@ -559,24 +639,24 @@ static void dma_irq_handler(void)
 	int i;
 	unsigned int cnt;
 	cnt = 0;
-	if ((ptr_edmacc_regs->shadow[0].ipr[0] == 0)
-	    && (ptr_edmacc_regs->shadow[0].ipr[1] == 0))
+	if ((edma_shadow0_read_array(SH_IPR, 0) == 0)
+	    && (edma_shadow0_read_array(SH_IPR, 1) == 0))
 		return;
 	while (1) {
 		int j;
-		if (ptr_edmacc_regs->shadow[0].ipr[0])
+		if (edma_shadow0_read_array(SH_IPR, 0))
 			j = 0;
-		else if (ptr_edmacc_regs->shadow[0].ipr[1])
+		else if (edma_shadow0_read_array(SH_IPR, 1))
 			j = 1;
 		else
 			break;
 		dev_dbg(&edma_dev.dev, "IPR%d =%x\r\n", j,
-				ptr_edmacc_regs->shadow[0].ipr[j]);
+				edma_shadow0_read_array(SH_IPR, j));
 		for (i = 0; i < 32; i++) {
 			int k = (j << 5) + i;
-			if (ptr_edmacc_regs->shadow[0].ipr[j] & (1 << i)) {
+			if (edma_shadow0_read_array(SH_IPR, j) & (1 << i)) {
 				/* Clear the corresponding IPR bits */
-				ptr_edmacc_regs->shadow[0].icr[j] = (1 << i);
+				edma_shadow0_write_array(SH_ICR, j, (1 << i));
 				if (intr_data[k].callback) {
 					intr_data[k].callback(k, DMA_COMPLETE,
 						intr_data[k].data);
@@ -588,7 +668,7 @@ static void dma_irq_handler(void)
 			break;
 		}
 	}
-	ptr_edmacc_regs->shadow[0].ieval = 0x1;
+	edma_shadow0_write(SH_IEVAL, 1);
 }
 
 /******************************************************************************
@@ -601,26 +681,27 @@ static void dma_ccerr_handler(void)
 	int i;
 	unsigned int cnt;
 	cnt = 0;
-	if ((ptr_edmacc_regs->emr[0] == 0) && (ptr_edmacc_regs->emr[1] == 0) &&
-	    (ptr_edmacc_regs->qemr == 0) && (ptr_edmacc_regs->ccerr == 0))
+	if ((edma_read_array(EDMA_EMR, 0) == 0) &&
+	    (edma_read_array(EDMA_EMR, 1) == 0) &&
+	    (edma_read(EDMA_QEMR) == 0) && (edma_read(EDMA_CCERR) == 0))
 		return;
 	while (1) {
 		int j = -1;
-		if (ptr_edmacc_regs->emr[0])
+		if (edma_read_array(EDMA_EMR, 0))
 			j = 0;
-		else if (ptr_edmacc_regs->emr[1])
+		else if (edma_read_array(EDMA_EMR, 1))
 			j = 1;
 		if (j >= 0) {
 			dev_dbg(&edma_dev.dev, "EMR%d =%x\r\n", j,
-					ptr_edmacc_regs->emr[j]);
+					edma_read_array(EDMA_EMR, j));
 			for (i = 0; i < 32; i++) {
 				int k = (j << 5) + i;
-				if (ptr_edmacc_regs->emr[j] & (1 << i)) {
+				if (edma_read_array(EDMA_EMR, j) & (1 << i)) {
 					/* Clear the corresponding EMR bits */
-					ptr_edmacc_regs->emcr[j] = (1 << i);
+					edma_write_array(EDMA_EMCR, j, 1 << i);
 					/* Clear any SER */
-					ptr_edmacc_regs->shadow[0].secr[j] =
-							(1 << i);
+					edma_shadow0_write_array(SH_SECR, j,
+							(1 << i));
 					if (intr_data[k].callback) {
 						intr_data[k].callback(k,
 								      DMA_CC_ERROR,
@@ -629,31 +710,30 @@ static void dma_ccerr_handler(void)
 					}
 				}
 			}
-		} else if (ptr_edmacc_regs->qemr) {
+		} else if (edma_read(EDMA_QEMR)) {
 			dev_dbg(&edma_dev.dev, "QEMR =%x\r\n",
-				ptr_edmacc_regs->qemr);
+				edma_read(EDMA_QEMR));
 			for (i = 0; i < 8; i++) {
-				if (ptr_edmacc_regs->qemr & (1 << i)) {
+				if (edma_read(EDMA_QEMR) & (1 << i)) {
 					/* Clear the corresponding IPR bits */
-					ptr_edmacc_regs->qemcr = (1 << i);
-					ptr_edmacc_regs->shadow[0].qsecr =
-					    (1 << i);
+					edma_write(EDMA_QEMCR, 1 << i);
+					edma_shadow0_write(SH_QSECR, (1 << i));
 				}
 			}
-		} else if (ptr_edmacc_regs->ccerr) {
+		} else if (edma_read(EDMA_CCERR)) {
 			dev_dbg(&edma_dev.dev, "CCERR =%x\r\n",
-				ptr_edmacc_regs->ccerr);
+				edma_read(EDMA_CCERR));
 			for (i = 0; i < 8; i++) {
-				if (ptr_edmacc_regs->ccerr & (1 << i)) {
+				if (edma_read(EDMA_CCERR) & (1 << i)) {
 					/* Clear the corresponding IPR bits */
-					ptr_edmacc_regs->ccerrclr = (1 << i);
+					edma_write(EDMA_CCERRCLR, 1 << i);
 				}
 			}
 		}
-		if ((ptr_edmacc_regs->emr[0] == 0)
-		    && (ptr_edmacc_regs->emr[1] == 0)
-		    && (ptr_edmacc_regs->qemr == 0)
-		    && (ptr_edmacc_regs->ccerr == 0)) {
+		if ((edma_read_array(EDMA_EMR, 0) == 0)
+		    && (edma_read_array(EDMA_EMR, 1) == 0)
+		    && (edma_read(EDMA_QEMR) == 0)
+		    && (edma_read(EDMA_CCERR) == 0)) {
 			break;
 		}
 		cnt++;
@@ -661,7 +741,7 @@ static void dma_ccerr_handler(void)
 			break;
 		}
 	}
-	ptr_edmacc_regs->eeval = 0x1;
+	edma_write(EDMA_EEVAL, 1);
 }
 
 /******************************************************************************
@@ -697,20 +777,18 @@ int __init arch_dma_init(void)
 	edma_dev.id = -1;
 	edma_dev.dev.driver = &edma_driver;
 
-	ptr_edmacc_regs = get_edma_base();
-	dev_dbg(&edma_dev.dev, "DMA REG BASE ADDR=%x\n", 
-	       (unsigned int)ptr_edmacc_regs);
+	edmacc_regs_base = get_edma_base();
+	dev_dbg(&edma_dev.dev, "DMA REG BASE ADDR=%x\n", edmacc_regs_base);
 	memset(dma_chan, 0x00, sizeof(dma_chan));
-	memset((void *)&(ptr_edmacc_regs->paramentry[0]), 0x00,
-	       sizeof(ptr_edmacc_regs->paramentry));
+	for (i = 0; i < DAVINCI_EDMA_NUM_PARAMENTRY * PARM_SIZE; i += 4)
+		edma_write(EDMA_PARM + i, 0);
 
 	/* Everything lives on transfer controller 1 until otherwise specified.
 	 * This way, long transfers on the low priority queue
 	 * started by the codec engine will not cause audio defects.
 	 */
-	for( i = 0 ; i < DAVINCI_EDMA_QEND ; i++ ){
+	for (i = 0; i < DAVINCI_EDMA_QEND; i++)
 		map_dmach_queue(i, 1);
-	}
 
 	i = 0;
 	/* Event queue to TC mapping */
@@ -726,9 +804,9 @@ int __init arch_dma_init(void)
 		i++;
 	}
 	for (i = 0; i < DAVINCI_EDMA_NUM_REGIONS; i++) {
-		ptr_edmacc_regs->drae[i][0] = 0x0;
-		ptr_edmacc_regs->drae[i][1] = 0x0;
-		ptr_edmacc_regs->qrae[i] = 0x0;
+		edma_write_array2(EDMA_DRAE, i, 0, 0x0);
+		edma_write_array2(EDMA_DRAE, i, 1, 0x0);
+		edma_write_array(EDMA_QRAE, i, 0x0);
 	}
 	LOCK_INIT;
 	return 0;
@@ -794,11 +872,11 @@ int davinci_request_dma(int dev_id, const char *name,
 	if ((dev_id != DAVINCI_DMA_CHANNEL_ANY) &&
 	    (dev_id != DAVINCI_EDMA_PARAM_ANY)) {
 		if (DAVINCI_EDMA_IS_Q(dev_id)) {
-			ptr_edmacc_regs->qrae[0] |=
-			    (1 << (dev_id - DAVINCI_EDMA_QSTART));
+			edma_or_array(EDMA_QRAE, 0,
+					1 << (dev_id - DAVINCI_EDMA_QSTART));
 		} else {
-			ptr_edmacc_regs->drae[0][dev_id >> 5] |=
-				(1 << (dev_id & 0x1f));
+			edma_or_array2(EDMA_DRAE, 0, dev_id >> 5,
+					1 << (dev_id & 0x1f));
 		}
 	}
 
@@ -890,11 +968,11 @@ int davinci_request_dma(int dev_id, const char *name,
 					return -EINVAL;
 				dev_dbg(&edma_dev.dev, "param_no=%d\r\n", j);
 				if (DAVINCI_EDMA_IS_Q(j)) {
-					ptr_edmacc_regs->qrae[0] |=
-					    (1 << (j - DAVINCI_EDMA_QSTART));
+					edma_or_array(EDMA_QRAE, 0, 1 << (j -
+							DAVINCI_EDMA_QSTART));
 				} else {
-					ptr_edmacc_regs->drae[0][j >> 5] |=
-							(1 << (j & 0x1f));
+					edma_or_array2(EDMA_DRAE, 0, j >> 5,
+							1 << (j & 0x1f));
 				}
 				if (callback) {
 					dma_chan[*lch].tcc =
@@ -946,7 +1024,6 @@ int davinci_request_dma(int dev_id, const char *name,
 	if (!ret_val) {
 		if (DAVINCI_EDMA_IS_Q(dev_id)) {
 			/* Master Channel */
-			volatile edmacc_paramentry_regs *p;
 			unsigned int opt;
 			int temp_ch = dma_chan[*lch].param_no;
 			qdam_to_param_mapping[dev_id - DAVINCI_EDMA_QSTART] =
@@ -959,8 +1036,7 @@ int davinci_request_dma(int dev_id, const char *name,
 			dma_chan[temp_ch].dev_id = *lch;
 			dma_chan[temp_ch].tcc = dma_chan[*lch].tcc;
 			dma_chan[temp_ch].param_no = temp_ch;
-			p = &ptr_edmacc_regs->paramentry[temp_ch];
-			opt = p->opt;
+			opt = edma_parm_read(PARM_OPT, temp_ch);
 			if (dma_chan[*lch].tcc != -1) {
 				opt &= ~TCC;
 				opt |= ((0x3f & dma_chan[*lch].tcc) << 12);
@@ -968,9 +1044,9 @@ int davinci_request_dma(int dev_id, const char *name,
 			} else {
 				opt &= ~TCINTEN;
 			}
-			p->opt = opt;
+			edma_parm_write(PARM_OPT, temp_ch, opt);
 			/* assign the link field to no link. i.e 0xffff */
-			p->link_bcntrld |= 0xffff;
+			edma_parm_or(PARM_LINK_BCNTRLD, temp_ch, 0xffff);
 		} else {
 			int j;
 			/* Slave Channel */
@@ -982,16 +1058,14 @@ int davinci_request_dma(int dev_id, const char *name,
 			dma_chan[*lch].dev_id = *lch;
 			j = dma_chan[*lch].param_no;
 			if (dma_chan[*lch].tcc != -1) {
-				ptr_edmacc_regs->paramentry[j].opt &= (~TCC);
-				ptr_edmacc_regs->paramentry[j].opt |=
-					((0x3f & dma_chan[*lch].tcc) << 12);
-				/* set TCINTEN bit in PARAM entry */
-				ptr_edmacc_regs->paramentry[j].opt |= TCINTEN;
+				edma_parm_modify(PARM_OPT, j, ~TCC,
+					((0x3f & dma_chan[*lch].tcc) << 12)
+					| TCINTEN);
 			} else {
-				ptr_edmacc_regs->paramentry[j].opt &= ~TCINTEN;
+				edma_parm_and(PARM_OPT, j, ~TCINTEN);
 			}
 			/* assign the link field to no link. i.e 0xffff */
-			ptr_edmacc_regs->paramentry[j].link_bcntrld |= 0xffff;
+			edma_parm_or(PARM_LINK_BCNTRLD, j, 0xffff);
 		}
 	}
 	return ret_val;
@@ -1034,8 +1108,8 @@ void davinci_set_dma_src_params(int lch, unsigned long src_port,
 	if (DAVINCI_EDMA_IS_Q(lch))
 		lch = qdam_to_param_mapping[lch - DAVINCI_EDMA_QSTART];
 	if (lch >= 0 && lch < DAVINCI_EDMA_NUM_PARAMENTRY) {
-		unsigned int i = ptr_edmacc_regs->
-					paramentry[dma_chan[lch].param_no].opt;
+		int j = dma_chan[lch].param_no;
+		unsigned int i = edma_parm_read(PARM_OPT, j);
 		if (mode) {
 			/* set SAM and program FWID */
 			i = (i & ~(EDMA_FWID)) | (SAM | ((width & 0x7) << 8));
@@ -1043,12 +1117,11 @@ void davinci_set_dma_src_params(int lch, unsigned long src_port,
 			/* clear SAM */
 			i &= ~SAM;
 		}
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].opt = i;
+		edma_parm_write(PARM_OPT, j, i);
 
 		/* set the source port address
 		   in source register of param structure */
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].src =
-		    src_port;
+		edma_parm_write(PARM_SRC, j, src_port);
 	}
 }
 
@@ -1067,8 +1140,8 @@ void davinci_set_dma_dest_params(int lch, unsigned long dest_port,
 	if (DAVINCI_EDMA_IS_Q(lch))
 		lch = qdam_to_param_mapping[lch - DAVINCI_EDMA_QSTART];
 	if (lch >= 0 && lch < DAVINCI_EDMA_NUM_PARAMENTRY) {
-		unsigned int i = ptr_edmacc_regs->
-					paramentry[dma_chan[lch].param_no].opt;
+		int j = dma_chan[lch].param_no;
+		unsigned int i = edma_parm_read(PARM_OPT, j);
 		if (mode) {
 			/* set DAM and program FWID */
 			i = (i & ~(EDMA_FWID)) | (DAM | ((width & 0x7) << 8));
@@ -1076,11 +1149,10 @@ void davinci_set_dma_dest_params(int lch, unsigned long dest_port,
 			/* clear DAM */
 			i &= ~DAM;
 		}
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].opt = i;
+		edma_parm_write(PARM_OPT, j, i);
 		/* set the destination port address
 		   in dest register of param structure */
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].dst =
-		    dest_port;
+		edma_parm_write(PARM_DST, j, dest_port);
 	}
 }
 
@@ -1098,14 +1170,10 @@ void davinci_set_dma_src_index(int lch, short src_bidx, short src_cidx)
 	if (DAVINCI_EDMA_IS_Q(lch))
 		lch = qdam_to_param_mapping[lch - DAVINCI_EDMA_QSTART];
 	if (lch >= 0 && lch < DAVINCI_EDMA_NUM_PARAMENTRY) {
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].src_dst_bidx
-		    &= 0xffff0000;
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].src_dst_bidx
-		    |= src_bidx;
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].src_dst_cidx
-		    &= 0xffff0000;
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].src_dst_cidx
-		    |= src_cidx;
+		edma_parm_modify(PARM_SRC_DST_BIDX, dma_chan[lch].param_no,
+				0xffff0000, src_bidx);
+		edma_parm_modify(PARM_SRC_DST_CIDX, dma_chan[lch].param_no,
+				0xffff0000, src_cidx);
 	}
 }
 
@@ -1123,14 +1191,10 @@ void davinci_set_dma_dest_index(int lch, short dest_bidx, short dest_cidx)
 	if (DAVINCI_EDMA_IS_Q(lch))
 		lch = qdam_to_param_mapping[lch - DAVINCI_EDMA_QSTART];
 	if (lch >= 0 && lch < DAVINCI_EDMA_NUM_PARAMENTRY) {
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].src_dst_bidx
-		    &= 0x0000ffff;
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].src_dst_bidx
-		    |= ((unsigned long)dest_bidx << 16);
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].src_dst_cidx
-		    &= 0x0000ffff;
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].src_dst_cidx
-		    |= ((unsigned long)dest_cidx << 16);
+		edma_parm_modify(PARM_SRC_DST_BIDX, dma_chan[lch].param_no,
+				0x0000ffff, dest_bidx << 16);
+		edma_parm_modify(PARM_SRC_DST_CIDX, dma_chan[lch].param_no,
+				0x0000ffff, dest_cidx << 16);
 	}
 }
 
@@ -1153,20 +1217,16 @@ void davinci_set_dma_transfer_params(int lch, unsigned short acnt,
 	if (DAVINCI_EDMA_IS_Q(lch))
 		lch = qdam_to_param_mapping[lch - DAVINCI_EDMA_QSTART];
 	if (lch >= 0 && lch < DAVINCI_EDMA_NUM_PARAMENTRY) {
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].link_bcntrld
-		    &= 0x0000ffff;
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].link_bcntrld
-		    |= (bcntrld << 16);
+		int j = dma_chan[lch].param_no;
+		edma_parm_modify(PARM_LINK_BCNTRLD, j,
+				0x0000ffff, bcntrld << 16);
 		if (sync_mode == ASYNC)
-			ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].opt
-			    &= (~SYNCDIM);
+			edma_parm_and(PARM_OPT, j, ~SYNCDIM);
 		else
-			ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].opt
-			    |= SYNCDIM;
+			edma_parm_or(PARM_OPT, j, SYNCDIM);
 		/* Set the acount, bcount, ccount registers */
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].a_b_cnt =
-		    (bcnt << 16) | acnt;
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no].ccnt = ccnt;
+		edma_parm_write(PARM_A_B_CNT, j, (bcnt << 16) | acnt);
+		edma_parm_write(PARM_CCNT, j, ccnt);
 	}
 }
 
@@ -1182,10 +1242,14 @@ void davinci_set_dma_params(int lch, edmacc_paramentry_regs * temp)
 	if (DAVINCI_EDMA_IS_Q(lch))
 		lch = qdam_to_param_mapping[lch - DAVINCI_EDMA_QSTART];
 	if (lch >= 0 && lch < DAVINCI_EDMA_NUM_PARAMENTRY) {
-		memcpy((void *)
-		       &(ptr_edmacc_regs->
-			 paramentry[dma_chan[lch].param_no].opt),
-		       (void *)temp, sizeof(edmacc_paramentry_regs));
+		int j = dma_chan[lch].param_no;
+		edma_parm_write(PARM_OPT, j, temp->opt);
+		edma_parm_write(PARM_SRC, j, temp->src);
+		edma_parm_write(PARM_A_B_CNT, j, temp->a_b_cnt);
+		edma_parm_write(PARM_DST, j, temp->dst);
+		edma_parm_write(PARM_SRC_DST_BIDX, j, temp->src_dst_bidx);
+		edma_parm_write(PARM_LINK_BCNTRLD, j, temp->link_bcntrld);
+		edma_parm_write(PARM_SRC_DST_CIDX, j, temp->src_dst_cidx);
 	}
 }
 
@@ -1201,10 +1265,14 @@ void davinci_get_dma_params(int lch, edmacc_paramentry_regs * temp)
 	if (DAVINCI_EDMA_IS_Q(lch))
 		lch = qdam_to_param_mapping[lch - DAVINCI_EDMA_QSTART];
 	if (lch >= 0 && lch < DAVINCI_EDMA_NUM_PARAMENTRY) {
-		memcpy((void *)temp,
-		       (void *)&(ptr_edmacc_regs->
-				 paramentry[dma_chan[lch].param_no].opt),
-		       sizeof(edmacc_paramentry_regs));
+		int j = dma_chan[lch].param_no;
+		temp->opt = edma_parm_read(PARM_OPT, j);
+		temp->src = edma_parm_read(PARM_SRC, j);
+		temp->a_b_cnt = edma_parm_read(PARM_A_B_CNT, j);
+		temp->dst = edma_parm_read(PARM_DST, j);
+		temp->src_dst_bidx = edma_parm_read(PARM_SRC_DST_BIDX, j);
+		temp->link_bcntrld = edma_parm_read(PARM_LINK_BCNTRLD, j);
+		temp->src_dst_cidx = edma_parm_read(PARM_SRC_DST_CIDX, j);
 	}
 }
 
@@ -1215,9 +1283,10 @@ void davinci_pause_dma(int lch)
 {
 	if ((lch >= 0) && (lch < DAVINCI_EDMA_NUM_DMACH)) {
 		unsigned int mask = (1 << (lch & 0x1f));
-		ptr_edmacc_regs->shadow[0].eecr[lch >> 5] = mask;
+		edma_shadow0_write_array(SH_EECR, lch >> 5, mask);
 	}
 }
+EXPORT_SYMBOL(davinci_pause_dma);
 /*
  * DMA resume - resumes the dma on the channel passed
  */
@@ -1225,9 +1294,10 @@ void davinci_resume_dma(int lch)
 {
 	if ((lch >= 0) && (lch < DAVINCI_EDMA_NUM_DMACH)) {
 		unsigned int mask = (1 << (lch & 0x1f));
-		ptr_edmacc_regs->shadow[0].eesr[lch >> 5] = mask;
+		edma_shadow0_write_array(SH_EESR, lch >> 5, mask);
 	}
 }
+EXPORT_SYMBOL(davinci_resume_dma);
 /******************************************************************************
  *
  * DMA Start - Starts the dma on the channel passed
@@ -1247,25 +1317,24 @@ int davinci_start_dma(int lch)
 			if (dma_chan_no_event[i] == lch) {
 				/* EDMA channels without event association */
 				dev_dbg(&edma_dev.dev, "ESR%d=%x\r\n", j,
-					ptr_edmacc_regs->shadow[0].esr[j]);
-				ptr_edmacc_regs->shadow[0].esr[j] = mask;
+					edma_shadow0_read_array(SH_ESR, j));
+				edma_shadow0_write_array(SH_ESR, j, mask);
 				return ret_val;
 			}
 			i++;
 		}
 		/* EDMA channel with event association */
 		dev_dbg(&edma_dev.dev, "ER%d=%x\r\n", j,
-			ptr_edmacc_regs->shadow[0].er[j]);
+			edma_shadow0_read_array(SH_ER, j));
 		/* Clear any pending error */
-		ptr_edmacc_regs->emcr[j] = mask;
+		edma_write_array(EDMA_EMCR, j, mask);
 		/* Clear any SER */
-		ptr_edmacc_regs->shadow[0].secr[j] = mask;
-		ptr_edmacc_regs->shadow[0].eesr[j] = mask;
+		edma_shadow0_write_array(SH_SECR, j, mask);
+		edma_shadow0_write_array(SH_EESR, j, mask);
 		dev_dbg(&edma_dev.dev, "EER%d=%x\r\n", j,
-			ptr_edmacc_regs->shadow[0].eer[j]);
+			edma_shadow0_read_array(SH_EER, j));
 	} else if (DAVINCI_EDMA_IS_Q(lch)) {
-		ptr_edmacc_regs->shadow[0].qeesr =
-		    (1 << (lch - DAVINCI_EDMA_QSTART));
+		edma_shadow0_write(SH_QEESR, 1 << (lch - DAVINCI_EDMA_QSTART));
 	} else {		/* for slaveChannels */
 		ret_val = -EINVAL;
 	}
@@ -1284,39 +1353,40 @@ void davinci_stop_dma(int lch)
 	if ((lch >= 0) && (lch < DAVINCI_EDMA_NUM_DMACH)) {
 		int j = lch >> 5;
 		unsigned int mask = (1 << (lch & 0x1f));
-		ptr_edmacc_regs->shadow[0].eecr[j] = mask;
-		if (ptr_edmacc_regs->shadow[0].er[j] & mask) {
+		edma_shadow0_write_array(SH_EECR, j, mask);
+		if (edma_shadow0_read_array(SH_ER, j) & mask) {
 			dev_dbg(&edma_dev.dev, "ER%d=%x\n", j,
-				ptr_edmacc_regs->shadow[0].er[j]);
-			ptr_edmacc_regs->shadow[0].ecr[j] = mask;
+				edma_shadow0_read_array(SH_ER, j));
+			edma_shadow0_write_array(SH_ECR, j, mask);
 		}
-		if (ptr_edmacc_regs->shadow[0].ser[j] & mask) {
+		if (edma_shadow0_read_array(SH_SER, j) & mask) {
 			dev_dbg(&edma_dev.dev, "SER%d=%x\n", j,
-				ptr_edmacc_regs->shadow[0].ser[j]);
-			ptr_edmacc_regs->shadow[0].secr[j] = mask;
+				edma_shadow0_read_array(SH_SER, j));
+			edma_shadow0_write_array(SH_SECR, j, mask);
 		}
-		if (ptr_edmacc_regs->emr[j] & mask) {
+		if (edma_read_array(EDMA_EMR, j) & mask) {
 			dev_dbg(&edma_dev.dev, "EMR%d=%x\n", j,
-				ptr_edmacc_regs->emr[j]);
-			ptr_edmacc_regs->emcr[j] = mask;
+				edma_read_array(EDMA_EMR, j));
+			edma_write_array(EDMA_EMCR, j, mask);
 		}
 		dev_dbg(&edma_dev.dev, "EER%d=%x\r\n", j,
-				ptr_edmacc_regs->shadow[0].eer[j]);
+				edma_shadow0_read_array(SH_EER, j));
 		/*
 		 * if the requested channel is one of the event channels
 		 * then just set the link field of the corresponding
 		 * param entry to 0xffff
 		 */
-		ptr_edmacc_regs->paramentry[lch].link_bcntrld |= 0xffff;
+		edma_parm_or(PARM_LINK_BCNTRLD, lch, 0xffff);
 	} else if (DAVINCI_EDMA_IS_Q(lch)) {
 		/* for QDMA channels */
-		ptr_edmacc_regs->shadow[0].qeecr = (1 << (lch - DAVINCI_EDMA_QSTART));
-		dev_dbg(&edma_dev.dev, "QER=%x\r\n", ptr_edmacc_regs->shadow[0].qer);
-		dev_dbg(&edma_dev.dev, "QEER=%x\r\n", ptr_edmacc_regs->shadow[0].qeer);
+		edma_shadow0_write(SH_QEECR, 1 << (lch - DAVINCI_EDMA_QSTART));
+		dev_dbg(&edma_dev.dev, "QER=%x\r\n", edma_shadow0_read(SH_QER));
+		dev_dbg(&edma_dev.dev, "QEER=%x\r\n",
+				edma_shadow0_read(SH_QEER));
 	} else if ((lch >= DAVINCI_EDMA_QEND) &&
 		   (lch < DAVINCI_EDMA_NUM_PARAMENTRY)) {
 		/* for slaveChannels */
-		ptr_edmacc_regs->paramentry[lch].link_bcntrld |= 0xffff;
+		edma_parm_or(PARM_LINK_BCNTRLD, lch, 0xffff);
 	}
 }
 
@@ -1340,15 +1410,9 @@ void davinci_dma_link_lch(int lch, int lch_que)
 	if ((lch >= 0) && (lch < DAVINCI_EDMA_NUM_PARAMENTRY) &&
 	    (lch_que >= 0) && (lch_que < DAVINCI_EDMA_NUM_PARAMENTRY)) {
 		/* program LINK */
-		volatile edmacc_paramentry_regs *q;
-		volatile edmacc_paramentry_regs *p;
-		unsigned int link;
-		q = &ptr_edmacc_regs->paramentry[dma_chan[lch_que].param_no];
-		p = &ptr_edmacc_regs->paramentry[dma_chan[lch].param_no];
-		link = p->link_bcntrld;
-		link &= 0xffff0000;
-		link |= (unsigned short)(unsigned int)q;
-		p->link_bcntrld = link;
+		edma_parm_modify(PARM_LINK_BCNTRLD, dma_chan[lch].param_no,
+				0xffff0000,
+				PARM_OFFSET(dma_chan[lch_que].param_no));
 		dma_chan[lch].link_lch = lch_que;
 	}
 }
@@ -1371,8 +1435,8 @@ void davinci_dma_unlink_lch(int lch, int lch_que)
 		lch_que = qdam_to_param_mapping[lch_que - DAVINCI_EDMA_QSTART];
 	if ((lch >= 0) && (lch < DAVINCI_EDMA_NUM_PARAMENTRY) &&
 	    (lch_que >= 0) && (lch_que < DAVINCI_EDMA_NUM_PARAMENTRY)) {
-		ptr_edmacc_regs->paramentry[dma_chan[lch].param_no]
-				.link_bcntrld |= 0xffff;
+		edma_parm_or(PARM_LINK_BCNTRLD, dma_chan[lch].param_no,
+				0xffff);
 		dma_chan[lch].link_lch = -1;
 	}
 }
@@ -1395,11 +1459,8 @@ void davinci_dma_chain_lch(int lch, int lch_que)
 	if ((lch >= 0) && (lch < DAVINCI_EDMA_QEND) &&
 	    (lch_que >= 0) && (lch_que < DAVINCI_EDMA_QEND)) {
 		/* program tcc */
-		unsigned int opt = ptr_edmacc_regs->paramentry[lch].opt;
-		opt &= ~TCC;
-		opt |= (lch_que & 0x3f) << 12;
-		opt |= TCCHEN;
-		ptr_edmacc_regs->paramentry[lch].opt = opt;
+		edma_parm_modify(PARM_OPT, lch, ~TCC,
+				((lch_que & 0x3f) << 12) | TCCHEN);
 	}
 }
 
@@ -1421,7 +1482,7 @@ void davinci_dma_unchain_lch(int lch, int lch_que)
 	/* reset TCCHEN */
 	if ((lch >= 0) && (lch < DAVINCI_EDMA_QEND) &&
 	    (lch_que >= 0) && (lch_que < DAVINCI_EDMA_QEND)) {
-		ptr_edmacc_regs->paramentry[lch].opt &= ~TCCHEN;
+		edma_parm_and(PARM_OPT, lch, ~TCCHEN);
 	}
 }
 
@@ -1442,13 +1503,13 @@ void davinci_clean_channel(int ch_no)
 		int j = (ch_no >> 5);
 		unsigned int mask = 1 << (ch_no & 0x1f);
 		dev_dbg(&edma_dev.dev, "EMR%d =%x\r\n", j,
-				ptr_edmacc_regs->emr[j]);
-		ptr_edmacc_regs->shadow[0].ecr[j] = mask;
+				edma_read_array(EDMA_EMR, j));
+		edma_shadow0_write_array(SH_ECR, j, mask);
 		/* Clear the corresponding EMR bits */
-		ptr_edmacc_regs->emcr[j] = mask;
+		edma_write_array(EDMA_EMCR, j, mask);
 		/* Clear any SER */
-		ptr_edmacc_regs->shadow[0].secr[j] = mask;
-		ptr_edmacc_regs->ccerrclr = ((1 << 16) | 0x3);
+		edma_shadow0_write_array(SH_SECR, j, mask);
+		edma_write(EDMA_CCERRCLR, (1 << 16) | 0x3);
 	}
 }
 
