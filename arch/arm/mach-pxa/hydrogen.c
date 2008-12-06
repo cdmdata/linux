@@ -47,7 +47,6 @@
 #include <asm/arch/pxa2xx-regs.h>
 #include <asm/arch/pxa2xx-gpio.h>
 #include <asm/arch/audio.h>
-#include <asm/arch/pxafb.h>
 #include <asm/arch/mmc.h>
 #include <asm/arch/gpio.h>
 #include <linux/mmc/host.h>
@@ -57,6 +56,7 @@
 
 #include "generic.h"
 #include "devices.h"
+#include "read_regs.h"
 
 #define MMC_CARD_DETECT_GP 36
 /* UCB1400 registers */
@@ -361,6 +361,8 @@ static void __init hydrogen_init(void)
 	pxa_set_mci_info(&hydrogen_mci_platform_data);
 	pxa_set_ohci_info(&hydrogen_ohci_platform_data);
 	pxa_set_i2c_info(NULL);
+
+	pxa_mode_from_registers(&pxa_device_fb);
 }
 
 #define DEBUG_SIZE (PAGE_SIZE*4)
