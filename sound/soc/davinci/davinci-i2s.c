@@ -111,7 +111,8 @@ static inline u32 davinci_mcbsp_read_reg(struct davinci_mcbsp_dev *dev, int reg)
 	return __raw_readl(dev->base + reg);
 }
 
-static void davinci_mcbsp_start(struct davinci_mcbsp_dev *dev, struct snd_pcm_substream *substream)
+static void davinci_mcbsp_start(struct davinci_mcbsp_dev *dev,
+		struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
@@ -128,7 +129,8 @@ static void davinci_mcbsp_start(struct davinci_mcbsp_dev *dev, struct snd_pcm_su
 		/* The clock needs to toggle to complete reset.
 		 * So, fake it by toggling the clk polarity.
 		 */
-		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, dev->pcr ^ m);
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG,
+				dev->pcr ^ m);
 		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, dev->pcr);
 	}
 	if (dev->pcr & (DAVINCI_MCBSP_PCR_FSXM | DAVINCI_MCBSP_PCR_FSRM |
@@ -163,7 +165,8 @@ static void davinci_mcbsp_start(struct davinci_mcbsp_dev *dev, struct snd_pcm_su
 		/* The clock needs to toggle to complete reset.
 		 * So, fake it by toggling the clk polarity.
 		 */
-		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, dev->pcr ^ m);
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG,
+				dev->pcr ^ m);
 		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG, dev->pcr);
 
 		/* Restart the DMA */
@@ -344,7 +347,8 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
 	w |= DAVINCI_MCBSP_SPCR_FREE;
 	w |= (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) ?
-			DAVINCI_MCBSP_SPCR_XINTM(3) : DAVINCI_MCBSP_SPCR_RINTM(3);
+			DAVINCI_MCBSP_SPCR_XINTM(3) :
+			DAVINCI_MCBSP_SPCR_RINTM(3);
 	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
 
 	rcr = DAVINCI_MCBSP_RCR_RFIG;
@@ -370,11 +374,11 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 		 * runs at mclk speed, independent of the sample rate.
 		 * So, having an entire frame at once means it has to be
 		 * serviced at the sample rate instead of the mclk speed.
-		 * 
+		 *
 		 * In the now very unlikely case that an underrun still
 		 * occurs, both the left and right samples will be repeated
 		 * so that no pops are heard, and the left and right channels
-		 * won't end up being swapped because of the underrun.  
+		 * won't end up being swapped because of the underrun.
 		 */
 		right_first = 1;
 		dma_params->convert_mono_stereo = 0;
@@ -447,7 +451,7 @@ static int davinci_i2s_prepare(struct snd_pcm_substream *substream)
 	struct davinci_mcbsp_dev *dev = rtd->dai->cpu_dai->private_data;
 	int playback = (substream->stream == SNDRV_PCM_STREAM_PLAYBACK);
 	davinci_mcbsp_stop(dev, playback);
-	if ((dev->pcr & DAVINCI_MCBSP_PCR_FSXM)==0) {
+	if ((dev->pcr & DAVINCI_MCBSP_PCR_FSXM) == 0) {
 		/* codec is master */
 		davinci_mcbsp_start(dev, substream);
 	}
@@ -459,7 +463,7 @@ static int davinci_i2s_trigger(struct snd_pcm_substream *substream, int cmd)
 	struct davinci_mcbsp_dev *dev = rtd->dai->cpu_dai->private_data;
 	int ret = 0;
 	int playback = (substream->stream == SNDRV_PCM_STREAM_PLAYBACK);
-	if ((dev->pcr & DAVINCI_MCBSP_PCR_FSXM)==0)
+	if ((dev->pcr & DAVINCI_MCBSP_PCR_FSXM) == 0)
 		return 0;	/* return if codec is master */
 
 	switch (cmd) {
