@@ -42,7 +42,6 @@
 #include <asm/arch/pxa2xx-gpio.h>
 #include <asm/arch/pxa2xx-regs.h>
 #include <asm/arch/audio.h>
-#include <asm/arch/pxafb.h>
 #include <asm/arch/mmc.h>
 #include <linux/mmc/host.h>
 #include <asm/arch/irda.h>
@@ -51,6 +50,8 @@
 #include <linux/sm501-int.h>
 
 #include "generic.h"
+#include "devices.h"
+#include "read_regs.h"
 
 #define MMC_CARD_DETECT_GP 36
 #define NEON_GPIO_USB_PULLUP 3
@@ -312,14 +313,17 @@ static struct platform_device *devices[] __initdata = {
 
 static void __init neon_init(void)
 {
+	/*done in platform_add_devices*/
+	/*platform_device_register(&smc91x_device);*/
+	(void) platform_add_devices(devices, ARRAY_SIZE(devices));
+
 	neon_pxafb_info.modes = &display_mode;
 	set_pxa_fb_info(&neon_pxafb_info);
 
 	pxa_set_udc_info(&udc_info);
 	pxa_set_mci_info(&neon_mci_platform_data);
 
-//	platform_device_register(&smc91x_device);	//done in platform_add_devices
-	(void) platform_add_devices(devices, ARRAY_SIZE(devices));
+	pxa_mode_from_registers(&pxa_device_fb);
 }
 
 #define DEBUG_SIZE (PAGE_SIZE*4)

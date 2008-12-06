@@ -44,7 +44,6 @@
 
 #include <asm/arch/pxa-regs.h>
 #include <asm/arch/audio.h>
-#include <asm/arch/pxafb.h>
 #include <asm/arch/mmc.h>
 #include <linux/mmc/host.h>
 #include <asm/arch/irda.h>
@@ -55,6 +54,8 @@
 #include <asm/arch/pxa2xx-regs.h>
 
 #include "generic.h"
+#include "devices.h"
+#include "read_regs.h"
 
 #define MMC_CARD_DETECT_GP 36
 #define NEON_GPIO_USB_PULLUP 3
@@ -389,9 +390,11 @@ static void __init neon_init(void)
 	pxa_set_ohci_info(&neon270_ohci_platform_data);
 #endif
 
-        neon_pxafb_info.modes = &display_mode;
+	neon_pxafb_info.modes = &display_mode;
 	set_pxa_fb_info(&neon_pxafb_info);
 	pxa_set_i2c_info(NULL);
+
+	pxa_mode_from_registers(&pxa_device_fb);
 }
 
 #define DEBUG_SIZE (PAGE_SIZE*4)
