@@ -30,10 +30,23 @@
 #define DAVINCI_PCM_DEBUG 0
 #if DAVINCI_PCM_DEBUG
 #define DPRINTK(format, arg...) printk(KERN_DEBUG format, ## arg)
+static void print_buf_info(int lch, char *name)
+{
+	edmacc_paramentry_regs p;
+	if (lch < 0)
+		return;
+	davinci_get_dma_params(lch, &p);
+	printk(KERN_DEBUG "%s: 0x%x, opt=%x, src=%x, a_b_cnt=%x dst=%x\n",
+			name, lch, p.opt, p.src, p.a_b_cnt, p.dst);
+	printk(KERN_DEBUG "    src_dst_bidx=%x link_bcntrld=%x src_dst_cidx=%x ccnt=%x\n",
+			p.src_dst_bidx, p.link_bcntrld, p.src_dst_cidx, p.ccnt);
+}
 #else
 #define DPRINTK(format, arg...) do {} while (0)
+static void print_buf_info(int lch, char *name)
+{
+}
 #endif
-
 
 static struct snd_pcm_hardware davinci_pcm_hardware = {
 	.info = (SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BLOCK_TRANSFER |
@@ -72,29 +85,12 @@ struct davinci_runtime_data {
 	edmacc_paramentry_regs ram_params;
 };
 
-#if DAVINCI_PCM_DEBUG
-void print_buf_info(int lch, char *name)
-{
-	edmacc_paramentry_regs p;
-	if (lch < 0)
-		return;
-	davinci_get_dma_params(lch, &p);
-	printk(KERN_DEBUG "%s: 0x%x, opt=%x, src=%x, a_b_cnt=%x dst=%x\n",
-			name, lch, p.opt, p.src, p.a_b_cnt, p.dst);
-	printk(KERN_DEBUG "    src_dst_bidx=%x link_bcntrld=%x src_dst_cidx=%x ccnt=%x\n",
-			p.src_dst_bidx, p.link_bcntrld, p.src_dst_cidx, p.ccnt);
-}
-#endif
 
 static void davinci_pcm_dma_irq(int lch, u16 ch_status, void *data)
 {
 	struct snd_pcm_substream *substream = data;
-#if DAVINCI_PCM_DEBUG
-	struct snd_pcm_runtime *runtime = substream->runtime;
-	struct davinci_runtime_data *prtd = runtime->private_data;
-
+	struct davinci_runtime_data *prtd = substream->runtime->private_data;
 	print_buf_info(prtd->ram_master_lch, "i ram_master_lch");
-#endif
 	DPRINTK("lch=%d, status=0x%x\n", lch, ch_status);
 	if (unlikely(ch_status != DMA_COMPLETE))
 		return;
@@ -308,6 +304,9 @@ static int davinci_pcm_dma_request(struct snd_pcm_substream *substream)
 	davinci_set_dma_src_index(lch, 0, 0);
 	davinci_set_dma_dest_index(lch, 0, 0);
 
+	/* davinci_dma_chain_lch better if parameter added
+	 * to allow TCINTEN to be changed
+	 */
 	davinci_get_dma_params(lch, &parm);
 	parm.opt &= ~(TCCMODE | TCC | TCINTEN);
 	parm.opt |= TCCHEN | ((prtd->ram_master_lch & 0x3f)<<12);
@@ -320,6 +319,9 @@ static int davinci_pcm_dma_request(struct snd_pcm_substream *substream)
 	davinci_set_dma_src_index(lch, 0, 0);
 	davinci_set_dma_dest_index(lch, 0, 0);
 
+	/* davinci_dma_chain_lch better if parameter added
+	 * to allow TCINTEN to be changed
+	 */
 	davinci_get_dma_params(lch, &parm);
 	parm.opt &= ~(TCCMODE | TCC);
 	/* interrupt after every pong completion */
@@ -390,16 +392,14 @@ static int davinci_pcm_prepare(struct snd_pcm_substream *substream)
 	davinci_set_dma_params(prtd->ram_master_lch, &prtd->ram_params);
 	davinci_dma_link_lch(prtd->ram_master_lch, prtd->ram_link_lch2);
 	davinci_set_dma_params(prtd->asp_master_lch, &prtd->asp_params);
-#if DAVINCI_PCM_DEBUG
-	if (1) {
-		print_buf_info(prtd->ram_master_lch, "ram_master_lch");
-		print_buf_info(prtd->ram_link_lch, "ram_link_lch");
-		print_buf_info(prtd->ram_link_lch2, "ram_link_lch2");
-		print_buf_info(prtd->asp_master_lch, "asp_master_lch");
-		print_buf_info(prtd->asp_link_lch[0], "asp_link_lch[0]");
-		print_buf_info(prtd->asp_link_lch[1], "asp_link_lch[1]");
-	}
-#endif
+
+	print_buf_info(prtd->ram_master_lch, "ram_master_lch");
+	print_buf_info(prtd->ram_link_lch, "ram_link_lch");
+	print_buf_info(prtd->ram_link_lch2, "ram_link_lch2");
+	print_buf_info(prtd->asp_master_lch, "asp_master_lch");
+	print_buf_info(prtd->asp_link_lch[0], "asp_link_lch[0]");
+	print_buf_info(prtd->asp_link_lch[1], "asp_link_lch[1]");
+
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		/* copy 1st iram buffer */
 		davinci_start_dma(prtd->ram_master_lch);
