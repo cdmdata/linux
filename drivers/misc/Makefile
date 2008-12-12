@@ -3,6 +3,7 @@
 #
 obj- := misc.o	# Dummy rule to force built-in.o to be made
 
+obj-$(CONFIG_TOUCHSCREEN_BOUNDARY)	+= touchscreen.o
 obj-$(CONFIG_BD_GENTIMER)	+= gen-timer.o
 obj-$(CONFIG_IBM_ASM)		+= ibmasm/
 obj-$(CONFIG_HDPU_FEATURES)	+= hdpuftrs/
