@@ -257,7 +257,9 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 
 	switch (fmt & SND_SOC_DAIFMT_INV_MASK) {
 	case SND_SOC_DAIFMT_IB_NF:
-		/* CLKRP Receive clock polarity,
+		break;
+	case SND_SOC_DAIFMT_NB_NF:
+		/* CLKR Receive clock polarity,
 		 *	1 - sampled on rising edge of CLKR
 		 *	valid on rising edge
 		 * CLKXP Transmit clock polarity,
@@ -268,7 +270,7 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 		 */
 		pcr |= (DAVINCI_MCBSP_PCR_CLKXP | DAVINCI_MCBSP_PCR_CLKRP);
 		break;
-	case SND_SOC_DAIFMT_NB_IF:
+	case SND_SOC_DAIFMT_IB_IF:
 		/* CLKRP Receive clock polarity,
 		 *	0 - sampled on falling edge of CLKR
 		 *	valid on falling edge
@@ -280,7 +282,7 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 		 */
 		pcr |= (DAVINCI_MCBSP_PCR_FSXP | DAVINCI_MCBSP_PCR_FSRP);
 		break;
-	case SND_SOC_DAIFMT_IB_IF:
+	case SND_SOC_DAIFMT_NB_IF:
 		/* CLKRP Receive clock polarity,
 		 *	1 - sampled on rising edge of CLKR
 		 *	valid on rising edge
@@ -292,8 +294,6 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 		 */
 		pcr |= (DAVINCI_MCBSP_PCR_CLKXP | DAVINCI_MCBSP_PCR_CLKRP |
 			DAVINCI_MCBSP_PCR_FSXP | DAVINCI_MCBSP_PCR_FSRP);
-		break;
-	case SND_SOC_DAIFMT_NB_NF:
 		break;
 	default:
 		return -EINVAL;
