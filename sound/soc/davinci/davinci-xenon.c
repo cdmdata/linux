@@ -37,10 +37,10 @@
 
 #if 1
 #define AUDIO_FORMAT (SND_SOC_DAIFMT_DSP_A | \
-	SND_SOC_DAIFMT_CBM_CFM | SND_SOC_DAIFMT_IB_NF)
+	SND_SOC_DAIFMT_CBM_CFM | SND_SOC_DAIFMT_NB_NF)
 #else
 #define AUDIO_FORMAT (SND_SOC_DAIFMT_DSP_B | \
-	SND_SOC_DAIFMT_CBM_CFM | SND_SOC_DAIFMT_IB_NF)
+	SND_SOC_DAIFMT_CBM_CFM | SND_SOC_DAIFMT_NB_NF)
 #endif
 
 static int xenon_startup(struct snd_pcm_substream *substream)
