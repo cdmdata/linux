@@ -165,6 +165,9 @@ static int davinci_pcm_dma_setup(struct snd_pcm_substream *substream)
 
 	lch = prtd->asp_link_lch[0];
 	if (convert_mono_stereo) {
+		/* Each byte is sent twice, so 
+		 * A_CNT * B_CNT * C_CNT = 2 * ping_size
+		 */
 		davinci_set_dma_transfer_params(lch, data_type,
 				2, ping_size/data_type, 2, ASYNC);
 		lch = prtd->asp_link_lch[1];
@@ -260,6 +263,7 @@ static int davinci_pcm_dma_request(struct snd_pcm_substream *substream)
 				  &prtd->asp_master_lch, &tcc, EVENTQ_0);
 	if (ret)
 		goto exit3;
+
 	/* Request asp link channels */
 	tcc = prtd->ram_master_lch;
 	ret = davinci_request_dma(DAVINCI_EDMA_PARAM_ANY, "audio asp ping",
@@ -451,7 +455,7 @@ davinci_pcm_pointer(struct snd_pcm_substream *substream)
 	spin_unlock(&prtd->lock);
 
 	offset = bytes_to_frames(runtime, count_ram);
-	DPRINTK("offset=0x%x\n", offset);
+	DPRINTK("count_ram=0x%x\n", count_ram);
 	if (offset >= runtime->buffer_size)
 		offset = 0;
 
