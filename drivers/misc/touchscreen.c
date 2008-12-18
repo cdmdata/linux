@@ -340,7 +340,7 @@ int discover_touch_type(struct ucb1400 *ucb)
 							UCB_TS_CR_TSMX_GND);
 		msleep(2);
 		tcr = ucb1400_reg_read(ucb, UCB_TS_CR);
-		if (!(tcr & (1<<12))) {
+		if (tcr & (1<<12)) {
 			/*TSPX is still high, NO cable plugged in*/
 			printk(KERN_ALERT "TSPX is still high,\
 						NO cable plugged in.\n");
