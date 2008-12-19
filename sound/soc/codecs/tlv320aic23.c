@@ -645,10 +645,10 @@ static int tlv320aic23_set_fmt(struct snd_soc_dai *codec_dai, unsigned int fmt)
 	case SND_SOC_DAIFMT_I2S:
 		aic23->datfm = DAF_FOR_I2S;
 		break;
-	case SND_SOC_DAIFMT_DSP_A:
+	case SND_SOC_DAIFMT_DSP_B:
 		aic23->datfm = DAF_FOR_DSP;
 		break;
-	case SND_SOC_DAIFMT_DSP_B:
+	case SND_SOC_DAIFMT_DSP_A:
 		aic23->datfm = DAF_FOR_DSP | DAF_MSB_ON_2ND_BCLK;
 		break;
 	case SND_SOC_DAIFMT_RIGHT_J:
