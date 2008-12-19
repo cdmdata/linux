@@ -249,13 +249,10 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 
 	/* interface format */
 	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
-	case SND_SOC_DAIFMT_DSP_A:
-		dev->mode = MOD_DSP_A;
-		break;
 	case SND_SOC_DAIFMT_I2S:
 		/* Davinci doesn't support TRUE I2S, but some codecs will have
 		 * the left and right channels contiguous. This allows
-		 * dsp_b mode to be used with an inverted normal frame clk.
+		 * dsp_a mode to be used with an inverted normal frame clk.
 		 * If your codec is master and does not have contiguous
 		 * channels, then you will have sound on only one channel.
 		 * Try using a different mode, or codec as slave.
@@ -270,6 +267,9 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 		 * rate is lowered.
 		 */
 		fmt ^= SND_SOC_DAIFMT_NB_IF;
+	case SND_SOC_DAIFMT_DSP_A:
+		dev->mode = MOD_DSP_A;
+		break;
 	case SND_SOC_DAIFMT_DSP_B:
 		dev->mode = MOD_DSP_B;
 		break;
@@ -372,7 +372,7 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 
 	rcr = DAVINCI_MCBSP_RCR_RFIG;
 	xcr = DAVINCI_MCBSP_XCR_XFIG;
-	if (dev->mode == MOD_DSP_A) {
+	if (dev->mode == MOD_DSP_B) {
 		rcr |= DAVINCI_MCBSP_RCR_RDATDLY(0);
 		xcr |= DAVINCI_MCBSP_XCR_XDATDLY(0);
 	} else {
