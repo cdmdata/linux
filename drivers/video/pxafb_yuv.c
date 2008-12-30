@@ -41,6 +41,10 @@
 #include "pxafb_yuv.h"
 int pxafb_get_mmio(void);
 
+#define ROUND_UP2(num) (((num) + 1) & ~1)
+#define ROUND_UP4(num) (((num) + 3) & ~3)
+#define ROUND_UP8(num) (((num) + 7) & ~7)
+
 static atomic_t g_yuv;
 
 struct fb_info_yuv *get_yuv(void)
@@ -73,6 +77,113 @@ static inline void lcd_writel(int base, unsigned int reg, unsigned int val)
 	printk(KERN_ERR "lcd_writel base=0x%x, reg=0x%x, val=0x%x\n", base , reg, val);
 	__raw_writel(val, base + reg);
 }
+
+/* Cache large dma space at probe time
+ * to avoid fragmentation problems.
+ */
+static void fb_init_dma_cache(struct fb_info_yuv *yuv)
+{
+	u_int width;
+	u_int height;
+	u_int size;
+	unsigned int lccr1;
+	unsigned int lccr2;
+	int i;
+	int mmio_base = pxafb_get_mmio();
+	if (!mmio_base)
+		return;
+	
+	lccr1 = lcd_readl(mmio_base, LCCR1);
+	lccr2 = lcd_readl(mmio_base, LCCR2);
+	width = (lccr1 & 0x3ff) + 1;
+	height = (lccr2 & 0x3ff) + 1;
+	if (width < 320)
+		width = 320;
+	if (height < 240)
+		height = 240;
+	size = ROUND_UP4(width) * height;
+	size = PAGE_ALIGN(size);
+	for (i=0; i<3; i++) {
+		struct fb_dma *cache = &yuv->fb_cache[i];
+		cache->map_virtual = dma_alloc_writecombine(yuv->dev, size,
+			&cache->map_dma, GFP_KERNEL);
+		if (cache->map_virtual) {
+			cache->map_size = size;
+			printk(KERN_ERR "%s: map_dma 0x%x\n", __func__, cache->map_dma);
+		} else
+			break;
+	}
+}
+
+static void fb_free_dma_cache(struct fb_info_yuv *yuv)
+{
+	int i;
+	for (i=0; i<3; i++) {
+		struct fb_dma *cache = &yuv->fb_cache[i];
+		if (cache->map_virtual) {
+			dma_free_writecombine(yuv->dev,
+					cache->map_size,
+					cache->map_virtual,
+					cache->map_dma);
+			cache->map_virtual = NULL;
+			cache->map_size = 0;
+		}
+	}
+}
+
+int alloc_plane_dma(struct fb_info_yuv *yuv, struct fb_plane *pi,
+		int plane_index, int size)
+{
+	struct fb_dma *cache = &yuv->fb_cache[plane_index];
+	if (cache->map_virtual) {
+		if (cache->map_size >= size) {
+			pi->map_virtual = cache->map_virtual;
+			pi->map_dma = cache->map_dma;
+			pi->map_size = cache->map_size;
+			return 0;
+		}
+	}
+	printk(KERN_ERR "calling dma_alloc_writecombine, size %i, plane %i\n",
+			size, plane_index);
+	pi->map_virtual = dma_alloc_writecombine(yuv->dev, size,
+		&pi->map_dma, GFP_KERNEL);
+	if (!pi->map_virtual)
+		return -ENOMEM;
+
+	pi->map_size = size;
+	if (cache->map_virtual) {
+		if (cache->map_size < size) {
+			dma_free_writecombine(yuv->dev,
+					cache->map_size,
+					cache->map_virtual,
+					cache->map_dma);
+			cache->map_virtual = NULL;
+		}
+	}
+	if (!cache->map_virtual) {
+		cache->map_virtual = pi->map_virtual;
+		cache->map_dma = pi->map_dma;
+		cache->map_size = size;
+	}
+	printk(KERN_ERR "%s: map_dma 0x%x\n", __func__, pi->map_dma);
+	return 0;
+}
+
+static void free_plane_dma(struct fb_info_yuv *yuv, int plane_index)
+{
+	struct fb_plane *pi = &yuv->fb_planes[plane_index];
+	struct fb_dma *cache = &yuv->fb_cache[plane_index];
+	if (pi->map_virtual) {
+		if (pi->map_virtual != cache->map_virtual) {
+			dma_free_writecombine(yuv->dev,
+					pi->map_size,
+					pi->map_virtual,
+					pi->map_dma);
+		}
+		pi->map_virtual = NULL;
+	}
+}
+
 
 
 void destroy_planes(struct fb_info_yuv *yuv)
@@ -119,27 +230,9 @@ void destroy_planes(struct fb_info_yuv *yuv)
 		lcd_writel(mmio_base, LCCR0, lccr0);
 #endif
 	}
-	if (yuv->fb_planes[PLANE_Y].map_virtual) {
-		dma_free_writecombine(yuv->dev,
-			yuv->fb_planes[PLANE_Y].map_size,
-			yuv->fb_planes[PLANE_Y].map_virtual,
-			yuv->fb_planes[PLANE_Y].map_dma);
-		yuv->fb_planes[PLANE_Y].map_virtual = NULL;
-	}
-	if (yuv->fb_planes[PLANE_U].map_virtual) {
-		dma_free_writecombine(yuv->dev,
-			yuv->fb_planes[PLANE_U].map_size,
-			yuv->fb_planes[PLANE_U].map_virtual,
-			yuv->fb_planes[PLANE_U].map_dma);
-		yuv->fb_planes[PLANE_U].map_virtual = NULL;
-	}
-	if (yuv->fb_planes[PLANE_V].map_virtual) {
-		dma_free_writecombine(yuv->dev,
-			yuv->fb_planes[PLANE_V].map_size,
-			yuv->fb_planes[PLANE_V].map_virtual,
-			yuv->fb_planes[PLANE_V].map_dma);
-		yuv->fb_planes[PLANE_V].map_virtual = NULL;
-	}
+	free_plane_dma(yuv, PLANE_Y);
+	free_plane_dma(yuv, PLANE_U);
+	free_plane_dma(yuv, PLANE_V);
 }
 
 static int alloc_plane_buffer(struct fb_plane *pi, int index, int plane_size,int val)
@@ -149,27 +242,19 @@ static int alloc_plane_buffer(struct fb_plane *pi, int index, int plane_size,int
 	 *  to make mmap safer 
 	 */
 	int size = PAGE_ALIGN(plane_size);
-	printk(KERN_ERR "calling dma_alloc_writecombine %i\n", size);
-	pi->map_virtual = dma_alloc_writecombine(pi->parent->dev, size,
-			&pi->map_dma, GFP_KERNEL);
-	if (pi->map_virtual) {
-		pi->map_size = size;
-		pi->plane_size = plane_size;
-		memset(pi->map_virtual, val, plane_size);
-		dma_desc = &pi->parent->desc_virtual[index];
-		dma_desc->fdadr = pi->parent->desc_dma +
-			(index * sizeof(struct pxafb_dma_descriptor));
-		dma_desc->fsadr = pi->map_dma;
-		dma_desc->fidr  = 0;
-		dma_desc->ldcmd = plane_size;
-		return 0;
-	}
-	return -ENOMEM;
+	int ret = alloc_plane_dma(pi->parent, pi, index, size);
+	if (ret)
+		return ret;
+	pi->plane_size = plane_size;
+	memset(pi->map_virtual, val, plane_size);
+	dma_desc = &pi->parent->desc_virtual[index];
+	dma_desc->fdadr = pi->parent->desc_dma +
+		(index * sizeof(struct pxafb_dma_descriptor));
+	dma_desc->fsadr = pi->map_dma;
+	dma_desc->fidr  = 0;
+	dma_desc->ldcmd = plane_size;
+	return 0;
 }
-
-#define ROUND_UP2(num) (((num) + 1) & ~1)
-#define ROUND_UP4(num) (((num) + 3) & ~3)
-#define ROUND_UP8(num) (((num) + 7) & ~7)
 
 int create_yuv_surface(struct fb_info_yuv *yuv, struct pxa27x_overlay_t *pdata)
 {
@@ -465,6 +550,7 @@ int __init pxafb_yuv_probe(struct platform_device *dev)
 	}
 	yuv->dev = &dev->dev;
 	platform_set_drvdata(dev, yuv);
+	fb_init_dma_cache(yuv);
 	return 0 ;
 }
 
@@ -489,6 +575,7 @@ static int __devexit pxafb_yuv_remove(struct platform_device *dev)
 		yuv->plane_major = 0;
 	}
 	destroy_planes(yuv);
+	fb_free_dma_cache(yuv);
 	if (yuv->desc_virtual) {
 		dma_free_writecombine(yuv->dev, yuv->desc_size,
 				yuv->desc_virtual, yuv->desc_dma);
