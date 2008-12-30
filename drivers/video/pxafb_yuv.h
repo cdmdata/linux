@@ -16,6 +16,12 @@ struct fb_plane {
 	struct fb_info_yuv* parent;
 };
 
+struct fb_dma {
+	dma_addr_t	map_dma;
+	u_char *	map_virtual;
+	u_int		map_size;
+};
+
 #define PLANE_Y		0
 #define PLANE_U		1
 #define PLANE_V		2
@@ -29,5 +35,6 @@ struct fb_info_yuv {
 	struct pxafb_dma_descriptor *desc_virtual;
 	u_int		desc_size;
 	struct fb_plane	fb_planes[3];
+	struct fb_dma fb_cache[3];
 };
 #endif
