@@ -24,6 +24,7 @@
 #include <linux/ioport.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
+#include <linux/dma-mapping.h>
 
 #include <asm/types.h>
 #include <asm/setup.h>
@@ -39,6 +40,8 @@
 #include <asm/mach/flash.h>
 
 #include <asm/arch/pxa-regs.h>
+#include <asm/arch/pxa2xx-regs.h>
+#include <asm/arch/pxa2xx-gpio.h>
 #include <asm/arch/audio.h>
 #include <asm/arch/pxafb.h>
 #include <asm/arch/mmc.h>
@@ -86,8 +89,21 @@ static struct platform_device oxygen_audio_device = {
 	.id		= -1,
 };
 
+static u64 pxafb_yuv_dma_mask = DMA_BIT_MASK(32);
+static struct platform_device pxafb_yuv_device = {
+	.name		= "pxafb_yuv",
+	.id		= 3,
+	.num_resources	= 0,
+	.resource	= 0,
+	.dev		= {
+		.dma_mask = &pxafb_yuv_dma_mask,
+		.coherent_dma_mask = DMA_BIT_MASK(32),
+	},
+};
+
 static struct platform_device *platform_devices[] __initdata = {
         &oxygen_audio_device,
+        &pxafb_yuv_device
 };
 
 static struct pxafb_mode_info fb_modes __initdata = {
