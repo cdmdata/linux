@@ -17,6 +17,8 @@
  */
 #define PHYS_OFFSET	UL(0xa0000000)
 
+#define CONSISTENT_DMA_SIZE SZ_8M
+
 /*
  * Virtual view <-> DMA view memory address translations
  * virt_to_bus: Used to translate the virtual address to an
