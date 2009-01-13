@@ -119,7 +119,7 @@ obj-$(CONFIG_FB_PNX4008_DUM)	  += pnx4008/
 obj-$(CONFIG_FB_PNX4008_DUM_RGB)  += pnx4008/
 obj-$(CONFIG_FB_IBM_GXT4500)	  += gxt4500.o
 obj-$(CONFIG_FB_PS3)		  += ps3fb.o
-obj-$(CONFIG_FB_SM501)            += sm501fb.o
+#obj-$(CONFIG_FB_SM501)            += sm501fb.o
 obj-$(CONFIG_FB_XILINX)           += xilinxfb.o
 obj-$(CONFIG_FB_SH_MOBILE_LCDC)	  += sh_mobile_lcdcfb.o
 obj-$(CONFIG_FB_OMAP)             += omap/
@@ -136,6 +136,11 @@ obj-$(CONFIG_FB_OF)               += offb.o
 obj-$(CONFIG_FB_BF54X_LQ043)	  += bf54x-lq043fb.o
 obj-$(CONFIG_FB_BFIN_T350MCQB)	  += bfin-t350mcqb-fb.o
 obj-$(CONFIG_FB_MX3)		  += mx3fb.o
+
+obj-$(CONFIG_FB_SM501) += sm501-int.o sm501.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o ffit.o
+obj-$(CONFIG_FB_SM501YUV) += sm501yuv.o
+obj-$(CONFIG_FB_SM501MEM) += sm501mem.o sm501-cmd.o
+obj-$(CONFIG_FB_SM501ALPHA) += sm501alpha.o
 
 # the test framebuffer is last
 obj-$(CONFIG_FB_VIRTUAL)          += vfb.o
