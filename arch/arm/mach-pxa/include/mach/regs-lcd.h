@@ -128,6 +128,8 @@
 
 #define LCCR3_BPP	Fld (3, 24)	/* Bit Per Pixel */
 #define LCCR3_Bpp(Bpp)	(((Bpp) << FShft (LCCR3_BPP)))
+ 
+#define LCCR3_BPP3      Fld (1, 29)     /* Bit Per Pixel */
 
 #define LCCR3_ACB	Fld (8, 8)	/* AC Bias */
 #define LCCR3_Acb(Acb)	(((Acb) << FShft (LCCR3_ACB)))
