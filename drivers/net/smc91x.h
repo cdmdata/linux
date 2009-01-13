@@ -201,7 +201,8 @@ static inline void SMC_outw(u16 val, void __iomem *ioaddr, int reg)
 #elif	defined(CONFIG_ARCH_INNOKOM) || \
 	defined(CONFIG_ARCH_PXA_IDP) || \
 	defined(CONFIG_ARCH_RAMSES) || \
-	defined(CONFIG_ARCH_PCM027)
+	defined(CONFIG_ARCH_NEON) || \
+	defined(CONFIG_ARCH_PCM027) 
 
 #define SMC_CAN_USE_8BIT	1
 #define SMC_CAN_USE_16BIT	1
@@ -496,8 +497,23 @@ smc_pxa_dma_insl(void __iomem *ioaddr, struct smc_local *lp, int reg, int dma,
 	DCMD(dma) = (DCMD_INCTRGADDR | DCMD_BURST32 |
 		     DCMD_WIDTH4 | (DCMD_LENGTH & len));
 	DCSR(dma) = DCSR_NODESC | DCSR_RUN;
-	while (!(DCSR(dma) & DCSR_STOPSTATE))
+
+	// only two ways out: bus-error or done
+	do {
+		unsigned long cmd;
+		unsigned long csr;
+		cmd = DCMD(dma);
+		if( 0 == (cmd & 0x1fff) )
+			break ;
+		csr = DCSR(dma);
+		if(0 != (csr & DCSR_BUSERR)){
+			printk( KERN_ERR "smc91x: bus error at addr %p/%p\n",
+                                buf, (void *)dmabuf );
+			break ;
+                }
 		cpu_relax();
+	} while( 1 );
+	
 	DCSR(dma) = 0;
 	dma_unmap_single(lp->device, dmabuf, len, DMA_FROM_DEVICE);
 }
@@ -535,8 +551,21 @@ smc_pxa_dma_insw(void __iomem *ioaddr, struct smc_local *lp, int reg, int dma,
 	DCMD(dma) = (DCMD_INCTRGADDR | DCMD_BURST32 |
 		     DCMD_WIDTH2 | (DCMD_LENGTH & len));
 	DCSR(dma) = DCSR_NODESC | DCSR_RUN;
-	while (!(DCSR(dma) & DCSR_STOPSTATE))
+	// only two ways out: bus-error or done
+	do {
+		unsigned long cmd;
+		unsigned long csr;
+		cmd = DCMD(dma);
+		if( 0 == (cmd & 0x1fff) )
+			break ;
+		csr = DCSR(dma);
+		if(0 != (csr & DCSR_BUSERR)){
+			printk( KERN_ERR "smc91x: bus error at addr %p/%p\n",
+                                buf, (void *)dmabuf );
+			break ;
+                }
 		cpu_relax();
+	} while( 1 );
 	DCSR(dma) = 0;
 	dma_unmap_single(lp->device, dmabuf, len, DMA_FROM_DEVICE);
 }
