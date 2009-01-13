@@ -1643,6 +1643,136 @@ static void smc_ethtool_setmsglevel(struct net_device *dev, u32 level)
 	lp->msg_enable = level;
 }
 
+#if 1
+/*
+ * 64 bytes of config, plus 6-bytes of mac
+ */
+#define SMC91X_EEPROM_LEN 70     
+
+static int smc911x_ethtool_geteeprom_len(struct net_device *dev)
+{
+	 return SMC91X_EEPROM_LEN;
+}
+
+static int readEEprom(struct smc_local *lp,void __iomem *ioaddr, int i,unsigned short *val,unsigned short ctl)
+{
+	int j=0;
+	SMC_SELECT_BANK( lp, 2 );
+	udelay(10);
+	SMC_SET_PTR( lp, i );
+	udelay(10);
+	SMC_SELECT_BANK( lp, 1 );
+	udelay(1);
+	SMC_SET_CTL( lp, ctl | CTL_EEPROM_SELECT | CTL_RELOAD );
+	do {
+		udelay(10);
+		j++;
+		if (j>=100000) return -1;
+	} while (SMC_GET_CTL() & (CTL_STORE|CTL_RELOAD));
+	*val = SMC_inw( ioaddr, GP_REG(lp) );
+	return 0;
+}
+
+static int writeEEprom(struct smc_local *lp,void __iomem *ioaddr, int i,unsigned short val,unsigned short ctl)
+{
+	int j=0;
+	SMC_SELECT_BANK( lp, 2 );
+	udelay(10);
+	SMC_SET_PTR( lp, i );
+	udelay(10);
+	SMC_SELECT_BANK( lp, 1 );
+	SMC_outw( val, ioaddr, GP_REG(lp) );
+	udelay(1);
+	SMC_SET_CTL( lp, ctl | CTL_EEPROM_SELECT | CTL_STORE );
+	do {
+		udelay(10);
+		j++;
+		if (j>=100000) return -1;
+	} while (SMC_GET_CTL() & (CTL_STORE|CTL_RELOAD));
+	return 0;
+}
+
+static int smc911x_ethtool_geteeprom(
+	struct net_device *dev,
+	struct ethtool_eeprom *eeprom, 
+	u8 *data)
+{
+	int i ;
+	u16 *words = (u16 *)data ;
+	unsigned short saved_ctl ;
+	unsigned short mask ;
+	struct smc_local *lp = netdev_priv(dev);
+	void __iomem *ioaddr = lp->base;
+	unsigned offs = eeprom->offset ;
+	spin_lock_irq(&lp->lock);
+	SMC_SELECT_BANK( lp, 2 );
+	mask = SMC_GET_INT_MASK(lp);
+	SMC_SET_INT_MASK(lp,0);   
+
+	DBG(2, "%s: read ctl from %p\n", __FUNCTION__, ioaddr );
+	SMC_SELECT_BANK( lp, 1 );
+	saved_ctl = SMC_inw(ioaddr, CTL_REG(lp));
+	DBG(2, "%s: ctl == %08x\n", __FUNCTION__, saved_ctl );
+	SMC_SET_CTL( lp, saved_ctl | CTL_EEPROM_SELECT );
+
+	memset(words,0,eeprom->len);
+	for( i = 0 ; i < (eeprom->len/2) ; i++, offs += 2 ){
+		if( offs > SMC91X_EEPROM_LEN-2 )
+			break;
+		readEEprom(lp,ioaddr, offs/2, words++, saved_ctl );
+	}
+	SMC_SET_CTL( lp, saved_ctl & ~CTL_EEPROM_SELECT );
+
+	SMC_SELECT_BANK( lp, 2 );
+	SMC_SET_INT_MASK(lp,mask);
+	spin_unlock_irq(&lp->lock);
+	return 0;
+}
+
+static int smc911x_ethtool_seteeprom(
+	struct net_device *dev,
+	struct ethtool_eeprom *eeprom, u8 *data)
+{
+	int i ;
+	unsigned short saved_ctl ;
+	unsigned short mask ;
+	struct smc_local *lp = netdev_priv(dev);
+	void __iomem *ioaddr = lp->base;
+	unsigned offs = eeprom->offset ;
+	spin_lock_irq(&lp->lock);
+	SMC_SELECT_BANK( lp, 2 );
+	mask = SMC_GET_INT_MASK(lp);
+	SMC_SET_INT_MASK(lp,0);   
+
+	DBG(2, "%s: read ctl from %p\n", __FUNCTION__, ioaddr );
+	SMC_SELECT_BANK( lp, 1 );
+	saved_ctl = SMC_inw(ioaddr, CTL_REG(lp));
+	DBG(2, "%s: ctl == %08x\n", __FUNCTION__, saved_ctl );
+	SMC_SET_CTL( lp, saved_ctl | CTL_EEPROM_SELECT );
+
+	DBG(2, "%s: offset %u, len %u\n", __FUNCTION__, eeprom->offset, eeprom->len );
+	for( i = 0 ; i < eeprom->len ; i++, offs++, data++ ){
+		unsigned short word ;
+		if( offs > SMC91X_EEPROM_LEN-1 )
+			break;
+		readEEprom(lp,ioaddr,offs/2, &word, saved_ctl);
+		if( offs & 1 ){
+			word = (word & 0x00FF)| (*data<<8);
+		} else {
+			word = (word & 0xFF00)| *data ;
+		}
+	      
+		DBG(2, "addr %02x, value 0x%04x\n", offs/2, word );
+		writeEEprom(lp,ioaddr, offs/2, word, saved_ctl );
+	}
+	SMC_SET_CTL( lp, saved_ctl & ~CTL_EEPROM_SELECT );
+
+	SMC_SELECT_BANK( lp, 2 );
+	SMC_SET_INT_MASK(lp,mask);
+	spin_unlock_irq(&lp->lock);
+	return 0;
+}
+#else
 static int smc_write_eeprom_word(struct net_device *dev, u16 addr, u16 word)
 {
 	u16 ctl;
@@ -1753,6 +1883,7 @@ static int smc_ethtool_seteeprom(struct net_device *dev,
 	return 0;
 }
 
+#endif
 
 static const struct ethtool_ops smc_ethtool_ops = {
 	.get_settings	= smc_ethtool_getsettings,
@@ -1763,9 +1894,15 @@ static const struct ethtool_ops smc_ethtool_ops = {
 	.set_msglevel	= smc_ethtool_setmsglevel,
 	.nway_reset	= smc_ethtool_nwayreset,
 	.get_link	= ethtool_op_get_link,
+#if 1
+	.get_eeprom_len = smc911x_ethtool_geteeprom_len,
+	.get_eeprom = smc911x_ethtool_geteeprom,
+	.set_eeprom = smc911x_ethtool_seteeprom,
+#else
 	.get_eeprom_len = smc_ethtool_geteeprom_len,
 	.get_eeprom	= smc_ethtool_geteeprom,
 	.set_eeprom	= smc_ethtool_seteeprom,
+#endif
 };
 
 static const struct net_device_ops smc_netdev_ops = {
