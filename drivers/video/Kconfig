@@ -2024,6 +2024,26 @@ config FB_SH7760
 	  and 8, 15 or 16 bpp color; 90 degrees clockwise display rotation for
 	  panels <= 320 pixel horizontal resolution.
 
+config FB_SM501
+	tristate "SM-501 support"
+	depends on FB && ARCH_PXA
+	default Y if CONFIG_MACH_NEON
+
+config FB_SM501MEM
+	tristate "SM-501 memory allocation"
+	depends on FB && ARCH_PXA && FB_SM501
+	default Y if CONFIG_MACH_NEON  
+
+config FB_SM501YUV
+	tristate "SM-501 YUV layer support"
+	depends on FB && ARCH_PXA && FB_SM501MEM
+	default Y if CONFIG_MACH_NEON  
+
+config FB_SM501ALPHA
+	tristate "SM-501 Alpha Layer support"
+	depends on FB && ARCH_PXA && FB_SM501MEM
+	default Y if CONFIG_MACH_NEON  
+
 config FB_VIRTUAL
 	tristate "Virtual Frame Buffer support (ONLY FOR TESTING!)"
 	depends on FB
