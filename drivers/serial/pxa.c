@@ -52,6 +52,7 @@ struct uart_pxa_port {
 	unsigned char           mcr;
 	unsigned int            lsr_break_flag;
 	struct clk		*clk;
+	wait_queue_head_t	tx_wait;
 	char			*name;
 };
 
@@ -238,8 +239,10 @@ static inline irqreturn_t serial_pxa_irq(int irq, void *dev_id)
 	if (lsr & UART_LSR_DR)
 		receive_chars(up, &lsr);
 	check_modem_status(up);
-	if (lsr & UART_LSR_THRE)
+	if (lsr & UART_LSR_THRE) {
 		transmit_chars(up);
+		wake_up_interruptible(&up->tx_wait);
+	}
 	return IRQ_HANDLED;
 }
 
@@ -336,9 +339,51 @@ out:
 }
 #endif
 
+static void serial_pxa_wait_until_sent(struct tty_struct *tty, int timeout)
+{
+	struct uart_state *state = tty->driver_data;
+	struct uart_port *port = state->port;
+	struct uart_pxa_port *up = (struct uart_pxa_port *)port ;
+	unsigned long flags;
+
+	DECLARE_WAITQUEUE(wait, current);
+
+	spin_lock_irqsave(&port->lock, flags);
+	add_wait_queue(&up->tx_wait, &wait);
+	spin_unlock_irqrestore(&port->lock, flags);
+
+	for (;;) {
+		unsigned int lsr ;
+		set_current_state(TASK_INTERRUPTIBLE);
+
+		lsr = serial_in(up, UART_LSR);
+		if( lsr & UART_LSR_THRE )
+			break ;
+		else
+			schedule_timeout(1);
+	}
+
+	set_current_state(TASK_RUNNING);
+	spin_lock_irqsave(&port->lock, flags);
+	remove_wait_queue(&up->tx_wait, &wait);
+	spin_unlock_irqrestore(&port->lock, flags);
+
+	for (;;) {
+		unsigned int lsr ;
+		lsr = serial_in(up, UART_LSR);
+		if( lsr & UART_LSR_TEMT )
+			break ;
+		else
+			yield();
+	}
+}
+
+struct tty_operations tty_ops;
+
 static int serial_pxa_startup(struct uart_port *port)
 {
 	struct uart_pxa_port *up = (struct uart_pxa_port *)port;
+	struct tty_struct *tty = up->port.info->port.tty;
 	unsigned long flags;
 	int retval;
 
@@ -399,6 +444,9 @@ static int serial_pxa_startup(struct uart_port *port)
 	(void) serial_in(up, UART_IIR);
 	(void) serial_in(up, UART_MSR);
 
+	tty_ops = (*tty->driver->ops);
+	tty_ops.wait_until_sent = serial_pxa_wait_until_sent;
+	tty_set_operations(tty->driver, &tty_ops);
 	return 0;
 }
 
@@ -461,6 +509,9 @@ serial_pxa_set_termios(struct uart_port *port, struct ktermios *termios,
 		cval |= UART_LCR_PARITY;
 	if (!(termios->c_cflag & PARODD))
 		cval |= UART_LCR_EPAR;
+	if (termios->c_cflag & CMSPAR) {
+		cval |= UART_LCR_SPAR ; // STKY
+	}
 
 	/*
 	 * Ask the core to calculate the divisor for us.
@@ -836,6 +887,7 @@ static struct platform_driver serial_pxa_driver = {
 int __init serial_pxa_init(void)
 {
 	int ret;
+	int i ;
 
 	ret = uart_register_driver(&serial_pxa_reg);
 	if (ret != 0)
@@ -845,6 +897,9 @@ int __init serial_pxa_init(void)
 	if (ret != 0)
 		uart_unregister_driver(&serial_pxa_reg);
 
+        for( i = 0 ; i < sizeof(serial_pxa_ports)/sizeof(serial_pxa_ports[0]) ; i++ )
+		if(serial_pxa_ports[i])
+			init_waitqueue_head (&(serial_pxa_ports[i]->tx_wait));
 	return ret;
 }
 
