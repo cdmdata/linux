@@ -59,6 +59,9 @@
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/div64.h>
+#include <mach/pxa-regs.h>
+#include <mach/pxa2xx-regs.h>
+#include <mach/pxa2xx-gpio.h>
 #include <mach/bitfield.h>
 #include <mach/pxafb.h>
 
@@ -134,55 +137,6 @@ static inline u_int chan_to_field(u_int chan, struct fb_bitfield *bf)
 
 #define LCCR0_CONFIG_MASK (0xFFFFFFFF & ~(LCCR0_OUM|LCCR0_BM|LCCR0_QDM|LCCR0_DIS|LCCR0_EFM|LCCR0_IUM|LCCR0_SFM|LCCR0_LDM|LCCR0_ENB))
 #define LCCR3_CONFIG_MASK (0xFFFFFFFF & ~(LCCR3_HSP|LCCR3_VSP|FMsk(LCCR3_PCD)|FMsk(LCCR3_BPP)|FMsk(LCCR3_BPP3)))
-
-static void pxa_mode_from_registers(struct pxafb_mode_info *mode,struct pxafb_info *info,struct pxafb_mach_info *mach)
-{
-	unsigned int const lccr0 = lcd_readl(info,LCCR0);
-	if( 0 != (lccr0 & LCCR0_ENB)){
-		unsigned int const lccr1 = lcd_readl(info,LCCR1);
-		unsigned int const lccr2 = lcd_readl(info,LCCR2);
-		unsigned int const lccr3 = lcd_readl(info,LCCR3);
-                unsigned int const cccr = CCCR ;
-                unsigned L = cccr & 0x1F ;
-                unsigned K ;
-                unsigned lclk ;
-                unsigned pcd = lccr3 & 0xFF ;
-     
-                if( L < 2 )
-                   L = 2 ;
-                K = ( 8 > L )
-                    ? 1
-                    : ( 16 >= L )
-                      ? 2 
-                      : 4 ;
-     
-                lclk = (13000000*L)/K ;
-		mode->pixclock = lclk/(2*(pcd+1));
-		mode->xres = (lccr1 & 0x3FF)+1 ;
-		mode->yres = (lccr2 & 0x3FF)+1 ;
-		mode->bpp	= 16 ;
-		mode->hsync_len = ((lccr1>>10)&0x3F)+1 ;
-		mode->left_margin	= (lccr1>>24)+1 ;
-		mode->right_margin = ((lccr1>>16)&0xFF)+1 ;
-		mode->vsync_len = ((lccr2>>10)&0x3f)+1 ;
-		mode->upper_margin = (lccr2>>24);
-		mode->lower_margin = ((lccr2>>16)&0xFF);
-		mode->sync = 0 ;
-		if( 0 == (lccr3 & LCCR3_HSP) )
-			mode->sync = FB_SYNC_HOR_HIGH_ACT ;
-		else
-			mode->sync = 0 ;
-		if( 0 == (lccr3 & LCCR3_VSP) )
-			mode->sync |= FB_SYNC_VERT_HIGH_ACT ;
-		info->lccr0 = (lccr0 & LCCR0_CONFIG_MASK);
-		info->lccr3 = (lccr3 & LCCR3_CONFIG_MASK);
-		if(lccr3&LCCR3_PCP)
-			mach->lccr3 |= LCCR3_PCP ;
-		else
-			mach->lccr3 &= ~LCCR3_PCP ;
-        	printk(KERN_INFO "Display %ix%ix%i pixclock=%lu\n", mode->xres,mode->yres,mode->bpp,mode->pixclock);
-	}
-}
 
 static int
 pxafb_setpalettereg(u_int regno, u_int red, u_int green, u_int blue,
@@ -1402,7 +1356,7 @@ static int pxafb_activate_var(struct fb_var_screeninfo *var,
 
 	fbi->reg_lccr0 = fbi->lccr0 |
 		(LCCR0_LDM | LCCR0_SFM | LCCR0_IUM | LCCR0_EFM |
-		 LCCR0_QDM | LCCR0_BM  | LCCR0_OUM);
+		 LCCR0_QDM | LCCR0_BM  | LCCR0_OUM | LCCR0_OUC);
 
 	fbi->reg_lccr3 |= pxafb_var_to_lccr3(var);
 
@@ -2103,12 +2057,20 @@ static void __devinit pxafb_check_options(struct device *dev,
 #define pxafb_check_options(...)	do {} while (0)
 #endif
 
+struct pxafb_info *gfbi;
+int pxafb_get_mmio(void)
+{
+	return (gfbi)? ((int)gfbi->mmio_base) : 0;
+}
+EXPORT_SYMBOL(pxafb_get_mmio);
+
 static int __devinit pxafb_probe(struct platform_device *dev)
 {
 	struct pxafb_info *fbi;
 	struct pxafb_mach_info *inf;
 	struct resource *r;
 	int irq, ret;
+	unsigned long lccr0, lccr3;
 
 	dev_dbg(&dev->dev, "pxafb_probe\n");
 
@@ -2137,6 +2099,7 @@ static int __devinit pxafb_probe(struct platform_device *dev)
 	}
 
 	fbi = pxafb_init_fbinfo(&dev->dev);
+	gfbi = fbi;
 	if (!fbi) {
 		/* only reason for pxafb_init_fbinfo to fail is kmalloc */
 		dev_err(&dev->dev, "Failed to initialize framebuffer device\n");
@@ -2167,7 +2130,31 @@ static int __devinit pxafb_probe(struct platform_device *dev)
 		ret = -EBUSY;
 		goto failed_free_res;
 	}
-        pxa_mode_from_registers(inf->modes,fbi,inf);
+
+	/*
+	these lines were moved from pxa_mode_from_registers
+	function code after it was removed from this file.
+	*/
+	lccr0 = lcd_readl(fbi, LCCR0);
+	lccr3 = lcd_readl(fbi, LCCR3);
+	/*
+	in the pxa_mode_from_registers function these variables
+	were set only if the enable bits were set in lccr0
+	register. as it turned out in argon board the enable
+	was being cleared because linux was wiping out the
+	frame buffers causing the enable bit to be cleared.
+	need to check if these variables need to be set
+	irrespective of the enable bit. if so uncomment the
+	following comment.
+	*/
+	/*
+	if( 0 != (lccr0 & LCCR0_ENB)){
+		fbi->lccr0 = (lccr0 & LCCR0_CONFIG_MASK);
+		fbi->lccr3 = (lccr3 & LCCR3_CONFIG_MASK);
+	}
+	*/
+	fbi->lccr0 = (lccr0 & LCCR0_CONFIG_MASK);
+	fbi->lccr3 = (lccr3 & LCCR3_CONFIG_MASK);
 	pxafb_decode_mach_info(fbi, inf);
 
 	fbi->dma_buff_size = PAGE_ALIGN(sizeof(struct pxafb_dma_buff));

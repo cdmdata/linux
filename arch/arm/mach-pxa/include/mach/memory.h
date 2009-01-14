@@ -17,6 +17,8 @@
  */
 #define PHYS_OFFSET	UL(0xa0000000)
 
+#define CONSISTENT_DMA_SIZE SZ_8M
+
 /*
  * The nodes are matched with the physical SDRAM banks as follows:
  *
