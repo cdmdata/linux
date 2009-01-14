@@ -73,6 +73,13 @@ config MACH_MP900C
 	bool "Nec Mobilepro 900/c"
 	select PXA25x
 
+config MACH_ARGON
+	bool "Boundary Devices Argon board"
+	select PXA27x
+	help
+	  Select Boundary Devices 32 bit wide board using internal LCD controller
+	  and Okaya QVGA display
+
 config MACH_NEON
 	bool "Boundary Devices Neon board"
 	select PXA25x

@@ -33,6 +33,7 @@ obj-$(CONFIG_ARCH_LUBBOCK)	+= lubbock.o
 obj-$(CONFIG_MACH_LOGICPD_PXA270) += lpd270.o
 obj-$(CONFIG_MACH_MAINSTONE)	+= mainstone.o
 obj-$(CONFIG_MACH_MP900C)	+= mp900.o
+obj-$(CONFIG_MACH_ARGON)	+= argon.o read_regs.o
 obj-$(CONFIG_MACH_NEON)		+= neon.o read_regs.o
 obj-$(CONFIG_MACH_NEON270)	+= neon270.o read_regs.o
 obj-$(CONFIG_ARCH_PXA_IDP)	+= idp.o
