@@ -86,6 +86,13 @@ config MACH_ARGON
 	  Select Boundary Devices 32 bit wide board using internal LCD controller
 	  and Okaya QVGA display
 
+config MACH_OXYGEN
+	bool "Boundary Devices Oxygen board"
+	select PXA27x
+	help
+	  Select Boundary Devices 32 bit wide board using internal LCD controller
+	  and Okaya 4.3" (480x272) display
+
 config MACH_NEON
 	bool "Boundary Devices Neon board"
 	select PXA25x
