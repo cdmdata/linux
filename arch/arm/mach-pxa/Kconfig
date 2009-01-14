@@ -117,8 +117,18 @@ config MACH_CAPC7117
 	select CPU_PXA320
 	select PXA3xx
 
+config MACH_NEON
+	bool "Boundary Devices Neon board"
+	select PXA25x
+	help
+	  Select Boundary Devices 32 bit wide board using SM-501 controller
+	  and SMSC Lan91C111 10/100 ethernet
+
 config ARCH_GUMSTIX
 	bool "Gumstix XScale 255 boards"
+
+config ARCH_PXA_IDP
+	bool "Accelent Xscale IDP"
 	select PXA25x
 	help
 	  Say Y here if you intend to run this kernel on
