@@ -36,6 +36,7 @@ obj-$(CONFIG_MACH_SAAR)		+= saar.o
 
 # 3rd Party Dev Platforms
 obj-$(CONFIG_MACH_MP900C)	+= mp900.o
+obj-$(CONFIG_MACH_ARGON)	+= argon.o read_regs.o
 obj-$(CONFIG_MACH_NEON)		+= neon.o read_regs.o
 obj-$(CONFIG_MACH_NEON270)	+= neon270.o read_regs.o
 obj-$(CONFIG_ARCH_PXA_IDP)	+= idp.o

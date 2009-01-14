@@ -117,6 +117,13 @@ config MACH_CAPC7117
 	select CPU_PXA320
 	select PXA3xx
 
+config MACH_ARGON
+	bool "Boundary Devices Argon board"
+	select PXA27x
+	help
+	  Select Boundary Devices 32 bit wide board using internal LCD controller
+	  and Okaya QVGA display
+
 config MACH_NEON
 	bool "Boundary Devices Neon board"
 	select PXA25x
