@@ -2,6 +2,7 @@
 # Makefile for misc devices that really don't fit anywhere else.
 #
 
+obj-$(CONFIG_TOUCHSCREEN_BOUNDARY)	+= touchscreen.o
 obj-$(CONFIG_BD_GENTIMER)	+= gen-timer.o
 obj-$(CONFIG_IBM_ASM)		+= ibmasm/
 obj-$(CONFIG_HDPU_FEATURES)	+= hdpuftrs/
