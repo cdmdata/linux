@@ -147,7 +147,6 @@ struct platform_device pxa_device_fb = {
 
 void __init set_pxa_fb_info(struct pxafb_mach_info *info)
 {
-	struct pxafb_mode_info *const mode = info->modes ;
 	pxa_device_fb.dev.platform_data = info;
 	pxa_register_device(&pxa_device_fb, info);
 }
