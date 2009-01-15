@@ -533,7 +533,6 @@ int dma_map_sg(struct device *dev, struct scatterlist *sg, int nents,
 	struct scatterlist *s;
 	int i, j;
 
-	SPECIAL_RF(dev,map_sg(sg, nents, dir))
 	for_each_sg(sg, s, nents, i) {
 		s->dma_address = dma_map_page(dev, sg_page(s), s->offset,
 						s->length, dir);
@@ -565,7 +564,6 @@ void dma_unmap_sg(struct device *dev, struct scatterlist *sg, int nents,
 	struct scatterlist *s;
 	int i;
 
-	SPECIAL_V(dev,unmap_sg(sg, nents, dir))
 	for_each_sg(sg, s, nents, i)
 		dma_unmap_page(dev, sg_dma_address(s), sg_dma_len(s), dir);
 }

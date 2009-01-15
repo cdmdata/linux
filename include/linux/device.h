@@ -422,11 +422,6 @@ struct device {
 					   core doesn't touch it */
 	struct dev_pm_info	power;
 
- 	unsigned char devIsSm501;
- 	unsigned char spare1;
- 	unsigned char spare2;
- 	unsigned char spare3;
-
 #ifdef CONFIG_NUMA
 	int		numa_node;	/* NUMA node this device is close to */
 #endif

@@ -2253,8 +2253,7 @@ int usb_add_hcd(struct usb_hcd *hcd,
 		dev_dbg(hcd->self.controller, "supports USB remote wakeup\n");
 
 	/* enable irqs just before we start the controller */
-	if (hcd->driver->irq) {
-
+	if (hcd->driver->irq && (irqnum != ~0)) {
 		/* IRQF_DISABLED doesn't work as advertised when used together
 		 * with IRQF_SHARED. As usb_hcd_irq() will always disable
 		 * interrupts we can remove it here.

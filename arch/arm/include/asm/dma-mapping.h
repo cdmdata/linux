@@ -6,27 +6,6 @@
 #include <linux/mm_types.h>
 #include <linux/scatterlist.h>
 
-#ifdef CONFIG_USB_OHCI_SM501
-static inline int dev_is_sm501(const struct device *dev)
-{
-	return (dev)? (dev->devIsSm501) : 0;
-}
-dma_addr_t sm501_map_single(void * ptr, size_t size, enum dma_data_direction dir);
-void sm501_unmap_single(dma_addr_t dma_addr, size_t size, enum dma_data_direction dir);
-int sm501_map_sg(struct scatterlist * sg, int nents, enum dma_data_direction dir);
-void sm501_unmap_sg(struct scatterlist * sg, int nents, enum dma_data_direction dir);
-void sm501_dma_sync_single(dma_addr_t dma_handle, size_t size, enum dma_data_direction dir);
-void sm501_dma_sync_sg(struct scatterlist * sg, int nelems, enum dma_data_direction dir);
-void * sm501_alloc_coherent(size_t size, dma_addr_t *handle);
-void sm501_free_coherent(size_t size, void *vaddr, dma_addr_t dma_handle);
-
-#define SPECIAL_RF(dev,func)	if (dev_is_sm501(dev)) return sm501_##func;
-#define SPECIAL_V(dev,func)	if (dev_is_sm501(dev)) {sm501_##func; return;}
-#else
-#define SPECIAL_RF(dev,func)
-#define SPECIAL_V(dev,func)
-#endif
-
 #include <asm-generic/dma-coherent.h>
 #include <asm/memory.h>
 
@@ -373,7 +352,6 @@ static inline dma_addr_t dma_map_single(struct device *dev, void *cpu_addr,
 {
 	BUG_ON(!valid_dma_direction(dir));
 
-	SPECIAL_RF(dev,map_single(cpu_addr, size, dir));
 	__dma_single_cpu_to_dev(cpu_addr, size, dir);
 
 	return virt_to_dma(dev, cpu_addr);
@@ -420,7 +398,6 @@ static inline dma_addr_t dma_map_page(struct device *dev, struct page *page,
 static inline void dma_unmap_single(struct device *dev, dma_addr_t handle,
 		size_t size, enum dma_data_direction dir)
 {
-	SPECIAL_V(dev,unmap_single(handle, size, dir))
 	__dma_single_dev_to_cpu(dma_to_virt(dev, handle), size, dir);
 }
 

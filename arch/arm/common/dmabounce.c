@@ -336,8 +336,6 @@ dma_addr_t dma_map_single(struct device *dev, void *ptr, size_t size,
 
 	BUG_ON(!valid_dma_direction(dir));
 
-	SPECIAL_RF(dev,map_single(ptr, size, dir))
-
 	return map_single(dev, ptr, size, dir);
 }
 EXPORT_SYMBOL(dma_map_single);
@@ -387,8 +385,6 @@ void dma_unmap_page(struct device *dev, dma_addr_t dma_addr, size_t size,
 {
 	dev_dbg(dev, "%s(ptr=%p,size=%d,dir=%x)\n",
 		__func__, (void *) dma_addr, size, dir);
-
-	SPECIAL_V(dev,unmap_single(dma_addr, size, dir))
 
 	unmap_single(dev, dma_addr, size, dir);
 }
