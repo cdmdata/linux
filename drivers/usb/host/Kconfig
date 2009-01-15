@@ -220,6 +220,10 @@ config USB_OHCI_LITTLE_ENDIAN
 	default n if STB03xxx || PPC_MPC52xx
 	default y
 
+config USB_OHCI_SM501
+	tristate "SM501 OHCI-compatible host interface support"
+	depends on USB
+
 config USB_UHCI_HCD
 	tristate "UHCI HCD (most Intel and VIA) support"
 	depends on USB && PCI
