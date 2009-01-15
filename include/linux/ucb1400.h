@@ -26,6 +26,7 @@
 #include <sound/ac97_codec.h>
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
+#include <linux/delay.h>
 
 /*
  * UCB1400 AC-link registers
@@ -39,6 +40,7 @@
 #define UCB_IE_CLEAR		0x62
 #define UCB_IE_ADC		(1 << 11)
 #define UCB_IE_TSPX		(1 << 12)
+#define UCB_IE_TSMX		(1 << 13)
 
 #define UCB_TS_CR		0x64
 #define UCB_TS_CR_TSMX_POW	(1 << 0)
@@ -52,6 +54,7 @@
 #define UCB_TS_CR_MODE_INT	(0 << 8)
 #define UCB_TS_CR_MODE_PRES	(1 << 8)
 #define UCB_TS_CR_MODE_POS	(2 << 8)
+#define UCB_TS_CR_HYST_DIS	(1 << 10)
 #define UCB_TS_CR_BIAS_ENA	(1 << 11)
 #define UCB_TS_CR_TSPX_LOW	(1 << 12)
 #define UCB_TS_CR_TSMX_LOW	(1 << 13)
@@ -74,9 +77,18 @@
 #define UCB_ADC_DATA		0x68
 #define UCB_ADC_DAT_VALID	(1 << 15)
 #define UCB_ADC_DAT_MASK	0x3ff
+#define UCB_ADC_DAT_VALUE(x)	((x) & UCB_ADC_DAT_MASK)
 
 #define UCB_ID			0x7e
 #define UCB_ID_1400             0x4304
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+//using io0 of UCB1400 as the 5th wire
+#define MASK_TSX_5 (1<<0)
+
+#define TOUCH_NOT_VALID -1
+#define TOUCH_4W 0
+#define TOUCH_5W 1
 
 struct ucb1400_ts {
 	struct input_dev	*ts_idev;
@@ -87,6 +99,9 @@ struct ucb1400_ts {
 	int			irq;
 	unsigned int		irq_pending;	/* not bit field shared */
 	struct snd_ac97		*ac97;
+	struct proc_dir_entry   *pde;
+	int                     touch_type;
+	unsigned int            num_pressed;
 };
 
 struct ucb1400 {
@@ -156,6 +171,24 @@ static unsigned int ucb1400_adc_read(struct snd_ac97 *ac97, u16 adc_channel,
 static inline void ucb1400_adc_disable(struct snd_ac97 *ac97)
 {
 	ucb1400_reg_write(ac97, UCB_ADC_CR, 0);
+}
+
+static void ucb1x00_io_write(struct snd_ac97 *ac97,unsigned int set, unsigned int clear)
+{
+	u16 prev = ucb1400_reg_read(ac97, UCB_IO_DATA);
+	u16 curr = (prev | set) & ~clear;
+	if (prev != curr) {
+		ucb1400_reg_write(ac97, UCB_IO_DATA,curr);
+	}
+}
+
+static void ucb1x00_io_set_dir(struct snd_ac97 *ac97,unsigned int in, unsigned int out)
+{
+	unsigned int prev = ucb1400_reg_read(ac97, UCB_IO_DIR);
+	unsigned int curr = (prev | out) & ~in;
+	if (prev != curr) {
+		ucb1400_reg_write(ac97, UCB_IO_DIR,curr);
+	}
 }
 
 #endif
