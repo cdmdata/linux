@@ -312,6 +312,17 @@ config TOUCHSCREEN_UCB1400
 	  To compile this driver as a module, choose M here: the
 	  module will be called ucb1400_ts.
 
+config UCB1400_FIVE_WIRE
+	bool "UCB1400 Five wire support"
+	depends on TOUCHSCREEN_UCB1400
+        default y
+
+	help
+	  This enables support for five wire touch screens using the 
+          TSMX pin as the sense (wiper) pin. It connects the UCB1400 
+          GPIO 0 to ground and reads X and Y settings by powering 
+          TSPX+TSMY and TSPX+TSPY respectively.
+
 config TOUCHSCREEN_WM97XX
 	tristate "Support for WM97xx AC97 touchscreen controllers"
 	depends on AC97_BUS
