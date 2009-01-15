@@ -369,7 +369,9 @@ static struct platform_device *devices[] __initdata = {
 	&sm501int_device,
 	&sm501cmd_device,
 	&sm501_device,
+#ifdef CONFIG_USB_OHCI_SM501
 	&sm501_ohci_device,
+#endif
 	&neon_audio_device
 };
 
@@ -380,7 +382,9 @@ static void __init neon_init(void)
 
 	(void) platform_add_devices(devices, ARRAY_SIZE(devices));
 
+#ifndef CONFIG_USB_OHCI_SM501
 	pxa_set_ohci_info(&neon270_ohci_platform_data);
+#endif
 	
 	neon_pxafb_info.modes = &display_mode;
 	set_pxa_fb_info(&neon_pxafb_info);
