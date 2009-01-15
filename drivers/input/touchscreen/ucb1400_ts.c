@@ -21,7 +21,6 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/completion.h>
-#include <linux/delay.h>
 #include <linux/input.h>
 #include <linux/device.h>
 #include <linux/interrupt.h>
@@ -29,19 +28,46 @@
 #include <linux/slab.h>
 #include <linux/kthread.h>
 #include <linux/freezer.h>
+#include <linux/proc_fs.h>
 #include <linux/ucb1400.h>
+
+
+#include <sound/core.h>
+#include <sound/ac97_codec.h>
+
+static char const * const touch_type_names[] = {
+   "Unknown"
+,  "4-wire resistive"
+,  "5-wire resistive"
+};
+
+static int touch_type = TOUCH_NOT_VALID ;
 
 static int adcsync;
 static int ts_delay = 55; /* us */
 static int ts_delay_pressure;	/* us */
+static int ts_eat_head = 3 ;
+static unsigned x5_bits = UCB_TS_CR_TSPX_POW
+			 |UCB_TS_CR_TSPY_GND
+			 |UCB_TS_CR_TSMY_POW ;
+static unsigned y5_bits = UCB_TS_CR_TSPX_POW
+			 |UCB_TS_CR_TSPY_POW
+			 |UCB_TS_CR_TSMY_GND ;
 
 /* Switch to interrupt mode. */
 static inline void ucb1400_ts_mode_int(struct snd_ac97 *ac97)
 {
-	ucb1400_reg_write(ac97, UCB_TS_CR,
-			UCB_TS_CR_TSMX_POW | UCB_TS_CR_TSPX_POW |
-			UCB_TS_CR_TSMY_GND | UCB_TS_CR_TSPY_GND |
-			UCB_TS_CR_MODE_INT);
+	if( TOUCH_4W == touch_type ){
+		ucb1400_reg_write(ac97, UCB_TS_CR,
+					UCB_TS_CR_TSMX_POW | UCB_TS_CR_TSPX_POW |
+					UCB_TS_CR_TSMY_GND | UCB_TS_CR_TSPY_GND |
+					UCB_TS_CR_MODE_INT);
+	} else {
+		ucb1400_reg_write(ac97, UCB_TS_CR,
+					UCB_TS_CR_TSPX_GND | UCB_TS_CR_TSMY_GND |
+					UCB_TS_CR_TSPY_GND | UCB_TS_CR_TSMX_POW |
+					UCB_TS_CR_MODE_INT);
+	}
 }
 
 /*
@@ -81,6 +107,9 @@ static inline unsigned int ucb1400_ts_read_xpos(struct ucb1400_ts *ucb)
 	return ucb1400_adc_read(ucb->ac97, UCB_ADC_INP_TSPY, adcsync);
 }
 
+#define MAX_XDELTA 16
+#define MAX_YDELTA 16
+
 /*
  * Switch to Y position mode and measure X plate.  We switch the plate
  * configuration in pressure mode, then switch to position mode.  This
@@ -102,6 +131,77 @@ static inline unsigned int ucb1400_ts_read_ypos(struct ucb1400_ts *ucb)
 	udelay(ts_delay);
 
 	return ucb1400_adc_read(ucb->ac97, UCB_ADC_INP_TSPX, adcsync);
+}
+
+/*
+ * In five wire mode, IN0 is connnected to what would normally be X- (TSMX)
+ * and always grounded (since it has a 'high' voltage higher than VBIAS).
+ *
+ * TSPX is set to always high
+ *
+ * TSMY and TSPY are swapped (one always high, one always low)
+ *
+ * TSMX is connected to the wiper and used for the ADC
+ */
+static inline unsigned int ucb1400_ts_read_xpos5(struct ucb1400_ts *ucb)
+{
+	unsigned prev = 0 ;
+	unsigned curr ;
+	int first = 1 ;
+	int delta ;
+
+	ucb1400_reg_write(ucb->ac97, UCB_TS_CR, 
+			  x5_bits
+			 |UCB_TS_CR_MODE_POS
+			 |UCB_TS_CR_BIAS_ENA );
+
+	udelay(ts_delay);
+
+	return ucb1400_adc_read(ucb->ac97, UCB_ADC_INP_TSMX, adcsync);
+
+	do {
+		curr = ucb1400_adc_read(ucb->ac97, UCB_ADC_INP_TSMX, adcsync);
+		if( first ){
+			first = 0 ; // prev not valid. sample again
+		} else {
+			delta = curr-prev ; 
+			if( 0 > delta ) 
+				delta = 0-delta ;
+		} // prev is valid 
+		prev = curr ;
+	} while( MAX_XDELTA < delta );
+
+	return curr ;
+}
+
+static inline unsigned int ucb1400_ts_read_ypos5(struct ucb1400_ts *ucb)
+{
+	unsigned prev = 0 ;
+	unsigned curr ;
+	int first = 1 ;
+	int delta ;
+
+	ucb1400_reg_write(ucb->ac97, UCB_TS_CR, 
+			  y5_bits
+			 |UCB_TS_CR_MODE_POS
+			 |UCB_TS_CR_BIAS_ENA);
+
+	udelay(ts_delay);
+
+	return ucb1400_adc_read(ucb->ac97, UCB_ADC_INP_TSMX, adcsync);
+	do {
+		curr = ucb1400_adc_read(ucb->ac97, UCB_ADC_INP_TSMX, adcsync);
+		if( first ){
+			first = 0 ; // prev not valid. sample again
+		} else {
+			delta = curr-prev ; 
+			if( 0 > delta ) 
+				delta = 0-delta ;
+		} // prev is valid 
+		prev = curr ;
+	} while( MAX_YDELTA < delta );
+
+	return curr ;
 }
 
 /*
@@ -131,7 +231,11 @@ static inline unsigned int ucb1400_ts_read_yres(struct ucb1400_ts *ucb)
 static inline int ucb1400_ts_pen_down(struct snd_ac97 *ac97)
 {
 	unsigned short val = ucb1400_reg_read(ac97, UCB_TS_CR);
-	return val & (UCB_TS_CR_TSPX_LOW | UCB_TS_CR_TSMX_LOW);
+	if(TOUCH_4W == touch_type){
+		return val & (UCB_TS_CR_TSPX_LOW|UCB_TS_CR_TSMX_LOW);
+	} else {
+		return ( 0 != (val & UCB_TS_CR_TSMX_LOW ) );
+	}
 }
 
 static inline void ucb1400_ts_irq_enable(struct snd_ac97 *ac97)
@@ -141,25 +245,44 @@ static inline void ucb1400_ts_irq_enable(struct snd_ac97 *ac97)
 	ucb1400_reg_write(ac97, UCB_IE_FAL, UCB_IE_TSPX);
 }
 
+static inline void ucb1400_ts_irq_enable5(struct snd_ac97 *ac97)
+{
+	ucb1400_reg_write(ac97, UCB_IE_CLEAR, UCB_IE_TSMX);
+	ucb1400_reg_write(ac97, UCB_IE_CLEAR, 0);
+	ucb1400_reg_write(ac97, UCB_IE_FAL, UCB_IE_TSMX);
+}
+
 static inline void ucb1400_ts_irq_disable(struct snd_ac97 *ac97)
 {
 	ucb1400_reg_write(ac97, UCB_IE_FAL, 0);
 }
 
-static void ucb1400_ts_evt_add(struct input_dev *idev, u16 pressure, u16 x, u16 y)
+static void ucb1400_ts_evt_add
+	(struct ucb1400_ts *ucb,
+	 u16 pressure, 
+	 u16 x, 
+	 u16 y)
 {
-	input_report_abs(idev, ABS_X, x);
-	input_report_abs(idev, ABS_Y, y);
-	input_report_abs(idev, ABS_PRESSURE, pressure);
-	input_report_key(idev, BTN_TOUCH, 1);
-	input_sync(idev);
+	if( ++ucb->num_pressed > ts_eat_head ){
+		struct input_dev *idev = ucb->ts_idev;
+		ucb->num_pressed--; // no overflow
+		BUG_ON( x > UCB_ADC_DAT_MASK );
+		BUG_ON( y > UCB_ADC_DAT_MASK );
+		input_report_abs(idev, ABS_X, x);
+		input_report_abs(idev, ABS_Y, y);
+		input_report_abs(idev, ABS_PRESSURE, pressure);
+		input_report_key(idev, BTN_TOUCH, 1);
+		input_sync(idev);
+	} // have enough samples at head
 }
 
-static void ucb1400_ts_event_release(struct input_dev *idev)
+static void ucb1400_ts_event_release(struct ucb1400_ts *ucb)
 {
+        struct input_dev *idev = ucb->ts_idev ;
 	input_report_abs(idev, ABS_PRESSURE, 0);
 	input_report_key(idev, BTN_TOUCH, 0);
 	input_sync(idev);
+	ucb->num_pressed = 0;
 }
 
 static void ucb1400_handle_pending_irq(struct ucb1400_ts *ucb)
@@ -170,11 +293,60 @@ static void ucb1400_handle_pending_irq(struct ucb1400_ts *ucb)
 	ucb1400_reg_write(ucb->ac97, UCB_IE_CLEAR, isr);
 	ucb1400_reg_write(ucb->ac97, UCB_IE_CLEAR, 0);
 
-	if (isr & UCB_IE_TSPX) {
-		ucb1400_ts_irq_disable(ucb->ac97);
-		enable_irq(ucb->irq);
-	} else
-		printk(KERN_ERR "ucb1400: unexpected IE_STATUS = %#x\n", isr);
+	if( ucb->touch_type == TOUCH_4W ){
+		if (isr & UCB_IE_TSPX) {
+			ucb1400_ts_irq_disable(ucb->ac97);
+		}
+	} else {
+		if (isr & UCB_IE_TSMX) {
+			ucb1400_ts_irq_disable(ucb->ac97);
+		}
+	}
+	enable_irq(ucb->irq);
+}
+
+int discover_touch_type(struct snd_ac97 *ac97)
+{
+	int type = TOUCH_NOT_VALID;
+        int tcr ;
+        
+	ucb1400_reg_write(ac97,UCB_TS_CR, UCB_TS_CR_TSPX_POW);
+	ucb1x00_io_write(ac97,0,MASK_TSX_5);         //clear bit
+	ucb1x00_io_set_dir(ac97,0,MASK_TSX_5);	//set as output low
+	msleep(2);
+	tcr = ucb1400_reg_read(ac97,UCB_TS_CR);
+	ucb1x00_io_set_dir(ac97,MASK_TSX_5,0);	//set as input
+	if (tcr & (1<<12)) {
+		//TSPX is still high, so TSMXX is NOT involved in touch 
+		// screen or NO cable plugged in
+		ucb1400_reg_write(ac97,UCB_TS_CR, UCB_TS_CR_TSPX_POW|UCB_TS_CR_TSMX_GND);
+		msleep(2);
+		tcr = ucb1400_reg_read(ac97,UCB_TS_CR);
+		if (tcr & (1<<12)) {
+			//TSPX is still high, NO cable plugged in
+		} else {
+			type = TOUCH_4W;
+		}
+	} else {
+		//TSPX is LOW, so TSMXX is involved in touch screen
+		ucb1400_reg_write(ac97,UCB_TS_CR, UCB_TS_CR_TSPX_POW|UCB_TS_CR_TSMY_GND );
+		msleep(2);
+		tcr = ucb1400_reg_read(ac97,UCB_TS_CR);
+		if (tcr & (1<<12)) {
+			//TSPX is still high, Independent X and Y
+			type = TOUCH_4W;
+		} else {
+			//TSPX is low, X plane connected to Y plane
+			type = TOUCH_5W;
+		}
+	}
+	ucb1400_reg_write(ac97,UCB_TS_CR, 0 );
+	if( TOUCH_5W == type ){
+		ucb1x00_io_set_dir(ac97, 0, 1);
+		ucb1x00_io_write(ac97,0,MASK_TSX_5);	//set as output low
+	}
+
+	return type;
 }
 
 static int ucb1400_ts_thread(void *_ucb)
@@ -188,54 +360,114 @@ static int ucb1400_ts_thread(void *_ucb)
 
 	set_freezable();
 	while (!kthread_should_stop()) {
-		unsigned int x, y, p;
-		long timeout;
+		switch( ucb->touch_type ){
+			case TOUCH_4W: {
+				unsigned int x, y, p;
+				long timeout;
 
-		ucb->ts_restart = 0;
+				ucb->ts_restart = 0;
+		
+				if (ucb->irq_pending) {
+					ucb->irq_pending = 0;
+					ucb1400_handle_pending_irq(ucb);
+				}
+		
+				ucb1400_adc_enable(ucb->ac97);
+				x = ucb1400_ts_read_xpos(ucb);
+				y = ucb1400_ts_read_ypos(ucb);
+				p = ucb1400_ts_read_pressure(ucb);
+				ucb1400_adc_disable(ucb->ac97);
+		
+				/* Switch back to interrupt mode. */
+				ucb1400_ts_mode_int(ucb->ac97);
 
-		if (ucb->irq_pending) {
-			ucb->irq_pending = 0;
-			ucb1400_handle_pending_irq(ucb);
-		}
+				if (ucb1400_ts_pen_down(ucb->ac97)) {
+					ucb1400_ts_irq_enable(ucb->ac97);
 
-		ucb1400_adc_enable(ucb->ac97);
-		x = ucb1400_ts_read_xpos(ucb);
-		y = ucb1400_ts_read_ypos(ucb);
-		p = ucb1400_ts_read_pressure(ucb);
-		ucb1400_adc_disable(ucb->ac97);
+					/*
+					 * If we spat out a valid sample set last time,
+					 * spit out a "pen off" sample here.
+					 */
+					if (valid) {
+						ucb1400_ts_event_release(ucb);
+						valid = 0;
+					}
+		
+					timeout = MAX_SCHEDULE_TIMEOUT;
+				} else {
+					valid = 1;
+					ucb1400_ts_evt_add(ucb, p, x, y);
+					timeout = msecs_to_jiffies(10);
+				}
 
-		/* Switch back to interrupt mode. */
-		ucb1400_ts_mode_int(ucb->ac97);
-
-		msleep(10);
-
-		if (ucb1400_ts_pen_down(ucb->ac97)) {
-			ucb1400_ts_irq_enable(ucb->ac97);
-
-			/*
-			 * If we spat out a valid sample set last time,
-			 * spit out a "pen off" sample here.
-			 */
-			if (valid) {
-				ucb1400_ts_event_release(ucb->ts_idev);
-				valid = 0;
+				wait_event_freezable_timeout(ucb->ts_wait,
+					ucb->irq_pending || ucb->ts_restart || kthread_should_stop(),
+					timeout);
+				break;
 			}
+			case TOUCH_5W: {
+				unsigned int x, y, p;
+				long timeout;
 
-			timeout = MAX_SCHEDULE_TIMEOUT;
-		} else {
-			valid = 1;
-			ucb1400_ts_evt_add(ucb->ts_idev, p, x, y);
-			timeout = msecs_to_jiffies(10);
+				ucb->ts_restart = 0;
+		
+				if (ucb->irq_pending) {
+					ucb->irq_pending = 0;
+					ucb1400_handle_pending_irq(ucb);
+				}
+
+				ucb1400_adc_enable(ucb->ac97);
+				x = ucb1400_ts_read_xpos5(ucb);
+				y = ucb1400_ts_read_ypos5(ucb);
+//				p = ucb1400_ts_read_pressure(ucb);
+				ucb1400_adc_disable(ucb->ac97);
+
+				/* Switch back to interrupt mode. */
+				ucb1400_ts_mode_int(ucb->ac97);
+
+				udelay(150);
+
+				if (ucb1400_ts_pen_down(ucb->ac97)) {
+					p = 0 ;
+					ucb1400_ts_irq_enable5(ucb->ac97);
+
+					/*
+					 * If we spat out a valid sample set last time,
+					 * spit out a "pen off" sample here.
+					 */
+					if (valid) {
+						ucb1400_ts_event_release(ucb);
+						valid = 0;
+					}
+		
+					timeout = MAX_SCHEDULE_TIMEOUT;
+				} else {
+					p = 1 ;
+					valid = 1;
+					ucb1400_ts_evt_add(ucb, p, x, y);
+					timeout = msecs_to_jiffies(10);
+				}
+
+				wait_event_freezable_timeout(ucb->ts_wait,
+					ucb->irq_pending || ucb->ts_restart || kthread_should_stop(),
+					timeout);
+				break;
+			}
+			default : {
+				touch_type = ucb->touch_type = discover_touch_type(ucb->ac97);
+				if( 0 > ucb->touch_type ){
+					msleep(100);
+				} else {
+					printk( KERN_INFO "%s: detected touch screen type %d\n", __FILE__, ucb->touch_type );
+				}
+				break;
+			}
 		}
-
-		wait_event_freezable_timeout(ucb->ts_wait,
-			ucb->irq_pending || ucb->ts_restart ||
-			kthread_should_stop(), timeout);
 	}
 
 	/* Send the "pen off" if we are stopping with the pen still active */
 	if (valid)
-		ucb1400_ts_event_release(ucb->ts_idev);
+		ucb1400_ts_event_release(ucb);
 
 	ucb->ts_task = NULL;
 	return 0;
@@ -342,6 +574,19 @@ static int ucb1400_ts_detect_irq(struct ucb1400_ts *ucb)
 	return 0;
 }
 
+static int ucb1400_read_proc
+(	char *page, 
+	char **start, 
+	off_t off,
+	int count, 
+	int *eof, 
+	void *data )
+{
+	return snprintf(page, 512, "%s", touch_type_names[touch_type+1]);
+}
+
+#define TSTYPE_PROCNAME "tstype"
+
 static int ucb1400_ts_probe(struct platform_device *dev)
 {
 	int error, x_res, y_res;
@@ -392,10 +637,21 @@ static int ucb1400_ts_probe(struct platform_device *dev)
 	input_set_abs_params(ucb->ts_idev, ABS_Y, 0, y_res, 0, 0);
 	input_set_abs_params(ucb->ts_idev, ABS_PRESSURE, 0, 0, 0, 0);
 
+	touch_type = ucb->touch_type = discover_touch_type(ucb->ac97);
+	printk( KERN_DEBUG "----> Touch screen is type %d\n", ucb->touch_type );
+
 	error = input_register_device(ucb->ts_idev);
 	if (error)
 		goto err_free_irq;
 
+        ucb->pde = create_proc_entry(TSTYPE_PROCNAME, 0, 0);
+	if( ucb->pde )
+		ucb->pde->read_proc  = ucb1400_read_proc ;
+
+	printk( KERN_DEBUG "---> eating %d samples at pen-down\n", ts_eat_head );
+	printk( KERN_DEBUG "adcsync == %d\n", adcsync );
+	printk( KERN_DEBUG "ts_delay == %d\n", ts_delay );
+	printk( KERN_DEBUG "ts_delay_pressure == %d\n", ts_delay_pressure );
 	return 0;
 
 err_free_irq:
@@ -411,8 +667,10 @@ static int ucb1400_ts_remove(struct platform_device *dev)
 {
 	struct ucb1400_ts *ucb = dev->dev.platform_data;
 
-	free_irq(ucb->irq, ucb);
+	if(ucb->pde)
+		remove_proc_entry(TSTYPE_PROCNAME, 0);
 	input_unregister_device(ucb->ts_idev);
+	free_irq(ucb->irq, ucb);
 	return 0;
 }
 
@@ -466,6 +724,15 @@ module_param(ts_delay_pressure, int, 0444);
 MODULE_PARM_DESC(ts_delay_pressure,
 		"delay between panel setup and pressure read."
 		"  Default = 0us.");
+
+module_param(ts_eat_head, int, 0444);
+MODULE_PARM_DESC(ts_eat_head, "Eat N samples before touch" );
+
+module_param(x5_bits, int, 0444);
+MODULE_PARM_DESC(x5_bits, "Pins to drive to read 5-wire Y" );
+
+module_param(y5_bits, int, 0444);
+MODULE_PARM_DESC(y5_bits, "Pins to drive to read 5-wire X" );
 
 module_init(ucb1400_ts_init);
 module_exit(ucb1400_ts_exit);
