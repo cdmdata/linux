@@ -22,15 +22,19 @@
 #include <linux/bitops.h>
 #include <linux/fb.h>
 #include <linux/ioport.h>
+#include <linux/bootmem.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
+#include <linux/backlight.h>
 #include <linux/dma-mapping.h>
+#include <net/ax88796.h>
+#include <sound/ac97_codec.h>
 
 #include <asm/types.h>
 #include <asm/setup.h>
 #include <asm/memory.h>
 #include <asm/mach-types.h>
-#include <asm/hardware.h>
+#include <mach/hardware.h>
 #include <asm/irq.h>
 #include <asm/sizes.h>
 
@@ -39,34 +43,46 @@
 #include <asm/mach/irq.h>
 #include <asm/mach/flash.h>
 
-#include <asm/arch/pxa-regs.h>
-#include <asm/arch/pxa2xx-regs.h>
-#include <asm/arch/pxa2xx-gpio.h>
-#include <asm/arch/audio.h>
-#include <asm/arch/pxafb.h>
-#include <asm/arch/mmc.h>
+#include <mach/pxa-regs.h>
+#include <mach/pxa2xx-regs.h>
+#include <mach/pxa2xx-gpio.h>
+#include <mach/audio.h>
+#include <mach/mmc.h>
+#include <mach/gpio.h>
 #include <linux/mmc/host.h>
-#include <asm/arch/irda.h>
-#include <asm/arch/ohci.h>
+#include <mach/irda.h>
+#include <mach/ohci.h>
+#include <mach/i2c.h>
 
 #include "generic.h"
+#include "devices.h"
+#include "read_regs.h"
 
 #define MMC_CARD_DETECT_GP 36
+/* UCB1400 registers */
+#define AC97_IO_DATA_REG          0x005A
+#define AC97_IO_DIRECTION_REG     0x005C
+#define BOUNDARY_AC97_MUTE        (0+(1<<4))
+#define BOUNDARY_AC97_UNMUTE      ((1<<8)+(1<<4))
+#define BOUNDARY_AC97_OUTPUTS 0x0101
 
 static void __init oxygen_init_irq(void)
 {
 	int gpdr = GPDR(0);	//0-31
 	pxa27x_init_irq();
-	set_irq_type(IRQ_GPIO(22), IRQT_FALLING);	//pcmcia irq
+	set_irq_type(IRQ_GPIO(22), IRQ_TYPE_EDGE_FALLING);	//pcmcia irq
 	if ((gpdr & (1 << 4)) == 0)
-		set_irq_type(IRQ_GPIO(4), IRQT_RISING);	/* UCB1400 Interrupt, neon board  */
+		set_irq_type(IRQ_GPIO(4), IRQ_TYPE_EDGE_RISING);	/* UCB1400 Interrupt, neon board  */
 	if ((gpdr & (1 << 5)) == 0)
-		set_irq_type(IRQ_GPIO(5), IRQT_RISING);	/* SM501 Interrupt, neon,neon-b board  */
+		set_irq_type(IRQ_GPIO(5), IRQ_TYPE_EDGE_RISING);	/* SM501 Interrupt, neon,neon-b board  */
 	if ((gpdr & (1 << 23)) == 0)
-		set_irq_type(IRQ_GPIO(23), IRQT_RISING);	/* UCB1400 Interrupt, neon-b board  */
+		set_irq_type(IRQ_GPIO(23), IRQ_TYPE_EDGE_RISING);	/* UCB1400 Interrupt, neon-b board  */
 	if ((gpdr & (1 << 24)) == 0)
-		set_irq_type(IRQ_GPIO(24), IRQT_RISING);	/* 91c111 Interrupt, sm501 board  */
-	set_irq_type(IRQ_GPIO(MMC_CARD_DETECT_GP), IRQT_FALLING);	//MMC card detect
+		set_irq_type(IRQ_GPIO(24), IRQ_TYPE_EDGE_RISING);	/* 91c111 Interrupt, sm501 board  */
+        GPDR(0) = gpdr & ~(1<<12);
+        set_irq_type(IRQ_GPIO(12), IRQ_TYPE_EDGE_FALLING);	/* Asix */
+	set_irq_type(IRQ_GPIO(MMC_CARD_DETECT_GP), IRQ_TYPE_EDGE_FALLING);	//MMC card detect
+        set_irq_type(IRQ_GPIO(3), IRQ_TYPE_EDGE_FALLING);	/* i2c touch */
 }
 
 static void __init
@@ -84,10 +100,48 @@ fixup_oxygen(struct machine_desc *desc, struct tag *t,
 	}
 }
 
+#ifdef CONFIG_SND_AC97_CODEC
+extern struct snd_ac97 *pxa2xx_ac97_ac97;
+
+static int audio_startup(struct snd_pcm_substream *substream, void *priv)
+{
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK){
+		snd_ac97_write(pxa2xx_ac97_ac97, AC97_IO_DIRECTION_REG, BOUNDARY_AC97_OUTPUTS );
+		snd_ac97_write(pxa2xx_ac97_ac97, AC97_IO_DATA_REG, BOUNDARY_AC97_UNMUTE );
+	}
+	return 0;
+}
+
+static void audio_shutdown(struct snd_pcm_substream *substream, void *priv)
+{
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK){
+		snd_ac97_write(pxa2xx_ac97_ac97, AC97_IO_DATA_REG, BOUNDARY_AC97_MUTE );
+	}
+}
+
+static void audio_suspend(void *priv)
+{
+	snd_ac97_write(pxa2xx_ac97_ac97, AC97_IO_DATA_REG, BOUNDARY_AC97_MUTE );
+}
+
+static void audio_resume(void *priv)
+{
+	snd_ac97_write(pxa2xx_ac97_ac97, AC97_IO_DATA_REG, BOUNDARY_AC97_UNMUTE );
+}
+
+static pxa2xx_audio_ops_t audio_ops = {
+	.startup	= audio_startup,
+	.shutdown	= audio_shutdown,
+	.suspend	= audio_suspend,
+	.resume		= audio_resume,
+};
+
 static struct platform_device oxygen_audio_device = {
 	.name		= "pxa2xx-ac97",
 	.id		= -1,
+	.dev		= { .platform_data = &audio_ops },
 };
+#endif
 
 static u64 pxafb_yuv_dma_mask = DMA_BIT_MASK(32);
 static struct platform_device pxafb_yuv_device = {
@@ -102,7 +156,9 @@ static struct platform_device pxafb_yuv_device = {
 };
 
 static struct platform_device *platform_devices[] __initdata = {
+#ifdef CONFIG_SND_AC97_CODEC
         &oxygen_audio_device,
+#endif
         &pxafb_yuv_device
 };
 
@@ -125,6 +181,67 @@ static struct pxafb_mach_info fb_hw = {
 	.lccr0 = LCCR0_Act,
 	.lccr3 = LCCR3_PCP,
 };
+
+#ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
+static int oxygen_backlight_update_status(struct backlight_device *bl)
+{
+	int brightness = bl->props.brightness;
+	int duty;
+	if ((bl->props.power != FB_BLANK_UNBLANK) ||
+	    (bl->props.fb_blank != FB_BLANK_UNBLANK))
+		brightness = 0;
+
+	duty = brightness ^ 0x3ff;	/* on this panel the duty cycle need inverted */
+	if (duty && (duty != bl->props.max_brightness)) {
+		gpio_set_value(GPIO17_PWM1, 1);
+		pxa_gpio_mode(GPIO16_PWM0_MD);
+		pxa_gpio_mode(GPIO17_PWM1 | GPIO_OUT);
+		//pxa_set_cken(CKEN_PWM0, 1);
+		PWM_CTRL0 = 0;
+		PWM_PWDUTY0 = duty;
+		PWM_PERVAL0 = bl->props.max_brightness;
+	} else {
+//value is either high or low, PWM not needed
+		PWM_CTRL0 = 0;
+		PWM_PWDUTY0 = duty;
+		PWM_PERVAL0 = bl->props.max_brightness;
+		gpio_set_value(GPIO16_PWM0, (duty)? 1 : 0);
+		gpio_set_value(GPIO17_PWM1, (brightness)? 1 : 0);
+		pxa_gpio_mode(GPIO16_PWM0 | GPIO_OUT);
+		pxa_gpio_mode(GPIO17_PWM1 | GPIO_OUT);
+		//pxa_set_cken(CKEN_PWM0, 0);
+	}
+	return 0;
+}
+
+static int oxygen_backlight_get_brightness(struct backlight_device *bl)
+{
+	return PWM_PWDUTY0 ^ 0x3ff;
+}
+
+static /*const*/ struct backlight_ops oxygen_backlight_ops = {
+	.update_status	= oxygen_backlight_update_status,
+	.get_brightness	= oxygen_backlight_get_brightness,
+};
+
+static void __init oxygen_backlight_register(void)
+{
+	struct backlight_device *bl;
+
+	bl = backlight_device_register("oxygen-bl", &pxa_device_fb.dev,
+				       NULL, &oxygen_backlight_ops);
+	if (IS_ERR(bl)) {
+		printk(KERN_ERR "oxygen: unable to register backlight: %ld\n",
+		       PTR_ERR(bl));
+		return;
+	}
+	bl->props.max_brightness = 1023;
+	bl->props.brightness = 1023;
+	backlight_update_status(bl);
+}
+#else
+#define oxygen_backlight_register()	do { } while (0)
+#endif
 
 static int oxygen_mci_init(struct device *dev, irq_handler_t intHandler,
 			     void *data)
@@ -175,17 +292,13 @@ static int oxygen_ohci_init(struct device *dev)
 	pxa_gpio_mode(88 | GPIO_ALT_FN_1_IN);	/* USBHPWR1 */
 	pxa_gpio_mode(89 | GPIO_ALT_FN_2_OUT);	/* USBHPEN1 */
 
-	/* Set the Power Control Polarity Low and Power Sense
-	   Polarity Low to active low. */
-	UHCHR = (UHCHR | UHCHR_PCPL | UHCHR_PSPL) &
-	    ~(UHCHR_SSEP1 | UHCHR_SSEP2 | UHCHR_SSEP3 | UHCHR_SSE);
-
 	return 0;
 }
 
 static struct pxaohci_platform_data oxygen_ohci_platform_data = {
 	.port_mode = PMM_PERPORT_MODE,
 	.init = oxygen_ohci_init,
+	.flags          = ENABLE_PORT1 | ENABLE_PORT2 | ENABLE_PORT3 | POWER_CONTROL_LOW | POWER_SENSE_LOW,
 };
 
 static void __init oxygen_init(void)
@@ -198,17 +311,28 @@ static void __init oxygen_init(void)
 
 	pxa_gpio_mode(GPIO45_SYSCLK_AC97_MD);
 
-	platform_add_devices(platform_devices, ARRAY_SIZE(platform_devices));
-
+	printk( KERN_ERR "%s: %u devices\n", __func__, ARRAY_SIZE(platform_devices));
 	fb_hw.modes = &fb_modes;
 	set_pxa_fb_info(&fb_hw);
+	platform_add_devices(platform_devices, ARRAY_SIZE(platform_devices));
+	oxygen_backlight_register();
 
 	pxa_set_mci_info(&oxygen_mci_platform_data);
 	pxa_set_ohci_info(&oxygen_ohci_platform_data);
+	pxa_set_i2c_info(NULL);
+
+	pxa_mode_from_registers(&pxa_device_fb);
 }
 
+#define DEBUG_SIZE (PAGE_SIZE*4)
+static struct map_desc oxygen_io_desc[] __initdata = {
+ /* virtual      	      pfn    	    length      domain       r  w  c  b */
+ { 0xfff00000, __phys_to_pfn(0x00000000), DEBUG_SIZE, MT_HIGH_VECTORS },	//DOMAIN_USER,   1, 0, 1, 1for debugging variables, DOMAIN_USER because of errata on exiting SDS
+};
 static void __init oxygen_map_io(void)
 {
+	void* init_maps;
+	void* src=(void *)0xff000000;
 	pxa_map_io();
 
 	/* initialize sleep mode regs (wake-up sources, etc) */
@@ -219,6 +343,18 @@ static void __init oxygen_map_io(void)
 	PWER = 0xC0000002;
 	PRER = 0x00000002;
 	PFER = 0x00000002;
+	/*
+	 * Create a mapping for 1st pages of flash and DEBUG variables
+	 * This is copied to ram to allow debugging while flash is being written.
+	 * It also allows caching, and faster access on cache miss.
+	 * Also, user mode need read access because of errata in exiting SDS
+	 */
+	init_maps = alloc_bootmem_low_pages(DEBUG_SIZE);
+	memcpy(init_maps,src,DEBUG_SIZE);
+	cpu_dcache_clean_area(init_maps,DEBUG_SIZE);
+
+	oxygen_io_desc[0].pfn = __phys_to_pfn(virt_to_phys(init_maps));
+	iotable_init(oxygen_io_desc,ARRAY_SIZE(oxygen_io_desc));
 }
 
 MACHINE_START(SCANPASS, "Boundary Devices Oxygen Board")
