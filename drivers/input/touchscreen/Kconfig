@@ -498,6 +498,23 @@ config TOUCHSCREEN_I2C
 	  To compile this driver as a module, choose M here: the
 	  module will be called i2c_touch.
 
+config TOUCHSCREEN_I2C_IRQ
+	int "I2C Touchscreen GPIO/IRQ"
+	default 11 if MACH_DAVINCI_XENON
+	default 96 if MACH_NEON270
+	depends on TOUCHSCREEN_I2C
+	help
+	  The I2C touch screen controller will generate an interrupt on touch to prevent
+	  the need to poll an un-touched screen. Specify the GPIO number here.
+
+config TOUCHSCREEN_I2C_EVENT
+	bool "I2C Event interface"
+	depends on TOUCHSCREEN_I2C
+	default Y
+	help
+	  Select this to use the event interface (/dev/input/eventX).
+	  Select N to use the ucb1x00-style interface
+
 config TOUCHSCREEN_TSC2007
 	tristate "TSC2007 based touchscreens"
 	depends on I2C
