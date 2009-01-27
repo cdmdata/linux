@@ -428,8 +428,6 @@ static void __init neon_map_io(void)
 
 	neon_io_desc[0].pfn = __phys_to_pfn(virt_to_phys(init_maps));
 	iotable_init(neon_io_desc,ARRAY_SIZE(neon_io_desc));
-
-	init_maps = alloc_bootmem_low_pages(PAGE_SIZE);
 }
 
 MACHINE_START(SCANPASS, "Boundary Devices Neon-270 board")
