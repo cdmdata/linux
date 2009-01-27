@@ -500,7 +500,7 @@ endmenu
 if MACH_NEON270
         config NEON270ENC
         	bool "Enclosure version"
-                default N
+                default Y
                 depends on MACH_NEON270
 endif
 
