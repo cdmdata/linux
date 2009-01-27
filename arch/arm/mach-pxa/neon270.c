@@ -229,6 +229,7 @@ static struct platform_device neon_audio_device = {
 	.dev		= { .platform_data = &audio_ops },
 };
 
+#ifdef CONFIG_USB_OHCI_SM501
 ///////////////////////////////
 static struct resource sm501_ohci_resources[] = {
 	[0] = {
@@ -265,6 +266,7 @@ static struct platform_device sm501_ohci_device = {
 	.num_resources	= ARRAY_SIZE(sm501_ohci_resources),
 	.resource	= sm501_ohci_resources,
 };
+#endif
 
 /////////////////////////////////////////////////////////
 #define NEON_MMC_CARD_DETECT_GPIO 36
@@ -382,9 +384,7 @@ static void __init neon_init(void)
 
 	(void) platform_add_devices(devices, ARRAY_SIZE(devices));
 
-#ifndef CONFIG_USB_OHCI_SM501
 	pxa_set_ohci_info(&neon270_ohci_platform_data);
-#endif
 	
 	neon_pxafb_info.modes = &display_mode;
 	set_pxa_fb_info(&neon_pxafb_info);
