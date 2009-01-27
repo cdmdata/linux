@@ -25,8 +25,8 @@
 #include <linux/interrupt.h>
 #include <linux/wait.h>
 #include <asm/io.h>
-#include <asm/arch/hardware.h>
-#include <asm/arch/gpio.h>
+#include <mach/hardware.h>
+#include <mach/gpio.h>
 #include <linux/proc_fs.h>
 
 /*
@@ -46,7 +46,7 @@ static char const * const touch_type_names[] = {
 };
 
 
-#ifndef USE_INPUT
+#ifndef CONFIG_TOUCHSCREEN_I2C_EVENT
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
 #include <linux/poll.h>
@@ -65,10 +65,9 @@ struct ts_event {
 
 struct pic16f616_ts {
 	struct i2c_client client;
-#ifdef USE_INPUT
+#ifdef CONFIG_TOUCHSCREEN_I2C_EVENT
 	struct input_dev	*idev;
-#endif
-#ifndef USE_INPUT
+#else
 	struct fasync_struct	*fasync;
 	wait_queue_head_t	read_wait;
 	u8			evt_head;
@@ -138,7 +137,9 @@ static int tstype_read_proc
 {
 	if (gts) {
 		int tstype=0;
+#if 0
 		unsigned char sumXReg[1] = { SUM_X };
+#endif
 		unsigned char regAddr[] = { X_IGND};
 		unsigned char buf[32];
 		struct i2c_msg readReg[] = {
@@ -233,7 +234,7 @@ pic16f616_proc_write
 }
 
 /*-----------------------------------------------------------------------*/
-#ifndef USE_INPUT
+#ifndef CONFIG_TOUCHSCREEN_I2C_EVENT
 
 #define ts_evt_pending(ts)	((volatile u8)(ts)->evt_head != (ts)->evt_tail)
 #define ts_evt_get(ts)		((ts)->events + (ts)->evt_tail)
@@ -671,11 +672,7 @@ static int ts_detect_client(struct i2c_adapter *adapter, int address, int kind)
 	ts->client.driver = &ts_driver;
 	ts->client.flags = 0;
 	strlcpy(ts->client.name, client_name, I2C_NAME_SIZE);
-#if 1
-	ts->irq = IRQ_GPIO(3);
-#else
-	ts->irq = IRQ_GPIO(11);
-#endif
+	ts->irq = IRQ_GPIO(CONFIG_TOUCHSCREEN_I2C_IRQ);
 	i2c_set_clientdata(&ts->client, ts);
 	if ((err = i2c_attach_client(&ts->client))) {
 		printk(KERN_WARNING "%s: i2c_attach_client failed\n", client_name);
@@ -713,6 +710,10 @@ static int ts_detach_client(struct i2c_client *client)
 	if (ts==gts) {
 		gts = NULL;
 		ts_deregister(ts);
+		if(ts->procentry)
+                   remove_proc_entry(procentryname, 0);
+		if(ts->tstype_procentry)
+                   remove_proc_entry(TSTYPE_PROCNAME, 0);
 	} else {
 		printk(KERN_ERR "%s: Error ts!=gts\n",client_name);
 	}
