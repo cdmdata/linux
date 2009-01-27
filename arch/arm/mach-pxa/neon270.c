@@ -82,6 +82,11 @@ static void __init neon_init_irq(void)
 	pxa_gpio_mode(SM501_INTERRUPT_GP | GPIO_IN);
 	set_irq_type(IRQ_GPIO(SM501_INTERRUPT_GP), IRQ_TYPE_EDGE_RISING); /* SM501 Interrupt, neon,neon-b board  */
 
+#if defined(CONFIG_TOUCHSCREEN_I2C) || defined(CONFIG_TOUCHSCREEN_I2C_MODULE)
+	pxa_gpio_mode(CONFIG_TOUCHSCREEN_I2C_IRQ | GPIO_IN);
+	set_irq_type(IRQ_GPIO(CONFIG_TOUCHSCREEN_I2C_IRQ), IRQ_TYPE_EDGE_FALLING); /* I2C touch screen  */
+#endif
+
 	if ((gpdr & (1 << 4)) == 0)
 		set_irq_type(IRQ_GPIO(4), IRQ_TYPE_EDGE_RISING);	/* UCB1400 Interrupt, neon board  */
 	if ((gpdr & (1 << 23)) == 0)
