@@ -29,15 +29,6 @@
 #include <mach/gpio.h>
 #include <linux/proc_fs.h>
 
-/*
- * Define this if you want to talk to the input layer
- */
-//#undef CONFIG_INPUT
-#ifdef CONFIG_INPUT
-#define USE_INPUT
-#else
-#undef USE_INPUT
-#endif
 
 static char const * const touch_type_names[] = {
    "Unknown"
