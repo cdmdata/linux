@@ -1,6 +1,10 @@
 /* Copyright (C) 2006, Red Hat, Inc. */
 
+#include <linux/types.h>
 #include <linux/etherdevice.h>
+#include <linux/ieee80211.h>
+#include <linux/if_arp.h>
+#include <net/lib80211.h>
 
 #include "assoc.h"
 #include "decl.h"
@@ -152,17 +156,18 @@ static int lbs_adhoc_join(struct lbs_private *priv,
 	struct bss_descriptor *bss = &assoc_req->bss;
 	u8 preamble = RADIO_PREAMBLE_LONG;
 	DECLARE_MAC_BUF(mac);
+	DECLARE_SSID_BUF(ssid);
 	u16 ratesize = 0;
 	int ret = 0;
 
 	lbs_deb_enter(LBS_DEB_ASSOC);
 
 	lbs_deb_join("current SSID '%s', ssid length %u\n",
-		escape_essid(priv->curbssparams.ssid,
+		print_ssid(ssid, priv->curbssparams.ssid,
 		priv->curbssparams.ssid_len),
 		priv->curbssparams.ssid_len);
 	lbs_deb_join("requested ssid '%s', ssid length %u\n",
-		escape_essid(bss->ssid, bss->ssid_len),
+		print_ssid(ssid, bss->ssid, bss->ssid_len),
 		bss->ssid_len);
 
 	/* check if the requested SSID is already joined */
@@ -307,6 +312,7 @@ static int lbs_adhoc_start(struct lbs_private *priv,
 	size_t ratesize = 0;
 	u16 tmpcap = 0;
 	int ret = 0;
+	DECLARE_SSID_BUF(ssid);
 
 	lbs_deb_enter(LBS_DEB_ASSOC);
 
@@ -326,7 +332,7 @@ static int lbs_adhoc_start(struct lbs_private *priv,
 	memcpy(cmd.ssid, assoc_req->ssid, assoc_req->ssid_len);
 
 	lbs_deb_join("ADHOC_START: SSID '%s', ssid length %u\n",
-		escape_essid(assoc_req->ssid, assoc_req->ssid_len),
+		print_ssid(ssid, assoc_req->ssid, assoc_req->ssid_len),
 		assoc_req->ssid_len);
 
 	cmd.bsstype = CMD_BSS_TYPE_IBSS;
@@ -338,12 +344,12 @@ static int lbs_adhoc_start(struct lbs_private *priv,
 	WARN_ON(!assoc_req->channel);
 
 	/* set Physical parameter set */
-	cmd.phyparamset.dsparamset.elementid = MFIE_TYPE_DS_SET;
+	cmd.phyparamset.dsparamset.elementid = WLAN_EID_DS_PARAMS;
 	cmd.phyparamset.dsparamset.len = 1;
 	cmd.phyparamset.dsparamset.currentchan = assoc_req->channel;
 
 	/* set IBSS parameter set */
-	cmd.ssparamset.ibssparamset.elementid = MFIE_TYPE_IBSS_SET;
+	cmd.ssparamset.ibssparamset.elementid = WLAN_EID_IBSS_PARAMS;
 	cmd.ssparamset.ibssparamset.len = 2;
 	cmd.ssparamset.ibssparamset.atimwindow = 0;
 
@@ -427,8 +433,8 @@ static inline int match_bss_no_security(struct lbs_802_11_security *secinfo,
 {
 	if (!secinfo->wep_enabled  && !secinfo->WPAenabled
 	    && !secinfo->WPA2enabled
-	    && match_bss->wpa_ie[0] != MFIE_TYPE_GENERIC
-	    && match_bss->rsn_ie[0] != MFIE_TYPE_RSN
+	    && match_bss->wpa_ie[0] != WLAN_EID_GENERIC
+	    && match_bss->rsn_ie[0] != WLAN_EID_RSN
 	    && !(match_bss->capability & WLAN_CAPABILITY_PRIVACY))
 		return 1;
 	else
@@ -450,7 +456,7 @@ static inline int match_bss_wpa(struct lbs_802_11_security *secinfo,
 				struct bss_descriptor *match_bss)
 {
 	if (!secinfo->wep_enabled && secinfo->WPAenabled
-	    && (match_bss->wpa_ie[0] == MFIE_TYPE_GENERIC)
+	    && (match_bss->wpa_ie[0] == WLAN_EID_GENERIC)
 	    /* privacy bit may NOT be set in some APs like LinkSys WRT54G
 	    && (match_bss->capability & WLAN_CAPABILITY_PRIVACY) */
 	   )
@@ -463,7 +469,7 @@ static inline int match_bss_wpa2(struct lbs_802_11_security *secinfo,
 				 struct bss_descriptor *match_bss)
 {
 	if (!secinfo->wep_enabled && secinfo->WPA2enabled &&
-	    (match_bss->rsn_ie[0] == MFIE_TYPE_RSN)
+	    (match_bss->rsn_ie[0] == WLAN_EID_RSN)
 	    /* privacy bit may NOT be set in some APs like LinkSys WRT54G
 	    (match_bss->capability & WLAN_CAPABILITY_PRIVACY) */
 	   )
@@ -477,8 +483,8 @@ static inline int match_bss_dynamic_wep(struct lbs_802_11_security *secinfo,
 {
 	if (!secinfo->wep_enabled && !secinfo->WPAenabled
 	    && !secinfo->WPA2enabled
-	    && (match_bss->wpa_ie[0] != MFIE_TYPE_GENERIC)
-	    && (match_bss->rsn_ie[0] != MFIE_TYPE_RSN)
+	    && (match_bss->wpa_ie[0] != WLAN_EID_GENERIC)
+	    && (match_bss->rsn_ie[0] != WLAN_EID_RSN)
 	    && (match_bss->capability & WLAN_CAPABILITY_PRIVACY))
 		return 1;
 	else
@@ -694,6 +700,7 @@ static int assoc_helper_essid(struct lbs_private *priv,
 	int ret = 0;
 	struct bss_descriptor * bss;
 	int channel = -1;
+	DECLARE_SSID_BUF(ssid);
 
 	lbs_deb_enter(LBS_DEB_ASSOC);
 
@@ -705,7 +712,7 @@ static int assoc_helper_essid(struct lbs_private *priv,
 		channel = assoc_req->channel;
 
 	lbs_deb_assoc("SSID '%s' requested\n",
-	              escape_essid(assoc_req->ssid, assoc_req->ssid_len));
+	              print_ssid(ssid, assoc_req->ssid, assoc_req->ssid_len));
 	if (assoc_req->mode == IW_MODE_INFRA) {
 		lbs_send_specific_ssid_scan(priv, assoc_req->ssid,
 			assoc_req->ssid_len);
@@ -1209,6 +1216,7 @@ void lbs_association_worker(struct work_struct *work)
 	int ret = 0;
 	int find_any_ssid = 0;
 	DECLARE_MAC_BUF(mac);
+	DECLARE_SSID_BUF(ssid);
 
 	lbs_deb_enter(LBS_DEB_ASSOC);
 
@@ -1232,7 +1240,7 @@ void lbs_association_worker(struct work_struct *work)
 		"    secinfo:  %s%s%s\n"
 		"    auth_mode: %d\n",
 		assoc_req->flags,
-		escape_essid(assoc_req->ssid, assoc_req->ssid_len),
+		print_ssid(ssid, assoc_req->ssid, assoc_req->ssid_len),
 		assoc_req->channel, assoc_req->band, assoc_req->mode,
 		print_mac(mac, assoc_req->bssid),
 		assoc_req->secinfo.WPAenabled ? " WPA" : "",
@@ -1771,6 +1779,7 @@ static int lbs_adhoc_post(struct lbs_private *priv, struct cmd_header *resp)
 	union iwreq_data wrqu;
 	struct bss_descriptor *bss;
 	DECLARE_MAC_BUF(mac);
+	DECLARE_SSID_BUF(ssid);
 
 	lbs_deb_enter(LBS_DEB_JOIN);
 
@@ -1820,7 +1829,7 @@ static int lbs_adhoc_post(struct lbs_private *priv, struct cmd_header *resp)
 	wireless_send_event(priv->dev, SIOCGIWAP, &wrqu, NULL);
 
 	lbs_deb_join("ADHOC_RESP: Joined/started '%s', BSSID %s, channel %d\n",
-		     escape_essid(bss->ssid, bss->ssid_len),
+		     print_ssid(ssid, bss->ssid, bss->ssid_len),
 		     print_mac(mac, priv->curbssparams.bssid),
 		     priv->curbssparams.channel);
 
