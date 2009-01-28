@@ -4,7 +4,7 @@
   */
 
 #include <net/iw_handler.h>
-#include <net/lib80211.h>
+#include <net/ieee80211.h>
 #include <linux/kfifo.h>
 #include "host.h"
 #include "hostcmd.h"
@@ -160,8 +160,7 @@ out:
 	return ret;
 }
 
-int lbs_host_sleep_cfg(struct lbs_private *priv, uint32_t criteria,
-		struct wol_config *p_wol_config)
+int lbs_host_sleep_cfg(struct lbs_private *priv, uint32_t criteria)
 {
 	struct cmd_ds_host_sleep cmd_config;
 	int ret;
@@ -171,21 +170,10 @@ int lbs_host_sleep_cfg(struct lbs_private *priv, uint32_t criteria,
 	cmd_config.gpio = priv->wol_gpio;
 	cmd_config.gap = priv->wol_gap;
 
-	if (p_wol_config != NULL)
-		memcpy((uint8_t *)&cmd_config.wol_conf, (uint8_t *)p_wol_config,
-				sizeof(struct wol_config));
-	else
-		cmd_config.wol_conf.action = CMD_ACT_ACTION_NONE;
-
 	ret = lbs_cmd_with_response(priv, CMD_802_11_HOST_SLEEP_CFG, &cmd_config);
 	if (!ret) {
-		if (criteria) {
-			lbs_deb_cmd("Set WOL criteria to %x\n", criteria);
-			priv->wol_criteria = criteria;
-		} else
-			memcpy((uint8_t *) p_wol_config,
-					(uint8_t *)&cmd_config.wol_conf,
-					sizeof(struct wol_config));
+		lbs_deb_cmd("Set WOL criteria to %x\n", criteria);
+		priv->wol_criteria = criteria;
 	} else {
 		lbs_pr_info("HOST_SLEEP_CFG failed %d\n", ret);
 	}
@@ -1075,7 +1063,6 @@ int lbs_mesh_config(struct lbs_private *priv, uint16_t action, uint16_t chan)
 {
 	struct cmd_ds_mesh_config cmd;
 	struct mrvl_meshie *ie;
-	DECLARE_SSID_BUF(ssid);
 
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.channel = cpu_to_le16(chan);
@@ -1083,7 +1070,7 @@ int lbs_mesh_config(struct lbs_private *priv, uint16_t action, uint16_t chan)
 
 	switch (action) {
 	case CMD_ACT_MESH_CONFIG_START:
-		ie->id = WLAN_EID_GENERIC;
+		ie->hdr.id = MFIE_TYPE_GENERIC;
 		ie->val.oui[0] = 0x00;
 		ie->val.oui[1] = 0x50;
 		ie->val.oui[2] = 0x43;
@@ -1095,7 +1082,7 @@ int lbs_mesh_config(struct lbs_private *priv, uint16_t action, uint16_t chan)
 		ie->val.mesh_capability = MARVELL_MESH_CAPABILITY;
 		ie->val.mesh_id_len = priv->mesh_ssid_len;
 		memcpy(ie->val.mesh_id, priv->mesh_ssid, priv->mesh_ssid_len);
-		ie->len = sizeof(struct mrvl_meshie_val) -
+		ie->hdr.len = sizeof(struct mrvl_meshie_val) -
 			IW_ESSID_MAX_SIZE + priv->mesh_ssid_len;
 		cmd.length = cpu_to_le16(sizeof(struct mrvl_meshie_val));
 		break;
@@ -1106,7 +1093,7 @@ int lbs_mesh_config(struct lbs_private *priv, uint16_t action, uint16_t chan)
 	}
 	lbs_deb_cmd("mesh config action %d type %x channel %d SSID %s\n",
 		    action, priv->mesh_tlv, chan,
-		    print_ssid(ssid, priv->mesh_ssid, priv->mesh_ssid_len));
+		    escape_essid(priv->mesh_ssid, priv->mesh_ssid_len));
 
 	return __lbs_mesh_config_send(priv, &cmd, action, priv->mesh_tlv);
 }

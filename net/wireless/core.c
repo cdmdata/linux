@@ -19,6 +19,7 @@
 #include "nl80211.h"
 #include "core.h"
 #include "sysfs.h"
+#include "reg.h"
 
 /* name for sysfs, %d is appended */
 #define PHY_NAME "phy"
@@ -300,10 +301,12 @@ int wiphy_register(struct wiphy *wiphy)
 	/* check and set up bitrates */
 	ieee80211_set_bitrate_flags(wiphy);
 
-	mutex_lock(&cfg80211_drv_mutex);
-
 	/* set up regulatory info */
+	mutex_lock(&cfg80211_reg_mutex);
 	wiphy_update_regulatory(wiphy, REGDOM_SET_BY_CORE);
+	mutex_unlock(&cfg80211_reg_mutex);
+
+	mutex_lock(&cfg80211_drv_mutex);
 
 	res = device_add(&drv->wiphy.dev);
 	if (res)
@@ -347,10 +350,6 @@ void wiphy_unregister(struct wiphy *wiphy)
 	mutex_lock(&drv->mtx);
 	/* unlock again before freeing */
 	mutex_unlock(&drv->mtx);
-
-	/* If this device got a regulatory hint tell core its
-	 * free to listen now to a new shiny device regulatory hint */
-	reg_device_remove(wiphy);
 
 	list_del(&drv->list);
 	device_del(&drv->wiphy.dev);
