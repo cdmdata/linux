@@ -33,7 +33,6 @@
 #include <asm/ioctls.h>
 #include <mach/pxa-regs.h>
 
-
 //#define INPUT_EVENT_INTERFACE
 #ifdef INPUT_EVENT_INTERFACE
 #include <linux/input.h>
@@ -178,9 +177,13 @@ struct gpioData
 };
 
 
+static __u8 invert_bytes[INVERT_BYTES] = {0};
+static inline int invert_bit(int gpio)
+{
+	return 0 != (invert_bytes[(gpio/8)] & (1<<(gpio&7)));
+}
 
 static struct gpioData * g_gpioData;
-
 
 void Do_Expiration(struct dev_gpio* dev)
 {
@@ -705,6 +708,7 @@ static ssize_t gpio_write (struct file *filp, const char *buffer,size_t count, l
 			char ch;
 			return_val = (copy_from_user (&ch, buffer, 1))? -EFAULT : 1;
 			if (return_val>=0) {
+				ch ^= invert_bit(gpio);
 				if (ch&1) {
 					GPSR(gpio) = GPIO_bit(gpio);
 				} else {
@@ -888,7 +892,7 @@ static ssize_t gpio_read (struct file *filp, char *buffer,size_t count, loff_t *
 				}
 			}
 			dev->gpio_transitions_read=dev->gpio_transitions;
-			ch = (dev->gpio_level) ? '1' : '0';
+			ch = ((dev->gpio_level) ? '1' : '0') ^ invert_bit(gpio);
 			return_val = (copy_to_user (buffer, &ch, 1))? -EFAULT : 1;
 		}
 	}
@@ -1368,6 +1372,16 @@ static int gpio_ioctl(struct inode *inode, struct file *filp,
 				return_val = -ENOIOCTLCMD;
 				break;
 			}
+			case GPIO_SET_INVERT:
+			{
+				return_val = copy_from_user(invert_bytes, (void *)arg, sizeof(invert_bytes));
+				break;
+			}
+			case GPIO_GET_INVERT:
+			{
+				return_val = copy_to_user((void *)arg,invert_bytes, sizeof(invert_bytes));
+				break;
+			}
 			default:
 				printk( KERN_ERR "unknown GPIO ioctl %u\n", cmd );
 				return_val = -ENOIOCTLCMD;
@@ -1641,6 +1655,7 @@ static int __init gpio_init(void)
 {
 	struct gpioData * g = g_gpioData;
 
+        memset(invert_bytes,0,sizeof(invert_bytes));
 	if (!g) {
 		g = (struct gpioData*) kmalloc(sizeof(struct gpioData),GFP_KERNEL);
 		if (g) {
