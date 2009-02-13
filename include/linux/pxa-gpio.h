@@ -44,4 +44,10 @@ struct gpEvent {
 	unsigned char level;
 };
 
+#define MAX_INVERT_BITS    128
+#define INVERT_BYTES       (MAX_INVERT_BITS/8)
+
+#define GPIO_GET_INVERT _IOR(BASE_MAGIC, 0x04, __u8[INVERT_BYTES]) // returns bit mask of pins to invert
+#define GPIO_SET_INVERT _IOW(BASE_MAGIC, 0x05, __u8[INVERT_BYTES]) // accepts bit mask of pins to invert
+
 #endif

@@ -82,6 +82,11 @@ static void __init neon_init_irq(void)
 	pxa_gpio_mode(SM501_INTERRUPT_GP | GPIO_IN);
 	set_irq_type(IRQ_GPIO(SM501_INTERRUPT_GP), IRQ_TYPE_EDGE_RISING); /* SM501 Interrupt, neon,neon-b board  */
 
+#if defined(CONFIG_TOUCHSCREEN_I2C) || defined(CONFIG_TOUCHSCREEN_I2C_MODULE)
+	pxa_gpio_mode(CONFIG_TOUCHSCREEN_I2C_IRQ | GPIO_IN);
+	set_irq_type(IRQ_GPIO(CONFIG_TOUCHSCREEN_I2C_IRQ), IRQ_TYPE_EDGE_FALLING); /* I2C touch screen  */
+#endif
+
 	if ((gpdr & (1 << 4)) == 0)
 		set_irq_type(IRQ_GPIO(4), IRQ_TYPE_EDGE_RISING);	/* UCB1400 Interrupt, neon board  */
 	if ((gpdr & (1 << 23)) == 0)
@@ -229,6 +234,7 @@ static struct platform_device neon_audio_device = {
 	.dev		= { .platform_data = &audio_ops },
 };
 
+#ifdef CONFIG_USB_OHCI_SM501
 ///////////////////////////////
 static struct resource sm501_ohci_resources[] = {
 	[0] = {
@@ -265,6 +271,7 @@ static struct platform_device sm501_ohci_device = {
 	.num_resources	= ARRAY_SIZE(sm501_ohci_resources),
 	.resource	= sm501_ohci_resources,
 };
+#endif
 
 /////////////////////////////////////////////////////////
 #define NEON_MMC_CARD_DETECT_GPIO 36
@@ -382,9 +389,7 @@ static void __init neon_init(void)
 
 	(void) platform_add_devices(devices, ARRAY_SIZE(devices));
 
-#ifndef CONFIG_USB_OHCI_SM501
 	pxa_set_ohci_info(&neon270_ohci_platform_data);
-#endif
 	
 	neon_pxafb_info.modes = &display_mode;
 	set_pxa_fb_info(&neon_pxafb_info);
@@ -395,14 +400,12 @@ static void __init neon_init(void)
 
 #define DEBUG_SIZE (PAGE_SIZE*4)
 static struct map_desc neon_io_desc[] __initdata = {
- /* virtual      	      pfn    	    length      domain       r  w  c  b */
- { 0xfff00000, __phys_to_pfn(0x00000000), DEBUG_SIZE, MT_HIGH_VECTORS },	//DOMAIN_USER,   1, 0, 1, 1for debugging variables, DOMAIN_USER because of errata on exiting SDS
- { 0xff800000, __phys_to_pfn(0x08000000), 0x00100000, MT_DEVICE }, // static chip select 2, USB DMA HOST controller
- { 0xff900000, __phys_to_pfn(0x0c000000), 0x00100000, MT_DEVICE }, // static chip select 3, USB DMA DEVICE controller
- { 0xffA00000, __phys_to_pfn(0x10000000), 0x00100000, MT_DEVICE }, // static chip select 4, USB I/O
- { 0xffB00000, __phys_to_pfn(0x14000000), 0x00100000, MT_DEVICE }, // static chip select 5, this is a dummy I/O location used to
-									//give 300ns delay between write of cmd register location
-									//to r/w of register
+  	{	/* debugging variables */
+		.virtual	=  0xf0000000,
+		.pfn		= __phys_to_pfn(0),
+		.length		= DEBUG_SIZE,
+		.type		= MT_HIGH_VECTORS
+	}
 };
 
 static void __init neon_map_io(void)
@@ -428,8 +431,6 @@ static void __init neon_map_io(void)
 
 	neon_io_desc[0].pfn = __phys_to_pfn(virt_to_phys(init_maps));
 	iotable_init(neon_io_desc,ARRAY_SIZE(neon_io_desc));
-
-	init_maps = alloc_bootmem_low_pages(PAGE_SIZE);
 }
 
 MACHINE_START(SCANPASS, "Boundary Devices Neon-270 board")
