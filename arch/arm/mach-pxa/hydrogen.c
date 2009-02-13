@@ -189,12 +189,24 @@ static struct platform_device pxafb_yuv_device = {
 	},
 };
 
+static struct platform_device pxafb_cursor = {
+	.name		= "pxafb_cursor",
+	.id		= 4,
+	.num_resources	= 0,
+	.resource	= 0,
+	.dev		= {
+		.dma_mask = &pxafb_yuv_dma_mask,
+		.coherent_dma_mask = DMA_BIT_MASK(32),
+	},
+};
+
 static struct platform_device *platform_devices[] __initdata = {
 #ifdef CONFIG_SND_AC97_CODEC
         &hydrogen_audio_device,
 #endif
         &asix_device,
-        &pxafb_yuv_device
+        &pxafb_yuv_device,
+	&pxafb_cursor
 };
 
 static struct pxafb_mode_info fb_modes __initdata = {

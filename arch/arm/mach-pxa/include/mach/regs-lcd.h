@@ -27,11 +27,24 @@
 #define FBR4		(0x030) /* DMA Channel 2 Frame Branch Register */
 #define FBR5		(0x110) /* DMA Channel 2 Frame Branch Register */
 #define FBR6		(0x114) /* DMA Channel 2 Frame Branch Register */
+#define FBR_BRA		0x1	/* Branch after finishing current frame */
+#define FBR_BINT	0x2	/* Branch Interrupt */
 
 #define OVL1C1		(0x050)	/* Overlay 1 Control Register 1 */
 #define OVL1C2		(0x060)	/* Overlay 1 Control Register 2 */
 #define OVL2C1		(0x070)	/* Overlay 2 Control Register 1 */
 #define OVL2C2		(0x080)	/* Overlay 2 Control Register 2 */
+
+#define CCR		(0x090)	/* Cursor Control Register */
+#define CCR_CEN		(1 << 31)	/* Enable bit for Cursor */
+#define CYPOS_BIT_POS	15	/* Y pos bit postion */
+#define CXPOS_BIT_POS	5	/* Y pos bit postion */
+
+#define IUM5	(1 << 28) /* Disable interrupts in case of runderrun error */
+#define BSM5	(1 << 20) /* Disable interrupts in case of branches */
+#define EOFM5	(1 << 12) /* Disable interrupts in case of end of frame */
+#define SOFM5	(1 << 4)  /* Disable interrupts in case of start of frame */
+					
 
 #define CMDCR		(0x100)	/* Command Control Register */
 #define PRSR		(0x104)	/* Panel Read Status Register */
