@@ -1825,6 +1825,14 @@ config FB_PXA_YUV
 	  PXA27x processor.
 	  If unsure, say N.
 
+config FB_PXA_HARDWARE_CURSOR
+	tristate "PXA27x CURSOR support"
+	depends on FB_PXA
+	---help---
+	  Hardware cursor driver for the built-in LCD controller in the Intel
+	  PXA27x processor.
+	  If unsure, say N.
+
 config FB_PXA_SMARTPANEL
 	bool "PXA Smartpanel LCD support"
 	default n
