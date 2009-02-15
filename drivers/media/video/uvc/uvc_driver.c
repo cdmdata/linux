@@ -857,6 +857,9 @@ static int uvc_parse_vendor_control(struct uvc_device *dev,
 		else
 			sprintf(unit->name, "Extension %u", buffer[3]);
 
+		uvc_trace(UVC_TRACE_DESCR, "Found Logitech extension unit: " UVC_GUID_FORMAT "\n",
+			UVC_GUID_ARGS(unit->extension.guidExtensionCode));
+
 		list_add_tail(&unit->list, &dev->entities);
 		handled = 1;
 		break;
@@ -1117,6 +1120,9 @@ static int uvc_parse_standard_control(struct uvc_device *dev,
 				   sizeof unit->name);
 		else
 			sprintf(unit->name, "Extension %u", buffer[3]);
+
+		uvc_trace(UVC_TRACE_DESCR, "Found extension unit: " UVC_GUID_FORMAT "\n",
+				UVC_GUID_ARGS(unit->extension.guidExtensionCode));
 
 		list_add_tail(&unit->list, &dev->entities);
 		break;
