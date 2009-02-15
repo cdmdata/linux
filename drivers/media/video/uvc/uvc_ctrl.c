@@ -311,6 +311,24 @@ static struct uvc_control_info uvc_ctrls[] = {
 		.flags		= UVC_CONTROL_SET_CUR | UVC_CONTROL_GET_CUR
 				| UVC_CONTROL_RESTORE | UVC_CONTROL_AUTO_UPDATE,
 	},
+	{
+		.entity		= UVC_GUID_LOGITECH_VIDEO,
+		.selector	= LXU_COLOR_PROCESSING_DISABLE_CONTROL,
+		.index		= LXU_COLOR_PROCESSING_DISABLE_CONTROL - 1,
+		.size		= 1,
+		.flags		= UVC_CONTROL_SET_CUR | UVC_CONTROL_GET_MIN
+				| UVC_CONTROL_GET_MAX | UVC_CONTROL_GET_RES
+				| UVC_CONTROL_GET_DEF,
+	},
+	{
+		.entity		= UVC_GUID_LOGITECH_VIDEO,
+		.selector	= LXU_RAW_DATA_BIT_PER_PIXEL_CONTROL,
+		.index		= LXU_RAW_DATA_BIT_PER_PIXEL_CONTROL - 1,
+		.size		= 1,
+		.flags		= UVC_CONTROL_SET_CUR | UVC_CONTROL_GET_MIN
+				| UVC_CONTROL_GET_MAX | UVC_CONTROL_GET_RES
+				| UVC_CONTROL_GET_DEF,
+	},
 };
 
 static struct uvc_menu_info power_line_frequency_controls[] = {
@@ -555,6 +573,26 @@ static struct uvc_control_mapping uvc_ctrl_mappings[] = {
 		.offset		= 0,
 		.v4l2_type	= V4L2_CTRL_TYPE_BOOLEAN,
 		.data_type	= UVC_CTRL_DATA_TYPE_BOOLEAN,
+	},
+	{
+		.id		= V4L2_CID_DISABLE_COLOR_PROCESSING,
+		.name		= "Disable Color Processing",
+		.entity		= UVC_GUID_LOGITECH_VIDEO,
+		.selector	= LXU_COLOR_PROCESSING_DISABLE_CONTROL,
+		.size		= 8,
+		.offset		= 0,
+		.v4l2_type	= V4L2_CTRL_TYPE_BOOLEAN,
+		.data_type	= UVC_CTRL_DATA_TYPE_BOOLEAN,
+	},
+	{
+		.id		= V4L2_CID_RAW_DATA_BITS_PER_PIXEL,
+		.name		= "Raw data: Bits per pixel",
+		.entity		= UVC_GUID_LOGITECH_VIDEO,
+		.selector	= LXU_RAW_DATA_BIT_PER_PIXEL_CONTROL,
+		.size		= 8,
+		.offset		= 0,
+		.v4l2_type	= V4L2_CTRL_TYPE_INTEGER,
+		.data_type	= UVC_CTRL_DATA_TYPE_UNSIGNED,
 	},
 	{
 		.id		= V4L2_CID_ZOOM_ABSOLUTE,

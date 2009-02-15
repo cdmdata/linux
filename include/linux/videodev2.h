@@ -887,7 +887,10 @@ enum v4l2_power_line_frequency {
 #define V4L2_CID_BACKLIGHT_COMPENSATION 	(V4L2_CID_BASE+28)
 #define V4L2_CID_CHROMA_AGC                     (V4L2_CID_BASE+29)
 #define V4L2_CID_COLOR_KILLER                   (V4L2_CID_BASE+30)
-#define V4L2_CID_COLORFX			(V4L2_CID_BASE+31)
+#define V4L2_CID_DISABLE_COLOR_PROCESSING	(V4L2_CID_BASE+31)
+#define V4L2_CID_RAW_DATA_BITS_PER_PIXEL	(V4L2_CID_BASE+32)
+ 
+#define V4L2_CID_COLORFX			(V4L2_CID_BASE+33)
 enum v4l2_colorfx {
 	V4L2_COLORFX_NONE	= 0,
 	V4L2_COLORFX_BW		= 1,
@@ -895,7 +898,7 @@ enum v4l2_colorfx {
 };
 
 /* last CID + 1 */
-#define V4L2_CID_LASTP1                         (V4L2_CID_BASE+32)
+#define V4L2_CID_LASTP1                         (V4L2_CID_BASE+34)
 
 /*  MPEG-class control IDs defined by V4L2 */
 #define V4L2_CID_MPEG_BASE 			(V4L2_CTRL_CLASS_MPEG | 0x900)
