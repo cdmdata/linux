@@ -177,7 +177,10 @@ int cursorfb_alloc_buffer(struct fb_info_cursor *cursor)
 void cursorfb_set_color(struct fb_info_cursor *cursor, struct color24_info ci)
 {
 	if(!cursor->map_virtual) {
-		cursorfb_alloc_buffer(cursor);
+		int ret;
+		ret = cursorfb_alloc_buffer(cursor);
+		if(ret)
+			return ret;
 	}
 
 	if(ci.color_idx < modes[cursor->cinfo.mode].color_count)
@@ -193,6 +196,13 @@ int cursorfb_enable(struct fb_info_cursor *cursor)
 
 	if (!mmio_base)
 		return -1;
+
+	if (!cursor->map_virtual) {
+		int ret;
+		ret = cursorfb_alloc_buffer(cursor);
+		if(ret)
+			return ret;
+	}
 
 	height = modes[cursor->cinfo.mode].xres;
 	width = modes[cursor->cinfo.mode].yres;
@@ -265,9 +275,6 @@ static ssize_t pxafb_cursor_write(struct file *filp, const char *buffer,
 		if(ret)
 			return 0;
 	}
-
-	if (!cursor->map_virtual)
-		return -EIO;
 
 	if (count > MAX_CURSOR_SIZE)
 		count = MAX_CURSOR_SIZE;
