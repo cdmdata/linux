@@ -17,13 +17,28 @@
 #define FBR2		(0x028)	/* DMA Channel 2 Frame Branch Register */
 #define FBR3		(0x02c)	/* DMA Channel 3 Frame Branch Register */
 #define FBR4		(0x030)	/* DMA Channel 4 Frame Branch Register */
+#define FBR5		(0x110)	/* DMA Channel 5 Frame Branch Register */
+#define LCSR1		(0x034) /* LCD Controller Status Register 1 */
 #define LCSR		(0x038)	/* LCD Controller Status Register */
 #define LIIDR		(0x03C)	/* LCD Controller Interrupt ID Register */
 #define TMEDRGBR	(0x040)	/* TMED RGB Seed Register */
 #define TMEDCR		(0x044)	/* TMED Control Register */
 
+#define FBR_BRA		0x1	/* Branch after finishing current frame */
+#define FBR_BINT	0x2	/* Branch Interrupt */
+
 #define OVL2C1	0x70
 #define OVL2C2	0x80
+#define CCR		(0x090)	/* Cursor Control Register */
+#define CCR_CEN		(1 << 31)	/* Enable bit for Cursor */
+#define CYPOS_BIT_POS	15	/* Y pos bit postion */
+#define CXPOS_BIT_POS	5	/* Y pos bit postion */
+
+#define IUM5	(1 << 28) /* Disable interrupts in case of runderrun error */
+#define BSM5	(1 << 20) /* Disable interrupts in case of branches */
+#define EOFM5	(1 << 12) /* Disable interrupts in case of end of frame */
+#define SOFM5	(1 << 4)  /* Disable interrupts in case of start of frame */
+					
 
 #define CMDCR		(0x100)	/* Command Control Register */
 #define PRSR		(0x104)	/* Panel Read Status Register */
