@@ -107,6 +107,14 @@ config MACH_NEON270
 	  Select Boundary Devices 32 bit wide board using SM-501 controller
 	  and SMSC Lan91C111 10/100 ethernet
 
+config SWAP_STUART_BTUART
+	bool "Swap STUART and BTUART"
+	default N
+	depends on MACH_NEON270
+	help
+	  This option will swap the UART numbering for STUART and BTUART
+	  for NEON270ENC boards.
+
 config MACH_HYDROGEN
 	bool "Boundary Devices Hydrogen board"
 	select PXA27x
