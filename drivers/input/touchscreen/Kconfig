@@ -492,6 +492,7 @@ config TOUCHSCREEN_TOUCHIT213
 
 config TOUCHSCREEN_I2C
 	tristate "I2C Touchscreen controller"
+	select I2C_PXA
 	select I2C
 	help
 	  If you say yes here you get touchscreen support through Boundary Devices 4/5 wire touchscreen card
