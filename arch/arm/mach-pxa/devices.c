@@ -19,6 +19,14 @@
 #include "devices.h"
 #include "generic.h"
 
+#if defined(CONFIG_SWAP_STUART_BTUART)
+#define STUART_ID	1
+#define BTUART_ID	2
+#else
+#define BTUART_ID	1
+#define STUART_ID	2
+#endif
+
 void __init pxa_register_device(struct platform_device *dev, void *data)
 {
 	int ret;
@@ -186,7 +194,7 @@ static struct resource pxa_resource_btuart[] = {
 
 struct platform_device pxa_device_btuart = {
 	.name		= "pxa2xx-uart",
-	.id		= 1,
+	.id		= BTUART_ID,
 	.resource	= pxa_resource_btuart,
 	.num_resources	= ARRAY_SIZE(pxa_resource_btuart),
 };
@@ -205,7 +213,7 @@ static struct resource pxa_resource_stuart[] = {
 
 struct platform_device pxa_device_stuart = {
 	.name		= "pxa2xx-uart",
-	.id		= 2,
+	.id		= STUART_ID,
 	.resource	= pxa_resource_stuart,
 	.num_resources	= ARRAY_SIZE(pxa_resource_stuart),
 };
