@@ -300,6 +300,7 @@ static struct pxamci_platform_data neon_mci_platform_data = {
 	.exit		= neon_mci_exit,
 };
 
+#ifdef CONFIG_BACKLIGHT_LCD_SUPPORT
 static void neon_backlight_power(int on)
 {
 	if (on) {
@@ -315,6 +316,7 @@ static void neon_backlight_power(int on)
 		//pxa_set_cken(CKEN_PWM0, 0);
 	}
 }
+#endif
 
 static struct pxafb_mode_info display_mode __initdata = {
 	.pixclock		= 110000,	//(7-1)	//was 4 then 7
@@ -334,7 +336,9 @@ static struct pxafb_mach_info neon_pxafb_info = {
 	.num_modes      	= 1,
 	.lccr0			= LCCR0_Act,
 	.lccr3			= LCCR3_PCP | LCCR3_Acb(255),
+#ifdef CONFIG_BACKLIGHT_LCD_SUPPORT
 	.pxafb_backlight_power	= neon_backlight_power,
+#endif
 };
 
 static int neon_udc_is_connected(void)
