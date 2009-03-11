@@ -1,7 +1,9 @@
 #ifndef __SM501_INT_H_INCLUDED__
 #define __SM501_INT_H_INCLUDED__
 
+#ifdef __KERNEL__
 #include <mach/pxa-regs.h>
+#endif
 
 typedef unsigned char* port_t;
 
@@ -222,10 +224,12 @@ struct yuv_slice {
 
 #define SM501ALPHA_SETPLANE _IOW(BASE_MAGIC, 0x01, unsigned long)
 
+#ifdef __KERNEL__
 #if defined(CONFIG_MACH_NEON270) && !defined(CONFIG_NEON270ENC)
 #define SM501_FBSTART      PXA_CS1_PHYS
 #else
 #define SM501_FBSTART      PXA_CS3_PHYS
+#endif
 #endif
 #define SM501_FBMAX        0x00700000
 #define SM501_MMIOSTART    (SM501_FBSTART+0x3E00000)
