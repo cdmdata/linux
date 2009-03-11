@@ -81,7 +81,7 @@
 #include <linux/proc_fs.h>
 #include <linux/platform_device.h>
 
-static int nocursor = 1;
+static int nocursor = 0;
 module_param(nocursor, int, 0644);
 MODULE_PARM_DESC(nocursor, "cursor enable/disable");
 
@@ -694,6 +694,7 @@ sm501_probe(struct device *dev)
       STUFF_SM501_REG(SMICCURSOR_LOC,0);
       STUFF_SM501_REG(SMICCURSOR_COLOR12,0xFFFF0000);
       STUFF_SM501_REG(SMICCURSOR_COLOR3,0);
+      printk(KERN_ERR "SM501 cursor at 0x%x\n", cursorOffs );
    }
 
    if( 0 == SM501_grab_int_slot(mmioVirtual,SMI_INTERRUPT_2D,drawing_engine_int,0) )
