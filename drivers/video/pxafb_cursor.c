@@ -45,11 +45,11 @@ int pxafb_get_mmio(void);
 static atomic_t g_cursor;
 
 static struct cursorfb_mode modes[] = {
-	{32, 32, 2, 2, 3},   /* 2 color and transparency */
-	{32, 32, 2, 3, 4},   /* 3 color and transparency */
+	{32, 32, 2, 2, 2},   /* 2 color and transparency */
+	{32, 32, 2, 3, 3},   /* 3 color and transparency */
 	{32, 32, 2, 4, -1},   /* 4 color */
-	{64, 64, 2, 2, 3},   /* 2 color and transparency */
-	{64, 64, 2, 3, 4},   /* 3 color and transparency */
+	{64, 64, 2, 2, 2},   /* 2 color and transparency */
+	{64, 64, 2, 3, 3},   /* 3 color and transparency */
 	{64, 64, 2, 4, -1},   /* 4 color */
 	{128, 128, 1, 2, -1}, /* 2 color */
 	{128, 128, 1, 1, 1}  /* 1 color and transparency */
@@ -69,6 +69,7 @@ struct fb_info_cursor {
 	u_char* map_cursor;
 	u_int* map_palette;
 	struct cursorfb_info cinfo;
+	bool dont_delete_atexit;
 };
 
 struct fb_info_cursor *get_cursor(void)
@@ -180,7 +181,7 @@ void cursorfb_set_color(struct fb_info_cursor *cursor, struct color24_info ci)
 		int ret;
 		ret = cursorfb_alloc_buffer(cursor);
 		if(ret)
-			return ret;
+			return;
 	}
 
 	if(ci.color_idx < modes[cursor->cinfo.mode].color_count)
@@ -254,9 +255,16 @@ static int pxafb_cursor_open(struct inode *inode, struct file *filp)
 static int pxafb_cursor_release(struct inode *inode, struct file *filp)
 {
 	struct fb_info_cursor *cursor = (struct fb_info_cursor *)filp->private_data;
+
 	if (!cursor)
 		return -EINVAL;
-	cursorfb_disable(cursor);
+
+	if(!cursor->dont_delete_atexit) {
+		cursorfb_disable(cursor);
+	}
+
+	cursor->dont_delete_atexit = false;
+
 	return 0;
 }
 
@@ -390,6 +398,11 @@ static int pxafb_cursor_ioctl( struct inode *inode, struct file  *filp,
 			}
 			else 
 				return_val = -EINVAL;
+			break;
+		}
+		case PXA27X_DONT_REMOVE_CURSOR_ATEXIT:
+		{
+			cursor->dont_delete_atexit = true;
 			break;
 		}
 		default:
