@@ -102,6 +102,10 @@ static inline void lcd_writel(int base, unsigned int reg, unsigned int val)
 void cursorfb_disable(struct fb_info_cursor *cursor)
 {
 	int mmio_base = pxafb_get_mmio();
+
+	if(!cursor->map_virtual)
+		return;
+
 	if (mmio_base) {
                 u_int ccr = lcd_readl(mmio_base, CCR);
 		u_int lcsr1 = lcd_readl(mmio_base, LCSR1);
