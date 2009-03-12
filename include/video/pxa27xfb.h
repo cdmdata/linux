@@ -78,4 +78,5 @@ struct pxa27x_overlay_t {
 #define PXA27X_CURSOR_DEACTIVATE  _IO(BASE_MAGIC, 0x07)
 #define PXA27X_16_BIT_COLOR  _IOW(BASE_MAGIC, 0x08, struct color16_info)
 #define PXA27X_24_BIT_COLOR  _IOW(BASE_MAGIC, 0x09, struct color24_info)
+#define PXA27X_DONT_REMOVE_CURSOR_ATEXIT  _IO(BASE_MAGIC, 0x0A)
 #endif
