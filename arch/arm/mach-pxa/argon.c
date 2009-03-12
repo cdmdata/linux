@@ -151,8 +151,25 @@ static struct platform_device pxafb_yuv_device = {
 	},
 };
 
+#ifdef CONFIG_FB_PXA_HARDWARE_CURSOR
+static struct platform_device pxafb_cursor = {
+	.name		= "pxafb_cursor",
+	.id		= 4,
+	.num_resources	= 0,
+	.resource	= 0,
+	.dev		= {
+		.dma_mask = &pxafb_yuv_dma_mask,
+		.coherent_dma_mask = DMA_BIT_MASK(32),
+	},
+};
+
+#endif
+
 static struct platform_device *platform_devices[] __initdata = {
         &audio_device,
+#ifdef CONFIG_FB_PXA_HARDWARE_CURSOR
+        &pxafb_cursor,
+#endif
         &pxafb_yuv_device
 };
 
