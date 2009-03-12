@@ -189,6 +189,7 @@ static struct platform_device pxafb_yuv_device = {
 	},
 };
 
+#ifdef CONFIG_FB_PXA_HARDWARE_CURSOR
 static struct platform_device pxafb_cursor = {
 	.name		= "pxafb_cursor",
 	.id		= 4,
@@ -199,6 +200,7 @@ static struct platform_device pxafb_cursor = {
 		.coherent_dma_mask = DMA_BIT_MASK(32),
 	},
 };
+#endif
 
 static struct platform_device *platform_devices[] __initdata = {
 #ifdef CONFIG_SND_AC97_CODEC
@@ -206,7 +208,9 @@ static struct platform_device *platform_devices[] __initdata = {
 #endif
         &asix_device,
         &pxafb_yuv_device,
+#ifdef CONFIG_FB_PXA_HARDWARE_CURSOR
 	&pxafb_cursor
+#endif
 };
 
 static struct pxafb_mode_info fb_modes __initdata = {
