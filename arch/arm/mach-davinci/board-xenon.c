@@ -37,29 +37,41 @@
 #include <linux/mtd/physmap.h>
 #include <linux/irq.h>
 
-#include <asm/setup.h>
-#include <asm/io.h>
-#include <asm/mach-types.h>
+#include <linux/io.h>
+#include <linux/phy.h>
+#include <linux/clk.h>
 
+#include <asm/setup.h>
+#include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
 #include <asm/mach/flash.h>
 
 #include <mach/hardware.h>
 #include <mach/common.h>
-#include <mach/board.h>
 #include <mach/i2c.h>
 #include <mach/psc.h>
 #include <mach/nand.h>
 #include <mach/gpio.h>
 #include <mach/mux.h>
 #include <mach/serial.h>
+#include <mach/mmc.h>
+
+#define DAVINCI_ASYNC_EMIF_CONTROL_BASE   0x01e00000
+#define DAVINCI_ASYNC_EMIF_DATA_CE0_BASE  0x02000000
+#define DAVINCI_ASYNC_EMIF_DATA_CE1_BASE  0x04000000
+#define DAVINCI_ASYNC_EMIF_DATA_CE2_BASE  0x06000000
+#define DAVINCI_ASYNC_EMIF_DATA_CE3_BASE  0x08000000
+
+static struct emac_platform_data emac_pdata = {
+	.phy_mask	= 1,
+	.mdio_max_freq	= 2200000,
+};
+
 
 /* other misc. init functions */
-void __init davinci_psc_init(void);
 void __init davinci_irq_init(void);
 void __init davinci_map_common_io(void);
-void __init davinci_init_common_hw(void);
 
 
 #if 0
@@ -167,41 +179,56 @@ map_io(void)
 {
 	printk(KERN_ERR "map_io\n");
 	davinci_map_common_io();
+	dm644x_init();
 }
 
-static struct davinci_uart_config davinci_xenon_uart_config __initdata = {
-	.enabled_uarts = 7,
+static int mmc_get_cd(int module)
+{
+	return (0 == gpio_get_value(49));
+}
+
+static int mmc_get_ro(int module)
+{
+	return (0 != gpio_get_value(17));
+}
+
+static struct davinci_mmc_config mmc_config = {
+	.get_cd		= mmc_get_cd,
+	.get_ro		= mmc_get_ro,
+	.wires		= 4
 };
 
-static struct davinci_board_config_kernel davinci_xenon_config[] __initdata = {
-	{ DAVINCI_TAG_UART,     &davinci_xenon_uart_config },
+static struct davinci_uart_config uart_config __initdata = {
+	.enabled_uarts = 7,
 };
 
 static __init void board_init(void)
 {
+	struct clk *aemif_clk;
+	aemif_clk = clk_get(NULL, "aemif");
+	clk_enable(aemif_clk);
+	clk_put(aemif_clk);
+
 	printk(KERN_ERR "board_init\n");
-	davinci_board_config = davinci_xenon_config;
-	davinci_board_config_size = ARRAY_SIZE(davinci_xenon_config);
-	davinci_psc_init();
 	gpio_direction_output(50, 1);	/* turn off USB power */
 	davinci_init_i2c(NULL);
 #if defined(CONFIG_BLK_DEV_DAVINCI) || defined(CONFIG_BLK_DEV_DAVINCI_MODULE)
 	printk(KERN_WARNING "WARNING: both IDE and NOR flash are enabled, "
 	       "but share pins.\n\t Disable IDE for NOR support.\n");
 #endif
-	davinci_mux_peripheral(DAVINCI_MUX_UART1, 1);
-	davinci_mux_peripheral(DAVINCI_MUX_UART2, 1);
 
 	platform_add_devices(davinci_devices,
 			     ARRAY_SIZE(davinci_devices));
-	davinci_serial_init();
+	davinci_serial_init(&uart_config);
 	setup_usb(500, 8);
+	davinci_setup_mmc(0, &mmc_config);
+
+	dm644x_init_emac(&emac_pdata);
 }
 
 static __init void irq_init(void)
 {
 	printk(KERN_ERR "irq_init\n");
-	davinci_init_common_hw();
 	davinci_irq_init();
 	set_irq_type(IRQ_GPIO(18), IRQ_TYPE_EDGE_RISING);
 	set_irq_type(IRQ_GPIO(11), IRQ_TYPE_EDGE_FALLING);
