@@ -75,8 +75,6 @@ static void __init hydrogen_init_irq(void)
 		set_irq_type(IRQ_GPIO(4), IRQ_TYPE_EDGE_RISING);	/* UCB1400 Interrupt, neon board  */
 	if ((gpdr & (1 << 5)) == 0)
 		set_irq_type(IRQ_GPIO(5), IRQ_TYPE_EDGE_RISING);	/* SM501 Interrupt, neon,neon-b board  */
-	if ((gpdr & (1 << 23)) == 0)
-		set_irq_type(IRQ_GPIO(23), IRQ_TYPE_EDGE_RISING);	/* UCB1400 Interrupt, neon-b board  */
 	if ((gpdr & (1 << 24)) == 0)
 		set_irq_type(IRQ_GPIO(24), IRQ_TYPE_EDGE_RISING);	/* 91c111 Interrupt, sm501 board  */
         GPDR(0) = gpdr & ~(1<<12);
