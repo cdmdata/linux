@@ -294,16 +294,16 @@ static int davinci_pcm_dma_request(struct snd_pcm_substream *substream)
 
 	/* Request asp link channels */
 	ret = prtd->asp_link_lch[0] = edma_alloc_slot(EDMA_SLOT_ANY);
-	if (ret)
+	if (ret < 0)
 		goto exit4;
 	ret = prtd->asp_link_lch[1] = edma_alloc_slot(EDMA_SLOT_ANY);
-	if (ret)
+	if (ret < 0)
 		goto exit5;
 
 	prtd->ram_link_lch2 = -1;
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		ret = prtd->ram_link_lch2 = edma_alloc_slot(EDMA_SLOT_ANY);
-		if (ret)
+		if (ret < 0)
 			goto exit6;
 	}
 	/* circle ping-pong buffers */
