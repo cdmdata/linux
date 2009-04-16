@@ -50,4 +50,13 @@ struct gpEvent {
 #define GPIO_GET_INVERT _IOR(BASE_MAGIC, 0x04, __u8[INVERT_BYTES]) // returns bit mask of pins to invert
 #define GPIO_SET_INVERT _IOW(BASE_MAGIC, 0x05, __u8[INVERT_BYTES]) // accepts bit mask of pins to invert
 
+
+/*
+ * Pulse parameter high bit is direction, low 31 bits are duration in jiffies
+ *
+ */
+#define PULSELOW(duration)	((duration)&0x7fffffff)
+#define PULSEHIGH(duration)	(0x80000000|((duration)&0x7fffffff))
+#define GPIO_PULSE _IOW(BASE_MAGIC, 0x06, __u32)
+
 #endif
