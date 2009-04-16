@@ -1411,6 +1411,8 @@ static int gpio_ioctl(struct inode *inode, struct file *filp,
                                 if (copy_from_user(&param, (void *)arg, sizeof(param))) {return_val = -EFAULT; break;}
 				duration = param & 0x7fffffff ;
 				direction = param & 0x80000000 ;
+				if(invert_bit(gpio))
+					direction ^= 0x80000000 ;
 				dev->pulse_timer.expires = jiffies + duration ;
 				dev->pulse_timer.data = direction | gpio ;
                                 add_timer (&dev->pulse_timer);
