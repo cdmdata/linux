@@ -146,6 +146,7 @@ struct dev_gpio
 	unsigned char gpio_gpio;
 	unsigned char gpio_regMask;		//bit 0,1,2 - which gp regs need read upon transition, bit 5 - read timestamp
 	unsigned char gpio_edges;
+	struct timer_list pulse_timer;	/* Times for the end of a pulse */
 
 #ifdef CONFIG_QUEUED_DATA
 //	int	prevJiffies;		//fiq uses difference between jiffies to update timestamp
@@ -244,6 +245,18 @@ void CheckExpirationTimerCallback(unsigned long parameters)
 	}
 }
 #endif
+
+static void endPulse(unsigned long parameters)
+{
+        unsigned gpio = MINOR (parameters);
+	unsigned high = (0 != (parameters&0x80000000));
+	if (high) {
+		GPCR(gpio) = GPIO_bit(gpio);
+	} else {
+		GPSR(gpio) = GPIO_bit(gpio);
+	}
+}
+
 void CheckExpired(struct dev_gpio* dev)
 {
 #ifdef DEBOUNCE_LOGIC
@@ -577,6 +590,8 @@ struct dev_gpio* GetAllocGpioDev(unsigned gpio,int direction,int dirMask,int edg
 				spin_lock_init(&dev->gpio_open_defs_lock);
 #endif
 				dev->gpio_direction = dir;
+                                init_timer (&dev->pulse_timer);
+                                dev->pulse_timer.function = endPulse ;
 				dev->gpio_gpio = gpio;
 				dev->gpio_transitions_read = dev->gpio_transitions-1 ; // force successful read
 				dev->gpio_level =(GPLR(gpio) & GPIO_bit(gpio)) ? 1 : 0;
@@ -1382,6 +1397,33 @@ static int gpio_ioctl(struct inode *inode, struct file *filp,
 				return_val = copy_to_user((void *)arg,invert_bytes, sizeof(invert_bytes));
 				break;
 			}
+			case GPIO_PULSE:
+			{
+				__u32 param ;
+				__u32 duration ;
+				__u32 direction ;
+				
+				if( OUT != dev->gpio_direction ){
+					printk( KERN_ERR "%s: pulse pin %u not output\n", __func__, gpio );
+					return_val = -EFAULT ;
+					break;
+				}
+                                if (copy_from_user(&param, (void *)arg, sizeof(param))) {return_val = -EFAULT; break;}
+				duration = param & 0x7fffffff ;
+				direction = param & 0x80000000 ;
+				dev->pulse_timer.expires = jiffies + duration ;
+				dev->pulse_timer.data = direction | gpio ;
+                                add_timer (&dev->pulse_timer);
+
+				if (direction) {
+					GPSR(gpio) = GPIO_bit(gpio);
+				} else {
+					GPCR(gpio) = GPIO_bit(gpio);
+				}
+
+				return_val = 0 ;
+				break;
+			}
 			default:
 				printk( KERN_ERR "unknown GPIO ioctl %u\n", cmd );
 				return_val = -ENOIOCTLCMD;
@@ -1491,6 +1533,8 @@ static int gpio_open (struct inode* inode, struct file *filp)
 #if defined(ASYNC_INTERFACE) || defined(CONFIG_QUEUED_DATA)
 static int gpio_release (struct inode* inode, struct file *filp)
 {
+        unsigned int minor = MINOR (filp->f_dentry->d_inode->i_rdev);
+        struct dev_gpio* dev= GetAllocGpioDev(minor,0,0,IRQ_TYPE_EDGE_BOTH);
 #ifdef CONFIG_QUEUED_DATA
 	struct gp_queued_def* qdef = filp->private_data;
 	if (qdef) {
@@ -1506,6 +1550,8 @@ static int gpio_release (struct inode* inode, struct file *filp)
 		kfree(qdef);
 	}
 #endif
+	del_timer_sync(&dev->pulse_timer);
+
 #ifdef ASYNC_INTERFACE
 	gpio_fasync(-1,filp,0); //remove from the notify list
 #endif
