@@ -196,7 +196,7 @@ typedef struct {
 static cmdListEntry_t cmdListEntries_[NUMCMDLISTENTRIES] = { {0} };
 static int   volatile cmdListAdd_ = 0 ;
 static int   volatile cmdListTake_ = 0 ;
-static DECLARE_MUTEX_LOCKED(cmdListWait_);
+static DECLARE_MUTEX(cmdListWait_);
 
 static void command_list_int(int slotnum, void * hdata)
 {
@@ -238,6 +238,13 @@ sm501_open(struct fb_info *info, int user)
 static int 
 sm501_release(struct fb_info *info, int user)
 {
+   unsigned long addr = READREG(SMICMD_ADDRESS);
+   STUFF_SM501_REG( SMICMD_ADDRESS, addr & ~SMICMD_START );
+   if( addr & SMICMD_START ){
+      printk( KERN_ERR "%s: aborted command-list 0x%08lx\n", __func__, addr );
+   }
+   cmdListTake_ = cmdListAdd_ ;
+
    return 0 ;
 }
 
@@ -545,8 +552,8 @@ DEBUGMSG( KERN_ERR "smem_start: %lx\n", fix->smem_start );
    rval = register_framebuffer(fbi);
    if( 0 <= rval ){
       DEBUGMSG( KERN_ERR "grab int slot %x\n", intNum );
-//      if( 0 != SM501_grab_int_slot(mmioVirtual,intNum,fb_vsync,fbi) )
-//         printk( KERN_ERR "%s: Error grabbing int slot %d\n", __FUNCTION__, intNum );
+      if( 0 != SM501_grab_int_slot(mmioVirtual,intNum,fb_vsync,fbi) )
+         printk( KERN_ERR "%s: Error grabbing int slot %d\n", __FUNCTION__, intNum );
    }
    DEBUGMSG( KERN_ERR "return fb %p\n", fbi );
    return fbi ;
