@@ -28,4 +28,11 @@
  */
 #define SM501_FREE   _IOR( BASE_MAGIC, 0x02, unsigned long)
 
+/* 
+ * Input: nothing
+ * Output: offset of fb0 in SM-501 memory
+ */
+#define SM501_BASEADDR  _IOWR(BASE_MAGIC, 0x03, unsigned long)
+
+
 #endif 
