@@ -202,6 +202,12 @@ DEBUGMSG( "%s:\n", __FUNCTION__ );
          else
             return 0 ;
       }
+      case SM501_BASEADDR: {
+         if( copy_to_user( (void __user *)arg, &fb0_offs, sizeof(fb0_offs) ) )
+            return -EFAULT ;
+         else
+            return 0 ;
+      }
       case SM501_FREE: {
          allocHeader_t *mem ;
          unsigned long  offs ;
