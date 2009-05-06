@@ -238,14 +238,17 @@ sm501_open(struct fb_info *info, int user)
 static int 
 sm501_release(struct fb_info *info, int user)
 {
+   return 0 ;
+}
+
+void clearCmdList( void )
+{
    unsigned long addr = READREG(SMICMD_ADDRESS);
    STUFF_SM501_REG( SMICMD_ADDRESS, addr & ~SMICMD_START );
    if( addr & SMICMD_START ){
       printk( KERN_ERR "%s: aborted command-list 0x%08lx\n", __func__, addr );
    }
    cmdListTake_ = cmdListAdd_ ;
-
-   return 0 ;
 }
 
 static void sync_cmd_callback( unsigned long cbparam )
