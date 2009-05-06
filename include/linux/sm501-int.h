@@ -39,6 +39,7 @@ extern int SM501_grab_int_slot(port_t cfgBase, unsigned int slotnum,handler501_t
 extern irqreturn_t sm501_interrupt (int irq, void * hdata);
 #endif
 
+extern void clearCmdList(void);
 
 #define SMIGRAPH_WIDTHREG     0x00080014   //  01400000
 #define SMIGRAPH_HEIGHTREG    0x00080018   //  00f00000

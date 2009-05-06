@@ -54,6 +54,7 @@ struct fasync_struct *cmdlist_async = 0 ;
 
 static int cmdlist_release(struct inode *inode, struct file *filp)
 {
+   clearCmdList();
    fasync_helper(-1, filp, 0, &cmdlist_async );
    return 0;
 }
