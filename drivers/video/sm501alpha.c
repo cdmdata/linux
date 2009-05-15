@@ -58,6 +58,7 @@
 #include <linux/sm501-int.h>
 #include <linux/sm501alpha.h>
 #include <linux/platform_device.h>
+#include <mach/pxa2xx-regs.h>
 
 #include "sm501.h"
 

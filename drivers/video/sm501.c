@@ -80,6 +80,7 @@
 #include "console/fbcon.h"
 #include <linux/proc_fs.h>
 #include <linux/platform_device.h>
+#include <mach/pxa2xx-regs.h>
 
 static int nocursor = 0;
 module_param(nocursor, int, 0644);

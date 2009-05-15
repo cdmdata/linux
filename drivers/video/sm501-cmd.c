@@ -29,7 +29,6 @@
 #include <mach/hardware.h>
 #include <asm/system.h>
 #include <asm/mach/map.h>
-#include <mach/pxa-regs.h>
 #include <linux/sm501-int.h>
 #include <asm/io.h>
 #include <asm/uaccess.h>

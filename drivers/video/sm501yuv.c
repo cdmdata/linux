@@ -108,6 +108,7 @@
 #include <asm/mach/map.h>
 #include <asm/cacheflush.h>
 #include <linux/dma-mapping.h>
+#include <mach/pxa2xx-regs.h>
 
 // #define SM501_USE_PXA_DMA
 
