@@ -13,7 +13,6 @@
  */
 
 #include <linux/platform_device.h>
-#include <mach/pxa-regs.h>
 #include <mach/pxa2xx-regs.h>
 #include <mach/pxafb.h>
 

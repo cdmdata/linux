@@ -31,7 +31,7 @@
 #include <asm/mach/map.h>
 #include <asm/bitops.h>
 #include <asm/ioctls.h>
-#include <mach/pxa-regs.h>
+#include <mach/pxa2xx-gpio.h>
 
 //#define INPUT_EVENT_INTERFACE
 #ifdef INPUT_EVENT_INTERFACE

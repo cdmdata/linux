@@ -1,10 +1,6 @@
 #ifndef __SM501_INT_H_INCLUDED__
 #define __SM501_INT_H_INCLUDED__
 
-#ifdef __KERNEL__
-#include <mach/pxa-regs.h>
-#endif
-
 typedef unsigned char* port_t;
 
 typedef void (*handler501_t) (int slotnum, void * hdata);
