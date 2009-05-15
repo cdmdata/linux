@@ -42,7 +42,7 @@
 #include <asm/mach/irq.h>
 #include <asm/mach/flash.h>
 
-#include <mach/pxa-regs.h>
+//#include <mach/pxa-regs.h>
 #include <mach/pxa2xx-regs.h>
 #include <mach/pxa2xx-gpio.h>
 #include <mach/audio.h>
@@ -194,6 +194,18 @@ static struct pxafb_mach_info fb_hw = {
 };
 
 #ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
+/*
+ * Pulse Width Modulator
+ */
+
+#define PWM_CTRL0       __REG(0x40B00000)  /* PWM 0 Control Register */
+#define PWM_PWDUTY0     __REG(0x40B00004)  /* PWM 0 Duty Cycle Register */
+#define PWM_PERVAL0     __REG(0x40B00008)  /* PWM 0 Period Control Register */
+
+#define PWM_CTRL1       __REG(0x40C00000)  /* PWM 1Control Register */
+#define PWM_PWDUTY1     __REG(0x40C00004)  /* PWM 1 Duty Cycle Register */
+#define PWM_PERVAL1     __REG(0x40C00008)  /* PWM 1 Period Control Register */
+
 static int argon_backlight_update_status(struct backlight_device *bl)
 {
 	int brightness = bl->props.brightness;
