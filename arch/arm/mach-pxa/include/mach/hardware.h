@@ -204,6 +204,11 @@
 #define __cpu_is_pxa935(id)	(0)
 #endif
 
+#define cpu_is_pxa21x()					\
+	({						\
+		__cpu_is_pxa21x(read_cpuid_id());	\
+	})
+
 #define cpu_is_pxa210()					\
 	({						\
 		__cpu_is_pxa210(read_cpuid_id());	\
