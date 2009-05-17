@@ -134,6 +134,8 @@ config MACH_OXYGEN
 config MACH_NEON
 	bool "Boundary Devices Neon board"
 	select PXA25x
+	select HAVE_PWM
+	select PXA_PWM
 	help
 	  Select Boundary Devices 32 bit wide board using SM-501 controller
 	  and SMSC Lan91C111 10/100 ethernet

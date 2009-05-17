@@ -17,11 +17,13 @@
 #include <linux/init.h>
 #include <linux/platform_device.h>
 #include <linux/fb.h>
+#include <linux/ctype.h>
 #include <linux/leds.h>
 #include <linux/err.h>
 #include <linux/pwm.h>
 #include <linux/leds_pwm.h>
 #include <linux/slab.h>
+#include "leds.h"
 
 struct led_pwm_data {
 	struct led_classdev	cdev;
@@ -37,15 +39,88 @@ static void led_pwm_set(struct led_classdev *led_cdev,
 		container_of(led_cdev, struct led_pwm_data, cdev);
 	unsigned int max = led_dat->cdev.max_brightness;
 	unsigned int period =  led_dat->period;
-
-	if (brightness == 0) {
-		pwm_config(led_dat->pwm, 0, period);
+	if (period == 0)
 		pwm_disable(led_dat->pwm);
+	else if (brightness == 0) {
+		pwm_config(led_dat->pwm, 0, period);
+		pwm_enable(led_dat->pwm);
 	} else {
 		pwm_config(led_dat->pwm, brightness * period / max, period);
 		pwm_enable(led_dat->pwm);
 	}
 }
+
+static ssize_t led_frequency_show(struct device *dev, 
+		struct device_attribute *attr, char *buf)
+{
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	struct led_pwm_data *led_dat =
+		container_of(led_cdev, struct led_pwm_data, cdev);
+	unsigned int period =  led_dat->period;
+	unsigned int freq = period ? 1000000000 / period : 0;
+
+	return sprintf(buf, "%u\n", freq);
+}
+
+static ssize_t led_frequency_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	struct led_pwm_data *led_dat =
+		container_of(led_cdev, struct led_pwm_data, cdev);
+	ssize_t ret = -EINVAL;
+	char *after;
+	unsigned long freq = simple_strtoul(buf, &after, 10);
+	size_t count = after - buf;
+
+	if (*after && isspace(*after))
+		count++;
+
+	if (count == size) {
+		ret = count;
+
+		led_dat->period = freq ? 1000000000 / freq : 0;
+		led_set_brightness(led_cdev, led_cdev->brightness);
+	}
+
+	return ret;
+}
+static ssize_t led_period_show(struct device *dev, 
+		struct device_attribute *attr, char *buf)
+{
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	struct led_pwm_data *led_dat =
+		container_of(led_cdev, struct led_pwm_data, cdev);
+	unsigned int period =  led_dat->period;
+
+	return sprintf(buf, "%u\n", period);
+}
+
+static ssize_t led_period_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	struct led_pwm_data *led_dat =
+		container_of(led_cdev, struct led_pwm_data, cdev);
+	ssize_t ret = -EINVAL;
+	char *after;
+	unsigned long period = simple_strtoul(buf, &after, 10);
+	size_t count = after - buf;
+
+	if (*after && isspace(*after))
+		count++;
+
+	if (count == size) {
+		ret = count;
+		led_dat->period = period;
+		led_set_brightness(led_cdev, led_cdev->brightness);
+	}
+
+	return ret;
+}
+
+static DEVICE_ATTR(frequency, 0644, led_frequency_show, led_frequency_store);
+static DEVICE_ATTR(period, 0644, led_period_show, led_period_store);
 
 static int led_pwm_probe(struct platform_device *pdev)
 {
@@ -63,6 +138,7 @@ static int led_pwm_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	for (i = 0; i < pdata->num_leds; i++) {
+		int rc;
 		cur_led = &pdata->leds[i];
 		led_dat = &leds_data[i];
 
@@ -88,6 +164,16 @@ static int led_pwm_probe(struct platform_device *pdev)
 			pwm_free(led_dat->pwm);
 			goto err;
 		}
+
+		/* register the attributes */
+		rc = device_create_file(led_dat->cdev.dev, &dev_attr_frequency);
+		if (rc)
+			goto err;
+		rc = device_create_file(led_dat->cdev.dev, &dev_attr_period);
+		if (rc) {
+			device_remove_file(led_dat->cdev.dev, &dev_attr_frequency);
+			goto err;
+		}
 	}
 
 	platform_set_drvdata(pdev, leds_data);
@@ -97,6 +183,8 @@ static int led_pwm_probe(struct platform_device *pdev)
 err:
 	if (i > 0) {
 		for (i = i - 1; i >= 0; i--) {
+			device_remove_file(led_dat->cdev.dev, &dev_attr_frequency);
+			device_remove_file(led_dat->cdev.dev, &dev_attr_period);
 			led_classdev_unregister(&leds_data[i].cdev);
 			pwm_free(leds_data[i].pwm);
 		}
