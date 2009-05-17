@@ -18,6 +18,7 @@
 #include <linux/clk.h>
 #include <linux/io.h>
 #include <linux/pwm.h>
+#include <mach/pxa2xx-gpio.h>
 
 #include <asm/div64.h>
 
@@ -105,8 +106,11 @@ int pwm_enable(struct pwm_device *pwm)
 
 	if (!pwm->clk_enabled) {
 		rc = clk_enable(pwm->clk);
-		if (!rc)
+		if (!rc) {
 			pwm->clk_enabled = 1;
+			pxa_gpio_mode(pwm->pwm_id ? GPIO17_PWM1_MD :
+				GPIO16_PWM0_MD);
+		}
 	}
 	return rc;
 }
@@ -115,6 +119,7 @@ EXPORT_SYMBOL(pwm_enable);
 void pwm_disable(struct pwm_device *pwm)
 {
 	if (pwm->clk_enabled) {
+		pxa_gpio_mode(pwm->pwm_id ? GPIO17_PWM1 : GPIO16_PWM0);
 		clk_disable(pwm->clk);
 		pwm->clk_enabled = 0;
 	}

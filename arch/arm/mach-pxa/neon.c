@@ -24,6 +24,8 @@
 #include <linux/bootmem.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
+#include <linux/pwm_backlight.h>
+#include <linux/leds_pwm.h>
 
 #include <asm/types.h>
 #include <asm/setup.h>
@@ -248,6 +250,87 @@ static struct pxamci_platform_data neon_mci_platform_data = {
 	.exit		= neon_mci_exit,
 #endif
 };
+
+
+
+static struct led_pwm neon_pwms[] = {
+	[0] = {
+		.name		= "led_pwm0",
+		.default_trigger = "what_default_trigger",
+		.pwm_id		= 0,
+		.active_low	= 0,
+		.max_brightness	= 0x100,
+		.pwm_period_ns	= 3822192,	/* middle "C" is 261.63 hz or */
+	},
+	[1] = {
+		.name		= "led_pwm1",
+		.default_trigger = "what_default_trigger1",
+		.pwm_id		= 1,
+		.active_low	= 0,
+		.max_brightness	= 0x100,
+		.pwm_period_ns	= 3822192,	/* middle "C" is 261.63 hz or */
+	}
+};
+
+static struct led_pwm_platform_data neon_led_data = {
+	.num_leds = 2,
+	.leds = neon_pwms,
+};
+static struct platform_device neon_leds_pwd = {
+	.name	= "leds_pwm",
+	.dev	= {
+		.platform_data	= &neon_led_data,
+	},
+};
+
+#define NEW_BACKLIGHT
+#ifdef NEW_BACKLIGHT
+/******************************************************************************
+ * Backlight
+ ******************************************************************************/
+#define BACKLIGHT_CTRL GPIO17_PWM1	/* on/off control */
+static int neon_backlight_init(struct device *dev)
+{
+	int ret;
+
+	ret = gpio_request(BACKLIGHT_CTRL, "BL POWER");
+	if (ret == 0) {
+		ret = gpio_direction_output(BACKLIGHT_CTRL, 0);
+		if (ret)
+			gpio_free(BACKLIGHT_CTRL);
+	}
+	return ret;
+}
+
+static int neon_backlight_notify(int brightness)
+{
+	gpio_set_value(BACKLIGHT_CTRL, brightness);
+	return brightness;
+}
+
+static void neon_backlight_exit(struct device *dev)
+{
+	gpio_free(BACKLIGHT_CTRL);
+}
+
+static struct platform_pwm_backlight_data neon_backlight_data = {
+	.pwm_id		= 0,
+	.max_brightness	= 0x100,
+	.dft_brightness	= 0x100,
+	.pwm_period_ns	= 3500,
+	.init		= neon_backlight_init,
+	.notify		= neon_backlight_notify,
+	.exit		= neon_backlight_exit,
+};
+
+static struct platform_device neon_backlight = {
+	.name	= "pwm-backlight",
+	.dev	= {
+		.parent		= &pxa25x_device_pwm0.dev,
+		.platform_data	= &neon_backlight_data,
+	},
+};
+#else
 /*
  * Pulse Width Modulator
  */
@@ -264,11 +347,11 @@ static struct pxamci_platform_data neon_mci_platform_data = {
 static void neon_backlight_power(int on)
 {
 	if (on) {
-		pxa_gpio_mode(GPIO16_PWM0_MD);
 		//pxa_set_cken(CKEN_PWM0, 1);
 		PWM_CTRL0 = 0;
-		PWM_PWDUTY0 = 0x3ff;
+		PWM_PWDUTY0 = 0x400;	/* always 1 */
 		PWM_PERVAL0 = 0x3ff;
+		pxa_gpio_mode(GPIO16_PWM0_MD);
 	} else {
 		PWM_CTRL0 = 0;
 		PWM_PWDUTY0 = 0x0;
@@ -276,6 +359,7 @@ static void neon_backlight_power(int on)
 		//pxa_set_cken(CKEN_PWM0, 0);
 	}
 }
+#endif
 
 static struct pxafb_mode_info display_mode __initdata = {
 	.pixclock		= 110000,	//(7-1)	//was 4 then 7
@@ -295,7 +379,9 @@ static struct pxafb_mach_info neon_pxafb_info = {
 	.num_modes      	= 1,
 	.lccr0			= LCCR0_Act,
 	.lccr3			= LCCR3_PCP | LCCR3_Acb(255),
+#ifndef NEW_BACKLIGHT
 	.pxafb_backlight_power	= neon_backlight_power,
+#endif
 };
 
 static int neon_udc_is_connected(void)
@@ -320,7 +406,9 @@ static struct platform_device *devices[] __initdata = {
         &sm501cmd_device,
 	&sm501_device,
 	&sm501_ohci_device,
-	&neon_audio_device
+	&neon_audio_device,
+	&neon_backlight,
+	&neon_leds_pwd,
 };
 
 static void __init neon_init(void)
@@ -336,6 +424,7 @@ static void __init neon_init(void)
 	pxa_set_mci_info(&neon_mci_platform_data);
 
 	pxa_mode_from_registers(&pxa_device_fb);
+//	neon_backlight_power(1);
 }
 
 #define DEBUG_SIZE (PAGE_SIZE*4)
