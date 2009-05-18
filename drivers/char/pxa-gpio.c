@@ -1674,22 +1674,22 @@ static void initPins( void )
 		int i ;
 		for( i = 0 ; i < ARRAYSIZE(inputs); i++ ){
 			int pinNum = inputs[i];
-			u32 volatile *gafr = &_GAFR(pinNum);
-			u32 volatile *gpdr = &_GPDR(pinNum);
+			u32 volatile *gafr = &GAFR(pinNum);
+			u32 volatile *gpdr = &GPDR(pinNum);
 			*gafr &= ~(3<<(2*(pinNum&15))); // Alternate function zero
 			*gpdr &= ~(1<<(pinNum&31)); 	// input=0
 		}
 		for( i = 0 ; i < ARRAYSIZE(outputs); i++ ){
 			int pinNum = outputs[i];
-			u32 volatile *gafr = &_GAFR(pinNum);
-			u32 volatile *gpdr = &_GPDR(pinNum);
+			u32 volatile *gafr = &GAFR(pinNum);
+			u32 volatile *gpdr = &GPDR(pinNum);
 			int const level = outputLevels[i];
 			*gafr &= ~(3<<(2*(pinNum&15))); // Alternate function zero
 			*gpdr |= (1<<(pinNum&31)); 	// output=1
 			if( level ){
-				_GPSR(pinNum) = (1<<(pinNum&31));
+				GPSR(pinNum) = (1<<(pinNum&31));
 			} else {
-				_GPCR(pinNum) = (1<<(pinNum&31));
+				GPCR(pinNum) = (1<<(pinNum&31));
 			}
 		}
 }

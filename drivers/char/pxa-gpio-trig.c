@@ -26,7 +26,6 @@
 #include <asm/uaccess.h>
 #include <asm/system.h>
 #include <asm/mach/irq.h>
-#include <mach/pxa-regs.h>
 #include <mach/pxa2xx-regs.h>
 #include <mach/pxa2xx-gpio.h>
 #include <linux/proc_fs.h>
