@@ -42,6 +42,7 @@
 #include <asm/mach/irq.h>
 #include <asm/mach/flash.h>
 
+//#include <mach/pxa27x.h>
 #include <mach/pxa2xx-regs.h>
 #include <mach/pxa2xx-gpio.h>
 #include <mach/audio.h>
@@ -322,6 +323,9 @@ static struct pxaohci_platform_data argon_ohci_platform_data = {
 	.init 		= argon_ohci_init,
 	.flags          = ENABLE_PORT1 | ENABLE_PORT2 | ENABLE_PORT3 | POWER_CONTROL_LOW | POWER_SENSE_LOW,
 };
+
+#define ARB_CNTRL      __REG(0x48000048)  /* Arbiter Control Register */
+#define ARB_CORE_PARK          (1<<24)    /* Be parked with core when idle */
 
 static void __init argon_init(void)
 {
