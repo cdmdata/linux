@@ -32,7 +32,6 @@
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/div64.h>
-#include <mach/pxa-regs.h>
 #include <mach/mfp-pxa27x.h>
 #include <mach/bitfield.h>
 #include <mach/pxafb.h>
