@@ -42,7 +42,6 @@
 #include <asm/mach/irq.h>
 #include <asm/mach/flash.h>
 
-#include <mach/pxa-regs.h>
 #include <mach/audio.h>
 #include <mach/mmc.h>
 #include <linux/mmc/host.h>
