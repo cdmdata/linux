@@ -59,7 +59,6 @@
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/div64.h>
-#include <mach/pxa-regs.h>
 #include <mach/pxa2xx-regs.h>
 #include <mach/pxa2xx-gpio.h>
 #include <mach/bitfield.h>
@@ -137,7 +136,7 @@ static inline u_int chan_to_field(u_int chan, struct fb_bitfield *bf)
 }
 
 #define LCCR0_CONFIG_MASK (0xFFFFFFFF & ~(LCCR0_OUM|LCCR0_BM|LCCR0_QDM|LCCR0_DIS|LCCR0_EFM|LCCR0_IUM|LCCR0_SFM|LCCR0_LDM|LCCR0_ENB))
-#define LCCR3_CONFIG_MASK (0xFFFFFFFF & ~(LCCR3_HSP|LCCR3_VSP|FMsk(LCCR3_PCD)|FMsk(LCCR3_BPP)|FMsk(LCCR3_BPP3)))
+#define LCCR3_CONFIG_MASK (0xFFFFFFFF & ~(LCCR3_HSP|LCCR3_VSP|FMsk(LCCR3_PCD)|LCCR3_BPP(0xf)))
 
 static int
 pxafb_setpalettereg(u_int regno, u_int red, u_int green, u_int blue,
