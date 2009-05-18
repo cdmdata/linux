@@ -357,6 +357,9 @@ static struct pxaohci_platform_data hydrogen_ohci_platform_data = {
 	.flags          = ENABLE_PORT1 | ENABLE_PORT2 | ENABLE_PORT3 | POWER_CONTROL_LOW | POWER_SENSE_LOW,
 };
 
+#define ARB_CNTRL      __REG(0x48000048)  /* Arbiter Control Register */
+#define ARB_CORE_PARK          (1<<24)    /* Be parked with core when idle */
+
 static void __init hydrogen_init(void)
 {
 	/* system bus arbiter setting
