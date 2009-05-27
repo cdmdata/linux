@@ -52,6 +52,9 @@
 #include <mach/irda.h>
 #include <mach/ohci.h>
 #include <mach/i2c.h>
+#ifdef CONFIG_USB_GADGET_PXA27X
+#include <mach/udc.h>
+#endif
 
 #include "generic.h"
 #include "devices.h"
@@ -65,6 +68,11 @@
 #define BOUNDARY_AC97_UNMUTE      ((1<<8)+(1<<4))
 #define BOUNDARY_AC97_OUTPUTS 0x0101
 
+#ifdef CONFIG_USB_GADGET_PXA27X
+#define GPIO_UDC_PULLUP 3
+#define GPIO_UDC_VBUS 1
+#endif
+
 static void __init hydrogen_init_irq(void)
 {
 	int gpdr = GPDR(0);	//0-31
@@ -76,7 +84,12 @@ static void __init hydrogen_init_irq(void)
 		set_irq_type(IRQ_GPIO(5), IRQ_TYPE_EDGE_RISING);	/* SM501 Interrupt, neon,neon-b board  */
 	if ((gpdr & (1 << 24)) == 0)
 		set_irq_type(IRQ_GPIO(24), IRQ_TYPE_EDGE_RISING);	/* 91c111 Interrupt, sm501 board  */
-        GPDR(0) = gpdr & ~(1<<12);
+        gpdr &= ~(1<<12);	// set GP12 as input
+#ifdef CONFIG_USB_GADGET_PXA27X
+	gpdr &= ~(1<<GPIO_UDC_PULLUP); // GP3 as input (output high means present)
+	gpdr &= ~(1<<GPIO_UDC_VBUS); // GP1 is an input (reads value of VBUS)
+#endif
+	GPDR(0) = gpdr ;
         set_irq_type(IRQ_GPIO(12), IRQ_TYPE_EDGE_FALLING);	/* Asix */
 	set_irq_type(IRQ_GPIO(MMC_CARD_DETECT_GP), IRQ_TYPE_EDGE_FALLING);	//MMC card detect
         set_irq_type(IRQ_GPIO(3), IRQ_TYPE_EDGE_FALLING);	/* i2c touch */
@@ -303,6 +316,35 @@ static void __init hydrogen_backlight_register(void)
 #define hydrogen_backlight_register()	do { } while (0)
 #endif
 
+#ifdef CONFIG_USB_GADGET_PXA27X
+static int udc_is_connected(void)
+{
+	int connected = ((GPLR(GPIO_UDC_VBUS) & GPIO_bit(GPIO_UDC_VBUS)) == 0);
+	printk( KERN_ERR "%s: %d\n", __func__, connected );
+	return connected ;
+}
+
+static void udc_command(int cmd)
+{
+	printk( KERN_ERR "%s: command %d\n", __func__, cmd );
+	if( PXA2XX_UDC_CMD_CONNECT == cmd ) /* let host see us */{
+		int mask = (1<<GPIO_UDC_PULLUP);
+		GPDR(0) |= mask ;
+		GPSR(0) |= mask ;
+	} else if( PXA2XX_UDC_CMD_DISCONNECT == cmd ){ /* so host won't see us */
+		int mask = (1<<GPIO_UDC_PULLUP);
+		GPDR(0) &= ~mask ;
+	} else
+		printk( KERN_ERR "%s: unknown command %d\n", __func__, cmd );
+}
+
+static struct pxa2xx_udc_mach_info udc_info __initdata = {
+	/* no connect GPIO; corgi can't tell connection status */
+	.udc_is_connected	= udc_is_connected,
+        .udc_command		= udc_command
+};
+#endif
+
 static int hydrogen_mci_init(struct device *dev, irq_handler_t intHandler,
 			     void *data)
 {
@@ -362,11 +404,17 @@ static struct pxaohci_platform_data hydrogen_ohci_platform_data = {
 
 static void __init hydrogen_init(void)
 {
+	unsigned gpdr ;
+
+#ifdef CONFIG_USB_GADGET_PXA27X
+	pxa_set_udc_info(&udc_info);
+#endif
+
 	/* system bus arbiter setting
 	 * - Core_Park
 	 * - LCD_wt:DMA_wt:CORE_Wt = 2:3:4
 	 */
-	unsigned gpdr = GPDR(88);
+	gpdr = GPDR(88);
 	if (gpdr & (1 << (88 & 0x1f))) {
 		/* Output, Power sense not used, make active high */
 		hydrogen_ohci_platform_data.flags &= ~(POWER_CONTROL_LOW | POWER_SENSE_LOW);
