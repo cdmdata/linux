@@ -65,3 +65,4 @@ ncscope.*
 *.orig
 *~
 \#*#
+include/asm-arm/mach-types.h
