@@ -85,6 +85,8 @@ static const char driver_name[] = "pxa27x_udc";
 static struct pxa_udc *the_controller;
 
 static void handle_ep(struct pxa_ep *ep);
+/* http://kerneltrap.org/mailarchive/linux-usb/2009/1/16/4750034 */
+static int pxa_ep_disable(struct usb_ep *_ep);
 
 /*
  * Debug filesystem
@@ -404,8 +406,17 @@ static void update_pxa_ep_matches(struct pxa_udc *udc)
 
 	for (i = 1; i < NR_USB_ENDPOINTS; i++) {
 		udc_usb_ep = &udc->udc_usb_ep[i];
-		if (udc_usb_ep->pxa_ep)
-			udc_usb_ep->pxa_ep = find_pxa_ep(udc, udc_usb_ep);
+		/* http://kerneltrap.org/mailarchive/linux-usb/2009/1/16/4750034 */
+		if (udc_usb_ep->pxa_ep) {
+			struct pxa_ep *ep = find_pxa_ep(udc, udc_usb_ep);
+			if (ep) {
+				udc_usb_ep->pxa_ep = ep;
+			}
+			else {
+				ep_warn(udc_usb_ep->pxa_ep, "new config drops ep; disabling now\n");
+				pxa_ep_disable(&udc_usb_ep->usb_ep);
+			}
+		}
 	}
 }
 
@@ -1198,9 +1209,15 @@ static int pxa_ep_queue(struct usb_ep *_ep, struct usb_request *_req,
 					ep0_end_in_req(ep, req);
 			break;
 		case OUT_DATA_STAGE:
-			if ((length == 0) || !epout_has_pkt(ep))
-				if (read_ep0_fifo(ep, req))
-					ep0_end_out_req(ep, req);
+			/* http://kerneltrap.org/mailarchive/linux-usb/2009/1/16/4750064 */
+			if (length == 0 || read_ep0_fifo(ep, req)) {
+				if (length == 0) {
+					/* we need to make up a status packet */
+					udc_ep_writeb(ep, UDCDR, 0);
+					udc_ep_writel(ep, UDCCSR, UDCCSR0_IPR);
+				}
+				ep0_end_out_req(ep, req);
+			}
 			break;
 		default:
 			ep_err(ep, "odd state %s to send me a request\n",
@@ -1573,10 +1590,9 @@ static __init void udc_init_data(struct pxa_udc *dev)
 	}
 
 	/* USB endpoints init */
-	for (i = 0; i < NR_USB_ENDPOINTS; i++)
-		if (i != 0)
-			list_add_tail(&dev->udc_usb_ep[i].usb_ep.ep_list,
-					&dev->gadget.ep_list);
+	for (i = 1; i < NR_USB_ENDPOINTS; i++)
+		list_add_tail(&dev->udc_usb_ep[i].usb_ep.ep_list,
+				&dev->gadget.ep_list);
 }
 
 /**
@@ -1853,13 +1869,14 @@ static void handle_ep0(struct pxa_udc *udc, int fifo_irq, int opc_irq)
 	struct pxa27x_request	*req = NULL;
 	int			completed = 0;
 
+	/* http://kerneltrap.org/mailarchive/linux-usb/2009/1/16/4750054 */
+	if (!list_empty(&ep->queue))
+		req = list_entry(ep->queue.next, struct pxa27x_request, queue);
+
 	udccsr0 = udc_ep_readl(ep, UDCCSR);
 	ep_dbg(ep, "state=%s, req=%p, udccsr0=0x%03x, udcbcr=%d, irq_msk=%x\n",
 		EP0_STNAME(udc), req, udccsr0, udc_ep_readl(ep, UDCBCR),
 		(fifo_irq << 1 | opc_irq));
-
-	if (!list_empty(&ep->queue))
-		req = list_entry(ep->queue.next, struct pxa27x_request, queue);
 
 	if (udccsr0 & UDCCSR0_SST) {
 		ep_dbg(ep, "clearing stall status\n");
