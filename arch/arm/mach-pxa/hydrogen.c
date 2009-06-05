@@ -73,6 +73,8 @@
 #define GPIO_UDC_VBUS 1
 #endif
 
+#define TOUCH_SCREEN_INTERRUPT_GP 0
+
 static void __init hydrogen_init_irq(void)
 {
 	int gpdr = GPDR(0);	//0-31
@@ -89,6 +91,8 @@ static void __init hydrogen_init_irq(void)
 	gpdr &= ~(1<<GPIO_UDC_PULLUP); // GP3 as input (output high means present)
 	gpdr &= ~(1<<GPIO_UDC_VBUS); // GP1 is an input (reads value of VBUS)
 #endif
+	gpdr &= ~(1<<TOUCH_SCREEN_INTERRUPT_GP);
+
 	GPDR(0) = gpdr ;
         set_irq_type(IRQ_GPIO(12), IRQ_TYPE_EDGE_FALLING);	/* Asix */
 	set_irq_type(IRQ_GPIO(MMC_CARD_DETECT_GP), IRQ_TYPE_EDGE_FALLING);	//MMC card detect
@@ -144,6 +148,7 @@ static pxa2xx_audio_ops_t audio_ops = {
 	.shutdown	= audio_shutdown,
 	.suspend	= audio_suspend,
 	.resume		= audio_resume,
+	.reset_gpio	= 113
 };
 
 static struct platform_device hydrogen_audio_device = {
@@ -339,9 +344,9 @@ static void udc_command(int cmd)
 }
 
 static struct pxa2xx_udc_mach_info udc_info __initdata = {
-	/* no connect GPIO; corgi can't tell connection status */
 	.udc_is_connected	= udc_is_connected,
-        .udc_command		= udc_command
+        .udc_command		= udc_command,
+        .gpio_pullup		= GPIO_UDC_PULLUP
 };
 #endif
 
