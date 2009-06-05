@@ -52,6 +52,9 @@
 #include <mach/irda.h>
 #include <mach/ohci.h>
 #include <mach/i2c.h>
+#ifdef CONFIG_USB_GADGET_PXA27X
+#include <mach/udc.h>
+#endif
 
 #include "generic.h"
 #include "devices.h"
@@ -64,6 +67,13 @@
 #define BOUNDARY_AC97_MUTE        (0+(1<<4))
 #define BOUNDARY_AC97_UNMUTE      ((1<<8)+(1<<4))
 #define BOUNDARY_AC97_OUTPUTS 0x0101
+
+#ifdef CONFIG_USB_GADGET_PXA27X
+#define GPIO_UDC_PULLUP 3
+#define GPIO_UDC_VBUS 1
+#endif
+
+#define TOUCH_SCREEN_INTERRUPT_GP 0
 
 static void __init argon_init_irq(void)
 {
@@ -78,6 +88,13 @@ static void __init argon_init_irq(void)
 		set_irq_type(IRQ_GPIO(23), IRQ_TYPE_EDGE_RISING);	/* UCB1400 Interrupt, neon-b board  */
 	if ((gpdr & (1 << 24)) == 0)
 		set_irq_type(IRQ_GPIO(24), IRQ_TYPE_EDGE_RISING);	/* 91c111 Interrupt, sm501 board  */
+#ifdef CONFIG_USB_GADGET_PXA27X
+	gpdr &= ~(1<<GPIO_UDC_PULLUP); // GP3 as input (output high means present)
+	gpdr &= ~(1<<GPIO_UDC_VBUS); // GP1 is an input (reads value of VBUS)
+#endif
+	gpdr &= ~(1<<TOUCH_SCREEN_INTERRUPT_GP);
+
+	GPDR(0) = gpdr ;
 	set_irq_type(IRQ_GPIO(MMC_CARD_DETECT_GP), IRQ_TYPE_EDGE_FALLING);	//MMC card detect
 }
 
@@ -130,6 +147,7 @@ static pxa2xx_audio_ops_t audio_ops = {
 	.shutdown	= audio_shutdown,
 	.suspend	= audio_suspend,
 	.resume		= audio_resume,
+	.reset_gpio	= 113
 };
 
 static struct platform_device audio_device = {
@@ -266,6 +284,35 @@ static void __init backlight_register(void)
 #define backlight_register()	do { } while (0)
 #endif
 
+#ifdef CONFIG_USB_GADGET_PXA27X
+static int udc_is_connected(void)
+{
+	int connected = ((GPLR(GPIO_UDC_VBUS) & GPIO_bit(GPIO_UDC_VBUS)) == 0);
+	printk( KERN_ERR "%s: %d\n", __func__, connected );
+	return connected ;
+}
+
+static void udc_command(int cmd)
+{
+	printk( KERN_ERR "%s: command %d\n", __func__, cmd );
+	if( PXA2XX_UDC_CMD_CONNECT == cmd ) /* let host see us */{
+		int mask = (1<<GPIO_UDC_PULLUP);
+		GPDR(0) |= mask ;
+		GPSR(0) |= mask ;
+	} else if( PXA2XX_UDC_CMD_DISCONNECT == cmd ){ /* so host won't see us */
+		int mask = (1<<GPIO_UDC_PULLUP);
+		GPDR(0) &= ~mask ;
+	} else
+		printk( KERN_ERR "%s: unknown command %d\n", __func__, cmd );
+}
+
+static struct pxa2xx_udc_mach_info udc_info __initdata = {
+	.udc_is_connected	= udc_is_connected,
+        .udc_command		= udc_command,
+        .gpio_pullup		= GPIO_UDC_PULLUP
+};
+#endif
+
 static int argon_mci_init(struct device *dev, irq_handler_t intHandler,
 			     void *data)
 {
@@ -329,6 +376,10 @@ static struct pxaohci_platform_data argon_ohci_platform_data = {
 
 static void __init argon_init(void)
 {
+#ifdef CONFIG_USB_GADGET_PXA27X
+	pxa_set_udc_info(&udc_info);
+#endif
+
 	/* system bus arbiter setting
 	 * - Core_Park
 	 * - LCD_wt:DMA_wt:CORE_Wt = 2:3:4
