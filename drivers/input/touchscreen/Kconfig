@@ -366,6 +366,15 @@ config UCB1400_FIVE_WIRE
           GPIO 0 to ground and reads X and Y settings by powering 
           TSPX+TSMY and TSPX+TSPY respectively.
 
+config UCB1400_TOUCH_IRQ
+	int "UCB1400 IRQ"
+	depends on TOUCHSCREEN_UCB1400
+	default 8 if MACH_HYDROGEN
+	default -1
+	help
+	  If set to something other than -1, this IRQ will be used for the
+	  UCB1400 touch screen interrupt (disabling auto-probe).
+
 config TOUCHSCREEN_WM97XX
 	tristate "Support for WM97xx AC97 touchscreen controllers"
 	depends on AC97_BUS

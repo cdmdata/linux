@@ -41,7 +41,7 @@ static char const * const touch_type_names[] = {
 };
 
 static int touch_type = TOUCH_NOT_VALID ;
-
+static int irq = CONFIG_UCB1400_TOUCH_IRQ ;
 static int adcsync;
 static int ts_delay = 55; /* us */
 static int ts_delay_pressure;	/* us */
@@ -538,6 +538,11 @@ static int ucb1400_ts_detect_irq(struct ucb1400_ts *ucb)
 {
 	unsigned long mask, timeout;
 
+	if( -1 != irq ){
+		printk( KERN_ERR "%s: use irq %d\n", __func__, irq );
+		ucb->irq = irq ;
+		return 0 ;
+	}
 	mask = probe_irq_on();
 
 	/* Enable the ADC interrupt. */
