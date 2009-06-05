@@ -370,6 +370,7 @@ config UCB1400_TOUCH_IRQ
 	int "UCB1400 IRQ"
 	depends on TOUCHSCREEN_UCB1400
 	default 8 if MACH_HYDROGEN
+	default 8 if MACH_ARGON
 	default -1
 	help
 	  If set to something other than -1, this IRQ will be used for the
