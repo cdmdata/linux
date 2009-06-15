@@ -13,7 +13,6 @@
 
 #include <asm/uaccess.h>
 
-/* ds1722 CE Inactive time is 400ns - sleeping for 1ms */
 #define CE_WAIT_MSEC 	12
 #define DEVICE_NAME	"fram"
 #define MAX_SIZE	65536 /*64 KB or 512 Kbits*/
@@ -117,7 +116,6 @@ static inline ssize_t fram_read_data(struct framdev_data *dev_data,
 {
 #define READ_OFFSET	3
 	DECLARE_COMPLETION_ONSTACK(done);
-	u8 in[READ_OFFSET] = { 0 };
 	int ret = count;
 	/* len = rx + tx. here tx = 3 but during transmission it
 	 * also receives data. the first 3 bytes would be undefined

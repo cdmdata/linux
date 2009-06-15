@@ -26,6 +26,11 @@
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
 #include <linux/sm501-int.h>
+#include <linux/gpio.h>
+
+#ifdef CONFIG_AX88796
+#include <net/ax88796.h>
+#endif
 
 #include <sound/ac97_codec.h>
 
@@ -49,17 +54,36 @@
 #include <mach/irda.h>
 #include <mach/ohci.h>
 #include <mach/i2c.h>
+
+#ifdef CONFIG_USB_GADGET_PXA27X
 #include <mach/udc.h>
+#endif
+
 #include <mach/pxa2xx-gpio.h>
 #include <mach/pxa2xx-regs.h>
+
+#if defined(CONFIG_SPI_PXA2XX) || defined(CONFIG_SPI_PXA2XX_MODULE)
+#include <linux/spi/spi.h>
+
+#include <mach/ssp.h>
+#include <mach/pxa2xx_spi.h>
+#include <mach/regs-ssp.h>
+#endif
+
+#if defined(CONFIG_SPI_PXA2XX) || defined(CONFIG_SPI_PXA2XX_MODULE)
+#include<linux/spi/fram_spi.h>
+#endif
 
 #include "generic.h"
 #include "devices.h"
 #include "read_regs.h"
 
+#ifdef CONFIG_USB_GADGET_PXA27X
+#define GPIO_UDC_PULLUP 12
+#define GPIO_UDC_VBUS 1
+#endif
+
 #define MMC_CARD_DETECT_GP 36
-#define NEON_GPIO_USB_PULLUP 3
-#define NEON_GPIO_USB_VBUS 2
 #define SM501_INTERRUPT_GP 22
 
 /* UCB1400 registers */
@@ -74,6 +98,7 @@ extern struct snd_ac97 *pxa2xx_ac97_ac97;
 static void __init neon_init_irq(void)
 {
 	int gpdr = GPDR(0);	//0-31
+	int gpdr1 = GPDR(1);
 	pxa27x_init_irq();
 
 	pxa_gpio_mode(89 | GPIO_OUT);	/* USBHPEN1 */ 
@@ -81,6 +106,17 @@ static void __init neon_init_irq(void)
 
 	pxa_gpio_mode(SM501_INTERRUPT_GP | GPIO_IN);
 	set_irq_type(IRQ_GPIO(SM501_INTERRUPT_GP), IRQ_TYPE_EDGE_RISING); /* SM501 Interrupt, neon,neon-b board  */
+
+#ifdef CONFIG_USB_GADGET_PXA27X
+	gpdr &= ~(1<<GPIO_UDC_PULLUP); // GP3 as input (output high means present)
+	gpdr &= ~(1<<GPIO_UDC_VBUS); // GP1 is an input (reads value of VBUS)
+	GPDR(0) = gpdr;
+#endif
+
+#ifdef CONFIG_AX88796
+	GPDR(1) = gpdr1 & ~(1 << (44 - 32));
+	set_irq_type(IRQ_GPIO(44), IRQ_TYPE_EDGE_FALLING);     /* Asix */
+#endif
 
 #if defined(CONFIG_TOUCHSCREEN_I2C) || defined(CONFIG_TOUCHSCREEN_I2C_MODULE)
 	pxa_gpio_mode(CONFIG_TOUCHSCREEN_I2C_IRQ | GPIO_IN);
@@ -94,6 +130,15 @@ static void __init neon_init_irq(void)
 	if ((gpdr & (1 << 24)) == 0)
 		set_irq_type(IRQ_GPIO(24), IRQ_TYPE_EDGE_RISING); /* 91c111 Interrupt, sm501 board  */
 	set_irq_type(IRQ_GPIO(MMC_CARD_DETECT_GP), IRQ_TYPE_EDGE_FALLING); // MMC card detect
+
+#if defined(CONFIG_SPI_PXA2XX) || defined(CONFIG_SPI_PXA2XX_MODULE)
+	GPDR(0) |= ((1 << NEON270_FRAM_CS) | (1 << NEON270_FRAM_CLOCK) | (1 << NEON270_FRAM_SI));
+	GPDR(0) &= ~(1 << NEON270_FRAM_SO);
+	GAFR0_U |= (0x02 << ((NEON270_FRAM_CLOCK & 0xf) << 1)) |
+			(0x02 << ((NEON270_FRAM_CS & 0xf) << 1)) |
+			(0x02 << ((NEON270_FRAM_SI & 0xf) << 1)) |
+			(0x01 << ((NEON270_FRAM_SO & 0xf) << 1));
+#endif
 }
 
 static void __init
@@ -113,6 +158,7 @@ fixup_neon(struct machine_desc *desc, struct tag *t,
 
 ///////////////////////////////////////////////////////////////////////////////
 #define PHYSICAL_CS1 0x04000000
+#define PHYSICAL_CS2 0x08000000
 #define PHYSICAL_CS3 0x0C000000
 #define PHYSICAL_CS4 0x10000000
 
@@ -121,6 +167,7 @@ fixup_neon(struct machine_desc *desc, struct tag *t,
 #define GP_SMC_INT 24
 #define SMC_IRQ			GPIO_2_x_TO_IRQ(GP_SMC_INT)
 
+#ifdef CONFIG_SMC91X
 static struct resource smc91x_resources[] = {
 	[0] = {
 		.name   = "smc91x-regs",
@@ -141,6 +188,81 @@ static struct platform_device smc91x_device = {
 	.num_resources	= ARRAY_SIZE(smc91x_resources),
 	.resource	= smc91x_resources,
 };
+#endif
+
+#ifdef CONFIG_USB_GADGET_PXA27X
+static int udc_is_connected(void)
+{
+	int connected = ((GPLR(GPIO_UDC_VBUS) & GPIO_bit(GPIO_UDC_VBUS)) == 0);
+	printk( KERN_ERR "%s: %d\n", __func__, connected );
+	return connected ;
+}
+
+static void udc_command(int cmd)
+{
+	printk( KERN_ERR "%s: command %d\n", __func__, cmd );
+	if( PXA2XX_UDC_CMD_CONNECT == cmd ) /* let host see us */{
+		int mask = (1<<GPIO_UDC_PULLUP);
+		GPDR(0) |= mask ;
+		GPSR(0) |= mask ;
+	} else if( PXA2XX_UDC_CMD_DISCONNECT == cmd ){ /* so host won't see us */
+		int mask = (1<<GPIO_UDC_PULLUP);
+		GPDR(0) &= ~mask ;
+	} else
+		printk( KERN_ERR "%s: unknown command %d\n", __func__, cmd );
+}
+
+static struct pxa2xx_udc_mach_info udc_info __initdata = {
+	/* no connect GPIO; corgi can't tell connection status */
+	.udc_is_connected	= udc_is_connected,
+        .udc_command		= udc_command
+};
+#endif
+
+#if defined(CONFIG_SPI_PXA2XX) || defined(CONFIG_SPI_PXA2XX_MODULE)
+static struct pxa2xx_spi_master neon270_spi_info = {
+	.clock_enable	= CKEN_SSP1,
+	.enable_dma	= 1,
+	.num_chipselect	= 1,
+};
+
+static struct platform_device neon270_spi_ssp = {
+        .name = "pxa2xx-spi", /* MUST BE THIS VALUE, so device match driver */
+        .id = 1, /* Bus number, MUST MATCH SSP number 1..n */
+        .dev = {
+                .platform_data = &neon270_spi_info, /* Passed to driver */
+        },
+};
+
+static void neon270_fram_cs(u32 command)
+{
+	gpio_set_value(NEON270_FRAM_CS, !(command == PXA2XX_CS_ASSERT));
+}
+
+static struct pxa2xx_spi_chip neon270_fram_chip = {
+        .dma_burst_size = 8,
+	.timeout	= 200,
+	.cs_control		= neon270_fram_cs,
+};
+
+static struct spi_board_info neon270_spi_devices[] = {
+	{
+		.modalias	= "fram",
+		.mode		= SPI_MODE_3,
+		.max_speed_hz	= 13000000,
+		.bus_num	= 1,
+		.controller_data= &neon270_fram_chip,
+		.chip_select    = 0,
+	},
+};
+
+static void __init neon270_init_spi(void)
+{
+	spi_register_board_info(ARRAY_AND_SIZE(neon270_spi_devices));
+}
+#else
+static inline void neon270_init_spi(void) {}
+#endif
 
 #define fbStart     (SM501_FBSTART)
 #define fbMax       0x00700000		//hi meg belongs to USB
@@ -233,6 +355,42 @@ static struct platform_device neon_audio_device = {
 	.id		= 4,
 	.dev		= { .platform_data = &audio_ops },
 };
+
+#ifdef CONFIG_AX88796
+/* Asix AX88796 10/100 ethernet controller */
+
+static struct ax_plat_data asix_platform_data = {
+	.flags          = AXFLG_HAS_EEPROM,
+	.wordlength     = 2,
+	.dcr_val        = 0x49,
+	.rcr_val        = 0x1F,
+};
+
+#define ASIX_IRQ (IRQ_GPIO(44))
+
+static struct resource asix_resources[] = {
+	[0] = {
+		.start = PXA_CS2_PHYS,
+		.end   = PXA_CS2_PHYS + (0x20 * 0x20) -1,
+		.flags = IORESOURCE_MEM
+	},
+	[1] = {
+		.start = ASIX_IRQ,
+		.end   = ASIX_IRQ,
+		.flags = IORESOURCE_IRQ
+	}
+};
+
+static struct platform_device asix_device = {
+	.name           = "ax88796",
+	.id             = -1,
+	.num_resources  = ARRAY_SIZE(asix_resources),
+	.resource       = asix_resources,
+	.dev            = {
+		.platform_data = &asix_platform_data,
+	}
+};
+#endif
 
 #ifdef CONFIG_USB_OHCI_SM501
 ///////////////////////////////
@@ -341,19 +499,6 @@ static struct pxafb_mach_info neon_pxafb_info = {
 #endif
 };
 
-static int neon_udc_is_connected(void)
-{
-	return ((GPLR(NEON_GPIO_USB_VBUS) & GPIO_bit(NEON_GPIO_USB_VBUS)) == 0);
-}
-
-
-static struct pxa2xx_udc_mach_info udc_info __initdata = {
-	/* no connect GPIO; corgi can't tell connection status */
-	.udc_is_connected	= neon_udc_is_connected,
-	.gpio_pullup		= NEON_GPIO_USB_PULLUP,
-	.gpio_vbus		= NEON_GPIO_USB_VBUS
-};
-
 static int neon270_ohci_init(struct device *dev)
 {
 	printk( KERN_ERR "%s\n", __FUNCTION__ );
@@ -373,13 +518,21 @@ static struct pxaohci_platform_data neon270_ohci_platform_data = {
 
 
 static struct platform_device *devices[] __initdata = {
+#ifdef CONFIG_SMC91X
 	&smc91x_device,
+#endif
+#ifdef CONFIG_AX88796
+	&asix_device,
+#endif
 	&sm501mem_device,
 	&sm501alpha_device,
 	&sm501yuv_device,
 	&sm501int_device,
 	&sm501cmd_device,
 	&sm501_device,
+#if defined(CONFIG_SPI_PXA2XX) || defined(CONFIG_SPI_PXA2XX_MODULE)
+	&neon270_spi_ssp,
+#endif
 #ifdef CONFIG_USB_OHCI_SM501
 	&sm501_ohci_device,
 #endif
@@ -388,7 +541,9 @@ static struct platform_device *devices[] __initdata = {
 
 static void __init neon_init(void)
 {
+#ifdef CONFIG_USB_GADGET_PXA27X
 	pxa_set_udc_info(&udc_info);
+#endif
 	pxa_set_mci_info(&neon_mci_platform_data);
 
 	(void) platform_add_devices(devices, ARRAY_SIZE(devices));
@@ -398,6 +553,7 @@ static void __init neon_init(void)
 	neon_pxafb_info.modes = &display_mode;
 	set_pxa_fb_info(&neon_pxafb_info);
 	pxa_set_i2c_info(NULL);
+	neon270_init_spi();
 
 	pxa_mode_from_registers(&pxa_device_fb);
 }

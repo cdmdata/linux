@@ -399,6 +399,7 @@ config TOUCHSCREEN_I2C
 config TOUCHSCREEN_I2C_IRQ
 	int "I2C Touchscreen GPIO/IRQ"
 	default 11 if MACH_DAVINCI_XENON
+	default 13 if MACH_NEON270 && AX88796
 	default 96 if MACH_NEON270
 	depends on TOUCHSCREEN_I2C
 	help
