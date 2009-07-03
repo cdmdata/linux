@@ -427,14 +427,12 @@ static void __init neon_init(void)
 
 #define DEBUG_SIZE (PAGE_SIZE*4)
 static struct map_desc neon_io_desc[] __initdata = {
- /* virtual      	      pfn    	    length      domain       r  w  c  b */
- { 0xfff00000, __phys_to_pfn(0x00000000), DEBUG_SIZE, MT_HIGH_VECTORS },	//DOMAIN_USER,   1, 0, 1, 1for debugging variables, DOMAIN_USER because of errata on exiting SDS
- { 0xff800000, __phys_to_pfn(0x08000000), 0x00100000, MT_DEVICE }, // static chip select 2, USB DMA HOST controller
- { 0xff900000, __phys_to_pfn(0x0c000000), 0x00100000, MT_DEVICE }, // static chip select 3, USB DMA DEVICE controller
- { 0xffA00000, __phys_to_pfn(0x10000000), 0x00100000, MT_DEVICE }, // static chip select 4, USB I/O
- { 0xffB00000, __phys_to_pfn(0x14000000), 0x00100000, MT_DEVICE }, // static chip select 5, this is a dummy I/O location used to
- 									//give 300ns delay between write of cmd register location
-									//to r/w of register
+  	{	/* debugging variables */
+		.virtual	=  0xf0000000,
+		.pfn		= __phys_to_pfn(0),
+		.length		= DEBUG_SIZE,
+		.type		= MT_HIGH_VECTORS
+	}
 };
 
 static void __init neon_map_io(void)
@@ -460,8 +458,6 @@ static void __init neon_map_io(void)
 
 	neon_io_desc[0].pfn = __phys_to_pfn(virt_to_phys(init_maps));
 	iotable_init(neon_io_desc,ARRAY_SIZE(neon_io_desc));
-
-	init_maps = alloc_bootmem_low_pages(PAGE_SIZE);
 }
 
 MACHINE_START(SCANPASS, "Boundary Devices Neon board")
