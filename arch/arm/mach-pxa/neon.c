@@ -206,13 +206,11 @@ static struct resource sm501_ohci_resources[] = {
 	}
 };
 
-static u64 sm501_ohci_dmamask = ~(u64)0;
-
 static struct platform_device sm501_ohci_device = {
 	.name		= "sm501-ohci",
 	.id		= -1,
 	.dev		= {
-		.dma_mask = &sm501_ohci_dmamask,
+		.dma_mask = NULL,
 		.coherent_dma_mask = 0xffffffff,
 	},
 	.num_resources	= ARRAY_SIZE(sm501_ohci_resources),
