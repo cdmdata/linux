@@ -2054,15 +2054,14 @@ EXPORT_SYMBOL_GPL(usb_bus_start_enum);
 irqreturn_t usb_hcd_irq (int irq, void *__hcd)
 {
 	struct usb_hcd		*hcd = __hcd;
-	unsigned long		flags;
+//	unsigned long		flags;
 	irqreturn_t		rc;
 
 	/* IRQF_DISABLED doesn't work correctly with shared IRQs
 	 * when the first handler doesn't use it.  So let's just
 	 * assume it's never used.
 	 */
-	local_irq_save(flags);
-
+//	local_irq_save(flags);
 	if (unlikely(hcd->state == HC_STATE_HALT ||
 		     !test_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags))) {
 		rc = IRQ_NONE;
@@ -2076,7 +2075,7 @@ irqreturn_t usb_hcd_irq (int irq, void *__hcd)
 		rc = IRQ_HANDLED;
 	}
 
-	local_irq_restore(flags);
+//	local_irq_restore(flags);
 	return rc;
 }
 

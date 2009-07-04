@@ -66,8 +66,6 @@ static void __init neon_init_irq(void)
 	set_irq_type(IRQ_GPIO(22), IRQ_TYPE_EDGE_FALLING);	//pcmcia irq
 	if ((gpdr & (1 << 4)) == 0)
 		set_irq_type(IRQ_GPIO(4), IRQ_TYPE_EDGE_RISING);	/* UCB1400 Interrupt, neon board  */
-	if ((gpdr & (1 << 5)) == 0)
-		set_irq_type(IRQ_GPIO(5), IRQ_TYPE_EDGE_RISING);	/* SM501 Interrupt, neon,neon-b board  */
 	if ((gpdr & (1 << 23)) == 0)
 		set_irq_type(IRQ_GPIO(23), IRQ_TYPE_EDGE_RISING); /* UCB1400 Interrupt, neon-b board  */
 	if ((gpdr & (1 << 24)) == 0)

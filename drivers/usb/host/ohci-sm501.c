@@ -42,7 +42,6 @@ void sm501_usb_int(int slotnum, void * hdata)
 		SMI_DUMMY(bufBase,0x000);
 //		SMI_DUMMY(bufBase,0x800);
 #endif
-//		pr_info("%s\n", __func__);
 		usb_hcd_irq(-1,hdata);
 	}
 }
