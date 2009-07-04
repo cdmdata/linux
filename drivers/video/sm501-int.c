@@ -89,7 +89,7 @@ int SM501_grab_int_slot(port_t cfgBase, unsigned int slotnum,handler501_t h,void
    int rval ;
    if( !haveIrq )
    {
-      rval = request_irq( SM501_IRQ, sm501_interrupt, IRQF_DISABLED, "SM-501", 0 );
+      rval = request_irq( SM501_IRQ, sm501_interrupt, IRQF_TRIGGER_RISING, "SM-501", 0 );
       if( 0 == rval ){
          haveIrq = 1 ;
       }
