@@ -370,8 +370,8 @@ static struct ax_plat_data asix_platform_data = {
 
 static struct resource asix_resources[] = {
 	[0] = {
-		.start = PXA_CS2_PHYS,
-		.end   = PXA_CS2_PHYS + (0x20 * 0x20) -1,
+		.start = PXA_CS1_PHYS,
+		.end   = PXA_CS1_PHYS + (0x20 * 0x20) -1,
 		.flags = IORESOURCE_MEM
 	},
 	[1] = {

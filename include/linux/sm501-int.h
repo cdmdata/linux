@@ -226,7 +226,7 @@ struct yuv_slice {
 #define SM501ALPHA_SETPLANE _IOW(BASE_MAGIC, 0x01, unsigned long)
 
 #ifdef __KERNEL__
-#if defined(CONFIG_MACH_NEON270) && !defined(CONFIG_NEON270ENC)
+#if defined(CONFIG_MACH_NEON270) && !defined(CONFIG_NEON270ENC) && !defined(CONFIG_AX88796)
 #define SM501_FBSTART      PXA_CS1_PHYS
 #else
 #define SM501_FBSTART      PXA_CS3_PHYS
