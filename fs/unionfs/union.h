@@ -47,7 +47,6 @@
 #include <linux/mman.h>
 #include <linux/backing-dev.h>
 #include <linux/splice.h>
-#include <linux/fs_struct.h>
 
 #include <asm/system.h>
 
