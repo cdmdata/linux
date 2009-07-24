@@ -47,10 +47,10 @@
 #include <linux/mmc/host.h>
 #include <mach/irda.h>
 #include <mach/ohci.h>
-#include <mach/i2c.h>
 #include <mach/udc.h>
 #include <mach/pxa2xx-gpio.h>
 #include <mach/pxa2xx-regs.h>
+#include <plat/i2c.h>
 
 #include "generic.h"
 #include "devices.h"
