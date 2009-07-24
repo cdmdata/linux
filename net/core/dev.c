@@ -1047,7 +1047,7 @@ void dev_load(struct net *net, const char *name)
 int dev_open(struct net_device *dev)
 {
 	const struct net_device_ops *ops = dev->netdev_ops;
-	int ret = 0;
+	int ret;
 
 	ASSERT_RTNL();
 
@@ -1063,6 +1063,11 @@ int dev_open(struct net_device *dev)
 	 */
 	if (!netif_device_present(dev))
 		return -ENODEV;
+
+	ret = call_netdevice_notifiers(NETDEV_PRE_UP, dev);
+	ret = notifier_to_errno(ret);
+	if (ret)
+		return ret;
 
 	/*
 	 *	Call device private open method
@@ -3580,6 +3585,7 @@ int __dev_addr_sync(struct dev_addr_list **to, int *to_count,
 	}
 	return err;
 }
+EXPORT_SYMBOL_GPL(__dev_addr_sync);
 
 void __dev_addr_unsync(struct dev_addr_list **to, int *to_count,
 		       struct dev_addr_list **from, int *from_count)
@@ -3599,6 +3605,7 @@ void __dev_addr_unsync(struct dev_addr_list **to, int *to_count,
 		da = next;
 	}
 }
+EXPORT_SYMBOL_GPL(__dev_addr_unsync);
 
 /**
  *	dev_unicast_sync - Synchronize device's unicast list to another device

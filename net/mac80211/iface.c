@@ -20,6 +20,7 @@
 #include "debugfs_netdev.h"
 #include "mesh.h"
 #include "led.h"
+#include "driver-ops.h"
 
 /**
  * DOC: Interface list locking
@@ -164,14 +165,12 @@ static int ieee80211_open(struct net_device *dev)
 	}
 
 	if (local->open_count == 0) {
-		res = 0;
-		if (local->ops->start)
-			res = local->ops->start(local_to_hw(local));
+		res = drv_start(local);
 		if (res)
 			goto err_del_bss;
 		/* we're brought up, everything changes */
 		hw_reconf_flags = ~0;
-		ieee80211_led_radio(local, local->hw.conf.radio_enabled);
+		ieee80211_led_radio(local, true);
 	}
 
 	/*
@@ -191,16 +190,12 @@ static int ieee80211_open(struct net_device *dev)
 			       ETH_ALEN);
 	}
 
-	if (compare_ether_addr(null_addr, local->mdev->dev_addr) == 0)
-		memcpy(local->mdev->dev_addr, local->hw.wiphy->perm_addr,
-		       ETH_ALEN);
-
 	/*
 	 * Validate the MAC address for this device.
 	 */
 	if (!is_valid_ether_addr(dev->dev_addr)) {
-		if (!local->open_count && local->ops->stop)
-			local->ops->stop(local_to_hw(local));
+		if (!local->open_count)
+			drv_stop(local);
 		return -EADDRNOTAVAIL;
 	}
 
@@ -230,30 +225,26 @@ static int ieee80211_open(struct net_device *dev)
 		if (sdata->u.mntr_flags & MONITOR_FLAG_OTHER_BSS)
 			local->fif_other_bss++;
 
-		netif_addr_lock_bh(local->mdev);
+		spin_lock_bh(&local->filter_lock);
 		ieee80211_configure_filter(local);
-		netif_addr_unlock_bh(local->mdev);
+		spin_unlock_bh(&local->filter_lock);
 		break;
 	case NL80211_IFTYPE_STATION:
-	case NL80211_IFTYPE_ADHOC:
-		if (sdata->vif.type == NL80211_IFTYPE_STATION)
-			sdata->u.mgd.flags &= ~IEEE80211_STA_PREV_BSSID_SET;
-		else
-			sdata->u.ibss.flags &= ~IEEE80211_IBSS_PREV_BSSID_SET;
+		sdata->u.mgd.flags &= ~IEEE80211_STA_PREV_BSSID_SET;
 		/* fall through */
 	default:
 		conf.vif = &sdata->vif;
 		conf.type = sdata->vif.type;
 		conf.mac_addr = dev->dev_addr;
-		res = local->ops->add_interface(local_to_hw(local), &conf);
+		res = drv_add_interface(local, &conf);
 		if (res)
 			goto err_stop;
 
 		if (ieee80211_vif_is_mesh(&sdata->vif)) {
 			local->fif_other_bss++;
-			netif_addr_lock_bh(local->mdev);
+			spin_lock_bh(&local->filter_lock);
 			ieee80211_configure_filter(local);
-			netif_addr_unlock_bh(local->mdev);
+			spin_unlock_bh(&local->filter_lock);
 
 			ieee80211_start_mesh(sdata);
 		}
@@ -287,10 +278,6 @@ static int ieee80211_open(struct net_device *dev)
 	}
 
 	if (local->open_count == 0) {
-		res = dev_open(local->mdev);
-		WARN_ON(res);
-		if (res)
-			goto err_del_interface;
 		tasklet_enable(&local->tx_pending_tasklet);
 		tasklet_enable(&local->tasklet);
 	}
@@ -306,6 +293,8 @@ static int ieee80211_open(struct net_device *dev)
 	if (sdata->flags & IEEE80211_SDATA_PROMISC)
 		atomic_inc(&local->iff_promiscs);
 
+	hw_reconf_flags |= __ieee80211_recalc_idle(local);
+
 	local->open_count++;
 	if (hw_reconf_flags) {
 		ieee80211_hw_config(local, hw_reconf_flags);
@@ -317,6 +306,8 @@ static int ieee80211_open(struct net_device *dev)
 		ieee80211_set_wmm_default(sdata);
 	}
 
+	ieee80211_recalc_ps(local, -1);
+
 	/*
 	 * ieee80211_sta_work is disabled while network interface
 	 * is down. Therefore, some configuration changes may not
@@ -325,17 +316,15 @@ static int ieee80211_open(struct net_device *dev)
 	 */
 	if (sdata->vif.type == NL80211_IFTYPE_STATION)
 		queue_work(local->hw.workqueue, &sdata->u.mgd.work);
-	else if (sdata->vif.type == NL80211_IFTYPE_ADHOC)
-		queue_work(local->hw.workqueue, &sdata->u.ibss.work);
 
 	netif_tx_start_all_queues(dev);
 
 	return 0;
  err_del_interface:
-	local->ops->remove_interface(local_to_hw(local), &conf);
+	drv_remove_interface(local, &conf);
  err_stop:
-	if (!local->open_count && local->ops->stop)
-		local->ops->stop(local_to_hw(local));
+	if (!local->open_count)
+		drv_stop(local);
  err_del_bss:
 	sdata->bss = NULL;
 	if (sdata->vif.type == NL80211_IFTYPE_AP_VLAN)
@@ -411,7 +400,14 @@ static int ieee80211_stop(struct net_device *dev)
 	if (sdata->flags & IEEE80211_SDATA_PROMISC)
 		atomic_dec(&local->iff_promiscs);
 
-	dev_mc_unsync(local->mdev, dev);
+	netif_addr_lock_bh(dev);
+	spin_lock_bh(&local->filter_lock);
+	__dev_addr_unsync(&local->mc_list, &local->mc_count,
+			  &dev->mc_list, &dev->mc_count);
+	ieee80211_configure_filter(local);
+	spin_unlock_bh(&local->filter_lock);
+	netif_addr_unlock_bh(dev);
+
 	del_timer_sync(&local->dynamic_ps_timer);
 	cancel_work_sync(&local->dynamic_ps_enable_work);
 
@@ -460,9 +456,9 @@ static int ieee80211_stop(struct net_device *dev)
 		if (sdata->u.mntr_flags & MONITOR_FLAG_OTHER_BSS)
 			local->fif_other_bss--;
 
-		netif_addr_lock_bh(local->mdev);
+		spin_lock_bh(&local->filter_lock);
 		ieee80211_configure_filter(local);
-		netif_addr_unlock_bh(local->mdev);
+		spin_unlock_bh(&local->filter_lock);
 		break;
 	case NL80211_IFTYPE_STATION:
 		memset(sdata->u.mgd.bssid, 0, ETH_ALEN);
@@ -497,7 +493,6 @@ static int ieee80211_stop(struct net_device *dev)
 		/* fall through */
 	case NL80211_IFTYPE_ADHOC:
 		if (sdata->vif.type == NL80211_IFTYPE_ADHOC) {
-			memset(sdata->u.ibss.bssid, 0, ETH_ALEN);
 			del_timer_sync(&sdata->u.ibss.timer);
 			cancel_work_sync(&sdata->u.ibss.work);
 			synchronize_rcu();
@@ -511,9 +506,9 @@ static int ieee80211_stop(struct net_device *dev)
 			local->fif_other_bss--;
 			atomic_dec(&local->iff_allmultis);
 
-			netif_addr_lock_bh(local->mdev);
+			spin_lock_bh(&local->filter_lock);
 			ieee80211_configure_filter(local);
-			netif_addr_unlock_bh(local->mdev);
+			spin_unlock_bh(&local->filter_lock);
 
 			ieee80211_stop_mesh(sdata);
 		}
@@ -549,19 +544,19 @@ static int ieee80211_stop(struct net_device *dev)
 		conf.mac_addr = dev->dev_addr;
 		/* disable all keys for as long as this netdev is down */
 		ieee80211_disable_keys(sdata);
-		local->ops->remove_interface(local_to_hw(local), &conf);
+		drv_remove_interface(local, &conf);
 	}
 
 	sdata->bss = NULL;
 
+	hw_reconf_flags |= __ieee80211_recalc_idle(local);
+
+	ieee80211_recalc_ps(local, -1);
+
 	if (local->open_count == 0) {
-		if (netif_running(local->mdev))
-			dev_close(local->mdev);
+		drv_stop(local);
 
-		if (local->ops->stop)
-			local->ops->stop(local_to_hw(local));
-
-		ieee80211_led_radio(local, 0);
+		ieee80211_led_radio(local, false);
 
 		flush_workqueue(local->hw.workqueue);
 
@@ -605,8 +600,11 @@ static void ieee80211_set_multicast_list(struct net_device *dev)
 			atomic_dec(&local->iff_promiscs);
 		sdata->flags ^= IEEE80211_SDATA_PROMISC;
 	}
-
-	dev_mc_sync(local->mdev, dev);
+	spin_lock_bh(&local->filter_lock);
+	__dev_addr_sync(&local->mc_list, &local->mc_count,
+			&dev->mc_list, &dev->mc_count);
+	ieee80211_configure_filter(local);
+	spin_unlock_bh(&local->filter_lock);
 }
 
 /*
@@ -649,7 +647,8 @@ static void ieee80211_teardown_sdata(struct net_device *dev)
 			mesh_rmc_free(sdata);
 		break;
 	case NL80211_IFTYPE_ADHOC:
-		kfree_skb(sdata->u.ibss.probe_resp);
+		if (WARN_ON(sdata->u.ibss.presp))
+			kfree_skb(sdata->u.ibss.presp);
 		break;
 	case NL80211_IFTYPE_STATION:
 		kfree(sdata->u.mgd.extra_ie);
@@ -895,4 +894,75 @@ void ieee80211_remove_interfaces(struct ieee80211_local *local)
 
 		unregister_netdevice(sdata->dev);
 	}
+}
+
+static u32 ieee80211_idle_off(struct ieee80211_local *local,
+			      const char *reason)
+{
+	if (!(local->hw.conf.flags & IEEE80211_CONF_IDLE))
+		return 0;
+
+#ifdef CONFIG_MAC80211_VERBOSE_DEBUG
+	printk(KERN_DEBUG "%s: device no longer idle - %s\n",
+	       wiphy_name(local->hw.wiphy), reason);
+#endif
+
+	local->hw.conf.flags &= ~IEEE80211_CONF_IDLE;
+	return IEEE80211_CONF_CHANGE_IDLE;
+}
+
+static u32 ieee80211_idle_on(struct ieee80211_local *local)
+{
+	if (local->hw.conf.flags & IEEE80211_CONF_IDLE)
+		return 0;
+
+#ifdef CONFIG_MAC80211_VERBOSE_DEBUG
+	printk(KERN_DEBUG "%s: device now idle\n",
+	       wiphy_name(local->hw.wiphy));
+#endif
+
+	local->hw.conf.flags |= IEEE80211_CONF_IDLE;
+	return IEEE80211_CONF_CHANGE_IDLE;
+}
+
+u32 __ieee80211_recalc_idle(struct ieee80211_local *local)
+{
+	struct ieee80211_sub_if_data *sdata;
+	int count = 0;
+
+	if (local->hw_scanning || local->sw_scanning)
+		return ieee80211_idle_off(local, "scanning");
+
+	list_for_each_entry(sdata, &local->interfaces, list) {
+		if (!netif_running(sdata->dev))
+			continue;
+		/* do not count disabled managed interfaces */
+		if (sdata->vif.type == NL80211_IFTYPE_STATION &&
+		    sdata->u.mgd.state == IEEE80211_STA_MLME_DISABLED)
+			continue;
+		/* do not count unused IBSS interfaces */
+		if (sdata->vif.type == NL80211_IFTYPE_ADHOC &&
+		    !sdata->u.ibss.ssid_len)
+			continue;
+		/* count everything else */
+		count++;
+	}
+
+	if (!count)
+		return ieee80211_idle_on(local);
+	else
+		return ieee80211_idle_off(local, "in use");
+
+	return 0;
+}
+
+void ieee80211_recalc_idle(struct ieee80211_local *local)
+{
+	u32 chg;
+
+	mutex_lock(&local->iflist_mtx);
+	chg = __ieee80211_recalc_idle(local);
+	mutex_unlock(&local->iflist_mtx);
+	if (chg)
+		ieee80211_hw_config(local, chg);
 }
