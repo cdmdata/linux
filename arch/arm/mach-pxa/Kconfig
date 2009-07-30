@@ -99,6 +99,7 @@ config MACH_NEON
 config MACH_NEON270
 	bool "Boundary Devices Neon-270 board"
 	select PXA27x
+	select PXA_PWM
 	help
 	  Select Boundary Devices 32 bit wide board using SM-501 controller
 	  and SMSC Lan91C111 10/100 ethernet
