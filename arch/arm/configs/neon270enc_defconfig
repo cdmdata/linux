@@ -399,12 +399,34 @@ CONFIG_DEFAULT_TCP_CONG="cubic"
 # CONFIG_BT is not set
 # CONFIG_AF_RXRPC is not set
 CONFIG_WIRELESS=y
+<<<<<<< HEAD:arch/arm/configs/neon270enc_defconfig
+CONFIG_CFG80211=y
+# CONFIG_CFG80211_REG_DEBUG is not set
+=======
 # CONFIG_CFG80211 is not set
+>>>>>>> f3308c2d044c3022cee400cb8d0d212d3bd02b8d:arch/arm/configs/neon270enc_defconfig
 CONFIG_WIRELESS_OLD_REGULATORY=y
 CONFIG_WIRELESS_EXT=y
 CONFIG_WIRELESS_EXT_SYSFS=y
 # CONFIG_LIB80211 is not set
+<<<<<<< HEAD:arch/arm/configs/neon270enc_defconfig
+CONFIG_MAC80211=y
+
+#
+# Rate control algorithm selection
+#
+CONFIG_MAC80211_RC_PID=y
+# CONFIG_MAC80211_RC_MINSTREL is not set
+CONFIG_MAC80211_RC_DEFAULT_PID=y
+# CONFIG_MAC80211_RC_DEFAULT_MINSTREL is not set
+CONFIG_MAC80211_RC_DEFAULT="pid"
+# CONFIG_MAC80211_MESH is not set
+# CONFIG_MAC80211_LEDS is not set
+# CONFIG_MAC80211_DEBUGFS is not set
+# CONFIG_MAC80211_DEBUG_MENU is not set
+=======
 # CONFIG_MAC80211 is not set
+>>>>>>> f3308c2d044c3022cee400cb8d0d212d3bd02b8d:arch/arm/configs/neon270enc_defconfig
 # CONFIG_WIMAX is not set
 # CONFIG_RFKILL is not set
 # CONFIG_NET_9P is not set
@@ -542,7 +564,11 @@ CONFIG_BD_GENTIMER=y
 #
 # EEPROM support
 #
+<<<<<<< HEAD:arch/arm/configs/neon270enc_defconfig
+CONFIG_EEPROM_93CX6=y
+=======
 # CONFIG_EEPROM_93CX6 is not set
+>>>>>>> f3308c2d044c3022cee400cb8d0d212d3bd02b8d:arch/arm/configs/neon270enc_defconfig
 CONFIG_HAVE_IDE=y
 # CONFIG_IDE is not set
 
@@ -627,9 +653,24 @@ CONFIG_SMC91X=y
 # CONFIG_WLAN_PRE80211 is not set
 CONFIG_WLAN_80211=y
 # CONFIG_LIBERTAS is not set
+<<<<<<< HEAD:arch/arm/configs/neon270enc_defconfig
+# CONFIG_LIBERTAS_THINFIRM is not set
+# CONFIG_AT76C50X_USB is not set
 # CONFIG_USB_ZD1201 is not set
 # CONFIG_USB_NET_RNDIS_WLAN is not set
+CONFIG_RTL8187=y
+# CONFIG_MAC80211_HWSIM is not set
+# CONFIG_P54_COMMON is not set
+# CONFIG_AR9170_USB is not set
+=======
+# CONFIG_USB_ZD1201 is not set
+# CONFIG_USB_NET_RNDIS_WLAN is not set
+>>>>>>> f3308c2d044c3022cee400cb8d0d212d3bd02b8d:arch/arm/configs/neon270enc_defconfig
 # CONFIG_HOSTAP is not set
+
+#
+# Enable WiMAX (Networking options) to see the WiMAX drivers
+#
 
 #
 # Enable WiMAX (Networking options) to see the WiMAX drivers
@@ -1200,7 +1241,30 @@ CONFIG_MMC_PXA=y
 # CONFIG_MMC_SDHCI is not set
 # CONFIG_MEMSTICK is not set
 # CONFIG_ACCESSIBILITY is not set
+<<<<<<< HEAD:arch/arm/configs/neon270enc_defconfig
+CONFIG_NEW_LEDS=y
+# CONFIG_LEDS_CLASS is not set
+
+#
+# LED drivers
+#
+
+#
+# LED Triggers
+#
+CONFIG_LEDS_TRIGGERS=y
+# CONFIG_LEDS_TRIGGER_TIMER is not set
+# CONFIG_LEDS_TRIGGER_HEARTBEAT is not set
+# CONFIG_LEDS_TRIGGER_BACKLIGHT is not set
+# CONFIG_LEDS_TRIGGER_GPIO is not set
+# CONFIG_LEDS_TRIGGER_DEFAULT_ON is not set
+
+#
+# iptables trigger is under Netfilter config (LED target)
+#
+=======
 # CONFIG_NEW_LEDS is not set
+>>>>>>> f3308c2d044c3022cee400cb8d0d212d3bd02b8d:arch/arm/configs/neon270enc_defconfig
 CONFIG_RTC_LIB=y
 # CONFIG_RTC_CLASS is not set
 # CONFIG_DMADEVICES is not set
