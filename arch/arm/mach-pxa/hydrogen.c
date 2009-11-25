@@ -29,6 +29,7 @@
 #include <linux/dma-mapping.h>
 #include <net/ax88796.h>
 #include <sound/ac97_codec.h>
+#include <mach/regs-ost.h>
 
 #include <asm/types.h>
 #include <asm/setup.h>
@@ -377,6 +378,18 @@ static int hydrogen_mci_init(struct device *dev, irq_handler_t intHandler,
 	return 0;
 }
 
+static void hydrogen_poweroff(void)
+{
+	OSMR3 = (OSCR)+5*3000000 ;
+	OWER = 1 ;
+	arm_machine_restart('g', NULL);
+}
+
+static void hydrogen_restart(char mode, const char *cmd)
+{
+	hydrogen_poweroff();
+}
+
 static void hydrogen_mci_setpower(struct device *dev, unsigned int vdd)
 {
 }
@@ -439,6 +452,8 @@ static void __init hydrogen_init(void)
 	pxa_set_i2c_info(NULL);
 
 	pxa_mode_from_registers(&pxa_device_fb);
+        pm_power_off = hydrogen_poweroff;
+        arm_pm_restart = hydrogen_restart;
 }
 
 #define DEBUG_SIZE (PAGE_SIZE*4)
