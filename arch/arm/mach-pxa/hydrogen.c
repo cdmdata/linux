@@ -380,9 +380,7 @@ static int hydrogen_mci_init(struct device *dev, irq_handler_t intHandler,
 
 static void hydrogen_poweroff(void)
 {
-	OSMR3 = (OSCR)+5*3000000 ;
-	OWER = 1 ;
-	arm_machine_restart('g', NULL);
+	arm_machine_restart('h', NULL);
 }
 
 static void hydrogen_restart(char mode, const char *cmd)
