@@ -340,6 +340,16 @@ static int argon_mci_init(struct device *dev, irq_handler_t intHandler,
 	return 0;
 }
 
+static void argon_poweroff(void)
+{
+       arm_machine_restart('h', NULL);
+}
+
+static void argon_restart(char mode, const char *cmd)
+{
+       argon_poweroff();
+}
+
 static void argon_mci_setpower(struct device *dev, unsigned int vdd)
 {
 }
@@ -399,6 +409,8 @@ static void __init argon_init(void)
 	pxa_set_ohci_info(&argon_ohci_platform_data);
 
 	pxa_mode_from_registers(&pxa_device_fb);
+        pm_power_off = argon_poweroff;
+        arm_pm_restart = argon_restart;
 }
 
 static void __init argon_map_io(void)
