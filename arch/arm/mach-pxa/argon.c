@@ -51,7 +51,7 @@
 #include <linux/mmc/host.h>
 #include <mach/irda.h>
 #include <mach/ohci.h>
-#include <mach/i2c.h>
+#include <plat/i2c.h>
 #ifdef CONFIG_USB_GADGET_PXA27X
 #include <mach/udc.h>
 #endif
