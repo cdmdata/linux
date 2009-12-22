@@ -414,7 +414,7 @@ static void __init neon_init(void)
 #define DEBUG_SIZE (PAGE_SIZE*4)
 static struct map_desc neon_io_desc[] __initdata = {
   	{	/* debugging variables */
-		.virtual	=  0xf0000000,
+		.virtual	=  0xfff00000,
 		.pfn		= __phys_to_pfn(0),
 		.length		= DEBUG_SIZE,
 		.type		= MT_HIGH_VECTORS
