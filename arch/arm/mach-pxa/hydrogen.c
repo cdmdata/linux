@@ -29,6 +29,7 @@
 #include <linux/dma-mapping.h>
 #include <net/ax88796.h>
 #include <sound/ac97_codec.h>
+#include <linux/leds_pwm.h>
 
 #include <asm/types.h>
 #include <asm/setup.h>
@@ -182,6 +183,36 @@ static struct resource asix_resources[] = {
 	}
 };
 
+static struct led_pwm hydrogen_pwms[] = {
+	[0] = {
+		.name		= "led_pwm0",
+		.default_trigger = "what_default_trigger",
+		.pwm_id		= 0,
+		.active_low	= 0,
+		.max_brightness	= 0x100,
+		.pwm_period_ns	= 3822192,	/* middle "C" is 261.63 hz or */
+	},
+	[1] = {
+		.name		= "led_pwm1",
+		.default_trigger = "what_default_trigger1",
+		.pwm_id		= 1,
+		.active_low	= 0,
+		.max_brightness	= 0x100,
+		.pwm_period_ns	= 3822192,	/* middle "C" is 261.63 hz or */
+	}
+};
+
+static struct led_pwm_platform_data hydrogen_led_data = {
+	.num_leds = 2,
+	.leds = hydrogen_pwms,
+};
+static struct platform_device hydrogen_leds_pwd = {
+	.name	= "leds_pwm",
+	.dev	= {
+		.platform_data	= &hydrogen_led_data,
+	},
+};
+
 static struct platform_device asix_device = {
 	.name		= "ax88796",
 	.id		= -1,
@@ -224,8 +255,9 @@ static struct platform_device *platform_devices[] __initdata = {
         &asix_device,
         &pxafb_yuv_device,
 #ifdef CONFIG_FB_PXA_HARDWARE_CURSOR
-	&pxafb_cursor
+	&pxafb_cursor,
 #endif
+	&hydrogen_leds_pwd
 };
 
 static struct pxafb_mode_info fb_modes __initdata = {
