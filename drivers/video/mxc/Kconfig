@@ -64,6 +64,11 @@ config FB_MXC_INTERNAL_MEM
 	depends on FB_MXC_SYNC_PANEL && MXC_FB_IRAM
 	default y
 
+config FB_MXC_SYNC_PANDISPLAY
+	depends on FB_MXC_SYNC_PANEL
+	bool "Synchronous Pandisplay for double buffer flip"
+	default n
+
 config FB_MXC_ASYNC_PANEL
 	depends on FB_MXC
 	bool "Asynchronous Panels"

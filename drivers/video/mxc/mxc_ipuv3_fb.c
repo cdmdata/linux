@@ -47,6 +47,7 @@
 #include <linux/uaccess.h>
 #include <linux/fsl_devices.h>
 #include <asm/mach-types.h>
+#include <linux/earlysuspend.h>
 
 /*
  * Driver name
@@ -231,7 +232,11 @@ static int _setup_disp_channel2(struct fb_info *fbi)
 	}
 
 	mxc_fbi->cur_ipu_buf = 1;
+#ifdef CONFIG_FB_MXC_SYNC_PANDISPLAY
+	sema_init(&mxc_fbi->flip_sem, 0);
+#else
 	sema_init(&mxc_fbi->flip_sem, 1);
+#endif
 	if (mxc_fbi->alpha_chan_en) {
 		mxc_fbi->cur_ipu_alpha_buf = 1;
 		sema_init(&mxc_fbi->alpha_flip_sem, 1);
@@ -961,6 +966,7 @@ static int mxcfb_ioctl(struct fb_info *fbi, unsigned int cmd, unsigned long arg)
 			} else if (retval > 0) {
 				retval = 0;
 			}
+
 			break;
 		}
 	case FBIO_ALLOC:
@@ -1240,7 +1246,11 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 		}
 	}
 
+#ifdef CONFIG_FB_MXC_SYNC_PANDISPLAY
+	init_completion(&mxc_fbi->vsync_complete);
+#else
 	down(&mxc_fbi->flip_sem);
+#endif
 
 	mxc_fbi->cur_ipu_buf = !mxc_fbi->cur_ipu_buf;
 
@@ -1274,6 +1284,9 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 		return -EBUSY;
 	}
 
+#ifdef CONFIG_FB_MXC_SYNC_PANDISPLAY
+	down(&mxc_fbi->flip_sem);
+#endif
 	dev_dbg(info->device, "Update complete\n");
 
 	info->var.xoffset = var->xoffset;
@@ -1370,6 +1383,7 @@ static irqreturn_t mxcfb_irq_handler(int irq, void *dev_id)
 		ipu_disable_irq(irq);
 		mxc_fbi->wait4vsync = 0;
 	} else {
+#ifndef CONFIG_FB_MXC_SYNC_PANDISPLAY
 		if (!ipu_check_buffer_busy(mxc_fbi->ipu_ch,
 				IPU_INPUT_BUFFER, mxc_fbi->cur_ipu_buf)
 				|| (mxc_fbi->waitcnt > 2)) {
@@ -1387,6 +1401,10 @@ static irqreturn_t mxcfb_irq_handler(int irq, void *dev_id)
 			mxc_fbi->waitcnt = 0;
 		} else
 			mxc_fbi->waitcnt++;
+#else
+		up(&mxc_fbi->flip_sem);
+		ipu_disable_irq(irq);
+#endif
 	}
 	return IRQ_HANDLED;
 }
@@ -1438,6 +1456,37 @@ static int mxcfb_resume(struct platform_device *pdev)
 
 	return 0;
 }
+
+static void mxcfb_early_suspend(struct early_suspend *h)
+{
+	int i;
+	struct platform_device *pdev;
+	pm_message_t state = { .event = PM_EVENT_SUSPEND };
+
+	for (i = 2; i >= 0; i--)
+		if (mxcfb_info[i]) {
+			pdev = to_platform_device(mxcfb_info[i]->device);
+			mxcfb_suspend(pdev, state);
+		}
+}
+
+static void mxcfb_later_resume(struct early_suspend *h)
+{
+	int i;
+	struct platform_device *pdev;
+
+	for (i = 0; i < 3; i++)
+		if (mxcfb_info[i]) {
+			pdev = to_platform_device(mxcfb_info[i]->device);
+			mxcfb_resume(pdev);
+		}
+}
+
+struct early_suspend fbdrv_earlysuspend = {
+	.level = EARLY_SUSPEND_LEVEL_DISABLE_FB,
+	.suspend = mxcfb_early_suspend,
+	.resume = mxcfb_later_resume,
+};
 
 /*
  * Main framebuffer functions
@@ -1790,8 +1839,10 @@ static struct platform_driver mxcfb_driver = {
 		   },
 	.probe = mxcfb_probe,
 	.remove = mxcfb_remove,
+#ifndef CONFIG_HAS_EARLYSUSPEND
 	.suspend = mxcfb_suspend,
 	.resume = mxcfb_resume,
+#endif
 };
 
 /*
@@ -1878,11 +1929,17 @@ static int mxcfb_option_setup(struct fb_info *info, char *options)
  */
 int __init mxcfb_init(void)
 {
-	return platform_driver_register(&mxcfb_driver);
+	int ret;
+
+	ret =  platform_driver_register(&mxcfb_driver);
+	if (!ret)
+		register_early_suspend(&fbdrv_earlysuspend);
+	return ret;
 }
 
 void mxcfb_exit(void)
 {
+	unregister_early_suspend(&fbdrv_earlysuspend);
 	platform_driver_unregister(&mxcfb_driver);
 }
 
