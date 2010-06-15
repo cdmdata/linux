@@ -359,7 +359,14 @@ static struct pxamci_platform_data argon_mci_platform_data = {
 static int argon_ohci_init(struct device *dev)
 {
 	/* setup Port1 GPIO pin. */
-	pxa_gpio_mode(88 | GPIO_ALT_FN_1_IN);	/* USBHPWR1 */
+	if (GPDR(88) & GPIO_bit(88)) {
+		struct pxaohci_platform_data *inf;
+		inf = dev->platform_data;
+		pxa_gpio_mode(88 | GPIO_OUT);	/* This is a no connect */
+		gpio_set_value(88, 1);
+		inf->flags &= ~(POWER_CONTROL_LOW | POWER_SENSE_LOW);
+	} else
+		pxa_gpio_mode(88 | GPIO_ALT_FN_1_IN);	/* USBHPWR1 */
 	pxa_gpio_mode(89 | GPIO_ALT_FN_2_OUT);	/* USBHPEN1 */
 
 	return 0;
