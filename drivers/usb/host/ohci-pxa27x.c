@@ -227,10 +227,10 @@ static int pxa27x_start_hc(struct pxa27x_ohci *ohci, struct device *dev)
 	while (__raw_readl(ohci->mmio_base + UHCHR) & UHCHR_FSBIR)
 		cpu_relax();
 
-	pxa27x_setup_hc(ohci, inf);
-
 	if (inf->init)
 		retval = inf->init(dev);
+
+	pxa27x_setup_hc(ohci, inf);
 
 	if (retval < 0)
 		return retval;
