@@ -1615,7 +1615,7 @@ int32_t ipu_disp_set_global_alpha(ipu_channel_t channel, bool enable,
 		clk_enable(g_ipu_clk);
 	spin_lock_irqsave(&ipu_lock, lock_flags);
 
-	if (bg_chan) {
+	if (1) { // bg_chan) {
 		reg = __raw_readl(DP_COM_CONF(flow));
 		__raw_writel(reg & ~DP_COM_CONF_GWSEL, DP_COM_CONF(flow));
 	} else {
