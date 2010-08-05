@@ -27,7 +27,7 @@
 #include <asm/system.h>
 #include <asm/mach/irq.h>
 #include <mach/pxa2xx-regs.h>
-#include <mach/pxa2xx-gpio.h>
+#include <mach/gpio.h>
 #include <linux/proc_fs.h>
 
 #define GPIO_MAJOR 0 //0 means dynmaic assignment

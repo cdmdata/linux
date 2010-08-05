@@ -32,7 +32,7 @@
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/div64.h>
-#include <mach/pxa2xx-gpio.h>
+#include <mach/gpio.h>
 #include <mach/bitfield.h>
 #include <mach/pxafb.h>
 #include <video/pxa27xfb.h>

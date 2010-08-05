@@ -60,7 +60,7 @@
 #include <asm/irq.h>
 #include <asm/div64.h>
 #include <mach/pxa2xx-regs.h>
-#include <mach/pxa2xx-gpio.h>
+#include <mach/gpio.h>
 #include <mach/bitfield.h>
 #include <mach/pxafb.h>
 
