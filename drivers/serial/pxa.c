@@ -343,7 +343,7 @@ out:
 static void serial_pxa_wait_until_sent(struct tty_struct *tty, int timeout)
 {
 	struct uart_state *state = tty->driver_data;
-	struct uart_port *port = state->port;
+	struct uart_port *port = state->uart_port;
 	struct uart_pxa_port *up = (struct uart_pxa_port *)port ;
 	unsigned long flags;
 
@@ -384,7 +384,7 @@ struct tty_operations tty_ops;
 static int serial_pxa_startup(struct uart_port *port)
 {
 	struct uart_pxa_port *up = (struct uart_pxa_port *)port;
-	struct tty_struct *tty = up->port.info->port.tty;
+	struct tty_struct *tty = up->port.state->port.tty;
 	unsigned long flags;
 	int retval;
 
