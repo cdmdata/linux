@@ -45,7 +45,7 @@
 #include <asm/mach/flash.h>
 
 #include <mach/pxa2xx-regs.h>
-#include <mach/pxa2xx-gpio.h>
+//#include <mach/pxa2xx-gpio.h>
 #include <mach/audio.h>
 #include <mach/mmc.h>
 #include <mach/gpio.h>
@@ -56,6 +56,7 @@
 #ifdef CONFIG_USB_GADGET_PXA27X
 #include <mach/udc.h>
 #endif
+#include <mach/mfp-pxa27x.h>
 
 #include "generic.h"
 #include "devices.h"
@@ -75,10 +76,42 @@
 #endif
 
 #define TOUCH_SCREEN_INTERRUPT_GP 0
+#define GPIO_ALT_FN_2_OUT	0x280
+#define GPIO_ALT_FN_1_OUT	0x180
+
+#define GPIO16_PWM0	16
+#define GPIO17_PWM1	17
+#define GPIO_OUT	0x080
+#define GPIO16_PWM0_MD		(16 | GPIO_ALT_FN_2_OUT)
+
+int pxa_gpio_mode(int gpio_mode)
+{
+        unsigned long flags;
+        int gpio = gpio_mode & 0x7f;
+        int fn = (gpio_mode & 0x300) >> 8;
+        int gafr;
+
+        local_irq_save(flags);
+        if (gpio_mode & 0x80)
+                GPDR(gpio) |= GPIO_bit(gpio);
+        else
+                GPDR(gpio) &= ~GPIO_bit(gpio);
+        gafr = GAFR(gpio) & ~(0x3 << (((gpio) & 0xf)*2));
+        GAFR(gpio) = gafr |  (fn  << (((gpio) & 0xf)*2));
+        local_irq_restore(flags);
+        return 0;
+}
+
+static struct gpio backlight_gpios[] = {
+        { GPIO16_PWM0, GPIOF_OUT_INIT_HIGH, "backlight pwm" },
+        { GPIO17_PWM1, GPIOF_OUT_INIT_HIGH, "backlight on/off" },
+};
 
 static void __init hydrogen_init_irq(void)
 {
-	int gpdr = GPDR(0);	//0-31
+	int gpdr;
+	gpio_request_array(ARRAY_AND_SIZE(backlight_gpios));
+	gpdr = GPDR(0);	//0-31
 	pxa27x_init_irq();
 	set_irq_type(IRQ_GPIO(22), IRQ_TYPE_EDGE_FALLING);	//pcmcia irq
 	if ((gpdr & (1 << 4)) == 0)
@@ -96,7 +129,6 @@ static void __init hydrogen_init_irq(void)
 
 	GPDR(0) = gpdr ;
         set_irq_type(IRQ_GPIO(12), IRQ_TYPE_EDGE_FALLING);	/* Asix */
-	set_irq_type(IRQ_GPIO(MMC_CARD_DETECT_GP), IRQ_TYPE_EDGE_FALLING);	//MMC card detect
         set_irq_type(IRQ_GPIO(3), IRQ_TYPE_EDGE_FALLING);	/* i2c touch */
 }
 
@@ -152,11 +184,6 @@ static pxa2xx_audio_ops_t audio_ops = {
 	.reset_gpio	= 113
 };
 
-static struct platform_device hydrogen_audio_device = {
-	.name		= "pxa2xx-ac97",
-	.id		= -1,
-	.dev		= { .platform_data = &audio_ops },
-};
 #endif
 
 /* Asix AX88796 10/100 ethernet controller */
@@ -249,9 +276,6 @@ static struct platform_device pxafb_cursor = {
 #endif
 
 static struct platform_device *platform_devices[] __initdata = {
-#ifdef CONFIG_SND_AC97_CODEC
-        &hydrogen_audio_device,
-#endif
         &asix_device,
         &pxafb_yuv_device,
 #ifdef CONFIG_FB_PXA_HARDWARE_CURSOR
@@ -337,15 +361,16 @@ static /*const*/ struct backlight_ops hydrogen_backlight_ops = {
 static void __init hydrogen_backlight_register(void)
 {
 	struct backlight_device *bl;
-
+	struct backlight_properties props;
+	memset(&props, 0, sizeof(struct backlight_properties));
+	props.max_brightness = 1023;
 	bl = backlight_device_register("hydrogen-bl", &pxa_device_fb.dev,
-				       NULL, &hydrogen_backlight_ops);
+				       NULL, &hydrogen_backlight_ops, &props);
 	if (IS_ERR(bl)) {
 		printk(KERN_ERR "hydrogen: unable to register backlight: %ld\n",
 		       PTR_ERR(bl));
 		return;
 	}
-	bl->props.max_brightness = 1023;
 	bl->props.brightness = 1023;
 	backlight_update_status(bl);
 }
@@ -385,27 +410,14 @@ static struct pxa2xx_udc_mach_info udc_info __initdata = {
 static int hydrogen_mci_init(struct device *dev, irq_handler_t intHandler,
 			     void *data)
 {
-	int err;
-
-	/*
-	 * setup GPIO for PXA27x MMC controller
-	 */
-	pxa_gpio_mode(GPIO32_MMCCLK_MD);
-	pxa_gpio_mode(GPIO112_MMCCMD_MD);
-	pxa_gpio_mode(GPIO92_MMCDAT0_MD);
-	pxa_gpio_mode(GPIO109_MMCDAT1_MD);
-	pxa_gpio_mode(GPIO110_MMCDAT2_MD);
-	pxa_gpio_mode(GPIO111_MMCDAT3_MD);
-
-	err =
-	    request_irq(IRQ_GPIO(MMC_CARD_DETECT_GP), intHandler, IRQF_DISABLED,
-			"MMC card detect", data);
+	int err = request_irq(IRQ_GPIO(MMC_CARD_DETECT_GP), intHandler,
+			IRQF_DISABLED | IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, "MMC card detect", data);
 	if (err) {
 		printk(KERN_ERR
 		       "hydrogen_mci_init: MMC/SD: can't request MMC card detect IRQ\n");
 		return -1;
 	}
-
+	printk(KERN_ERR "%s\n", __func__);
 	return 0;
 }
 
@@ -419,10 +431,13 @@ static void hydrogen_mci_exit(struct device *dev, void *data)
 }
 
 static struct pxamci_platform_data hydrogen_mci_platform_data = {
-	.ocr_mask = MMC_VDD_32_33 | MMC_VDD_33_34,
-	.init = hydrogen_mci_init,
-	.setpower = hydrogen_mci_setpower,
-	.exit = hydrogen_mci_exit,
+	.ocr_mask		= MMC_VDD_32_33|MMC_VDD_33_34,
+	.init			= hydrogen_mci_init,
+	.setpower		= hydrogen_mci_setpower,
+	.exit			= hydrogen_mci_exit,
+	.gpio_card_detect	= -1,
+	.gpio_card_ro		= -1,
+	.gpio_power		= -1,
 };
 
 static int hydrogen_ohci_init(struct device *dev)
@@ -439,9 +454,45 @@ static struct pxaohci_platform_data hydrogen_ohci_platform_data = {
 #define ARB_CNTRL      __REG(0x48000048)  /* Arbiter Control Register */
 #define ARB_CORE_PARK          (1<<24)    /* Be parked with core when idle */
 
+static unsigned long hydrogen_pin_config[] = {
+	/* LCD - 16bpp Active TFT */
+//	GPIOxx_LCD_TFT_16BPP,
+//	GPIO16_PWM0_OUT,	/* Backlight */
+
+	/* MMC */
+	GPIO32_MMC_CLK,
+	GPIO112_MMC_CMD,
+	GPIO92_MMC_DAT_0,
+	GPIO109_MMC_DAT_1,
+	GPIO110_MMC_DAT_2,
+	GPIO111_MMC_DAT_3,
+
+	/* USB Host Port 1 */
+//	GPIO88_USBH1_PWR,
+//	GPIO89_USBH1_PEN,
+
+	/* AC97 */
+	GPIO28_AC97_BITCLK,
+	GPIO29_AC97_SDATA_IN_0,
+	GPIO30_AC97_SDATA_OUT,
+	GPIO31_AC97_SYNC,
+	GPIO45_AC97_SYSCLK,
+};
+
 static void __init hydrogen_init(void)
 {
 	unsigned gpdr ;
+	pxa2xx_mfp_config(ARRAY_AND_SIZE(hydrogen_pin_config));
+
+	pxa_set_ffuart_info(NULL);
+	pxa_set_btuart_info(NULL);
+	pxa_set_stuart_info(NULL);
+
+	/* system bus arbiter setting
+	 * - Core_Park
+	 * - LCD_wt:DMA_wt:CORE_Wt = 2:3:4
+	 */
+	ARB_CNTRL = ARB_CORE_PARK | 0x234;
 
 #ifdef CONFIG_USB_GADGET_PXA27X
 	pxa_set_udc_info(&udc_info);
@@ -456,9 +507,6 @@ static void __init hydrogen_init(void)
 		/* Output, Power sense not used, make active high */
 		hydrogen_ohci_platform_data.flags &= ~(POWER_CONTROL_LOW | POWER_SENSE_LOW);
 	}
-	ARB_CNTRL = ARB_CORE_PARK | 0x234;
-
-	pxa_gpio_mode(GPIO45_SYSCLK_AC97_MD);
 
 	printk( KERN_ERR "%s: %u devices\n", __func__, ARRAY_SIZE(platform_devices));
 	fb_hw.modes = &fb_modes;
@@ -469,6 +517,7 @@ static void __init hydrogen_init(void)
 	pxa_set_mci_info(&hydrogen_mci_platform_data);
 	pxa_set_ohci_info(&hydrogen_ohci_platform_data);
 	pxa_set_i2c_info(NULL);
+	pxa_set_ac97_info(&audio_ops);
 
 	pxa_mode_from_registers(&pxa_device_fb);
 }

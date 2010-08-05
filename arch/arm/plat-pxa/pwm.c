@@ -19,7 +19,7 @@
 #include <linux/clk.h>
 #include <linux/io.h>
 #include <linux/pwm.h>
-#include <mach/pxa2xx-gpio.h>
+//#include <mach/pxa2xx-gpio.h>
 
 #include <asm/div64.h>
 
@@ -100,6 +100,15 @@ int pwm_config(struct pwm_device *pwm, int duty_ns, int period_ns)
 	return 0;
 }
 EXPORT_SYMBOL(pwm_config);
+
+int pxa_gpio_mode(int gpio_mode);
+#define GPIO_ALT_FN_2_OUT	0x280
+#define GPIO_ALT_FN_1_OUT	0x180
+
+#define GPIO16_PWM0_MD		(16 | GPIO_ALT_FN_2_OUT)
+#define GPIO17_PWM1_MD		(17 | GPIO_ALT_FN_2_OUT)
+#define GPIO16_PWM0	16
+#define GPIO17_PWM1	17
 
 int pwm_enable(struct pwm_device *pwm)
 {
