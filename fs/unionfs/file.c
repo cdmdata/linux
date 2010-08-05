@@ -225,7 +225,6 @@ int unionfs_fsync(struct file *file, struct dentry *dentry, int datasync)
 		lower_dentry = unionfs_lower_dentry_idx(dentry, bindex);
 		mutex_lock(&lower_inode->i_mutex);
 		err = lower_inode->i_fop->fsync(lower_file,
-						lower_dentry,
 						datasync);
 		if (!err && bindex == bstart)
 			fsstack_copy_attr_times(inode, lower_inode);
