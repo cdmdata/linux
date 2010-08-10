@@ -21,6 +21,7 @@
 #include <linux/sched.h>
 #include <linux/bitops.h>
 #include <linux/fb.h>
+#include <linux/clk.h>
 #include <linux/ioport.h>
 #include <linux/bootmem.h>
 #include <linux/mtd/mtd.h>
@@ -275,6 +276,14 @@ static struct platform_device pxafb_cursor = {
 };
 #endif
 
+static struct i2c_board_info __initdata hydrogen_i2c_board_info[] = {
+	{
+		.type = "sgtl5000-i2c",
+		.addr = 0x2a,
+//		.platform_data = 
+	},
+};
+
 static struct platform_device *platform_devices[] __initdata = {
         &asix_device,
         &pxafb_yuv_device,
@@ -471,12 +480,25 @@ static unsigned long hydrogen_pin_config[] = {
 //	GPIO88_USBH1_PWR,
 //	GPIO89_USBH1_PEN,
 
+#ifdef CONFIG_SND_AC97_CODEC
 	/* AC97 */
 	GPIO28_AC97_BITCLK,
 	GPIO29_AC97_SDATA_IN_0,
 	GPIO30_AC97_SDATA_OUT,
 	GPIO31_AC97_SYNC,
 	GPIO45_AC97_SYSCLK,
+#endif
+#ifdef CONFIG_SND_PXA2XX_SOC_I2S
+	/* I2S */
+	GPIO28_I2S_BITCLK_OUT,
+	GPIO29_I2S_SDATA_IN,
+	GPIO30_I2S_SDATA_OUT,
+	GPIO31_I2S_SYNC,
+	GPIO113_I2S_SYSCLK,
+#endif
+	/* I2C */
+	GPIO117_I2C_SCL,
+	GPIO118_I2C_SDA,
 };
 
 static void __init hydrogen_init(void)
@@ -516,9 +538,13 @@ static void __init hydrogen_init(void)
 
 	pxa_set_mci_info(&hydrogen_mci_platform_data);
 	pxa_set_ohci_info(&hydrogen_ohci_platform_data);
+	clk_add_alias(NULL, "0-002a", NULL, &pxa_device_i2s.dev);
+	i2c_register_board_info(0, hydrogen_i2c_board_info,
+	                        ARRAY_SIZE(hydrogen_i2c_board_info));
 	pxa_set_i2c_info(NULL);
+#ifdef CONFIG_SND_AC97_CODEC
 	pxa_set_ac97_info(&audio_ops);
-
+#endif
 	pxa_mode_from_registers(&pxa_device_fb);
 }
 

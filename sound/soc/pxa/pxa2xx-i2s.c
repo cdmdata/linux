@@ -106,8 +106,11 @@ static int pxa2xx_i2s_startup(struct snd_pcm_substream *substream,
 	if (IS_ERR(clk_i2s))
 		return PTR_ERR(clk_i2s);
 
+	BUG_ON(IS_ERR(clk_i2s));
+	clk_enable(clk_i2s);
 	if (!cpu_dai->active)
-		SACR0 = 0;
+		SACR0 = SACR0_RFTH(14) | SACR0_TFTH(1) |
+				((pxa_i2s.master) ? SACR0_BCKD : 0);
 
 	return 0;
 }
@@ -166,8 +169,6 @@ static int pxa2xx_i2s_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_dai *cpu_dai = rtd->dai->cpu_dai;
 	struct pxa2xx_pcm_dma_params *dma_data;
 
-	BUG_ON(IS_ERR(clk_i2s));
-	clk_enable(clk_i2s);
 	dai->private_data = dai;
 	pxa_i2s_wait();
 
@@ -180,11 +181,8 @@ static int pxa2xx_i2s_hw_params(struct snd_pcm_substream *substream,
 
 	/* is port used by another stream */
 	if (!(SACR0 & SACR0_ENB)) {
-		SACR0 = 0;
-		if (pxa_i2s.master)
-			SACR0 |= SACR0_BCKD;
-
-		SACR0 |= SACR0_RFTH(14) | SACR0_TFTH(1);
+		SACR0 = SACR0_RFTH(14) | SACR0_TFTH(1) |
+				((pxa_i2s.master) ? SACR0_BCKD : 0);
 		SACR1 |= pxa_i2s.fmt;
 	}
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
@@ -193,6 +191,7 @@ static int pxa2xx_i2s_hw_params(struct snd_pcm_substream *substream,
 		SAIMR |= SAIMR_RFS;
 
 	switch (params_rate(params)) {
+#if 0
 	case 8000:
 		SADIV = 0x48;
 		break;
@@ -205,6 +204,7 @@ static int pxa2xx_i2s_hw_params(struct snd_pcm_substream *substream,
 	case 22050:
 		SADIV = 0x1a;
 		break;
+#endif
 	case 44100:
 		SADIV = 0xd;
 		break;
@@ -300,9 +300,13 @@ static int pxa2xx_i2s_resume(struct snd_soc_dai *dai)
 #define pxa2xx_i2s_resume	NULL
 #endif
 
+#if 0
 #define PXA2XX_I2S_RATES (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_11025 |\
 		SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_22050 | SNDRV_PCM_RATE_44100 | \
 		SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_96000)
+#else
+#define PXA2XX_I2S_RATES (SNDRV_PCM_RATE_44100 | SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_96000)
+#endif
 
 static struct snd_soc_dai_ops pxa_i2s_dai_ops = {
 	.startup	= pxa2xx_i2s_startup,
@@ -349,15 +353,22 @@ static int pxa2xx_i2s_probe(struct platform_device *dev)
 		clk_put(clk_i2s);
 
 	/*
+	 * Default to master mode, since if the codec is a slave,
+	 * it may need the I2S_SYSCLK for i2c codec accesses.
+	 */
+	pxa_i2s.master = 1;
+	/*
 	 * PXA Developer's Manual:
 	 * If SACR0[ENB] is toggled in the middle of a normal operation,
 	 * the SACR0[RST] bit must also be set and cleared to reset all
 	 * I2S controller registers.
 	 */
-	SACR0 = SACR0_RST;
-	SACR0 = 0;
+	SACR0 = SACR0_RFTH(14) | SACR0_TFTH(1) | SACR0_BCKD | SACR0_RST;
+	SACR0 = SACR0_RFTH(14) | SACR0_TFTH(1) | SACR0_BCKD;
+
 	/* Make sure RPL and REC are disabled */
 	SACR1 = SACR1_DRPL | SACR1_DREC;
+	SADIV = 0xc;
 	/* Along with FIFO servicing */
 	SAIMR &= ~(SAIMR_RFS | SAIMR_TFS);
 

@@ -163,3 +163,12 @@ config SND_PXA2XX_SOC_IMOTE2
        help
          Say Y if you want to add support for SoC audio on the
 	 IMote 2.
+
+config SND_PXA2XX_SOC_HYDROGEN_FMI
+       tristate "SoC Audio support for Hydrogen_fmi"
+       depends on SND_PXA2XX_SOC && MACH_HYDROGEN && I2C
+       select SND_PXA2XX_SOC_I2S
+       select SND_SOC_SGTL5000
+       help
+         Say Y if you want to add support for SoC audio on the
+	 Hydrogen_fmi.
