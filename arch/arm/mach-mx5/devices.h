@@ -91,3 +91,8 @@ extern struct platform_device fixed_volt_reg_device;
 extern struct platform_device mxc_zq_calib_device;
 extern struct platform_device mxc_asrc_device;
 extern int z160_revision;
+extern struct platform_device mxc_android_pmem_device;
+extern struct platform_device mxc_android_pmem_gpu_device;
+extern struct platform_device usb_mass_storage_device;
+extern struct platform_device usb_rndis_device;
+extern struct platform_device android_usb_device;
