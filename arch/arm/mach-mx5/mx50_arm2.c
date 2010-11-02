@@ -61,6 +61,10 @@
 #include <mach/iomux-mx50.h>
 #include <mach/i2c.h>
 
+#ifdef CONFIG_ANDROID_PMEM
+#include <linux/android_pmem.h>
+#endif
+
 #include "devices.h"
 #include "crm_regs.h"
 #include "usb.h"
@@ -1077,6 +1081,14 @@ static struct fsl_otp_data otp_data = {
 #undef BANKS
 #undef BANK_ITEMS
 
+#ifdef CONFIG_ANDROID_PMEM
+static struct android_pmem_platform_data android_pmem_gpu_data = {
+	.name = "pmem_gpu",
+	.size = SZ_32M,
+	.cached = 1,
+};
+#endif
+
 /*!
  * Board specific fixup function. It is called by \b setup_arch() in
  * setup.c file very early on during kernel starts. It allows the user to
@@ -1091,10 +1103,47 @@ static struct fsl_otp_data otp_data = {
 static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 				   char **cmdline, struct meminfo *mi)
 {
+#ifdef CONFIG_ANDROID_PMEM
+	char *str;
+	struct tag *t;
+	struct tag *mem_tag = 0;
+	int total_mem = SZ_512M;
+	int left_mem = 0;
+#endif
+
 	mxc_set_cpu_type(MXC_CPU_MX50);
 
 	get_cpu_wp = mx50_arm2_get_cpu_wp;
 	set_num_cpu_wp = mx50_arm2_set_num_cpu_wp;
+
+#ifdef CONFIG_ANDROID_PMEM
+	for_each_tag(mem_tag, tags) {
+		if (mem_tag->hdr.tag == ATAG_MEM) {
+			total_mem = mem_tag->u.mem.size - android_pmem_gpu_data.size;
+			left_mem = total_mem;
+			break;
+		}
+	}
+
+	for_each_tag(t, tags) {
+		if (t->hdr.tag == ATAG_CMDLINE) {
+			str = t->u.cmdline.cmdline;
+			str = strstr(str, "mem=");
+			if (str != NULL) {
+				str += 4;
+				left_mem = memparse(str, &str);
+				if (left_mem == 0 || left_mem > total_mem)
+				left_mem = total_mem;
+			}
+			break;
+		}
+	}
+
+	if (mem_tag) {
+		android_pmem_gpu_data.start = mem_tag->u.mem.start + left_mem;
+		mem_tag->u.mem.size = left_mem;
+	}
+#endif
 }
 
 static void __init mx50_arm2_io_init(void)
@@ -1229,6 +1278,11 @@ static void __init mxc_board_init(void)
 	mxc_register_device(&fsl_otp_device, &otp_data);
 	if (cpu_is_mx50_rev(CHIP_REV_1_1) >= 1)
 		mxc_register_device(&mxc_zq_calib_device, NULL);
+
+#ifdef CONFIG_ANDROID_PMEM
+	mxc_register_device(&mxc_android_pmem_gpu_device, &android_pmem_gpu_data);
+#endif
+
 }
 
 static void __init mx50_arm2_timer_init(void)
