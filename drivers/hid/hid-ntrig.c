@@ -69,6 +69,9 @@ struct ntrig_data {
 	/* The current activation state. */
 	__s8 act_state;
 
+	/* Which pointers have reported touches */
+	__u8 active_pointers ;
+
 	/* Empty frames to ignore before recognizing the end of activity */
 	__s8 deactivate_slack;
 
@@ -662,6 +665,7 @@ static int ntrig_event (struct hid_device *hid, struct hid_field *field,
 				input_event(input, EV_ABS,
 						ABS_MT_TOUCH_MINOR, nd->w);
 			}
+			nd->active_pointers |= (1<<nd->id);
 			input_mt_sync(field->hidinput->input);
 			break;
 
@@ -671,6 +675,16 @@ static int ntrig_event (struct hid_device *hid, struct hid_field *field,
 
 			nd->reading_mt = 0;
 
+			if ((0 == value) && (0 != nd->active_pointers)) {
+				/* No pointers down. generate release events if necessary */
+				int i ;
+				for (i=0; i < 6 ; i++) {
+					if (nd->active_pointers & (1<<i)) {
+						input_event(input, EV_ABS, ABS_MT_TOUCH_MAJOR, 0);
+						input_mt_sync(field->hidinput->input);
+					}
+				}
+			}
 
 			/*
 			 * Activation state machine logic:
@@ -791,6 +805,7 @@ static int ntrig_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	nd->min_height = 0;
 	nd->activate_slack = activate_slack;
 	nd->act_state = activate_slack;
+        nd->active_pointers = 0 ;
 	nd->deactivate_slack = -deactivate_slack;
 	nd->sensor_logical_width = 0;
 	nd->sensor_logical_height = 0;
