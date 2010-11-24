@@ -657,6 +657,7 @@ static int fsl_otg_set_peripheral(struct otg_transceiver *otg_p,
 	/* start the gadget right away if the ID pin says Mini-B */
 	DBG("ID pin=%d\n", otg_dev->fsm.id);
 	if (otg_dev->fsm.id == 1) {
+		cancel_delayed_work(&otg_dev->otg_event);
 		fsl_otg_start_host(&otg_dev->fsm, 0);
 		otg_drv_vbus(&otg_dev->fsm, 0);
 		fsl_otg_start_gadget(&otg_dev->fsm, 1);

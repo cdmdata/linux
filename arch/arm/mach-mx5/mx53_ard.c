@@ -1197,7 +1197,7 @@ static void __init mx53_ard_io_init(void)
 	gpio_direction_input(ARD_USBOTG_OC);
 	/* USBOTG_PWR */
 	gpio_request(ARD_USBOTG_PWR, "otg-pwr");
-	gpio_direction_output(ARD_USBOTG_PWR, 1);
+	gpio_direction_output(ARD_USBOTG_PWR, 0);
 
 	gpio_request(ARD_USBH1_OC, "usbh1-oc");
 	gpio_direction_input(ARD_USBH1_OC);
