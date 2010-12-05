@@ -764,6 +764,26 @@ static int mx53_ard_max7310_setup(struct i2c_client *client,
 
 	return 0;
 }
+struct max11801_ts_platform_data {
+	bool auto_mode_enable;
+	/* Enable Autonomous converion mode, only availible in max11801 and
+	 * max11800 */
+	bool aperture_criteria_enable;
+	/* Enable aperture criteria or not if in Autonomous mode, better
+	 * enable this if you can enable autonomouse mode */
+
+	/* X & Y size of aperture criteria, the set to
+	 * 2^(x/y)_scale */
+	unsigned char aperture_x_scale;
+	unsigned char aperture_y_scale;
+};
+
+static struct max11801_ts_platform_data mx53_i2c_max11801_platdata = {
+        .auto_mode_enable = true,
+        .aperture_criteria_enable = true,
+        .aperture_x_scale = 3,
+        .aperture_y_scale = 3,
+};
 
 static struct pca953x_platform_data mx53_i2c_max7310_platdata = {
 	.gpio_base	= MAX7310_BASE_ADDR,
@@ -792,6 +812,7 @@ static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
 	 .type = "max11801",
 	 .addr = 0x49,
 	 .irq  = IOMUX_TO_IRQ_V3(ARD_TS_INT),
+         .platform_data = &mx53_i2c_max11801_platdata,
 	},
 	{
 	 .type = "max7310",
