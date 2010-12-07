@@ -233,7 +233,10 @@ static int _setup_disp_channel2(struct fb_info *fbi)
 
 	mxc_fbi->cur_ipu_buf = 1;
 #ifdef CONFIG_FB_MXC_SYNC_PANDISPLAY
-	sema_init(&mxc_fbi->flip_sem, 0);
+	if (mxc_fbi->ipu_ch != MEM_BG_SYNC)
+		sema_init(&mxc_fbi->flip_sem, 1);
+	else
+		sema_init(&mxc_fbi->flip_sem, 0);
 #else
 	sema_init(&mxc_fbi->flip_sem, 1);
 #endif
@@ -1247,7 +1250,8 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 	}
 
 #ifdef CONFIG_FB_MXC_SYNC_PANDISPLAY
-	init_completion(&mxc_fbi->vsync_complete);
+	if (mxc_fbi->ipu_ch != MEM_BG_SYNC)
+		down(&mxc_fbi->flip_sem);
 #else
 	down(&mxc_fbi->flip_sem);
 #endif
@@ -1285,7 +1289,8 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 	}
 
 #ifdef CONFIG_FB_MXC_SYNC_PANDISPLAY
-	down(&mxc_fbi->flip_sem);
+	if (mxc_fbi->ipu_ch == MEM_BG_SYNC)
+		down(&mxc_fbi->flip_sem);
 #endif
 	dev_dbg(info->device, "Update complete\n");
 
@@ -1402,8 +1407,28 @@ static irqreturn_t mxcfb_irq_handler(int irq, void *dev_id)
 		} else
 			mxc_fbi->waitcnt++;
 #else
-		up(&mxc_fbi->flip_sem);
-		ipu_disable_irq(irq);
+		if (mxc_fbi->ipu_ch != MEM_BG_SYNC) {
+			if (!ipu_check_buffer_busy(mxc_fbi->ipu_ch,
+						IPU_INPUT_BUFFER, mxc_fbi->cur_ipu_buf)
+					|| (mxc_fbi->waitcnt > 2)) {
+				/*
+				 * This interrupt come after pan display select
+				 * cur_ipu_buf buffer, this buffer should become
+				 * idle after show. If it keep busy, clear it manually.
+				 */
+				if (mxc_fbi->waitcnt > 2)
+					ipu_clear_buffer_ready(mxc_fbi->ipu_ch,
+							IPU_INPUT_BUFFER,
+							mxc_fbi->cur_ipu_buf);
+				up(&mxc_fbi->flip_sem);
+				ipu_disable_irq(irq);
+				mxc_fbi->waitcnt = 0;
+			} else
+				mxc_fbi->waitcnt++;
+		} else {
+			up(&mxc_fbi->flip_sem);
+			ipu_disable_irq(irq);
+		}
 #endif
 	}
 	return IRQ_HANDLED;
