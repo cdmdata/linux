@@ -282,6 +282,7 @@ static struct pad_desc  mx50_rdp[] = {
 	MX50_PAD_KEY_ROW2__KEY_ROW2,
 	MX50_PAD_KEY_COL3__KEY_COL3,
 	MX50_PAD_KEY_ROW3__KEY_ROW3,
+	/*
 	MX50_PAD_EIM_DA0__KEY_COL4,
 	MX50_PAD_EIM_DA1__KEY_ROW4,
 	MX50_PAD_EIM_DA2__KEY_COL5,
@@ -290,6 +291,7 @@ static struct pad_desc  mx50_rdp[] = {
 	MX50_PAD_EIM_DA5__KEY_ROW6,
 	MX50_PAD_EIM_DA6__KEY_COL7,
 	MX50_PAD_EIM_DA7__KEY_ROW7,
+	*/
 	/*EIM pads */
 	MX50_PAD_EIM_DA8__GPIO_1_8,
 	MX50_PAD_EIM_DA9__GPIO_1_9,
@@ -503,20 +505,21 @@ static struct fec_platform_data fec_data = {
 };
 
 static u16 keymapping[] = {
-	KEY_9, KEY_0, KEY_O, KEY_P, KEY_L, KEY_DELETE, KEY_SLASH, KEY_ENTER,
-	KEY_F4, KEY_F1, KEY_F6, KEY_F9, KEY_F5, KEY_BACKSPACE, KEY_MENU, 0,
-	KEY_PREVIOUS, KEY_NEXT, KEY_HOME, KEY_NEXT, KEY_F2, KEY_F3, KEY_F8, KEY_F7,
-	KEY_F11, KEY_CAPSLOCK, KEY_SPACE, KEY_SPACE, KEY_LEFTALT, KEY_LEFTSHIFT, 0, 0,
+	KEY_9, KEY_0, KEY_O, KEY_P,// KEY_L, KEY_DELETE, KEY_SLASH, KEY_ENTER,
+	KEY_F4, KEY_F1, KEY_F6, KEY_F9,// KEY_F5, KEY_BACKSPACE, KEY_MENU, 0,
+	KEY_PREVIOUS, KEY_NEXT, KEY_HOME, KEY_NEXT,// KEY_F2, KEY_F3, KEY_F8, KEY_F7,
+	KEY_F11, KEY_CAPSLOCK, KEY_SPACE, KEY_SPACE,// KEY_LEFTALT, KEY_LEFTSHIFT, 0, 0,
+	/*
 	KEY_COMMA, KEY_M, KEY_N, KEY_B, KEY_V, KEY_C, KEY_X, KEY_Z,
 	KEY_K, KEY_J, KEY_H, KEY_G, KEY_F, KEY_D, KEY_S, KEY_A,
 	KEY_I, KEY_U, KEY_Y, KEY_T, KEY_R, KEY_E, KEY_W, KEY_Q,
 	KEY_8, KEY_7, KEY_6, KEY_5, KEY_4, KEY_3, KEY_2, KEY_1
+	*/
 };
 
 static struct keypad_data keypad_plat_data = {
-	.rowmax = 8,
-	.colmax = 8,
-	.irq = MXC_INT_KPP,
+	.rowmax = 4,
+	.colmax = 4,
 	.learning = 0,
 	.delay = 2,
 	.matrix = keymapping,
