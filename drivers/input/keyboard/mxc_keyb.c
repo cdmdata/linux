@@ -58,6 +58,10 @@
 #include <linux/fsl_devices.h>
 #include <linux/slab.h>
 #include <asm/mach/keypad.h>
+#include <mach/hardware.h>
+#ifdef CONFIG_EARLYSUSPEND
+#include <linux/earlysuspend.h>
+#endif
 
 /*!
  * Keypad Module Name
@@ -249,6 +253,8 @@ static unsigned short KScanRate = (10 * HZ) / 1000;
 static struct keypad_data *keypad;
 
 static int has_leaning_key;
+
+static struct device *key_dev;
 /*!
  * These arrays are used to store press and release scancodes.
  */
@@ -816,6 +822,29 @@ static void mxc_kpp_close(struct input_dev *dev)
 {
 }
 
+#ifdef CONFIG_EARLYSUSPEND
+
+static void mxc_keypad_early_suspend(struct early_suspend *h)
+{
+	if (h->pm_mode == EARLY_SUSPEND_MODE_NORMAL && key_dev)
+		device_set_wakeup_enable(key_dev, 0);
+	else
+		device_set_wakeup_enable(key_dev, 1);
+}
+
+static void mxc_keypad_late_resume(struct early_suspend *h)
+{
+	device_set_wakeup_enable(key_dev, 1);
+}
+
+static struct early_suspend mxc_keypad_earlysuspend = {
+	.level = EARLY_SUSPEND_LEVEL_STOP_DRAWING,
+	.suspend = mxc_keypad_early_suspend,
+	.resume = mxc_keypad_late_resume,
+};
+
+#endif
+
 #ifdef CONFIG_PM
 /*!
  * This function puts the Keypad controller in low-power mode/state.
@@ -1085,7 +1114,12 @@ static int mxc_kpp_probe(struct platform_device *pdev)
 	/* By default, devices should wakeup if they can */
 	/* So keypad is set as "should wakeup" as it can */
 	device_init_wakeup(&pdev->dev, 1);
+	key_dev = &pdev->dev;
 
+#ifdef CONFIG_EARLYSUSPEND
+	if (cpu_is_mx50())
+		register_early_suspend(&mxc_keypad_earlysuspend);
+#endif
 	return 0;
 
       err3:
@@ -1111,6 +1145,10 @@ static int mxc_kpp_remove(struct platform_device *pdev)
 {
 	unsigned short reg_val;
 
+#ifdef CONFIG_EARLYSUSPEND
+	if (cpu_is_mx50())
+		unregister_early_suspend(&mxc_keypad_earlysuspend);
+#endif
 	/*
 	 * Clear the KPKD status flag (write 1 to it) and synchronizer chain.
 	 * Set KDIE control bit, clear KRIE control bit (avoid false release
@@ -1127,6 +1165,7 @@ static int mxc_kpp_remove(struct platform_device *pdev)
 	reg_val &= ~KBD_STAT_KRIE;
 	__raw_writew(reg_val, kpp_dev.base + KPSR);
 
+	key_dev = NULL;
 	gpio_keypad_inactive();
 	clk_disable(kpp_clk);
 	clk_put(kpp_clk);
