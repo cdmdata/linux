@@ -47,6 +47,9 @@
 #include <linux/gpio.h>
 #include <linux/regulator/driver.h>
 #include <linux/fsl_devices.h>
+#ifdef CONFIG_EARLYSUSPEND
+#include <linux/earlysuspend.h>
+#endif
 
 #include <linux/time.h>
 
@@ -201,6 +204,7 @@ struct mxcfb_waveform_data_file {
 };
 
 void __iomem *epdc_base;
+static struct mxc_epdc_fb_data *epdc_fb_data;
 
 struct mxc_epdc_fb_data *g_fb_data;
 
@@ -3440,6 +3444,7 @@ int __devinit mxc_epdc_fb_probe(struct platform_device *pdev)
 			"Wait for update complete failed.  Error = 0x%x", ret);
 #endif
 
+	epdc_fb_data = fb_data;
 	goto out;
 
 out_dmaengine:
@@ -3477,6 +3482,7 @@ static int mxc_epdc_fb_remove(struct platform_device *pdev)
 	struct update_data_list *plist, *temp_list;
 	struct mxc_epdc_fb_data *fb_data = platform_get_drvdata(pdev);
 
+	epdc_fb_data = NULL;
 	mxc_epdc_fb_blank(FB_BLANK_POWERDOWN, &fb_data->info);
 
 	flush_workqueue(fb_data->epdc_submit_workqueue);
@@ -3526,6 +3532,42 @@ static int mxc_epdc_fb_remove(struct platform_device *pdev)
 
 	return 0;
 }
+
+#ifdef CONFIG_EARLYSUSPEND
+static void mxc_epdc_early_suspend(struct early_suspend *h)
+{
+	if (!epdc_fb_data)
+		return;
+
+	if (h->pm_mode == EARLY_SUSPEND_MODE_NORMAL) {
+		unsigned long flags;
+		int i;
+
+		epdc_powerup(epdc_fb_data);
+		clk_enable(epdc_fb_data->epdc_clk_axi);
+		clk_enable(epdc_fb_data->epdc_clk_pix);
+		/* Program EPDC update to process buffer */
+		epdc_set_update_addr(epdc_fb_data->phys_start);
+		epdc_set_update_coord(0, 0);
+		epdc_set_update_dimensions(epdc_fb_data->info.var.xres,
+					epdc_fb_data->info.var.yres);
+		epdc_submit_update(0, epdc_fb_data->wv_modes.mode_du, UPDATE_MODE_FULL, true, 0x0);
+
+		clk_disable(epdc_fb_data->epdc_clk_axi);
+		clk_disable(epdc_fb_data->epdc_clk_pix);
+	}
+}
+
+static void mxc_epdc_late_resume(struct early_suspend *h)
+{
+}
+
+static struct early_suspend mxc_epdc_earlysuspend = {
+	.level = EARLY_SUSPEND_LEVEL_DISABLE_FB,
+	.suspend = mxc_epdc_early_suspend,
+	.resume = mxc_epdc_late_resume,
+};
+#endif
 
 #ifdef CONFIG_PM
 static int mxc_epdc_fb_suspend(struct platform_device *pdev, pm_message_t state)
@@ -3760,6 +3802,9 @@ static int pxp_complete_update(struct mxc_epdc_fb_data *fb_data, u32 *hist_stat)
 
 static int __init mxc_epdc_fb_init(void)
 {
+#ifdef CONFIG_EARLYSUSPEND
+	register_early_suspend(&mxc_epdc_earlysuspend);
+#endif
 	return platform_driver_register(&mxc_epdc_fb_driver);
 }
 late_initcall(mxc_epdc_fb_init);
@@ -3768,6 +3813,9 @@ late_initcall(mxc_epdc_fb_init);
 static void __exit mxc_epdc_fb_exit(void)
 {
 	platform_driver_unregister(&mxc_epdc_fb_driver);
+#ifdef CONFIG_EARLYSUSPEND
+	unregister_early_suspend(&mxc_epdc_earlysuspend);
+#endif
 }
 module_exit(mxc_epdc_fb_exit);
 
