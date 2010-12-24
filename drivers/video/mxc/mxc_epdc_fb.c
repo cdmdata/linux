@@ -3543,17 +3543,26 @@ static void mxc_epdc_early_suspend(struct early_suspend *h)
 		int i;
 
 		epdc_powerup(epdc_fb_data);
-		clk_enable(epdc_fb_data->epdc_clk_axi);
-		clk_enable(epdc_fb_data->epdc_clk_pix);
+
 		/* Program EPDC update to process buffer */
+		epdc_working_buf_intr(true);
+		epdc_lut_complete_intr(0, true);
+		epdc_fb_data->in_init = true;
+
 		epdc_set_update_addr(epdc_fb_data->phys_start);
 		epdc_set_update_coord(0, 0);
 		epdc_set_update_dimensions(epdc_fb_data->info.var.xres,
 					epdc_fb_data->info.var.yres);
 		epdc_submit_update(0, epdc_fb_data->wv_modes.mode_du, UPDATE_MODE_FULL, true, 0x0);
 
-		clk_disable(epdc_fb_data->epdc_clk_axi);
-		clk_disable(epdc_fb_data->epdc_clk_pix);
+		for (i = 0; i < 40; i++) {
+			if (!epdc_is_lut_active(0)) {
+				dev_dbg(epdc_fb_data->dev, "Mode0 init complete\n");
+				break;
+			}
+			msleep(100);
+		}
+		epdc_powerdown(epdc_fb_data);
 	}
 }
 

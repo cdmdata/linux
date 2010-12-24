@@ -44,6 +44,7 @@ enum {
 };
 static int state;
 static int mode = EARLY_SUSPEND_MODE_NORMAL;
+static int last_mode = -1;
 
 void register_early_suspend(struct early_suspend *handler)
 {
@@ -175,6 +176,12 @@ void request_suspend_state(suspend_state_t new_state)
 		mode = EARLY_SUSPEND_MODE_NORMAL;
 
 	if (!old_sleep && new_state != PM_SUSPEND_ON) {
+		if ((state & SUSPENDED) && (last_mode != mode)) {
+			/* flush the workqueue */
+			spin_unlock_irqrestore(&state_lock, irqflags);
+			flush_workqueue(suspend_work_queue);
+			spin_lock_irqsave(&state_lock, irqflags);
+		}
 		state |= SUSPEND_REQUESTED;
 		queue_work(suspend_work_queue, &early_suspend_work);
 	} else if (old_sleep && new_state == PM_SUSPEND_ON) {
@@ -182,6 +189,10 @@ void request_suspend_state(suspend_state_t new_state)
 		wake_lock(&main_wake_lock);
 		queue_work(suspend_work_queue, &late_resume_work);
 	}
+
+	if (new_state != PM_SUSPEND_ON)
+		last_mode = mode;
+
 	requested_suspend_state = new_state;
 	spin_unlock_irqrestore(&state_lock, irqflags);
 }
