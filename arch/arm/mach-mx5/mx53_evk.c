@@ -1388,23 +1388,17 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 	struct tag *t;
 	struct tag *mem_tag = 0;
 	int total_mem = SZ_1G;
-	int left_mem = 0;
-	int gpu_mem = SZ_128M;
+	int left_mem = 0, temp_mem = 0;
+	int gpu_mem = SZ_64M;
 	int fb_mem = SZ_32M;
 	char *str;
 #ifdef CONFIG_ANDROID_PMEM
 	int pmem_gpu_size = android_pmem_gpu_data.size;
+	int pmem_adsp_size = android_pmem_data.size;
+	fb_mem = 0;
 #endif
 
 	mxc_set_cpu_type(MXC_CPU_MX53);
-
-	for_each_tag(mem_tag, tags) {
-		if (mem_tag->hdr.tag == ATAG_MEM) {
-			total_mem = mem_tag->u.mem.size;
-			left_mem = total_mem - gpu_mem - fb_mem;
-			break;
-		}
-	}
 
 	for_each_tag(t, tags) {
 		if (t->hdr.tag == ATAG_CMDLINE) {
@@ -1412,9 +1406,7 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 			str = strstr(str, "mem=");
 			if (str != NULL) {
 				str += 4;
-				left_mem = memparse(str, &str);
-				if (left_mem == 0 || left_mem > total_mem)
-					left_mem = total_mem - gpu_mem - fb_mem;
+				temp_mem = memparse(str, &str);
 			}
 
 			str = t->u.cmdline.cmdline;
@@ -1423,25 +1415,37 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 				str += 11;
 				gpu_mem = memparse(str, &str);
 			}
-
 			break;
 		}
 	}
 
+	for_each_tag(mem_tag, tags) {
+		if (mem_tag->hdr.tag == ATAG_MEM) {
+			total_mem = mem_tag->u.mem.size;
+#ifdef CONFIG_ANDROID_PMEM
+			left_mem = total_mem - gpu_mem - pmem_gpu_size - pmem_adsp_size;
+#else
+			left_mem = total_mem - gpu_mem - fb_mem;
+#endif
+			break;
+		}
+	}
+
+	if (temp_mem > 0 && temp_mem < left_mem)
+		left_mem = temp_mem;
+
 	if (mem_tag) {
+#ifndef CONFIG_ANDROID_PMEM
 		fb_mem = total_mem - left_mem - gpu_mem;
 		if (fb_mem < 0) {
-			gpu_mem = total_mem - left_mem;
-			fb_mem = 0;
+			 gpu_mem = total_mem - left_mem;
+			 fb_mem = 0;
 		}
-#ifdef CONFIG_ANDROID_PMEM
-
+#else
 		android_pmem_data.start = mem_tag->u.mem.start
 				+ left_mem + gpu_mem + pmem_gpu_size;
 		android_pmem_gpu_data.start = mem_tag->u.mem.start
 				+ left_mem + gpu_mem;
-
-		fb_mem = 0;
 #endif
 		mem_tag->u.mem.size = left_mem;
 
