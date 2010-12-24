@@ -48,6 +48,7 @@
 #include <linux/fsl_devices.h>
 #include <asm/mach-types.h>
 #include <linux/earlysuspend.h>
+#include <mach/hardware.h>
 
 /*
  * Driver name
@@ -422,6 +423,8 @@ static int mxcfb_set_par(struct fb_info *fbi)
 		return retval;
 
 	ipu_enable_channel(mxc_fbi->ipu_ch);
+
+	mxc_fbi->cur_blank = FB_BLANK_UNBLANK;
 
 	return retval;
 }
@@ -1490,7 +1493,14 @@ static void mxcfb_early_suspend(struct early_suspend *h)
 
 	for (i = 2; i >= 0; i--)
 		if (mxcfb_info[i]) {
+			struct fb_info *fbi;
 			pdev = to_platform_device(mxcfb_info[i]->device);
+			fbi = platform_get_drvdata(pdev);
+			/*
+			 * memset to avoid last frame remain issue,
+			 * it's a little ugly adding these code here.
+			 */
+			memset(fbi->screen_base, 0, fbi->fix.smem_len);
 			mxcfb_suspend(pdev, state);
 		}
 }
@@ -1704,7 +1714,8 @@ static int mxcfb_probe(struct platform_device *pdev)
 	if (!g_dp_in_use) {
 		mxcfbi->ipu_ch_irq = IPU_IRQ_BG_SYNC_EOF;
 		mxcfbi->ipu_ch = MEM_BG_SYNC;
-		mxcfbi->cur_blank = mxcfbi->next_blank = FB_BLANK_UNBLANK;
+		mxcfbi->cur_blank = FB_BLANK_POWERDOWN;
+		mxcfbi->next_blank = FB_BLANK_UNBLANK;
 	} else {
 		mxcfbi->ipu_ch_irq = IPU_IRQ_DC_SYNC_EOF;
 		mxcfbi->ipu_ch = MEM_DC_SYNC;
@@ -1970,6 +1981,29 @@ void mxcfb_exit(void)
 
 module_init(mxcfb_init);
 module_exit(mxcfb_exit);
+
+/* Need unblank fb0 if no one did it */
+int __init mxcfb0_init(void)
+{
+	struct fb_info *fbi = registered_fb[0];
+	struct mxcfb_info *mxcfbi;
+
+	if (cpu_is_mx51() || cpu_is_mx53() || cpu_is_mx37()) {
+		mxcfbi = (struct mxcfb_info *)(fbi->par);
+		if ((mxcfbi->ipu_ch == MEM_BG_SYNC)
+				&& (mxcfbi->cur_blank != FB_BLANK_UNBLANK)
+				&& (mxcfbi->next_blank == FB_BLANK_UNBLANK)) {
+			acquire_console_sem();
+			fb_blank(fbi, FB_BLANK_UNBLANK);
+			release_console_sem();
+
+			fb_prepare_logo(fbi, 0);
+			fb_show_logo(fbi, 0);
+		}
+	}
+	return 0;
+}
+late_initcall(mxcfb0_init);
 
 MODULE_AUTHOR("Freescale Semiconductor, Inc.");
 MODULE_DESCRIPTION("MXC framebuffer driver");

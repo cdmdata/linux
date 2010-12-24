@@ -59,7 +59,7 @@
  * Enable this define to have a default panel
  * loaded during driver initialization
  */
-/*#define DEFAULT_PANEL_HW_INIT*/
+#define DEFAULT_PANEL_HW_INIT
 
 #define NUM_SCREENS_MIN	2
 #define EPDC_NUM_LUTS 16
@@ -2928,9 +2928,7 @@ int __devinit mxc_epdc_fb_probe(struct platform_device *pdev)
 	struct update_data_list *plist, *temp_list;
 	int i;
 	unsigned long x_mem_size = 0;
-#ifdef CONFIG_FRAMEBUFFER_CONSOLE
 	struct mxcfb_update_data update;
-#endif
 
 	fb_data = (struct mxc_epdc_fb_data *)framebuffer_alloc(
 			sizeof(struct mxc_epdc_fb_data), &pdev->dev);
@@ -3424,7 +3422,6 @@ int __devinit mxc_epdc_fb_probe(struct platform_device *pdev)
 	}
 #endif
 
-#ifdef CONFIG_FRAMEBUFFER_CONSOLE
 	/* If FB console included, update display to show logo */
 	update.update_region.left = 0;
 	update.update_region.width = info->var.xres;
@@ -3442,9 +3439,11 @@ int __devinit mxc_epdc_fb_probe(struct platform_device *pdev)
 	if (ret < 0)
 		dev_err(fb_data->dev,
 			"Wait for update complete failed.  Error = 0x%x", ret);
-#endif
 
 	epdc_fb_data = fb_data;
+
+	fb_prepare_logo(info, 0);
+	fb_show_logo(info, 0);
 	goto out;
 
 out_dmaengine:

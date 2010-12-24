@@ -1281,6 +1281,7 @@ static int ldb_probe(struct platform_device *pdev)
 		acquire_console_sem();
 		fb_blank(ldb.fbi[0], FB_BLANK_UNBLANK);
 		release_console_sem();
+		fb_prepare_logo(ldb.fbi[0], 0);
 		fb_show_logo(ldb.fbi[0], 0);
 	}
 
