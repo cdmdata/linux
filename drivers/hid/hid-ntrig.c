@@ -22,6 +22,11 @@
 
 #include "hid-ids.h"
 
+static int calibration[7] = {
+-1,0,9550,0,-1,7150,1
+};
+module_param_array(calibration, int, NULL, S_IRUGO | S_IWUSR);
+
 #define NTRIG_DUPLICATE_USAGES	0x001
 
 static unsigned int min_width;
@@ -485,6 +490,30 @@ static int ntrig_input_mapped(struct hid_device *hdev, struct hid_input *hi,
 	return 0;
 }
 
+static int calibrated_x(int x, int y) {
+	if (0 != calibration[6]){
+		int tmpx ;
+		tmpx = calibration[0]*x + calibration[1]*y + calibration[2];
+		tmpx /= calibration[6];
+		if (tmpx < 0)
+			tmpx = 0;
+		return tmpx ;
+	} else
+		return x ;
+}
+
+static int calibrated_y(int x, int y) {
+	if (0 != calibration[6]){
+		int tmpy ;
+		tmpy = calibration[3]*x + calibration[4]*y + calibration[5];
+		tmpy /= calibration[6];
+		if (tmpy < 0)
+			tmpy = 0;
+		return tmpy ;
+	} else
+		return y ;
+}
+
 /*
  * this function is called upon all reports
  * so that we can filter contact point information,
@@ -545,8 +574,8 @@ static int ntrig_event (struct hid_device *hid, struct hid_field *field,
 						 nd->tipswitch);
 				input_report_key(input, BTN_TOOL_DOUBLETAP,
 						 nd->tipswitch);
-				input_event(input, EV_ABS, ABS_X, nd->x);
-				input_event(input, EV_ABS, ABS_Y, nd->y);
+				input_event(input, EV_ABS, ABS_X, calibrated_x(nd->x,nd->y));
+				input_event(input, EV_ABS, ABS_Y, calibrated_y(nd->x,nd->y));
 			}
 			break;
 		case 0xff000002:
@@ -638,13 +667,13 @@ static int ntrig_event (struct hid_device *hid, struct hid_field *field,
 				 * not.
 				 */
 				nd->first_contact_touch = nd->confidence;
-				input_event(input, EV_ABS, ABS_X, nd->x);
-				input_event(input, EV_ABS, ABS_Y, nd->y);
+				input_event(input, EV_ABS, ABS_X, calibrated_x(nd->x,nd->y));
+				input_event(input, EV_ABS, ABS_Y, calibrated_y(nd->x,nd->y));
 			}
 
 			/* Emit MT events */
-			input_event(input, EV_ABS, ABS_MT_POSITION_X, nd->x);
-			input_event(input, EV_ABS, ABS_MT_POSITION_Y, nd->y);
+			input_event(input, EV_ABS, ABS_MT_POSITION_X, calibrated_x(nd->x,nd->y));
+			input_event(input, EV_ABS, ABS_MT_POSITION_Y, calibrated_y(nd->x,nd->y));
 
 			/*
 			 * Translate from height and width to size
@@ -684,6 +713,7 @@ static int ntrig_event (struct hid_device *hid, struct hid_field *field,
 						input_mt_sync(field->hidinput->input);
 					}
 				}
+				nd->active_pointers = 0 ;
 			}
 
 			/*
