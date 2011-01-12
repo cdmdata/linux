@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2011 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -157,7 +157,7 @@ typedef enum iomux_config {
 #define MX53_PAD_EIM_D17__GPIO_3_17		IOMUX_PAD(0x464, 0x11C, 1, 0x0, 0, NO_PAD_CTRL)
 #define MX53_PAD_EIM_D18__GPIO_3_18		IOMUX_PAD(0x468, 0x120, 1, 0x0, 0, NO_PAD_CTRL)
 #define MX53_PAD_EIM_D19__GPIO_3_19		IOMUX_PAD(0x46C, 0x124, 1, 0x0, 0, PAD_CTRL_4)
-#define MX53_PAD_EIM_D20__GPIO_3_20		IOMUX_PAD(0x470, 0x128, 1, 0x0, 0, NO_PAD_CTRL)
+#define MX53_PAD_EIM_D20__GPIO_3_20		IOMUX_PAD(0x470, 0x128, 1, 0x0, 0, PAD_CTL_PUS_100K_UP)
 #define MX53_PAD_EIM_D21__GPIO_3_21		IOMUX_PAD(0x474, 0x12C, 1, 0x0, 0, NO_PAD_CTRL)
 #define MX53_PAD_EIM_D22__GPIO_3_22		IOMUX_PAD(0x478, 0x130, 1, 0x0, 0, PAD_CTRL_12)
 #define MX53_PAD_EIM_D23__GPIO_3_23		IOMUX_PAD(0x47C, 0x134, 1, 0x0, 0, NO_PAD_CTRL)
@@ -530,7 +530,7 @@ typedef enum iomux_config {
 #define MX53_PAD_GPIO_3__I2C3_SCL               IOMUX_PAD(0x6B0, 0x320, \
 							2 | IOMUX_CONFIG_SION, \
 							0x824, 1, PAD_CTRL_9)
-#define MX53_PAD_GPIO_6__I2C3_SDA		IOMUX_PAD(0x6b4, 0x324, \
+#define MX53_PAD_GPIO_6__I2C3_SDA              IOMUX_PAD(0x6B4, 0x324, \
 							2 | IOMUX_CONFIG_SION, \
 							0x828, 1, PAD_CTRL_9)
 #define MX53_PAD_GPIO_16__I2C3_SDA              IOMUX_PAD(0x6CC, 0x33C, \
