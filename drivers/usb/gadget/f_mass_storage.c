@@ -2405,13 +2405,8 @@ reset:
 		common->luns[i].unit_attention_data = SS_RESET_OCCURRED;
 out:
 	if (fsg) {
-		char *envp[2];
-		char state_buf[120];
-		snprintf(state_buf, sizeof(state_buf),
-			"STATE=%s", online? "online":"offline");
-		envp[0] = state_buf;
-		envp[1] = NULL;
-		kobject_uevent_env(&fsg->function.dev->kobj, KOBJ_CHANGE, envp);
+		fsg->function.config->cdev->online = online;
+		kobject_uevent(&fsg->function.dev->kobj, KOBJ_CHANGE);
 	}
 
 	return rc;
