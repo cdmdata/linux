@@ -3135,6 +3135,8 @@ static int fsl_udc_resume(struct platform_device *pdev)
 {
 	struct fsl_usb2_platform_data *pdata = udc_controller->pdata;
 	struct fsl_usb2_wakeup_platform_data *wake_up_pdata = pdata->wakeup_pdata;
+	unsigned long flags = 0;
+
 	printk(KERN_DEBUG "USB Gadget resume begins\n");
 
 	if (pdev->dev.power.status == DPM_RESUMING) {
@@ -3170,6 +3172,7 @@ static int fsl_udc_resume(struct platform_device *pdev)
 		goto end;
 	}
 
+	spin_lock_irqsave(&udc_controller->lock, flags);
 	/* Enable DR irq reg and set controller Run */
 	if (udc_controller->stopped) {
 		/* the clock is already on at usb wakeup routine */
@@ -3182,11 +3185,14 @@ static int fsl_udc_resume(struct platform_device *pdev)
 		if ((fsl_readl(&dr_regs->otgsc) & OTGSC_STS_USB_ID) == 0) {
 			dr_phy_low_power_mode(udc_controller, true);
 			dr_wake_up_enable(udc_controller, true);
+			spin_unlock_irqrestore(&udc_controller->lock, flags);
 			goto end;
 		}
 		dr_controller_setup(udc_controller);
 		dr_controller_run(udc_controller);
 	}
+	spin_unlock_irqrestore(&udc_controller->lock, flags);
+
 	udc_controller->usb_state = USB_STATE_ATTACHED;
 	udc_controller->ep0_dir = 0;
 
