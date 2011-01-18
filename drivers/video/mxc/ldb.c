@@ -41,6 +41,10 @@
 #include <linux/fsl_devices.h>
 #include <mach/hardware.h>
 
+#define FIXME_RATE 83500000
+//#define FIXME_RATE 38250000
+//#define FIXME_RATE 65000000
+
 #define LDB_BGREF_RMODE_MASK		0x00008000
 #define LDB_BGREF_RMODE_INT		0x00008000
 #define LDB_BGREF_RMODE_EXT		0x0
@@ -97,7 +101,6 @@ static struct ldb_data {
 	uint32_t *control_reg;
 	struct clk *ldb_di_clk[2];
 	struct regulator *lvds_bg_reg;
-	struct list_head modelist;
 } ldb;
 
 static struct device *g_ldb_dev;
@@ -109,26 +112,6 @@ static bool g_enable_ldb;
 static bool g_boot_cmd;
 
 DEFINE_SPINLOCK(ldb_lock);
-
-struct fb_videomode mxcfb_ldb_modedb[] = {
-	{
-	 "1080P60", 60, 1920, 1080, 7692,
-	 100, 40,
-	 30, 3,
-	 10, 2,
-	 0,
-	 FB_VMODE_NONINTERLACED,
-	 0,},
-	{
-	 "XGA", 60, 1024, 768, 15385,
-	 220, 40,
-	 21, 7,
-	 60, 10,
-	 0,
-	 FB_VMODE_NONINTERLACED,
-	 0,},
-};
-int mxcfb_ldb_modedb_sz = ARRAY_SIZE(mxcfb_ldb_modedb);
 
 static int bits_per_pixel(int pixel_fmt)
 {
@@ -602,7 +585,7 @@ static int mxc_ldb_ioctl(struct inode *inode, struct file *file,
 		/* TODO:Set the correct pll4 rate for all situations */
 		pll4_clk = clk_get(NULL, "pll4");
 		pll4_rate = clk_get_rate(pll4_clk);
-		pll4_rate = 455000000;
+		pll4_rate = FIXME_RATE * 7;
 		clk_set_rate(pll4_clk, pll4_rate);
 		clk_put(pll4_clk);
 
@@ -771,19 +754,19 @@ static const struct file_operations mxc_ldb_fops = {
 static int ldb_probe(struct platform_device *pdev)
 {
 	int ret = 0, i, ipu_di, ipu_di_pix_fmt[2];
-	bool primary = false, find_1080p = false;
+	bool primary = false ;
 	struct resource *res;
 	struct ldb_platform_data *plat_data = pdev->dev.platform_data;
 	mm_segment_t old_fs;
 	struct clk *ldb_clk_parent;
-	unsigned long ldb_clk_prate = 455000000;
+	unsigned long ldb_clk_prate = FIXME_RATE * 7;
 	struct fb_var_screeninfo *var[2];
 	uint32_t reg;
 	struct device *temp;
 	int mxc_ldb_major;
-	const struct fb_videomode *mode;
 	struct class *mxc_ldb_class;
 
+	printk(KERN_ERR "%s: g_enable_ldb=%d\n", __func__, g_enable_ldb);
 	if (g_enable_ldb == false)
 		return -ENODEV;
 
@@ -808,60 +791,37 @@ static int ldb_probe(struct platform_device *pdev)
 	ldb_reg = ioremap(ldb.base_addr, res->end - res->start + 1);
 	ldb.control_reg = ldb_reg + 2;
 
-	INIT_LIST_HEAD(&ldb.modelist);
-	for (i = 0; i < mxcfb_ldb_modedb_sz; i++)
-		fb_add_videomode(&mxcfb_ldb_modedb[i], &ldb.modelist);
-
 	for (i = 0; i < num_registered_fb; i++) {
-		if (registered_fb[i]->var.vmode == FB_VMODE_NONINTERLACED) {
-			mode = fb_match_mode(&registered_fb[i]->var,
-						&ldb.modelist);
-			if (mode) {
-				dev_dbg(g_ldb_dev, "fb mode found\n");
-				ldb.fbi[i] = registered_fb[i];
-				fb_videomode_to_var(&ldb.fbi[i]->var, mode);
-			} else if (i == 0 && ldb.chan_mode_opt != LDB_SEP) {
-				continue;
-			} else {
-				dev_warn(g_ldb_dev,
-						"can't find video mode\n");
-				goto err0;
-			}
+		printk(KERN_ERR "%s: vmode=%d\n", __func__, registered_fb[i]->var.vmode);
+		if ((registered_fb[i]->var.sync & FB_SYNC_EXT) &&
+		    (registered_fb[i]->var.vmode == FB_VMODE_NONINTERLACED)) {
+			struct fb_videomode m;
+			fb_var_to_videomode(&m, &registered_fb[i]->var);
+			printk(KERN_ERR "%s: %ix%i %i h=%d %d %d v=%d %d %d   %d %d\n", __func__, m.xres, m.yres, m.pixclock,
+					m.hsync_len, m.left_margin, m.right_margin,
+					m.vsync_len, m.upper_margin, m.lower_margin,
+					m.sync, m.vmode);
+			ldb.fbi[i] = registered_fb[i];
+			fb_videomode_to_var(&ldb.fbi[i]->var, &m);
 			/*
 			 * Default ldb mode:
 			 * 1080p: DI0 split, SPWG or DI1 split, SPWG
 			 * others: single, SPWG
 			 */
 			if (g_boot_cmd == false) {
-				if (fb_mode_is_equal(mode, &mxcfb_ldb_modedb[0])) {
-					if (strcmp(ldb.fbi[i]->fix.id,
-					    "DISP3 BG") == 0) {
-						ldb.chan_mode_opt = LDB_SPL_DI0;
-						dev_warn(g_ldb_dev,
-							"default di0 split mode\n");
-					} else if (strcmp(ldb.fbi[i]->fix.id,
-						   "DISP3 BG - DI1") == 0) {
-						ldb.chan_mode_opt = LDB_SPL_DI1;
-						dev_warn(g_ldb_dev,
-							"default di1 split mode\n");
-					}
+				ldb.chan_bit_map[0] = LDB_BIT_MAP_SPWG;
+				if (strcmp(ldb.fbi[i]->fix.id,
+				    "DISP3 BG") == 0) {
+					ldb.chan_mode_opt = LDB_SIN_DI0;
 					ldb.chan_bit_map[0] = LDB_BIT_MAP_SPWG;
+					dev_warn(g_ldb_dev,
+						 "default di0 single mode\n");
+				} else if (strcmp(ldb.fbi[i]->fix.id,
+					   "DISP3 BG - DI1") == 0) {
+					ldb.chan_mode_opt = LDB_SIN_DI1;
 					ldb.chan_bit_map[1] = LDB_BIT_MAP_SPWG;
-					find_1080p = true;
-				} else if (!find_1080p) {
-					if (strcmp(ldb.fbi[i]->fix.id,
-					    "DISP3 BG") == 0) {
-						ldb.chan_mode_opt = LDB_SIN_DI0;
-						ldb.chan_bit_map[0] = LDB_BIT_MAP_SPWG;
-						dev_warn(g_ldb_dev,
-							 "default di0 single mode\n");
-					} else if (strcmp(ldb.fbi[i]->fix.id,
-						   "DISP3 BG - DI1") == 0) {
-						ldb.chan_mode_opt = LDB_SIN_DI1;
-						ldb.chan_bit_map[1] = LDB_BIT_MAP_SPWG;
-						dev_warn(g_ldb_dev,
-							 "default di1 single mode\n");
-					}
+					dev_warn(g_ldb_dev,
+						 "default di1 single mode\n");
 				}
 			}
 
@@ -885,6 +845,8 @@ static int ldb_probe(struct platform_device *pdev)
 		if (ldb.fbi[0]->var.pixclock != ldb.fbi[1]->var.pixclock &&
 		    ldb.fbi[0]->var.pixclock != 2 * ldb.fbi[1]->var.pixclock &&
 		    ldb.fbi[1]->var.pixclock != 2 * ldb.fbi[0]->var.pixclock)
+			dev_err (g_ldb_dev, "Invalid pixel clocks: %d/%d\n",
+                                 ldb.fbi[0]->var.pixclock, ldb.fbi[1]->var.pixclock);
 			return -EINVAL;
 	}
 
@@ -922,8 +884,8 @@ static int ldb_probe(struct platform_device *pdev)
 			}
 
 			if (!valid_mode(ipu_di_pix_fmt[ipu_di])) {
-				dev_err(g_ldb_dev, "Unsupport pixel format "
-						   "for ldb input\n");
+				dev_err(g_ldb_dev, "Unsupport pixel format %08x"
+						   "for ldb input\n", ipu_di_pix_fmt[ipu_di]);
 				goto err0;
 			}
 
@@ -953,6 +915,7 @@ static int ldb_probe(struct platform_device *pdev)
 			}
 
 			/* TODO:Set the correct pll4 rate for all situations */
+			printk(KERN_ERR "%s: ipu_di=%i\n", __func__, ipu_di);
 			if (ipu_di == 1) {
 				ldb.ldb_di_clk[1] =
 					clk_get(&pdev->dev, "ldb_di1_clk");
@@ -1370,6 +1333,31 @@ static struct platform_driver mxcldb_driver = {
 	.suspend = ldb_suspend,
 	.resume = ldb_resume,
 };
+
+int use_ldb (int chan) {
+	if (!g_enable_ldb) {
+		return 0 ;
+	}
+	if (0 == chan) {
+                return (LDB_SIN_DI0 == g_chan_mode_opt)
+			||
+			(LDB_SPL_DI0 == g_chan_mode_opt)
+			||
+			(LDB_DUL_DI0 == g_chan_mode_opt)
+			||
+			(LDB_SEP == g_chan_mode_opt);
+	} else if (1 == chan) {
+                return (LDB_SIN_DI1 == g_chan_mode_opt)
+			||
+			(LDB_SPL_DI1 == g_chan_mode_opt)
+			||
+			(LDB_DUL_DI1 == g_chan_mode_opt)
+			||
+			(LDB_SEP == g_chan_mode_opt);
+	} else
+		return 0 ;
+}
+EXPORT_SYMBOL(use_ldb);
 
 /*
  * Parse user specified options (`ldb=')
