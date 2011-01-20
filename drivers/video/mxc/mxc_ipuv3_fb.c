@@ -2068,6 +2068,9 @@ int __init mxcfb0_init(void)
 	struct fb_info *fbi = registered_fb[0];
 	struct mxcfb_info *mxcfbi;
 
+	if ((0 == fbi) || (0 == fbi->par)) {
+		return -ENODEV ;
+	}
 	if (cpu_is_mx51() || cpu_is_mx53() || cpu_is_mx37()) {
 		mxcfbi = (struct mxcfb_info *)(fbi->par);
 		if ((mxcfbi->ipu_ch == MEM_BG_SYNC)
