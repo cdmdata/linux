@@ -48,6 +48,9 @@ enum ipu_dmfc_type {
 	DMFC_HIGH_RESOLUTION_ONLY_DP,
 };
 
+void enter_ipu_Func(char const *fname);
+void exit_ipu_Func(char const *fname);
+
 int register_ipu_device(void);
 ipu_color_space_t format_to_colorspace(uint32_t fmt);
 bool ipu_pixel_format_has_alpha(uint32_t fmt);
@@ -98,5 +101,8 @@ void _ipu_csi_ccir_err_detection_disable(uint32_t csi);
 void _ipu_smfc_init(ipu_channel_t channel, uint32_t mipi_id, uint32_t csi);
 void _ipu_smfc_set_burst_size(ipu_channel_t channel, uint32_t bs);
 void _ipu_dp_set_csc_coefficients(ipu_channel_t channel, int32_t param[][3]);
+
+extern void ipu_writel(unsigned int v,void *p);
+extern void ipu_write_paramw(void *base,unsigned w,unsigned i,uint32_t value);
 
 #endif				/* __INCLUDE_IPU_PRV_H__ */

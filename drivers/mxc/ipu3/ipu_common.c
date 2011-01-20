@@ -20,6 +20,7 @@
  */
 #include <linux/types.h>
 #include <linux/init.h>
+#include <linux/slab.h>
 #include <linux/platform_device.h>
 #include <linux/err.h>
 #include <linux/spinlock.h>
@@ -100,6 +101,39 @@ u32 *ipu_disp_base[2];
 u32 *ipu_vdi_reg;
 
 /* Static functions */
+static int nestLevel = 0 ;
+void enter_ipu_Func(char const *fname) {
+	char nestchars[80];
+	char *nextOut = nestchars ;
+	char *nestEnd = nestchars+sizeof(nestchars)-2;
+	int i = 0 ;
+	nestchars[0] = 0 ;
+	while ((i < nestLevel) && (nextOut < nestEnd) ) {
+		++i ;
+		strcpy(nextOut,"  ");
+		nextOut += 2 ;
+	}
+	printk (KERN_ERR "%sipu:%s\n", nestchars, fname);
+	++nestLevel ;
+}
+
+void exit_ipu_Func(char const *fname) {
+	char nestchars[80];
+	char *nextOut = nestchars ;
+	char *nestEnd = nestchars+sizeof(nestchars)-2;
+	int i = 0 ;
+	nestchars[0] = 0 ;
+	if (0 < nestLevel) {
+		--nestLevel ;
+	}
+	while ((i < nestLevel) && (nextOut < nestEnd) ) {
+		++i ;
+		strcpy(nextOut,"  ");
+		nextOut += 2 ;
+	}
+	printk (KERN_ERR "%sipu:~%s\n", nestchars, fname);
+}
+
 static irqreturn_t ipu_irq_handler(int irq, void *desc);
 
 static inline uint32_t channel_2_dma(ipu_channel_t ch, ipu_buffer_t type)
@@ -245,6 +279,29 @@ static struct clk pixel_clk[] = {
 	},
 };
 
+struct io_map_t {
+	void *virt ;
+	unsigned phys ;
+	unsigned size ;
+	char const *name ;
+	struct io_map_t *next ;
+};
+
+struct io_map_t *maps = 0 ;
+
+static void add_map(void *virt, unsigned phys, unsigned size, char const *name)
+{
+        struct io_map_t *newone = kmalloc(sizeof(*newone),GFP_KERNEL);
+	if ( 0 == newone)
+		return ;
+	newone->next = maps ;
+	newone->virt = virt ;
+	newone->name = name ;
+	newone->phys = phys ;
+	newone->size = size ;
+	maps = newone ;
+}
+
 /*!
  * This function is called by the driver framework to initialize the IPU
  * hardware.
@@ -295,23 +352,23 @@ static int ipu_probe(struct platform_device *pdev)
 	else			/* IPUv3D, v3E, v3EX */
 		ipu_base += IPU_REG_BASE;
 
-	ipu_cm_reg = ioremap(ipu_base + IPU_CM_REG_BASE, PAGE_SIZE);
-	ipu_ic_reg = ioremap(ipu_base + IPU_IC_REG_BASE, PAGE_SIZE);
-	ipu_idmac_reg = ioremap(ipu_base + IPU_IDMAC_REG_BASE, PAGE_SIZE);
+	ipu_cm_reg = ioremap(ipu_base + IPU_CM_REG_BASE, PAGE_SIZE); add_map(ipu_cm_reg, ipu_base + IPU_CM_REG_BASE, PAGE_SIZE, "ipu_cm_reg" );
+	ipu_ic_reg = ioremap(ipu_base + IPU_IC_REG_BASE, PAGE_SIZE); add_map(ipu_ic_reg, ipu_base + IPU_IC_REG_BASE, PAGE_SIZE, "ipu_ic_reg" );
+	ipu_idmac_reg = ioremap(ipu_base + IPU_IDMAC_REG_BASE, PAGE_SIZE); add_map(ipu_idmac_reg, ipu_base + IPU_IDMAC_REG_BASE, PAGE_SIZE, "ipu_idmac_reg" );
 	/* DP Registers are accessed thru the SRM */
-	ipu_dp_reg = ioremap(ipu_base + IPU_SRM_REG_BASE, PAGE_SIZE);
-	ipu_dc_reg = ioremap(ipu_base + IPU_DC_REG_BASE, PAGE_SIZE);
-	ipu_dmfc_reg = ioremap(ipu_base + IPU_DMFC_REG_BASE, PAGE_SIZE);
-	ipu_di_reg[0] = ioremap(ipu_base + IPU_DI0_REG_BASE, PAGE_SIZE);
-	ipu_di_reg[1] = ioremap(ipu_base + IPU_DI1_REG_BASE, PAGE_SIZE);
-	ipu_smfc_reg = ioremap(ipu_base + IPU_SMFC_REG_BASE, PAGE_SIZE);
-	ipu_csi_reg[0] = ioremap(ipu_base + IPU_CSI0_REG_BASE, PAGE_SIZE);
-	ipu_csi_reg[1] = ioremap(ipu_base + IPU_CSI1_REG_BASE, PAGE_SIZE);
-	ipu_cpmem_base = ioremap(ipu_base + IPU_CPMEM_REG_BASE, PAGE_SIZE);
-	ipu_tpmem_base = ioremap(ipu_base + IPU_TPM_REG_BASE, SZ_64K);
-	ipu_dc_tmpl_reg = ioremap(ipu_base + IPU_DC_TMPL_REG_BASE, SZ_128K);
-	ipu_disp_base[1] = ioremap(ipu_base + IPU_DISP1_BASE, SZ_4K);
-	ipu_vdi_reg = ioremap(ipu_base + IPU_VDI_REG_BASE, PAGE_SIZE);
+	ipu_dp_reg = ioremap(ipu_base + IPU_SRM_REG_BASE, PAGE_SIZE); add_map(ipu_dp_reg, ipu_base + IPU_SRM_REG_BASE, PAGE_SIZE, "ipu_dp_reg" );
+	ipu_dc_reg = ioremap(ipu_base + IPU_DC_REG_BASE, PAGE_SIZE); add_map(ipu_dc_reg, ipu_base + IPU_DC_REG_BASE, PAGE_SIZE, "ipu_dc_reg" );
+	ipu_dmfc_reg = ioremap(ipu_base + IPU_DMFC_REG_BASE, PAGE_SIZE); add_map(ipu_dmfc_reg, ipu_base + IPU_DMFC_REG_BASE, PAGE_SIZE, "ipu_dmfc_reg" );
+	ipu_di_reg[0] = ioremap(ipu_base + IPU_DI0_REG_BASE, PAGE_SIZE); add_map(ipu_di_reg[0], ipu_base  + IPU_DI0_REG_BASE, PAGE_SIZE, "ipu_di_reg[0]" );
+	ipu_di_reg[1] = ioremap(ipu_base + IPU_DI1_REG_BASE, PAGE_SIZE); add_map(ipu_di_reg[1], ipu_base  + IPU_DI1_REG_BASE, PAGE_SIZE, "ipu_di_reg[1]" );
+	printk(KERN_ERR "display controller registers at 0x%lx/0x%lx\n", ipu_base + IPU_DI0_REG_BASE, ipu_base + IPU_DI1_REG_BASE );
+	ipu_smfc_reg = ioremap(ipu_base + IPU_SMFC_REG_BASE, PAGE_SIZE); add_map(ipu_smfc_reg, ipu_base + IPU_SMFC_REG_BASE, PAGE_SIZE, "ipu_smfc_reg" );
+	ipu_csi_reg[0] = ioremap(ipu_base + IPU_CSI0_REG_BASE, PAGE_SIZE); add_map(ipu_csi_reg[0], ipu_base +IPU_CSI0_REG_BASE, PAGE_SIZE, "ipu_csi_reg[0]" );
+	ipu_csi_reg[1] = ioremap(ipu_base + IPU_CSI1_REG_BASE, PAGE_SIZE); add_map(ipu_csi_reg[1], ipu_base +IPU_CSI1_REG_BASE, PAGE_SIZE, "ipu_csi_reg[1]" );
+	ipu_cpmem_base = ioremap(ipu_base + IPU_CPMEM_REG_BASE, PAGE_SIZE); add_map(ipu_cpmem_base, ipu_base + IPU_CPMEM_REG_BASE, PAGE_SIZE, "ipu_cpmem_base" );
+	ipu_tpmem_base = ioremap(ipu_base + IPU_TPM_REG_BASE, SZ_64K); add_map(ipu_tpmem_base, ipu_base + IPU_TPM_REG_BASE, SZ_64K, "ipu_tpmem_base" );
+	ipu_dc_tmpl_reg = ioremap(ipu_base + IPU_DC_TMPL_REG_BASE, SZ_128K); add_map(ipu_dc_tmpl_reg, ipu_base + IPU_DC_TMPL_REG_BASE, SZ_128K, "ipu_dc_tmpl_reg" );
+	ipu_disp_base[1] = ioremap(ipu_base + IPU_DISP1_BASE, SZ_4K); add_map(ipu_disp_base[1], ipu_base  + IPU_DISP1_BASE, PAGE_SIZE, "ipu_disp_base[1]" );
 
 	dev_dbg(g_ipu_dev, "IPU VDI Regs = %p\n", ipu_vdi_reg);
 	dev_dbg(g_ipu_dev, "IPU CM Regs = %p\n", ipu_cm_reg);
@@ -2634,6 +2691,45 @@ static int ipu_resume(struct platform_device *pdev)
 
 	return 0;
 }
+
+static int num_ipu_writes = 0 ;
+int ipu_debug_writes = 0 ;
+EXPORT_SYMBOL(ipu_debug_writes);
+
+static int first = 1 ;
+
+void ipu_writel(unsigned int v,void *p)
+{
+	if(ipu_debug_writes || (10 > num_ipu_writes++)){
+		unsigned phys = 0xFFFFFFFF ;
+		char const *name = "unknown" ;
+		struct io_map_t *next = maps ;
+		while (next) {
+			unsigned offs = (char *)p-(char *)next->virt ;
+//			printk(KERN_ERR "%s: %p/0x%08x/%u - %s, offs %u\n", __func__, next->virt, next->phys, next->size, next->name, offs );
+			if (offs < next->size) {
+				phys = next->phys + offs ;
+				name = next->name ;
+				break;
+			}
+			next = next->next ;
+		}
+		printk(KERN_ERR "ipu[%p/0x%x] == %s == 0x%08x\n",p,phys,name,v);
+		if (first && (0xFFFFFFFF == phys)) {
+//	dump_stack();
+			first = 0 ;
+		}
+	}
+	__raw_writel(v,p);
+}
+
+
+void ipu_write_paramw(void *base,unsigned w,unsigned i,uint32_t value)
+{
+        ipu_writel(value,_param_word(base, w)+i);
+}
+
+EXPORT_SYMBOL(ipu_write_paramw);
 
 /*!
  * This structure contains pointers to the power management callback functions.
