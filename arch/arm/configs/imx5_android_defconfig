@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.3
-# Mon Jan 17 13:06:10 2011
+# Thu Jan 20 13:19:13 2011
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -1278,7 +1278,7 @@ CONFIG_SENSORS_MAX17135=y
 # CONFIG_SENSORS_LIS3_SPI is not set
 # CONFIG_SENSORS_LIS3_I2C is not set
 CONFIG_SENSORS_ISL29003=y
-CONFIG_MXC_MMA8450=y
+# CONFIG_MXC_MMA8450 is not set
 CONFIG_MXC_MMA8451=y
 # CONFIG_THERMAL is not set
 CONFIG_WATCHDOG=y
