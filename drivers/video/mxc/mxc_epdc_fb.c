@@ -204,8 +204,7 @@ struct mxcfb_waveform_data_file {
 };
 
 void __iomem *epdc_base;
-static struct mxc_epdc_fb_data *epdc_fb_data;
-
+static int mxc_epdc_earlysuspend_mode;
 struct mxc_epdc_fb_data *g_fb_data;
 
 /* forward declaration */
@@ -3440,7 +3439,6 @@ int __devinit mxc_epdc_fb_probe(struct platform_device *pdev)
 		dev_err(fb_data->dev,
 			"Wait for update complete failed.  Error = 0x%x", ret);
 
-	epdc_fb_data = fb_data;
 
 	fb_prepare_logo(info, 0);
 	fb_show_logo(info, 0);
@@ -3481,7 +3479,6 @@ static int mxc_epdc_fb_remove(struct platform_device *pdev)
 	struct update_data_list *plist, *temp_list;
 	struct mxc_epdc_fb_data *fb_data = platform_get_drvdata(pdev);
 
-	epdc_fb_data = NULL;
 	mxc_epdc_fb_blank(FB_BLANK_POWERDOWN, &fb_data->info);
 
 	flush_workqueue(fb_data->epdc_submit_workqueue);
@@ -3535,35 +3532,10 @@ static int mxc_epdc_fb_remove(struct platform_device *pdev)
 #ifdef CONFIG_EARLYSUSPEND
 static void mxc_epdc_early_suspend(struct early_suspend *h)
 {
-	if (!epdc_fb_data)
-		return;
-
-	if (h->pm_mode == EARLY_SUSPEND_MODE_NORMAL) {
-		unsigned long flags;
-		int i;
-
-		epdc_powerup(epdc_fb_data);
-
-		/* Program EPDC update to process buffer */
-		epdc_working_buf_intr(true);
-		epdc_lut_complete_intr(0, true);
-		epdc_fb_data->in_init = true;
-
-		epdc_set_update_addr(epdc_fb_data->phys_start);
-		epdc_set_update_coord(0, 0);
-		epdc_set_update_dimensions(epdc_fb_data->info.var.xres,
-					epdc_fb_data->info.var.yres);
-		epdc_submit_update(0, epdc_fb_data->wv_modes.mode_du, UPDATE_MODE_FULL, true, 0x0);
-
-		for (i = 0; i < 40; i++) {
-			if (!epdc_is_lut_active(0)) {
-				dev_dbg(epdc_fb_data->dev, "Mode0 init complete\n");
-				break;
-			}
-			msleep(100);
-		}
-		epdc_powerdown(epdc_fb_data);
-	}
+	if (h->pm_mode == EARLY_SUSPEND_MODE_NORMAL)
+		mxc_epdc_earlysuspend_mode = 1;
+	else
+		mxc_epdc_earlysuspend_mode = 0;
 }
 
 static void mxc_epdc_late_resume(struct early_suspend *h)
@@ -3580,22 +3552,49 @@ static struct early_suspend mxc_epdc_earlysuspend = {
 #ifdef CONFIG_PM
 static int mxc_epdc_fb_suspend(struct platform_device *pdev, pm_message_t state)
 {
+
 	struct mxc_epdc_fb_data *data = platform_get_drvdata(pdev);
-	int ret;
 
-	ret = mxc_epdc_fb_blank(FB_BLANK_POWERDOWN, &data->info);
-	if (ret)
-		goto out;
+	mxc_epdc_fb_blank(FB_BLANK_POWERDOWN, &data->info);
 
-out:
-	return ret;
+	if (mxc_epdc_earlysuspend_mode) {
+
+		unsigned long flags;
+		int i;
+
+		epdc_powerup(data);
+
+		epdc_set_update_addr(data->phys_start);
+		epdc_set_update_coord(0, 0);
+		epdc_set_update_dimensions(data->info.var.xres,
+					data->info.var.yres);
+		epdc_submit_update(0, data->wv_modes.mode_du, UPDATE_MODE_FULL, true, 0x0);
+
+		for (i = 0; i < 40; i++) {
+			if (!epdc_is_lut_active(0)) {
+				dev_dbg(data->dev, "Mode0 init complete\n");
+				break;
+			}
+			msleep(100);
+		}
+		data->powering_down = true;
+		disable_irq(data->epdc_irq);
+		epdc_powerdown(data);
+	}
+
+	return 0;
 }
 
 static int mxc_epdc_fb_resume(struct platform_device *pdev)
 {
+
 	struct mxc_epdc_fb_data *data = platform_get_drvdata(pdev);
 
+	if (mxc_epdc_earlysuspend_mode)
+		enable_irq(data->epdc_irq);
+
 	mxc_epdc_fb_blank(FB_BLANK_UNBLANK, &data->info);
+
 	return 0;
 }
 #else
