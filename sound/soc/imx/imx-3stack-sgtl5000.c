@@ -310,7 +310,7 @@ static void headphone_detect_handler(struct work_struct *work)
 	/* setup a message for userspace headphone in */
 	buf = kmalloc(32, GFP_ATOMIC);
 	if (!buf)
-		return -ENOMEM;
+		return;
 	envp[0] = "NAME=headphone";
 	snprintf(buf, 32, "STATE=%d", hp_status);
 	envp[1] = buf;
@@ -587,7 +587,7 @@ static int __devinit imx_3stack_sgtl5000_probe(struct platform_device *pdev)
 {
 	struct mxc_audio_platform_data *plat = pdev->dev.platform_data;
 	struct imx_3stack_priv *priv = &card_priv;
-	struct snd_soc_dai *sgtl5000_cpu_dai;
+	struct snd_soc_dai *sgtl5000_cpu_dai = NULL;
 	struct sgtl5000_setup_data *setup;
 
 	int ret = 0;
