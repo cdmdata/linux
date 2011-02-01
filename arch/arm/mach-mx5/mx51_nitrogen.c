@@ -55,6 +55,9 @@
 #ifdef CONFIG_KEYBOARD_GPIO
 #include <linux/gpio_keys.h>
 #endif
+#ifdef CONFIG_MAGSTRIPE_MODULE
+#include <linux/magstripe.h>
+#endif
 
 #include "devices.h"
 #include "crm_regs.h"
@@ -918,6 +921,26 @@ static struct platform_device nitrogen_gpio_keys_device = {
 };
 #endif
 
+#ifdef CONFIG_MAGSTRIPE_MODULE
+
+static struct mag_platform_data nitrogen_mag_platform_data = {
+	.front_pin = CONFIG_MAG_FRONT,
+	.rear_pin = CONFIG_MAG_REAR,
+	.clock_pin = CONFIG_MAG_CLOCK,
+	.data_pin = CONFIG_MAG_DATA,
+	.edge = CONFIG_MAG_RISING_EDGE,
+	.timeout = CONFIG_MAG_TIMEOUT,
+};
+
+static struct platform_device magstripe_device = {
+	.name	= "magstripe",
+	.dev	= {
+		.platform_data = &nitrogen_mag_platform_data
+	},
+};
+#endif
+
+
 static struct mxc_camera_platform_data camera_data = {
 	.io_regulator = "SW4",
 	.analog_regulator = "VIOHI",
@@ -1617,6 +1640,11 @@ static void __init mxc_board_init(void)
 	gpio_free(NITROGEN_GP_4_31);
 	platform_device_register(&nitrogen_gpio_keys_device);
 #endif
+
+#ifdef CONFIG_MAGSTRIPE_MODULE
+	platform_device_register(&magstripe_device);
+#endif
+
 	dont_sleep_yet = 0 ;
 }
 
