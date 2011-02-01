@@ -906,7 +906,6 @@ static void mxcuart_dmaread_callback(void *arg, int error, unsigned int cnt)
 	}
 
 	tty_flip_buffer_push(tty);
-	umxc->port.state->port.tty->real_raw = 1;
 
       drop_data:
 	readchnl_request.src_addr = umxc->port.mapbase;
