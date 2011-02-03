@@ -672,7 +672,7 @@ static void ts_shutdown(struct pic16f616_ts* ts)
 /*-----------------------------------------------------------------------*/
 
 /* Return 0 if detection is successful, -ENODEV otherwise */
-static int ts_detect(struct i2c_client *client, int kind,
+static int ts_detect(struct i2c_client *client, 
 			  struct i2c_board_info *info)
 {
 	struct i2c_adapter *adapter = client->adapter;
