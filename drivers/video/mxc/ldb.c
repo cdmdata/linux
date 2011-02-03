@@ -41,10 +41,6 @@
 #include <linux/fsl_devices.h>
 #include <mach/hardware.h>
 
-#define FIXME_RATE 83500000
-//#define FIXME_RATE 38250000
-//#define FIXME_RATE 65000000
-
 #define LDB_BGREF_RMODE_MASK		0x00008000
 #define LDB_BGREF_RMODE_INT		0x00008000
 #define LDB_BGREF_RMODE_EXT		0x0
@@ -585,8 +581,6 @@ static int mxc_ldb_ioctl(struct inode *inode, struct file *file,
 		/* TODO:Set the correct pll4 rate for all situations */
 		pll4_clk = clk_get(NULL, "pll4");
 		pll4_rate = clk_get_rate(pll4_clk);
-		pll4_rate = FIXME_RATE * 7;
-		clk_set_rate(pll4_clk, pll4_rate);
 		clk_put(pll4_clk);
 
 		reg = __raw_readl(ldb.control_reg);
@@ -759,7 +753,7 @@ static int ldb_probe(struct platform_device *pdev)
 	struct ldb_platform_data *plat_data = pdev->dev.platform_data;
 	mm_segment_t old_fs;
 	struct clk *ldb_clk_parent;
-	unsigned long ldb_clk_prate = FIXME_RATE * 7;
+	unsigned long ldb_clk_prate = 0 ;
 	struct fb_var_screeninfo *var[2];
 	uint32_t reg;
 	struct device *temp;
@@ -802,6 +796,9 @@ static int ldb_probe(struct platform_device *pdev)
 					m.vsync_len, m.upper_margin, m.lower_margin,
 					m.sync, m.vmode);
 			ldb.fbi[i] = registered_fb[i];
+			if (0 == ldb_clk_prate) {
+				ldb_clk_prate = PICOS2KHZ(registered_fb[i]->var.pixclock)*1000*7 ;
+			}
 			fb_videomode_to_var(&ldb.fbi[i]->var, &m);
 			/*
 			 * Default ldb mode:
