@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.3
-# Tue Feb  8 14:23:12 2011
+# Tue Feb  8 14:26:10 2011
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -561,7 +561,28 @@ CONFIG_IP_NF_MANGLE=m
 # CONFIG_HAMRADIO is not set
 # CONFIG_CAN is not set
 # CONFIG_IRDA is not set
-# CONFIG_BT is not set
+CONFIG_BT=m
+CONFIG_BT_L2CAP=m
+# CONFIG_BT_L2CAP_EXT_FEATURES is not set
+CONFIG_BT_SCO=m
+CONFIG_BT_RFCOMM=m
+# CONFIG_BT_RFCOMM_TTY is not set
+CONFIG_BT_BNEP=m
+# CONFIG_BT_BNEP_MC_FILTER is not set
+# CONFIG_BT_BNEP_PROTO_FILTER is not set
+CONFIG_BT_HIDP=m
+
+#
+# Bluetooth device drivers
+#
+# CONFIG_BT_HCIBTUSB is not set
+CONFIG_BT_HCIBTSDIO=m
+# CONFIG_BT_HCIUART is not set
+# CONFIG_BT_HCIBCM203X is not set
+# CONFIG_BT_HCIBPA10X is not set
+# CONFIG_BT_HCIBFUSB is not set
+# CONFIG_BT_HCIVHCI is not set
+# CONFIG_BT_MRVL is not set
 # CONFIG_AF_RXRPC is not set
 CONFIG_WIRELESS=y
 CONFIG_WIRELESS_EXT=y
@@ -1470,6 +1491,7 @@ CONFIG_HID_LOGITECH=y
 # CONFIG_LOGITECH_FF is not set
 # CONFIG_LOGIRUMBLEPAD2_FF is not set
 # CONFIG_LOGIG940_FF is not set
+# CONFIG_HID_MAGICMOUSE is not set
 CONFIG_HID_MICROSOFT=y
 # CONFIG_HID_MOSART is not set
 CONFIG_HID_MONTEREY=y
@@ -1490,6 +1512,7 @@ CONFIG_HID_SUNPLUS=y
 # CONFIG_HID_SMARTJOYPLUS is not set
 # CONFIG_HID_TOPSEED is not set
 # CONFIG_HID_THRUSTMASTER is not set
+# CONFIG_HID_WACOM is not set
 # CONFIG_HID_ZEROPLUS is not set
 # CONFIG_HID_ZYDACRON is not set
 CONFIG_USB_SUPPORT=y
