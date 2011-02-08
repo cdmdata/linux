@@ -159,6 +159,16 @@ CROSS_COMPILE = /usr/src/telechip/SDK_0127_20101006/prebuilt/linux-x86/toolchain
 KSRC := /usr/src/telechip/SDK_0127_20101006/kernel
 endif
 
+ifeq ($(CONFIG_PLATFORM_ARM_PXA), y)
+EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN
+ARCH ?= arm
+CROSS_COMPILE ?= arm-v5t-linux-gnueabi-
+KVER  := 2.6.30-wl-00108-gaf3e8a3
+KSRC := $(HOME)/linux-hydrogen
+MODDESTDIR := /lib/modules/$(KVER)
+INSTALL_PREFIX :=
+endif
+
 ifneq ($(KERNELRELEASE),)
 
 
