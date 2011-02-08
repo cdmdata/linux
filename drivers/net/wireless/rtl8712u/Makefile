@@ -1,4 +1,4 @@
-EXTRA_CFLAGS += -O1 -Wno-unused-variable -Wno-unused-value -Wno-unused-label -Wno-unused-parameter -Wno-uninitialized
+EXTRA_CFLAGS += -DCONFIG_PLATFORM_ANDROID -O1 -Wno-unused-variable -Wno-unused-value -Wno-unused-label -Wno-unused-parameter -Wno-uninitialized
 EXTRA_CFLAGS += -I$(src)/include  -Wno-unused -Wno-unused-function
 
 CONFIG_RTL8711                  =       n
