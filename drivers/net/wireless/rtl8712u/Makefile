@@ -169,6 +169,16 @@ MODDESTDIR := /lib/modules/$(KVER)
 INSTALL_PREFIX :=
 endif
 
+ifeq ($(CONFIG_PLATFORM_ARM_IMX), y)
+EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN
+ARCH ?= arm
+CROSS_COMPILE ?= arm-none-linux-gnueabi-
+KVER  := 2.6.31-00872-g86397c9
+KSRC := $(HOME)/tmp/linux-bd
+MODDESTDIR := /lib/modules/$(KVER)
+INSTALL_PREFIX :=
+endif
+
 ifneq ($(KERNELRELEASE),)
 
 
