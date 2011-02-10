@@ -1676,7 +1676,7 @@ static struct sys_timer mxc_timer = {
  * initialize __mach_desc_MX51_BABBAGE data structure.
  */
 /* *INDENT-OFF* */
-MACHINE_START(NITROGEN_IMX51, "Boundary Devices Nitrogen Board")
+MACHINE_START(NITROGEN_IMX51, "Boundary Devices Nitrogen MX51 Board")
 	/* Maintainer: Boundary Devices */
 	.phys_io	= AIPS1_BASE_ADDR,
 	.io_pg_offst	= ((AIPS1_BASE_ADDR_VIRT) >> 18) & 0xfffc,

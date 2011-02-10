@@ -1878,7 +1878,7 @@ static struct sys_timer mxc_timer = {
  * The following uses standard kernel macros define in arch.h in order to
  * initialize __mach_desc_MX53_EVK data structure.
  */
-MACHINE_START(NITROGEN_IMX53, "Freescale MX53 EVK Board")
+MACHINE_START(NITROGEN_IMX53, "Boundary Devices Nitrogen MX53 Board")
 	/* Maintainer: Freescale Semiconductor, Inc. */
 	.fixup = fixup_mxc_board,
 	.map_io = mx5_map_io,
