@@ -94,11 +94,15 @@
  * CSPI1_RDY	GP4_26		GPIO				I2C(Pic) interrupt	N/C
  * EIM_D17	GP2_1		USB/Audio clock enable		N/C			I2C(Pic) interrupt
  */
-#define NITROGEN_P	0
-#define NITROGEN_E	1
-#define NITROGEN_VM	2
-
-#define NITROGEN_VARIANT NITROGEN_E
+#ifdef CONFIG_NITROGEN_P
+	#warning Nitrogen Portable selected
+#elif defined (CONFIG_NITROGEN_E)
+	#warning Nitrogen Ethernet selected
+#elif defined (CONFIG_NITROGEN_VM)
+	#warning Nitrogen vertical mount selected
+#else
+	#error Nitrogen variant not selected
+#endif
 
 #define NITROGEN_GP_1_3			(0*32 + 3)	/* GPIO_1_3 */
 #define NITROGEN_GP_1_4			(0*32 + 4)	/* GPIO_1_4 */
@@ -184,7 +188,7 @@ static struct pad_desc mx51nitrogen_pads[] = {
 	MX51_PAD_GPIO_1_6__GPIO_1_6,
 	MX51_PAD_GPIO_1_7__GPIO_1_7,
 	MX51_PAD_GPIO_1_8__GPIO_1_8,
-#if defined(CONFIG_TOUCHSCREEN_I2C) && (NITROGEN_VARIANT == NITROGEN_E)
+#if defined(CONFIG_TOUCHSCREEN_I2C) && (CONFIG_NITROGEN_E)
 	MX51_PAD_UART3_RXD__GPIO_1_22,
 #else
 	MX51_PAD_UART3_RXD__UART3_RXD,
@@ -830,7 +834,7 @@ static int handle_edid(int *pixclk)
 
 #ifdef CONFIG_KEYBOARD_GPIO
 static struct gpio_keys_button nitrogen_gpio_keys[] = {
-#if NITROGEN_VARIANT == NITROGEN_P
+#ifdef CONFIG_NITROGEN_P
 	{
 		.type	= EV_KEY,
 		.code	= KEY_HOME,
@@ -955,9 +959,9 @@ struct plat_i2c_touch_data {
 };
 
 static struct plat_i2c_touch_data i2c_touch_data = {
-#if NITROGEN_VARIANT == NITROGEN_VM
+#ifdef CONFIG_NITROGEN_VM
 	IOMUX_TO_IRQ_V3(GPIO_2_1), GPIO_2_1 /* EIM_D17 Nitrogen-VM */
-#else if NITROGEN_VARIANT == NITROGEN_E
+#else if defined (CONFIG_NITROGEN_E)
 #if 1
 	IOMUX_TO_IRQ_V3(GPIO_1_22), GPIO_1_22 /* temporary */
 #else
@@ -1464,7 +1468,7 @@ static void __init mx51_nitrogen_io_init(void)
 	gpio_direction_output(BABBAGE_26M_OSC_EN, 1);
 
 	gpio_request(BABBAGE_USB_CLK_EN_B, "usb-clk_en_b");
-#if NITROGEN_VARIANT == NITROGEN_P
+#ifdef CONFIG_NITROGEN_P
 	/* Drive USB_CLK_EN_B line low */
 	gpio_direction_output(BABBAGE_USB_CLK_EN_B, 1);
 #else

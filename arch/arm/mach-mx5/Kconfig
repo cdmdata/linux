@@ -49,6 +49,31 @@ config MACH_NITROGEN_IMX51
 	  Include support for Boundary Devices' MX51 Nitrogen platform
 	  This includes specific configurations for the board and its peripherals.
 
+choice
+	prompt "Nitrogen i.MX51 Variant"
+	default NITROGEN_E
+	depends on MACH_NITROGEN_IMX51
+
+config NITROGEN_E
+	bool "Nitrogen-E (Ethernet)"
+	help
+	  Nitrogen Ethernet version
+	  See http://boundarydevices.com/NitrogenE.php for a photo.
+
+config NITROGEN_VM
+	bool "Nitrogen-VM (Vertical mount)"
+	help
+	  Nitrogen Vertical mount. Typically used for player tracking.
+	  See http://boundarydevices.com/NitrogenVM.php for a photo.
+
+config NITROGEN_P
+	bool "Nitrogen-P (Portable)"
+	help
+	  Nitrogen Portable version.
+	  See http://boundarydevices.com/NitrogenP.php for a photo.
+
+endchoice
+
 config MACH_MX53_EVK
 	bool "Support MX53 EVK platform"
 	select ARCH_MX53
