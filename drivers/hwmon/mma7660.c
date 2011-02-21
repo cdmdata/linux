@@ -33,7 +33,7 @@
 #include <linux/input-polldev.h>
 #include <linux/gpio.h>
 
-#define TESTING
+//#define TESTING
 /*
  * Defines
  */
@@ -83,13 +83,17 @@ enum {
 	MMA7660_PD,	/* Tap Debounce Count */
 };
 
-enum {
-	MODE_STANDBY,
-	MODE_ACTIVE,
-	MODE_TEST = 4,
-};
+#define MODE_STANDBY 0x40
+#define MODE_ACTIVE 0x41
+#define MODE_TEST 0x44
 
-unsigned char init_array[] = {
+
+unsigned char cmd_off[] = {
+		MMA7660_MODE, MODE_STANDBY,
+		MMA7660_INTSU, 0x00,	/* Interrupt setup*/
+		0
+};
+unsigned char cmd_on[] = {
 		MMA7660_MODE, MODE_STANDBY,
 		MMA7660_SPCNT, 0xff,	/* Sleep Count */
 		MMA7660_INTSU, 0x10,	/* Interrupt setup*/
@@ -102,11 +106,9 @@ unsigned char init_array[] = {
 /*
  * Initialization function
  */
-static int mma7660_init_client(struct i2c_client *client)
+static int mma7660_send_cmds(struct i2c_client *client, unsigned char *p)
 {
 	int result;
-	unsigned char *p = init_array;
-
 	while (*p) {
 		result = i2c_smbus_write_byte_data(client, p[0], p[1]);
 		if (result) {
@@ -144,7 +146,7 @@ static void report_abs(struct mma7660_accel *mma)
 {
 	short x, y, z;
 
-	printk(KERN_ERR "%s\n", __func__);
+//	printk(KERN_ERR "%s\n", __func__);
 	if (mma7660_read_data(mma->client, &x, &y, &z) != 0)
 		return;
 
@@ -152,7 +154,7 @@ static void report_abs(struct mma7660_accel *mma)
 	input_report_abs(mma->idev, ABS_Y, y);
 	input_report_abs(mma->idev, ABS_Z, z);
 	input_sync(mma->idev);
-	printk(KERN_ERR "%s sync\n", __func__);
+//	printk(KERN_ERR "%s sync\n", __func__);
 }
 
 /*
@@ -180,7 +182,7 @@ static int mma_thread(void *_mma)
 	complete(&mma->init_exit);
 
 	mma->interruptCnt=0;
-	mma7660_init_client(mma->client);
+	mma7660_send_cmds(mma->client, cmd_on);
 
 	do {
 #ifdef TESTING
@@ -198,6 +200,7 @@ static int mma_thread(void *_mma)
 			break;
 	} while (1);
 
+	mma7660_send_cmds(mma->client, cmd_off);
 	mma->rtask = NULL;
 //	printk(KERN_ERR "%s: ts_thread exiting\n",client_name);
 	complete_and_exit(&mma->init_exit, 0);
@@ -211,7 +214,7 @@ static irqreturn_t mma_interrupt(int irq, void *id)
 {
 	struct mma7660_accel *mma = id;
 	int bit;
-	printk(KERN_ERR "%s\n", __func__);
+//	printk(KERN_ERR "%s\n", __func__);
 	{
 		unsigned gp = mma->gp;
 #if 1
@@ -313,7 +316,7 @@ static int __devinit mma_init(struct mma7660_accel *mma, struct i2c_client *clie
 	struct input_dev *idev;
 	int result;
 	/* Initialize the MMA7660 chip */
-	result = mma7660_init_client(client);
+	result = mma7660_send_cmds(client, cmd_off);
 	if (result) {
 		dev_err(&client->dev, "init failed\n");
 		return result;
@@ -364,8 +367,15 @@ static void mma_deinit(struct mma7660_accel *mma)
 static ssize_t mma7660_reg_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
+	u8 tmp[16];
 	struct mma7660_accel *mma = dev_get_drvdata(dev);
-	return sprintf(buf, "%d\n", mma->irq);
+
+	if (i2c_smbus_read_i2c_block_data(mma->client, 0, 11, tmp) < 11) {
+			dev_err(dev, "i2c block read failed\n");
+			return -EIO;
+	}
+	return sprintf(buf, "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n", tmp[0], tmp[1], tmp[2], tmp[3], tmp[4],
+			tmp[5], tmp[6], tmp[7], tmp[8], tmp[9], tmp[10]);
 }
 
 static DEVICE_ATTR(mma7660_reg, 0444, mma7660_reg_show, NULL);
