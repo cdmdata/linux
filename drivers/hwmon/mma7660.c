@@ -44,7 +44,7 @@
 	}
 
 #define DRV_NAME	"mma7660"
-const char *client_name = DRV_NAME;
+static const char *client_name = DRV_NAME;
 
 #define INPUT_FUZZ	2
 #define INPUT_FLAT	2
@@ -88,12 +88,12 @@ enum {
 #define MODE_TEST 0x44
 
 
-unsigned char cmd_off[] = {
+static unsigned char cmd_off[] = {
 		MMA7660_MODE, MODE_STANDBY,
 		MMA7660_INTSU, 0x00,	/* Interrupt setup*/
 		0
 };
-unsigned char cmd_on[] = {
+static unsigned char cmd_on[] = {
 		MMA7660_MODE, MODE_STANDBY,
 		MMA7660_SPCNT, 0xff,	/* Sleep Count */
 		MMA7660_INTSU, 0x10,	/* Interrupt setup*/
@@ -281,7 +281,7 @@ static int mma_startup(struct mma7660_accel* mma)
 }
 
 /*
- * Release touchscreen resources.  Disable IRQs.
+ * Release accelerometer resources.  Disable IRQs.
  */
 static void mma_shutdown(struct mma7660_accel *mma)
 {
@@ -420,7 +420,7 @@ static int __devinit mma7660_probe(struct i2c_client *client,
 	mma->client = client;
 	mma->irq = plat->irq;
 	mma->gp = plat->gp;
-	printk(KERN_INFO "%s: touchscreen irq=%i gp=%i\n", __func__, mma->irq, mma->gp);
+	printk(KERN_INFO "%s: mma7660 irq=%i gp=%i\n", __func__, mma->irq, mma->gp);
 
 	i2c_set_clientdata(client, mma);
 	result = mma_init(mma, client);
