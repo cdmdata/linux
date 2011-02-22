@@ -878,12 +878,12 @@ static struct mxc_lcd_platform_data sii9022_hdmi_data = {
 	.reset = sii9022_hdmi_reset,
 };
 
-struct plat_i2c_touch_data {
+struct plat_i2c_generic_data {
 	unsigned irq;
 	unsigned gp;
 };
 
-static struct plat_i2c_touch_data i2c_touch_data = {
+static struct plat_i2c_generic_data i2c_generic_data = {
 	IOMUX_TO_IRQ_V3(MAKE_GP(7,12)), MAKE_GP(7,12)
 };
 
@@ -1025,7 +1025,12 @@ static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
 	{
 	 .type = "Pic16F616-ts",
 	 .addr = 0x22,
-	 .platform_data  = &i2c_touch_data,
+	 .platform_data  = &i2c_generic_data,
+	},
+	{
+	 .type = "mma7660",
+	 .addr = 0x4c,
+	 .platform_data  = &i2c_generic_data,
 	},
 #if defined(CONFIG_PMIC_DA905X_MODULE) || defined(CONFIG_PMIC_DA905X)
 	{
@@ -1775,6 +1780,9 @@ extern void mx53_gpio_host1_driver_vbus(bool on);
  */
 static void __init mxc_board_init(void)
 {
+	gpio_request(i2c_generic_data.gp, "I2C connector int");
+	gpio_direction_input(i2c_generic_data.gp);
+
 	mxc_ipu_data.di_clk[0] = clk_get(NULL, "ipu_di0_clk");
 	mxc_ipu_data.di_clk[1] = clk_get(NULL, "ipu_di1_clk");
 	mxc_ipu_data.csi_clk[0] = clk_get(NULL, "ssi_ext1_clk");

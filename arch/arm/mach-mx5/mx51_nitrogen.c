@@ -188,7 +188,7 @@ static struct pad_desc mx51nitrogen_pads[] = {
 	MX51_PAD_GPIO_1_6__GPIO_1_6,
 	MX51_PAD_GPIO_1_7__GPIO_1_7,
 	MX51_PAD_GPIO_1_8__GPIO_1_8,
-#if defined(CONFIG_TOUCHSCREEN_I2C) && (CONFIG_NITROGEN_E)
+#if (defined(CONFIG_TOUCHSCREEN_I2C) || defined(CONFIG_MMA7660)) && (NITROGEN_VARIANT == NITROGEN_E)
 	MX51_PAD_UART3_RXD__GPIO_1_22,
 #else
 	MX51_PAD_UART3_RXD__UART3_RXD,
@@ -952,13 +952,12 @@ static struct mxc_camera_platform_data camera_data = {
 	.csi = 0,
 };
 
-#ifdef CONFIG_TOUCHSCREEN_I2C
-struct plat_i2c_touch_data {
+struct struct plat_i2c_generic_data {
 	unsigned irq;
 	unsigned gp;
 };
 
-static struct plat_i2c_touch_data i2c_touch_data = {
+static struct plat_i2c_generic_data i2c_generic_data = {
 #ifdef CONFIG_NITROGEN_VM
 	IOMUX_TO_IRQ_V3(GPIO_2_1), GPIO_2_1 /* EIM_D17 Nitrogen-VM */
 #else if defined (CONFIG_NITROGEN_E)
@@ -969,7 +968,7 @@ static struct plat_i2c_touch_data i2c_touch_data = {
 #endif
 #endif
 };
-#endif
+
 
 static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
 #if defined(CONFIG_MXC_CAMERA_OV3640)
@@ -989,7 +988,7 @@ static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
 	{
 	 .type = "Pic16F616-ts",
 	 .addr = 0x22,
-	 .platform_data  = &i2c_touch_data,
+	 .platform_data  = &i2c_generic_data,
 	},
 #endif
 };
@@ -1008,9 +1007,14 @@ static struct i2c_board_info mxc_i2c_hs_board_info[] __initdata = {
 	{
 	 .type = "Pic16F616-ts",
 	 .addr = 0x22,
-	 .platform_data  = &i2c_touch_data,
+	 .platform_data  = &i2c_generic_data,
 	},
 #endif
+	{
+	 .type = "mma7660",
+	 .addr = 0x4c,
+	 .platform_data  = &i2c_generic_data,
+	}
 };
 
 static struct mtd_partition mxc_spi_nor_partitions[] = {
@@ -1533,19 +1537,18 @@ static void __init mx51_nitrogen_io_init(void)
 	}
 }
 
-#ifdef CONFIG_TOUCHSCREEN_I2C
-static void pic_ts_gpio_init(void)
+static void I2C_gpio_init(void)
 {
-	gpio_request(i2c_touch_data.gp, "Pic16F616 touchscreen int");
-	gpio_direction_input(i2c_touch_data.gp);
+	gpio_request(i2c_generic_data.gp, "I2C connector int");
+	gpio_direction_input(i2c_generic_data.gp);
 }
-#endif
 
 /*!
  * Board specific initialization.
  */
 static void __init mxc_board_init(void)
 {
+	I2C_gpio_init();
 	mxc_ipu_data.di_clk[0] = clk_get(NULL, "ipu_di0_clk");
 	mxc_ipu_data.di_clk[1] = clk_get(NULL, "ipu_di1_clk");
 	mxc_ipu_data.csi_clk[0] = clk_get(NULL, "csi_mclk1");
@@ -1631,9 +1634,6 @@ static void __init mxc_board_init(void)
 	mx5_usb_dr_init();
 	mx5_usbh1_init();
 
-#ifdef CONFIG_TOUCHSCREEN_I2C
-	pic_ts_gpio_init();
-#endif
 
 #ifdef CONFIG_KEYBOARD_GPIO
 	gpio_request(NITROGEN_GP_4_30, "gp_4_30");
