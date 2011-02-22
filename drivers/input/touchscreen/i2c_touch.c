@@ -99,6 +99,10 @@ struct pic16f616_ts {
 };
 const char *client_name = "Pic16F616-ts";
 
+#define NUM_SAMPLES_DEFAULT 64
+static unsigned char num_samples = NUM_SAMPLES_DEFAULT;
+module_param(num_samples, byte, S_IRUGO | S_IWUSR);
+
 #define PULLUP_DELAY_DEFAULT 80
 static unsigned char pullup_delay = PULLUP_DELAY_DEFAULT;
 module_param(pullup_delay, byte, S_IRUGO | S_IWUSR);
@@ -119,7 +123,12 @@ module_param(sample_delay, byte, S_IRUGO | S_IWUSR);
 #define SUM_Y		0x2b
 #define SAMPLE_CNT 	0x30
 #define X_IGND		0x31
-#define PULLUP_DELAY 0x39
+#define DRIVE_DELAY	0x37
+#define SAMPLE_DELAY	0x38
+#define PULLUP_DELAY	0x39
+
+#define SAMPLE_MASK	0x3fffff
+#define SAMPLE_SIZE	1024
 
 struct pic16f616_ts* gts;
 
@@ -470,8 +479,8 @@ static inline int ts_register(struct pic16f616_ts *ts)
 	__set_bit(ABS_Y, idev->absbit);
 	__set_bit(ABS_PRESSURE, idev->absbit);
 
-	input_set_abs_params(idev, ABS_X, 0, 0x3fffff, 0, 0);
-	input_set_abs_params(idev, ABS_Y, 0, 0x3fffff, 0, 0);
+	input_set_abs_params(idev, ABS_X, 0, num_samples*SAMPLE_SIZE-1, 0, 0);
+	input_set_abs_params(idev, ABS_Y, 0, num_samples*SAMPLE_SIZE-1, 0, 0);
 	input_set_abs_params(idev, ABS_PRESSURE, 0, 1, 0, 0);
 
 	__set_bit(EV_KEY, idev->evbit);
@@ -535,15 +544,19 @@ static int ts_thread(void *_ts)
 	i2c_master_send(ts->client,buf,1);
 #endif
 
-        buf[0] = 0x39 ;
+        buf[0] = PULLUP_DELAY ;
         buf[1] = pullup_delay ;		// units of time (loop counter) 0 min, 0xff max
         i2c_master_send(ts->client,buf,2);
 
-        buf[0] = 0x38 ;
+        buf[0] = SAMPLE_CNT ;
+        buf[1] = num_samples ;		// over-sampling count
+        i2c_master_send(ts->client,buf,2);
+
+        buf[0] = SAMPLE_DELAY ;
         buf[1] = sample_delay ;
         i2c_master_send(ts->client,buf,2);
 
-        buf[0] = 0x37 ;
+        buf[0] = DRIVE_DELAY ;
         buf[1] = drive_delay ;
         i2c_master_send(ts->client,buf,2);
 
@@ -579,7 +592,7 @@ static int ts_thread(void *_ts)
 				ts_event_release(ts);
 			} else {
 				/* touch is active */
-				ts_evt_add(ts, pressure, i, j & 0x3fffff);
+				ts_evt_add(ts, pressure, i, j & SAMPLE_MASK);
 			}
 		} else {
 			printk(KERN_WARNING "%s: sample not valid i=%06x j=%06x interruptCnt=%i\n",client_name,i,j,ts->interruptCnt);
