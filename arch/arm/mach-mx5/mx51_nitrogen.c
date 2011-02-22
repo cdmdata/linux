@@ -960,7 +960,7 @@ struct struct plat_i2c_generic_data {
 static struct plat_i2c_generic_data i2c_generic_data = {
 #ifdef CONFIG_NITROGEN_VM
 	IOMUX_TO_IRQ_V3(GPIO_2_1), GPIO_2_1 /* EIM_D17 Nitrogen-VM */
-#else if defined (CONFIG_NITROGEN_E)
+#elif defined (CONFIG_NITROGEN_E)
 #if 1
 	IOMUX_TO_IRQ_V3(GPIO_1_22), GPIO_1_22 /* temporary */
 #else
