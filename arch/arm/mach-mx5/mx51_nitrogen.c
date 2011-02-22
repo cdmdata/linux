@@ -63,6 +63,8 @@
 #include "crm_regs.h"
 #include "usb.h"
 
+#define MAKE_GP(port, bit) ((port - 1) * 32 + bit)
+
 #ifdef CONFIG_FEC
 	/* Nitrogen-E, audio codec is on 1st i2c bus */
 	#define SGTL5000_I2C0
@@ -959,16 +961,23 @@ struct struct plat_i2c_generic_data {
 
 static struct plat_i2c_generic_data i2c_generic_data = {
 #ifdef CONFIG_NITROGEN_VM
-	IOMUX_TO_IRQ_V3(GPIO_2_1), GPIO_2_1 /* EIM_D17 Nitrogen-VM */
+	.irq = IOMUX_TO_IRQ_V3(GPIO_2_1), .gp = GPIO_2_1 /* EIM_D17 Nitrogen-VM */
 #elif defined (CONFIG_NITROGEN_E)
 #if 1
-	IOMUX_TO_IRQ_V3(GPIO_1_22), GPIO_1_22 /* temporary */
+	.irq = IOMUX_TO_IRQ_V3(GPIO_1_22), .gp = GPIO_1_22 /* temporary */
 #else
-	IOMUX_TO_IRQ_V3(GPIO_4_26), GPIO_4_26 /* CSPI1_RDY Nitrogen-E */
+	.irq = IOMUX_TO_IRQ_V3(GPIO_4_26), .gp = GPIO_4_26 /* CSPI1_RDY Nitrogen-E */
 #endif
 #endif
 };
 
+struct plat_i2c_tfp410_data {
+	unsigned gp;
+};
+
+static struct plat_i2c_tfp410_data i2c_tfp410_data = {
+	.gp = MAKE_GP(3, 5)
+};
 
 static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
 #if defined(CONFIG_MXC_CAMERA_OV3640)
@@ -1014,6 +1023,11 @@ static struct i2c_board_info mxc_i2c_hs_board_info[] __initdata = {
 	 .type = "mma7660",
 	 .addr = 0x4c,
 	 .platform_data  = &i2c_generic_data,
+	},
+	{
+	 .type = "tfp410",
+	 .addr = 0x38,
+	 .platform_data  = &i2c_tfp410_data,
 	}
 };
 
