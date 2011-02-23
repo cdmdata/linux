@@ -100,59 +100,96 @@
 	#warning Nitrogen Portable selected
 #elif defined (CONFIG_NITROGEN_E)
 	#warning Nitrogen Ethernet selected
+//#define I2C_INT_JUMPER_GP1_22
 #elif defined (CONFIG_NITROGEN_VM)
 	#warning Nitrogen vertical mount selected
 #else
 	#error Nitrogen variant not selected
 #endif
 
-#define NITROGEN_GP_1_3			(0*32 + 3)	/* GPIO_1_3 */
-#define NITROGEN_GP_1_4			(0*32 + 4)	/* GPIO_1_4 */
-#define NITROGEN_GP_1_6			(0*32 + 6)	/* GPIO_1_6 */
-#define NITROGEN_GP_1_22		(0*32 + 22)	/* GPIO_1_22 */
 
-#define BABBAGE_SD1_CD			(0*32 + 0)	/* GPIO_1_0 */
-#define BABBAGE_SD1_WP		(0*32 + 1)	/* GPIO_1_1 */
-#define BABBAGE_SD2_CD_2_0		(0*32 + 4)	/* GPIO_1_4 */
-#define BABBAGE_SD2_WP		(0*32 + 5)	/* GPIO_1_5 */
-#define BABBAGE_SD2_CD_2_5		(0*32 + 6)	/* GPIO_1_6 */
-#define BABBAGE_USBH1_HUB_RST		(0*32 + 7)	/* GPIO_1_7 */
+#define BABBAGE_SD1_CD			MAKE_GP(1, 0)	/* GPIO_1_0 */
+#define BABBAGE_SD1_WP			MAKE_GP(1, 1)	/* GPIO_1_1 */
+#define BABBAGE_SD2_CD_2_0		MAKE_GP(1, 4)	/* GPIO_1_4 */
+#define BABBAGE_SD2_WP			MAKE_GP(1, 5)	/* GPIO_1_5 */
+#define BABBAGE_SD2_CD_2_5		MAKE_GP(1, 6)	/* GPIO_1_6 */
+#define BABBAGE_USBH1_HUB_RST		MAKE_GP(1, 7)	/* GPIO_1_7 */
 
-#define GPIO_1_22			(0*32 + 22)	/* GPIO_1_22 */
 
-#define BABBAGE_USB_CLK_EN_B		(1*32 + 1)	/* GPIO_2_1 */
-#define GPIO_2_1			(1*32 + 1)	/* GPIO_2_1 */
-#define BABBAGE_FM_PWR		(1*32 + 12)	/* GPIO_2_12 */
-#define BABBAGE_VGA_RESET		(1*32 + 13)	/* GPIO_2_13 */
-#define BABBAGE_FEC_PHY_RESET		(1*32 + 14)	/* GPIO_2_14 */
-#define BABBAGE_FM_RESET		(1*32 + 15)	/* GPIO_2_15 */
-#define BABBAGE_AUDAMP_STBY		(1*32 + 17)	/* GPIO_2_17 */
-#define BABBAGE_POWER_KEY		(1*32 + 21)	/* GPIO_2_21 */
+#define BABBAGE_USB_CLK_EN_B		MAKE_GP(2, 1)	/* GPIO_2_1 */
+#define BABBAGE_FM_PWR			MAKE_GP(2, 12)	/* GPIO_2_12 */
+#define BABBAGE_VGA_RESET		MAKE_GP(2, 13)	/* GPIO_2_13 */
+#define BABBAGE_FEC_PHY_RESET		MAKE_GP(2, 14)	/* GPIO_2_14 */
+#define BABBAGE_FM_RESET		MAKE_GP(2, 15)	/* GPIO_2_15 */
+#define BABBAGE_AUDAMP_STBY		MAKE_GP(2, 17)	/* GPIO_2_17 */
+#define BABBAGE_POWER_KEY		MAKE_GP(2, 21)	/* GPIO_2_21 */
 
-#define BABBAGE_26M_OSC_EN		(2*32 + 1)	/* GPIO_3_1 */
-#define BABBAGE_LVDS_POWER_DOWN	(2*32 + 3)	/* GPIO_3_3 */
-#define BABBAGE_DISP_BRIGHTNESS_CTL	(2*32 + 4)	/* GPIO_3_4 */
-#define BABBAGE_DVI_RESET		(2*32 + 5)	/* GPIO_3_5 */
-#define BABBAGE_DVI_POWER		(2*32 + 6)	/* GPIO_3_6 */
-#define BABBAGE_HEADPHONE_DET	(2*32 + 26)	/* GPIO_3_26 */
-#define BABBAGE_DVI_DET		(2*32 + 28)	/* GPIO_3_28 */
+#define BABBAGE_26M_OSC_EN		MAKE_GP(3, 1)	/* GPIO_3_1 */
+#define BABBAGE_LVDS_POWER_DOWN		MAKE_GP(3, 3)	/* GPIO_3_3 */
+#define BABBAGE_DISP_BRIGHTNESS_CTL	MAKE_GP(3, 4)	/* GPIO_3_4 */
+#define BABBAGE_DVI_RESET		MAKE_GP(3, 5)	/* GPIO_3_5 */
+#define BABBAGE_DVI_POWER		MAKE_GP(3, 6)	/* GPIO_3_6 */
+#define BABBAGE_HEADPHONE_DET		MAKE_GP(3, 26)	/* GPIO_3_26 */
+#define BABBAGE_DVI_DET			MAKE_GP(3, 28)	/* GPIO_3_28 */
 
-#define BABBAGE_LCD_3V3_ON		(3*32 + 9)	/* GPIO_4_9 */
-#define BABBAGE_LCD_5V_ON		(3*32 + 10)	/* GPIO_4_10 */
-#define GPIO_4_16 			(3*32 + 16)	/* GPIO_4_16 */
-#define GPIO_4_17 			(3*32 + 17)	/* GPIO_4_17 */
-#define BABBAGE_CSP1_SS0_GPIO		(3*32 + 24)	/* GPIO_4_24 */
-#define BABBAGE_AUDIO_CLK_EN		(3*32 + 26)	/* GPIO_4_26 */
-#define GPIO_4_26 			(3*32 + 26)	/* GPIO_4_26 */
-#define NITROGEN_GP_4_30		(3*32 + 30)	/* GPIO_4_30 */
-#define NITROGEN_GP_4_31		(3*32 + 31)	/* GPIO_4_31 */
+#define BABBAGE_LCD_3V3_ON		MAKE_GP(4, 9)	/* GPIO_4_9 */
+#define BABBAGE_LCD_5V_ON		MAKE_GP(4, 10)	/* GPIO_4_10 */
+#define BABBAGE_CSP1_SS0_GPIO		MAKE_GP(4, 24)	/* GPIO_4_24 */
+#define BABBAGE_AUDIO_CLK_EN		MAKE_GP(4, 26)	/* GPIO_4_26 */
+
+struct input_gp {
+	const char *name;
+	int gp;
+};
+
+struct output_gp {
+	const char *name;
+	int gp;
+	int val;
+};
+
+struct input_gp input_gps[] __initdata = {
+	{.name="I2C connector int",	.gp = MAKE_GP(4, 26)},	/* overriden by i2c_generic_data.gp */
+	{.name="tfp410int",	.gp = MAKE_GP(3, 28)},		/* overriden by i2c_tfp410_data.gp */
+	{.name="pmic-int",	.gp = MAKE_GP(1, 8)},
+	{.name="sdhc1-detect",	.gp = BABBAGE_SD1_CD},		/* MAKE_GP(1, 0) */
+	{.name="sdhc1-wp",	.gp = BABBAGE_SD1_WP},		/* MAKE_GP(1, 1) */
+	{.name="sdhc2-detect",	.gp = BABBAGE_SD2_CD_2_5},	/* MAKE_GP(1, 6) */
+	{.name="sdhc2-wp",	.gp = BABBAGE_SD2_WP},		/* MAKE_GP(1, 5) */
+	{.name="hphone-det",	.gp = BABBAGE_HEADPHONE_DET},	/* MAKE_GP(3, 26) */
+	{.name="power-key",	.gp = BABBAGE_POWER_KEY},	/* MAKE_GP(2, 21) */
+	{.name= NULL}
+};
+
+struct output_gp output_gps[] __initdata = {
+	{.name="gp_1_5",	.gp = MAKE_GP(1, 5),		.val = 1},
+	{.name="gp_1_6",	.gp = MAKE_GP(1, 6),		.val = 1},
+	{.name="hub-rst",	.gp = BABBAGE_USBH1_HUB_RST,	.val = 0},	/* MAKE_GP(1, 7) */
+	{.name="fec-phy-reset", .gp = BABBAGE_FEC_PHY_RESET,	.val = 0},	/* MAKE_GP(2, 14) */
+	{.name="fm-reset",	.gp = BABBAGE_FM_RESET,		.val = 0},	/* MAKE_GP(2, 15) */
+	{.name="26m-osc-en",	.gp = BABBAGE_26M_OSC_EN,	.val = 1},	/* MAKE_GP(3, 1) */
+#ifdef CONFIG_NITROGEN_P
+	{.name="usb-clk_en_b",	.gp = MAKE_GP(2, 1),		.val = 1},
+	{.name="audio-clk-en",	.gp = MAKE_GP(4, 26),		.val = 0},
+#endif
+	{.name="usb-phy-reset",	.gp = MAKE_GP(2, 5),		.val = 1},
+	{.name="disp-brightness-ctl", .gp = BABBAGE_DISP_BRIGHTNESS_CTL, .val = 0},	/* MAKE_GP(3, 4) */
+	{.name="lvds-power-down", .gp = BABBAGE_LVDS_POWER_DOWN, .val = 0},	/* MAKE_GP(3, 3) */
+	{.name="lcd-3v3-on",	.gp = BABBAGE_LCD_3V3_ON,	.val = 0},	/* MAKE_GP(4, 9) */
+	{.name="lcd-5v-on",	.gp = BABBAGE_LCD_5V_ON,	.val = 0},	/* MAKE_GP(4, 10) */
+	{.name="cam-reset",	.gp = MAKE_GP(2, 7),		.val = 1},
+	{.name="cam-low-power",	.gp = MAKE_GP(4, 12),		.val = 0},
+	{.name="osc-en",	.gp = MAKE_GP(2, 2),		.val = 1},
+	{.name= NULL}
+};
+
 
 extern int __init mx51_nitrogen_init_mc13892(void);
 extern struct cpu_wp *(*get_cpu_wp)(int *wp);
 extern void (*set_num_cpu_wp)(int num);
 static int num_cpu_wp = 3;
 
-static struct pad_desc mx51nitrogen_pads[] = {
+static struct pad_desc mx51nitrogen_pads[] __initdata = {
 	/* UART1 */
 	MX51_PAD_UART1_RXD__UART1_RXD,
 	MX51_PAD_UART1_TXD__UART1_TXD,
@@ -183,7 +220,7 @@ static struct pad_desc mx51nitrogen_pads[] = {
 	MX51_PAD_GPIO_1_6__GPIO_1_6,
 	MX51_PAD_GPIO_1_7__GPIO_1_7,
 	MX51_PAD_GPIO_1_8__GPIO_1_8,
-#if (defined(CONFIG_TOUCHSCREEN_I2C) || defined(CONFIG_MMA7660)) && defined(CONFIG_NITROGEN_E)
+#ifdef I2C_INT_JUMPER_GP1_22
 	MX51_PAD_UART3_RXD__GPIO_1_22,
 #else
 	MX51_PAD_UART3_RXD__UART3_RXD,
@@ -542,8 +579,8 @@ static struct pad_desc hs_i2c_dat_pad_dat = MX51_PAD_I2C1_DAT__HSI2C_DAT ;
 static void hs_i2c_clock_toggle(void)
 {
 	unsigned i;
-	unsigned gp_clk = GPIO_4_16;
-	unsigned gp_dat = GPIO_4_17;
+	unsigned gp_clk = MAKE_GP(4, 16);
+	unsigned gp_dat = MAKE_GP(4, 17);
 	printk(KERN_INFO "%s\n", __FUNCTION__);
 	gpio_request(gp_clk, "hs_i2c_clk");
 	gpio_direction_input(gp_clk);
@@ -833,7 +870,7 @@ static struct gpio_keys_button nitrogen_gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.code	= KEY_HOME,
-		.gpio	= NITROGEN_GP_4_31,
+		.gpio	= MAKE_GP(4, 31),
 		.desc	= "Home Button",
 		.wakeup	= 1,
 		.active_low = 1,
@@ -842,7 +879,7 @@ static struct gpio_keys_button nitrogen_gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.code	= KEY_BACK,
-		.gpio	= NITROGEN_GP_1_4,
+		.gpio	= MAKE_GP(1, 4),
 		.desc	= "Back Button",
 		.wakeup	= 1,
 		.active_low = 1,
@@ -851,7 +888,7 @@ static struct gpio_keys_button nitrogen_gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.code	= KEY_MENU,
-		.gpio	= NITROGEN_GP_4_30,
+		.gpio	= MAKE_GP(4, 30),
 		.desc	= "Menu Button",
 		.wakeup	= 1,
 		.active_low = 1,
@@ -860,7 +897,7 @@ static struct gpio_keys_button nitrogen_gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.code	= KEY_SEARCH,
-		.gpio	= NITROGEN_GP_1_3,
+		.gpio	= MAKE_GP(1, 3),
 		.desc	= "Search Button",
 		.wakeup	= 1,
 		.active_low = 1,
@@ -870,7 +907,7 @@ static struct gpio_keys_button nitrogen_gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.code	= KEY_HOME,
-		.gpio	= NITROGEN_GP_1_3,
+		.gpio	= MAKE_GP(1, 3),
 		.desc	= "Home Button",
 		.wakeup	= 1,
 		.active_low = 1,
@@ -879,7 +916,7 @@ static struct gpio_keys_button nitrogen_gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.code	= KEY_BACK,
-		.gpio	= NITROGEN_GP_1_4,
+		.gpio	= MAKE_GP(1, 4),
 		.desc	= "Back Button",
 		.wakeup	= 1,
 		.active_low = 1,
@@ -888,7 +925,7 @@ static struct gpio_keys_button nitrogen_gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.code	= KEY_MENU,
-		.gpio	= NITROGEN_GP_4_30,
+		.gpio	= MAKE_GP(4, 30),
 		.desc	= "Menu Button",
 		.wakeup	= 1,
 		.active_low = 1,
@@ -897,7 +934,7 @@ static struct gpio_keys_button nitrogen_gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.code	= KEY_SEARCH,
-		.gpio	= NITROGEN_GP_4_31,
+		.gpio	= MAKE_GP(4, 31),
 		.desc	= "Search Button",
 		.wakeup	= 1,
 		.active_low = 1,
@@ -947,12 +984,12 @@ struct plat_i2c_generic_data {
 
 static struct plat_i2c_generic_data i2c_generic_data = {
 #ifdef CONFIG_NITROGEN_VM
-	.irq = IOMUX_TO_IRQ_V3(GPIO_2_1), .gp = GPIO_2_1 /* EIM_D17 Nitrogen-VM */
+	.irq = IOMUX_TO_IRQ_V3(MAKE_GP(2, 1)), .gp = MAKE_GP(2, 1) /* EIM_D17 Nitrogen-VM */
 #elif defined(CONFIG_NITROGEN_E)
-#if 1
-	.irq = IOMUX_TO_IRQ_V3(GPIO_1_22), .gp = GPIO_1_22 /* temporary */
+#ifdef I2C_INT_JUMPER_GP1_22
+	.irq = IOMUX_TO_IRQ_V3(MAKE_GP(1, 22)), .gp = MAKE_GP(1, 22) /* temporary */
 #else
-	.irq = IOMUX_TO_IRQ_V3(GPIO_4_26), .gp = GPIO_4_26 /* CSPI1_RDY Nitrogen-E */
+	.irq = IOMUX_TO_IRQ_V3(MAKE_GP(4, 26)), .gp = MAKE_GP(4, 26) /* CSPI1_RDY Nitrogen-E */
 #endif
 #endif
 };
@@ -1426,61 +1463,15 @@ static struct power_key_platform_data pwrkey_data = {
 	.get_key_status = mxc_pwrkey_getstatus,
 };
 
-struct input_gp {
-	const char *name;
-	int gp;
-};
-
-struct output_gp {
-	const char *name;
-	int gp;
-	int val;
-};
-
-struct input_gp input_gps[] __initdata = {
-	{.name="pmic-int",	.gp = MAKE_GP(1, 8)},
-	{.name="sdhc1-detect",	.gp = BABBAGE_SD1_CD},
-	{.name="sdhc1-wp",	.gp = BABBAGE_SD1_WP},
-	{.name="sdhc2-detect",	.gp = BABBAGE_SD2_CD_2_5},	/* SD2 CD for BB2.5 */
-	{.name="sdhc2-wp",	.gp = BABBAGE_SD2_WP},	/* SD2 CD for BB2.5 */
-	{.name="hphone-det",	.gp = BABBAGE_HEADPHONE_DET},
-	{.name="power-key",	.gp = BABBAGE_POWER_KEY},
-	{.name= NULL}
-};
-
-struct output_gp output_gps[] __initdata = {
-	{.name="gp_1_5",	.gp = MAKE_GP(1, 5),		.val = 1},
-	{.name="gp_1_6",	.gp = MAKE_GP(1, 6),		.val = 1},
-	{.name="hub-rst",	.gp = BABBAGE_USBH1_HUB_RST,	.val = 0},
-	{.name="fec-phy-reset", .gp = BABBAGE_FEC_PHY_RESET,	.val = 0},
-	{.name="fm-reset",	.gp = BABBAGE_FM_RESET,		.val = 0},
-	{.name="26m-osc-en",	.gp = BABBAGE_26M_OSC_EN,	.val = 1},
-#ifdef CONFIG_NITROGEN_P
-	{.name="usb-clk_en_b",	.gp = MAKE_GP(2, 1),		.val = 1},
-	{.name="audio-clk-en",	.gp = MAKE_GP(4, 26),		.val = 0},
-#endif
-	{.name="usb-phy-reset",	.gp = MAKE_GP(2, 5),		.val = 1},
-	{.name="disp-brightness-ctl", .gp = BABBAGE_DISP_BRIGHTNESS_CTL, .val = 0},	/* LCD related gpio */
-	{.name="lvds-power-down", .gp = BABBAGE_LVDS_POWER_DOWN, .val = 0},
-	{.name="lcd-3v3-on",	.gp = BABBAGE_LCD_3V3_ON,	.val = 0},
-	{.name="lcd-5v-on",	.gp = BABBAGE_LCD_5V_ON,	.val = 0},
-	{.name="cam-reset",	.gp = MAKE_GP(2, 7),		.val = 1},
-	{.name="cam-low-power",	.gp = MAKE_GP(4, 12),		.val = 0},
-	{.name="osc-en",	.gp = MAKE_GP(2, 2),		.val = 1},
-	{.name= NULL}
-};
-
 static void __init mx51_nitrogen_io_init(void)
 {
 	const struct input_gp *pi = input_gps;
 	const struct output_gp *po = output_gps;
 	mxc_iomux_v3_setup_multiple_pads(mx51nitrogen_pads,
 					ARRAY_SIZE(mx51nitrogen_pads));
-	gpio_request(i2c_generic_data.gp, "I2C connector int");
-	gpio_direction_input(i2c_generic_data.gp);
-	gpio_request(i2c_tfp410_data.gp, "tfp410int");
-	gpio_direction_input(i2c_tfp410_data.gp);
 
+	input_gps[0].gp = i2c_generic_data.gp;
+	input_gps[1].gp = i2c_tfp410_data.gp;
 	while (pi->name) {
 		gpio_request( pi->gp, pi->name);
 		gpio_direction_input(pi->gp);
@@ -1602,12 +1593,12 @@ static void __init mxc_board_init(void)
 
 
 #ifdef CONFIG_KEYBOARD_GPIO
-	gpio_request(NITROGEN_GP_4_30, "gp_4_30");
-	gpio_request(NITROGEN_GP_4_31, "gp_4_31");
-	gpio_direction_input(NITROGEN_GP_4_30);
-	gpio_direction_input(NITROGEN_GP_4_31);
-	gpio_free(NITROGEN_GP_4_30);
-	gpio_free(NITROGEN_GP_4_31);
+	gpio_request(MAKE_GP(4, 30), "gp_4_30");
+	gpio_request(MAKE_GP(4, 31), "gp_4_31");
+	gpio_direction_input(MAKE_GP(4, 30));
+	gpio_direction_input(MAKE_GP(4, 31));
+	gpio_free(MAKE_GP(4, 30));
+	gpio_free(MAKE_GP(4, 31));
 	platform_device_register(&nitrogen_gpio_keys_device);
 #endif
 
