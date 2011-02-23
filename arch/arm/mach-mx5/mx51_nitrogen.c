@@ -1501,9 +1501,13 @@ static void __init mx51_nitrogen_io_init(void)
 	gpio_request(BABBAGE_HEADPHONE_DET, "hphone-det");
 	gpio_direction_input(BABBAGE_HEADPHONE_DET);
 
-	/* audio_clk_en_b */
-	gpio_request(BABBAGE_AUDIO_CLK_EN, "audio-clk-en");
-	gpio_direction_output(BABBAGE_AUDIO_CLK_EN, 0);
+	if (BABBAGE_AUDIO_CLK_EN != i2c_generic_data.gp) {
+		/* audio_clk_en_b */
+		gpio_request(BABBAGE_AUDIO_CLK_EN, "audio-clk-en");
+		gpio_direction_output(BABBAGE_AUDIO_CLK_EN, 0);
+	}
+	gpio_request(i2c_generic_data.gp, "I2C connector int");
+	gpio_direction_input(i2c_generic_data.gp);
 
 	/* power key */
 	gpio_request(BABBAGE_POWER_KEY, "power-key");
@@ -1550,18 +1554,11 @@ static void __init mx51_nitrogen_io_init(void)
 	}
 }
 
-static void I2C_gpio_init(void)
-{
-	gpio_request(i2c_generic_data.gp, "I2C connector int");
-	gpio_direction_input(i2c_generic_data.gp);
-}
-
 /*!
  * Board specific initialization.
  */
 static void __init mxc_board_init(void)
 {
-	I2C_gpio_init();
 	mxc_ipu_data.di_clk[0] = clk_get(NULL, "ipu_di0_clk");
 	mxc_ipu_data.di_clk[1] = clk_get(NULL, "ipu_di1_clk");
 	mxc_ipu_data.csi_clk[0] = clk_get(NULL, "csi_mclk1");
