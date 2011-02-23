@@ -190,7 +190,7 @@ static struct pad_desc mx51nitrogen_pads[] = {
 	MX51_PAD_GPIO_1_6__GPIO_1_6,
 	MX51_PAD_GPIO_1_7__GPIO_1_7,
 	MX51_PAD_GPIO_1_8__GPIO_1_8,
-#if (defined(CONFIG_TOUCHSCREEN_I2C) || defined(CONFIG_MMA7660)) && (NITROGEN_VARIANT == NITROGEN_E)
+#if (defined(CONFIG_TOUCHSCREEN_I2C) || defined(CONFIG_MMA7660)) && defined(CONFIG_NITROGEN_E)
 	MX51_PAD_UART3_RXD__GPIO_1_22,
 #else
 	MX51_PAD_UART3_RXD__UART3_RXD,
@@ -947,14 +947,7 @@ static struct platform_device magstripe_device = {
 #endif
 
 
-static struct mxc_camera_platform_data camera_data = {
-	.io_regulator = "SW4",
-	.analog_regulator = "VIOHI",
-	.mclk = 24000000,
-	.csi = 0,
-};
-
-struct struct plat_i2c_generic_data {
+struct plat_i2c_generic_data {
 	unsigned irq;
 	unsigned gp;
 };
@@ -962,7 +955,7 @@ struct struct plat_i2c_generic_data {
 static struct plat_i2c_generic_data i2c_generic_data = {
 #ifdef CONFIG_NITROGEN_VM
 	.irq = IOMUX_TO_IRQ_V3(GPIO_2_1), .gp = GPIO_2_1 /* EIM_D17 Nitrogen-VM */
-#elif defined (CONFIG_NITROGEN_E)
+#elif defined(CONFIG_NITROGEN_E)
 #if 1
 	.irq = IOMUX_TO_IRQ_V3(GPIO_1_22), .gp = GPIO_1_22 /* temporary */
 #else
