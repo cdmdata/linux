@@ -108,7 +108,6 @@
 
 #define NITROGEN_GP_1_3			(0*32 + 3)	/* GPIO_1_3 */
 #define NITROGEN_GP_1_4			(0*32 + 4)	/* GPIO_1_4 */
-#define NITROGEN_GP_1_5			(0*32 + 5)	/* GPIO_1_5 */
 #define NITROGEN_GP_1_6			(0*32 + 6)	/* GPIO_1_6 */
 #define NITROGEN_GP_1_22		(0*32 + 22)	/* GPIO_1_22 */
 
@@ -118,15 +117,11 @@
 #define BABBAGE_SD2_WP		(0*32 + 5)	/* GPIO_1_5 */
 #define BABBAGE_SD2_CD_2_5		(0*32 + 6)	/* GPIO_1_6 */
 #define BABBAGE_USBH1_HUB_RST		(0*32 + 7)	/* GPIO_1_7 */
-#define BABBAGE_PMIC_INT		(0*32 + 8)	/* GPIO_1_8 */
 
 #define GPIO_1_22			(0*32 + 22)	/* GPIO_1_22 */
 
 #define BABBAGE_USB_CLK_EN_B		(1*32 + 1)	/* GPIO_2_1 */
 #define GPIO_2_1			(1*32 + 1)	/* GPIO_2_1 */
-#define BABBAGE_OSC_EN_B		(1*32 + 2)	/* GPIO_2_2 */
-#define BABBAGE_PHY_RESET		(1*32 + 5)	/* GPIO_2_5 */
-#define BABBAGE_CAM_RESET		(1*32 + 7)	/* GPIO_2_7 */
 #define BABBAGE_FM_PWR		(1*32 + 12)	/* GPIO_2_12 */
 #define BABBAGE_VGA_RESET		(1*32 + 13)	/* GPIO_2_13 */
 #define BABBAGE_FEC_PHY_RESET		(1*32 + 14)	/* GPIO_2_14 */
@@ -144,8 +139,6 @@
 
 #define BABBAGE_LCD_3V3_ON		(3*32 + 9)	/* GPIO_4_9 */
 #define BABBAGE_LCD_5V_ON		(3*32 + 10)	/* GPIO_4_10 */
-#define BABBAGE_CAM_LOW_POWER	(3*32 + 10)	/* GPIO_4_12 */
-#define BABBAGE_DVI_I2C_EN		(3*32 + 14)	/* GPIO_4_14 */
 #define GPIO_4_16 			(3*32 + 16)	/* GPIO_4_16 */
 #define GPIO_4_17 			(3*32 + 17)	/* GPIO_4_17 */
 #define BABBAGE_CSP1_SS0_GPIO		(3*32 + 24)	/* GPIO_4_24 */
@@ -1433,119 +1426,82 @@ static struct power_key_platform_data pwrkey_data = {
 	.get_key_status = mxc_pwrkey_getstatus,
 };
 
+struct input_gp {
+	const char *name;
+	int gp;
+};
+
+struct output_gp {
+	const char *name;
+	int gp;
+	int val;
+};
+
+struct input_gp input_gps[] __initdata = {
+	{.name="pmic-int",	.gp = MAKE_GP(1, 8)},
+	{.name="sdhc1-detect",	.gp = BABBAGE_SD1_CD},
+	{.name="sdhc1-wp",	.gp = BABBAGE_SD1_WP},
+	{.name="sdhc2-detect",	.gp = BABBAGE_SD2_CD_2_5},	/* SD2 CD for BB2.5 */
+	{.name="sdhc2-wp",	.gp = BABBAGE_SD2_WP},	/* SD2 CD for BB2.5 */
+	{.name="hphone-det",	.gp = BABBAGE_HEADPHONE_DET},
+	{.name="power-key",	.gp = BABBAGE_POWER_KEY},
+	{.name= NULL}
+};
+
+struct output_gp output_gps[] __initdata = {
+	{.name="gp_1_5",	.gp = MAKE_GP(1, 5),		.val = 1},
+	{.name="gp_1_6",	.gp = MAKE_GP(1, 6),		.val = 1},
+	{.name="hub-rst",	.gp = BABBAGE_USBH1_HUB_RST,	.val = 0},
+	{.name="fec-phy-reset", .gp = BABBAGE_FEC_PHY_RESET,	.val = 0},
+	{.name="fm-reset",	.gp = BABBAGE_FM_RESET,		.val = 0},
+	{.name="26m-osc-en",	.gp = BABBAGE_26M_OSC_EN,	.val = 1},
+#ifdef CONFIG_NITROGEN_P
+	{.name="usb-clk_en_b",	.gp = MAKE_GP(2, 1),		.val = 1},
+	{.name="audio-clk-en",	.gp = MAKE_GP(4, 26),		.val = 0},
+#endif
+	{.name="usb-phy-reset",	.gp = MAKE_GP(2, 5),		.val = 1},
+	{.name="disp-brightness-ctl", .gp = BABBAGE_DISP_BRIGHTNESS_CTL, .val = 0},	/* LCD related gpio */
+	{.name="lvds-power-down", .gp = BABBAGE_LVDS_POWER_DOWN, .val = 0},
+	{.name="lcd-3v3-on",	.gp = BABBAGE_LCD_3V3_ON,	.val = 0},
+	{.name="lcd-5v-on",	.gp = BABBAGE_LCD_5V_ON,	.val = 0},
+	{.name="cam-reset",	.gp = MAKE_GP(2, 7),		.val = 1},
+	{.name="cam-low-power",	.gp = MAKE_GP(4, 12),		.val = 0},
+	{.name="osc-en",	.gp = MAKE_GP(2, 2),		.val = 1},
+	{.name= NULL}
+};
+
 static void __init mx51_nitrogen_io_init(void)
 {
+	const struct input_gp *pi = input_gps;
+	const struct output_gp *po = output_gps;
 	mxc_iomux_v3_setup_multiple_pads(mx51nitrogen_pads,
 					ARRAY_SIZE(mx51nitrogen_pads));
-
-	gpio_request(BABBAGE_PMIC_INT, "pmic-int");
-	gpio_request(BABBAGE_SD1_CD, "sdhc1-detect");
-	gpio_request(BABBAGE_SD1_WP, "sdhc1-wp");
-
-	gpio_direction_input(BABBAGE_PMIC_INT);
-	gpio_direction_input(BABBAGE_SD1_CD);
-	gpio_direction_input(BABBAGE_SD1_WP);
-
+	gpio_request(i2c_generic_data.gp, "I2C connector int");
+	gpio_direction_input(i2c_generic_data.gp);
 	gpio_request(i2c_tfp410_data.gp, "tfp410int");
 	gpio_direction_input(i2c_tfp410_data.gp);
 
-	/* SD2 CD for BB2.5 */
-	gpio_request(BABBAGE_SD2_CD_2_5, "sdhc2-detect");
-	gpio_direction_input(BABBAGE_SD2_CD_2_5);
+	while (pi->name) {
+		gpio_request( pi->gp, pi->name);
+		gpio_direction_input(pi->gp);
+		pi++;
+	}
 
-	gpio_request(BABBAGE_SD2_WP, "sdhc2-wp");
-	gpio_direction_input(BABBAGE_SD2_WP);
-
-	gpio_request(NITROGEN_GP_1_5, "gp_1_5");
-	gpio_direction_output(NITROGEN_GP_1_5,1);
-	gpio_request(NITROGEN_GP_1_6, "gp_1_6");
-	gpio_direction_output(NITROGEN_GP_1_6,1);
-
-	/* reset usbh1 hub */
-	gpio_request(BABBAGE_USBH1_HUB_RST, "hub-rst");
-	gpio_direction_output(BABBAGE_USBH1_HUB_RST, 0);
-	gpio_set_value(BABBAGE_USBH1_HUB_RST, 0);
+	while (po->name) {
+		gpio_request(po->gp, po->name);
+		gpio_direction_output(po->gp, po->val);
+		po++;
+	}
+	/* release usbh1 hub reset */
 	msleep(1);
 	gpio_set_value(BABBAGE_USBH1_HUB_RST, 1);
 
-	/* reset FEC PHY */
-	gpio_request(BABBAGE_FEC_PHY_RESET, "fec-phy-reset");
-	gpio_direction_output(BABBAGE_FEC_PHY_RESET, 0);
-	msleep(10);
+	/* release FEC PHY reset */
+	msleep(9);
 	gpio_set_value(BABBAGE_FEC_PHY_RESET, 1);
 
-	/* reset FM */
-	gpio_request(BABBAGE_FM_RESET, "fm-reset");
-	gpio_direction_output(BABBAGE_FM_RESET, 0);
-	msleep(10);
+	/* release FM reset */
 	gpio_set_value(BABBAGE_FM_RESET, 1);
-
-	/* Drive 26M_OSC_EN line high */
-	gpio_request(BABBAGE_26M_OSC_EN, "26m-osc-en");
-	gpio_direction_output(BABBAGE_26M_OSC_EN, 1);
-
-	gpio_request(BABBAGE_USB_CLK_EN_B, "usb-clk_en_b");
-#ifdef CONFIG_NITROGEN_P
-	/* Drive USB_CLK_EN_B line low */
-	gpio_direction_output(BABBAGE_USB_CLK_EN_B, 1);
-#else
-	gpio_direction_input(BABBAGE_USB_CLK_EN_B);
-	gpio_free(BABBAGE_USB_CLK_EN_B);
-#endif
-
-	/* De-assert USB PHY RESETB */
-	gpio_request(BABBAGE_PHY_RESET, "usb-phy-reset");
-	gpio_direction_output(BABBAGE_PHY_RESET, 1);
-
-	/* hphone_det_b */
-	gpio_request(BABBAGE_HEADPHONE_DET, "hphone-det");
-	gpio_direction_input(BABBAGE_HEADPHONE_DET);
-
-	if (BABBAGE_AUDIO_CLK_EN != i2c_generic_data.gp) {
-		/* audio_clk_en_b */
-		gpio_request(BABBAGE_AUDIO_CLK_EN, "audio-clk-en");
-		gpio_direction_output(BABBAGE_AUDIO_CLK_EN, 0);
-	}
-	gpio_request(i2c_generic_data.gp, "I2C connector int");
-	gpio_direction_input(i2c_generic_data.gp);
-
-	/* power key */
-	gpio_request(BABBAGE_POWER_KEY, "power-key");
-	gpio_direction_input(BABBAGE_POWER_KEY);
-
-	if (cpu_is_mx51_rev(CHIP_REV_3_0) > 0) {
-		/* DVI_I2C_ENB = 0 tristates the DVI I2C level shifter */
-		gpio_request(BABBAGE_DVI_I2C_EN, "dvi-i2c-en");
-		gpio_direction_output(BABBAGE_DVI_I2C_EN, 0);
-	}
-
-#ifdef CONFIG_FB_MXC_CH7026
-	/* Deassert VGA reset to free i2c bus */
-	gpio_request(BABBAGE_VGA_RESET, "vga-reset");
-	gpio_direction_output(BABBAGE_VGA_RESET, 1);
-#endif
-
-	/* LCD related gpio */
-	gpio_request(BABBAGE_DISP_BRIGHTNESS_CTL, "disp-brightness-ctl");
-	gpio_request(BABBAGE_LVDS_POWER_DOWN, "lvds-power-down");
-	gpio_request(BABBAGE_LCD_3V3_ON, "lcd-3v3-on");
-	gpio_request(BABBAGE_LCD_5V_ON, "lcd-5v-on");
-	gpio_direction_output(BABBAGE_DISP_BRIGHTNESS_CTL, 0);
-	gpio_direction_output(BABBAGE_LVDS_POWER_DOWN, 0);
-	gpio_direction_output(BABBAGE_LCD_3V3_ON, 0);
-	gpio_direction_output(BABBAGE_LCD_5V_ON, 0);
-
-	/* Camera reset */
-	gpio_request(BABBAGE_CAM_RESET, "cam-reset");
-	gpio_direction_output(BABBAGE_CAM_RESET, 1);
-
-	/* Camera low power */
-	gpio_request(BABBAGE_CAM_LOW_POWER, "cam-low-power");
-	gpio_direction_output(BABBAGE_CAM_LOW_POWER, 0);
-
-	/* OSC_EN */
-	gpio_request(BABBAGE_OSC_EN_B, "osc-en");
-	gpio_direction_output(BABBAGE_OSC_EN_B, 1);
 
 	if (enable_w1) {
 		/* OneWire */
