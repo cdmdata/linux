@@ -32,6 +32,8 @@
 #include <linux/input-polldev.h>
 #include <linux/gpio.h>
 
+//#define TESTING
+
 /* register definitions according to the TFP410 data sheet */
 #define TFP410_VID		0x014C
 #define TFP410_DID		0x0410
@@ -53,17 +55,46 @@
 #define TFP410_CTL_1_EDGE	(1<<1)
 #define TFP410_CTL_1_PD		(1<<0)
 
+#define TFP410_CTL_2		0x09
+#define TFP410_CTL_2_VLOW	(1<<7)
+#define TFP410_CTL_2_MSEL_MASK	(0x7<<4)
+#define TFP410_CTL_2_MSEL_INT	(1<<4)
+#define TFP410_CTL_2_MSEL_RSEN	(2<<4)
+#define TFP410_CTL_2_TSEL_RSEN	(0<<3)
+#define TFP410_CTL_2_TSEL_HTPLG	(1<<3)
+#define TFP410_CTL_2_RSEN	(1<<2)
+#define TFP410_CTL_2_HTPLG	(1<<1)
+#define TFP410_CTL_2_MDI	(1<<0)
+
+#define TFP410_CTL_3		0x0A
+#define TFP410_CTL_3_DK_MASK 	(0x7<<5)
+#define TFP410_CTL_3_DK		(1<<5)
+#define TFP410_CTL_3_DKEN	(1<<4)
+#define TFP410_CTL_3_CTL_MASK	(0x7<<1)
+#define TFP410_CTL_3_CTL	(1<<1)
+
+#define TFP410_USERCFG		0x0B
+
 #define DRV_NAME	"tfp410"
-//static const char *client_name = DRV_NAME;
+static const char *client_name = DRV_NAME;
 
 
 struct tfp410_priv
 {
 	struct i2c_client	*client;
-	int gp;
+	int gp_i2c_sel;
+	wait_queue_head_t	sample_waitq;
+	struct completion	init_exit;	//thread exit notification
+	struct task_struct	*rtask;
+	int			bReady;
+	int			interruptCnt;
+	int			irq;
+	unsigned		gp;
+	int			enabled;
+#ifdef TESTING
+	struct timeval	lastInterruptTime;
+#endif
 };
-
-
 
 static unsigned char cmd_off[] = {
 	TFP410_CTL_1, TFP410_CTL_1_RSVD | TFP410_CTL_1_VEN | TFP410_CTL_1_HEN |
@@ -73,6 +104,7 @@ static unsigned char cmd_off[] = {
 static unsigned char cmd_on[] = {
 	TFP410_CTL_1, TFP410_CTL_1_RSVD | TFP410_CTL_1_VEN | TFP410_CTL_1_HEN |
 		TFP410_CTL_1_DSEL | TFP410_CTL_1_BSEL | TFP410_CTL_1_PD,
+	TFP410_CTL_2, TFP410_CTL_2_MSEL_RSEN | TFP410_CTL_2_TSEL_RSEN,
 		0
 };
 /*
@@ -92,18 +124,154 @@ static int tfp410_send_cmds(struct i2c_client *client, unsigned char *p)
 	return result;
 }
 
+static int tfp410_on(struct tfp410_priv *tfp)
+{
+	int result;
+	pr_info("tfp410: power up\n");
+	result = tfp410_send_cmds(tfp->client, cmd_on);
+	tfp->enabled = (!result) ? 1 : -1;
+	return result;
+}
+
+static int tfp410_off(struct tfp410_priv *tfp)
+{
+	int result;
+	pr_info("tfp410: power down\n");
+	result = tfp410_send_cmds(tfp->client, cmd_off);
+	tfp->enabled = (!result) ? 0 : -1;
+	return result;
+}
+
+/*
+ * This is a RT kernel thread that handles the I2c accesses
+ * The I2c access functions are expected to be able to sleep.
+ */
+static int tfp_thread(void *_tfp)
+{
+	struct tfp410_priv *tfp = _tfp;
+	struct task_struct *tsk = current;
+
+	tfp->rtask = tsk;
+
+	daemonize("tfp410d");
+	/* only want to receive SIGKILL, SIGTERM */
+	allow_signal(SIGKILL);
+	allow_signal(SIGTERM);
+
+	/*
+	 * We could run as a real-time thread.  However, thus far
+	 * this doesn't seem to be necessary.
+	 */
+//	tsk->policy = SCHED_FIFO;
+//	tsk->rt_priority = 1;
+
+	complete(&tfp->init_exit);
+
+	tfp->interruptCnt=0;
+	do {
+		int bit = -1;
+		do {
+			unsigned gp = tfp->gp;
+			int b;
+			int ret;
+			tfp->bReady = 0;
+#if 1
+			b = gpio_get_value(gp);
+#else
+			struct gpio_controller  *__iomem g = __gpio_to_controller(gp);
+			b = (__raw_readl(&g->in_data) >> (gp&0x1f))&1;
+#endif
+#ifdef TESTING
+			pr_info("tfp410: int bit=%i\n", b);
+#endif
+			if (bit == b)
+				break;
+			if (signal_pending(tsk))
+				goto exit1;
+			/* wait 1/2 second for power/bit to stabilize */
+			ret = wait_event_interruptible_timeout(tfp->sample_waitq,
+					tfp->bReady, msecs_to_jiffies(500));
+			bit = (!ret) ? b : -1;
+		} while (1);
+
+		if (bit != tfp->enabled) {
+			if (bit) {
+				tfp410_on(tfp);
+			} else {
+				tfp410_off(tfp);
+			}
+		}
+		if (signal_pending(tsk))
+			break;
+		wait_event_interruptible(tfp->sample_waitq, tfp->bReady);
+		if (signal_pending(tsk))
+			break;
+	} while (1);
+exit1:
+	tfp410_off(tfp);
+	tfp->rtask = NULL;
+//	printk(KERN_ERR "%s: ts_thread exiting\n",client_name);
+	complete_and_exit(&tfp->init_exit, 0);
+}
+
+/*
+ * We only detect samples ready with this interrupt
+ * handler, and even then we just schedule our task.
+ */
+static irqreturn_t tfp_interrupt(int irq, void *id)
+{
+	struct tfp410_priv *tfp = id;
+//	printk(KERN_ERR "%s\n", __func__);
+	tfp->interruptCnt++;
+	tfp->bReady=1;
+	wmb();
+	wake_up(&tfp->sample_waitq);
+#ifdef TESTING
+	{
+		suseconds_t     tv_usec = tfp->lastInterruptTime.tv_usec;
+		int delta;
+		do_gettimeofday(&tfp->lastInterruptTime);
+		delta = tfp->lastInterruptTime.tv_usec - tv_usec;
+		if (delta<0) delta += 1000000;
+		pr_info("(delta=%ius gp%i)\n",delta, tfp->gp);
+	}
+#endif
+	return IRQ_HANDLED;
+}
+
+
+/*
+ * Release accelerometer resources.  Disable IRQs.
+ */
+static void tfp_deinit(struct tfp410_priv *tfp)
+{
+	if (tfp) {
+		if (tfp->rtask) {
+			send_sig(SIGKILL, tfp->rtask, 1);
+			wait_for_completion(&tfp->init_exit);
+		}
+	}
+}
+
 
 static int __devinit tfp_init(struct tfp410_priv *tfp, struct i2c_client *client)
 {
 	/* Initialize the tfp410 chip */
-	int result = tfp410_send_cmds(client, cmd_on);
+	int result = tfp410_on(tfp);
 	if (result)
 		dev_err(&client->dev, "init failed\n");
-	return result;
-}
+	if (tfp->irq < 0)
+		return 0;
+	if (tfp->rtask)
+		panic("tfp410d: rtask running?");
 
-static void tfp_deinit(struct tfp410_priv *tfp)
-{
+	init_completion(&tfp->init_exit);
+	result = kernel_thread(tfp_thread, tfp, CLONE_KERNEL);
+	if (result >= 0) {
+		wait_for_completion(&tfp->init_exit);	//wait for thread to Start
+		result = 0;
+	}
+	return result;
 }
 
 static ssize_t tfp410_reg_show(struct device *dev,
@@ -122,8 +290,52 @@ static ssize_t tfp410_reg_show(struct device *dev,
 
 static DEVICE_ATTR(tfp410_reg, 0444, tfp410_reg_show, NULL);
 
+static ssize_t tfp410_enable_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	u8 tmp[4];
+	int result;
+	struct tfp410_priv *tfp = dev_get_drvdata(dev);
+	result = i2c_smbus_read_i2c_block_data(tfp->client, TFP410_CTL_1, 1, tmp);
+	if (result < 1) {
+		dev_err(dev, "i2c block read failed(%i)\n", result);
+		return -EIO;
+	}
+	return sprintf(buf, "%i\n", (tmp[0] & TFP410_CTL_1_PD) ? 1 : 0);
+}
+
+static ssize_t tfp410_enable_store(struct device *dev, struct device_attribute *attr,
+	const char *buf, size_t count)
+{
+	int val;
+	int result;
+	struct tfp410_priv *tfp = dev_get_drvdata(dev);
+	val = simple_strtol(buf, NULL, 10);
+	if (val < 0)
+		return count;
+	result = i2c_smbus_read_byte_data(tfp->client, TFP410_CTL_1);
+	if (result < 0) {
+		dev_err(dev, "i2c_smbus_read_byte_data failed(%i)\n", result);
+		return -EIO;
+	}
+	result &= ~TFP410_CTL_1_PD;
+	if (val & 1)
+		result |= TFP410_CTL_1_PD;
+	result = i2c_smbus_write_byte_data(tfp->client, TFP410_CTL_1, result);
+	if (result < 0) {
+		dev_err(dev, "i2c_smbus_write_byte_data failed(%i)\n", result);
+		return -EIO;
+	}
+	tfp->enabled = (val & 1) ? 1 : 0;
+	return count;
+}
+
+static DEVICE_ATTR(tfp410_enable, 0644, tfp410_enable_show, tfp410_enable_store);
+
 struct plat_i2c_tfp410_data {
-	unsigned gp;
+	int irq;
+	int gp;
+	int gp_i2c_sel;
 };
 
 /*
@@ -134,7 +346,7 @@ static int __devinit tfp410_probe(struct i2c_client *client,
 {
 	unsigned vid_did;
 	int result;
-	int gp;
+	int gp_i2c_sel;
 	int ret;
 	struct tfp410_priv *tfp;
 	struct i2c_adapter *adapter;
@@ -150,14 +362,14 @@ static int __devinit tfp410_probe(struct i2c_client *client,
 		return -ENODEV;
 	}
 
-	gp = (plat) ? plat->gp : -1;
-	printk(KERN_INFO "%s: tfp410 gp=%i\n", __func__, gp);
-	if (gp >= 0) {
-		if (gpio_request(gp, "tfp410 i2c mode")) {
-			dev_err(&client->dev, "gp for i2c mode unavailable\n");
-			gp = -1;
+	gp_i2c_sel = (plat) ? plat->gp_i2c_sel : -1;
+	printk(KERN_INFO "%s: tfp410 gp_i2c_sel=%i\n", __func__, gp_i2c_sel);
+	if (gp_i2c_sel >= 0) {
+		if (gpio_request(gp_i2c_sel, "tfp410 i2c mode")) {
+			dev_err(&client->dev, "gp_i2c_sel for i2c mode unavailable\n");
+			gp_i2c_sel = -1;
 		} else {
-			gpio_set_value(gp, 1);	/* enable i2c mode */
+			gpio_set_value(gp_i2c_sel, 1);	/* enable i2c mode */
 		}
 	}
 	if (i2c_smbus_read_i2c_block_data(client, TFP410_VID_LO, 4, (unsigned char *)&vid_did) < 4) {
@@ -176,34 +388,52 @@ static int __devinit tfp410_probe(struct i2c_client *client,
 		dev_err(&client->dev, "Couldn't allocate memory\n");
 		return -ENOMEM;
 	}
+	init_waitqueue_head(&tfp->sample_waitq);
 	tfp->client = client;
-	tfp->gp = gp;
-
+	tfp->gp_i2c_sel = gp_i2c_sel;
+	tfp->irq = (plat) ? plat->irq : -1;
+	tfp->gp = (plat) ? plat->gp : -1;
+	printk(KERN_INFO "%s: tfp410 irq=%i gp=%i\n", __func__, tfp->irq, tfp->gp);
+	if (tfp->irq >= 0) {
+		result = request_irq(tfp->irq, &tfp_interrupt, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, client_name, tfp);
+		if (result) {
+			printk(KERN_ERR "%s: request_irq failed, irq:%i\n", client_name,tfp->irq);
+			goto free_tfp;
+		}
+	}
 	i2c_set_clientdata(client, tfp);
 	result = tfp_init(tfp, client);
 	if (result)
-		goto free_tfp;
+		goto free_irq;
 	ret = device_create_file(&client->dev, &dev_attr_tfp410_reg);
 	if (ret < 0)
 		printk(KERN_WARNING "failed to add tfp410 sysfs files\n");
+	ret = device_create_file(&client->dev, &dev_attr_tfp410_enable);
+	if (ret < 0)
+		printk(KERN_WARNING "failed to add tfp410 sysfs files\n");
 	return result;
+free_irq:
+	if (tfp->irq >= 0)
+		free_irq(tfp->irq, tfp);
 free_tfp:
 	tfp_deinit(tfp);
 	kfree(tfp);
 release_gpio:
-	if (gp >= 0)
-		gpio_free(gp);
+	if (gp_i2c_sel >= 0)
+		gpio_free(gp_i2c_sel);
 	return result;
 }
 
 static int __devexit tfp410_remove(struct i2c_client *client)
 {
 	struct tfp410_priv *tfp = i2c_get_clientdata(client);
-	int result = tfp410_send_cmds(client, cmd_off);
+	int result = tfp410_off(tfp);
 	device_remove_file(&client->dev, &dev_attr_tfp410_reg);
 	if (tfp) {
-		if (tfp->gp >=0)
-			gpio_free(tfp->gp);
+		if (tfp->gp_i2c_sel >=0)
+			gpio_free(tfp->gp_i2c_sel);
+		if (tfp->irq >= 0)
+			free_irq(tfp->irq, tfp);
 		tfp_deinit(tfp);
 		kfree(tfp);
 	}
@@ -212,13 +442,15 @@ static int __devexit tfp410_remove(struct i2c_client *client)
 
 static int tfp410_suspend(struct i2c_client *client, pm_message_t mesg)
 {
-	int result = tfp410_send_cmds(client, cmd_off);
+	struct tfp410_priv *tfp = i2c_get_clientdata(client);
+	int result = tfp410_off(tfp);
 	return result;
 }
 
 static int tfp410_resume(struct i2c_client *client)
 {
-	int result = tfp410_send_cmds(client, cmd_on);
+	struct tfp410_priv *tfp = i2c_get_clientdata(client);
+	int result = tfp410_on(tfp);
 	return result;
 }
 

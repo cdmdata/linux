@@ -965,11 +965,14 @@ static struct plat_i2c_generic_data i2c_generic_data = {
 };
 
 struct plat_i2c_tfp410_data {
-	unsigned gp;
+	int irq;
+	int gp;
+	int gp_i2c_sel;
 };
 
 static struct plat_i2c_tfp410_data i2c_tfp410_data = {
-	.gp = MAKE_GP(3, 5)
+	.irq = IOMUX_TO_IRQ_V3(MAKE_GP(3, 28)), .gp = MAKE_GP(3, 28),
+	.gp_i2c_sel = MAKE_GP(3, 5)
 };
 
 static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
@@ -1442,6 +1445,9 @@ static void __init mx51_nitrogen_io_init(void)
 	gpio_direction_input(BABBAGE_PMIC_INT);
 	gpio_direction_input(BABBAGE_SD1_CD);
 	gpio_direction_input(BABBAGE_SD1_WP);
+
+	gpio_request(i2c_tfp410_data.gp, "tfp410int");
+	gpio_direction_input(i2c_tfp410_data.gp);
 
 	/* SD2 CD for BB2.5 */
 	gpio_request(BABBAGE_SD2_CD_2_5, "sdhc2-detect");
