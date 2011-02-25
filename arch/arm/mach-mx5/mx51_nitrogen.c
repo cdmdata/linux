@@ -134,7 +134,8 @@ struct input_gp input_gps[] __initdata = {
 
 #define GP_LCD_3V3_ON			MAKE_GP(4, 9)
 #define GP_LCD_5V_ON			MAKE_GP(4, 10)
-#define GP_CSP1_SS0_GPIO		MAKE_GP(4, 24)
+#define GP_CSP1_SS0			MAKE_GP(4, 24)
+#define GP_CSP1_SS1			MAKE_GP(4, 25)
 
 struct output_gp output_gps[] __initdata = {
 	{.name="usb-clk_en_b",	.gp = -1,			.val = 1},	/* NITROGEN_P only, DON'T REORDER, MAKE_GP(2, 1) */
@@ -154,9 +155,24 @@ struct output_gp output_gps[] __initdata = {
 	{.name="lcd-3v3-on",	.gp = GP_LCD_3V3_ON,		.val = 0},	/* MAKE_GP(4, 9) */
 	{.name="lcd-5v-on",	.gp = GP_LCD_5V_ON,		.val = 0},	/* MAKE_GP(4, 10) */
 	{.name="cam-low-power",	.gp = MAKE_GP(4, 12),		.val = 0},
-	{.name="cspi1-gpio",	.gp = GP_CSP1_SS0_GPIO,		.val = 0},	/* MAKE_GP(4, 24) */
+	{.name="cspi1-ss0",	.gp = GP_CSP1_SS0,		.val = 0},	/* MAKE_GP(4, 24) */
+	{.name="cspi1-ss1",	.gp = GP_CSP1_SS1,		.val = 1},	/* MAKE_GP(4, 25) */
 	{.name= NULL}
 };
+
+void mx51_reboot_setup()
+{
+	/* workaround for ENGcm09397 - Fix SPI NOR reset issue*/
+	/* de-select SS0 of instance: eCSPI1 */
+	struct pad_desc cspi1_ss0_gpio = MX51_PAD_CSPI1_SS0__GPIO_4_24;
+	struct pad_desc cspi1_ss1_gpio = MX51_PAD_CSPI1_SS1__GPIO_4_25;
+	mxc_iomux_v3_setup_pad(&cspi1_ss0_gpio);
+	mxc_iomux_v3_setup_pad(&cspi1_ss1_gpio);
+
+	gpio_set_value(GP_CSP1_SS0, 0);	/* SS0 high active */
+	gpio_set_value(GP_CSP1_SS1, 1); /* SS1 low active */
+}
+
 
 extern int __init mx51_nitrogen_init_mc13892(void);
 extern struct cpu_wp *(*get_cpu_wp)(int *wp);
@@ -439,7 +455,7 @@ static void mx51_nitrogen_gpio_spi_chipselect_active(int cspi_mode, int status,
 			struct pad_desc cspi1_ss0_gpio = MX51_PAD_CSPI1_SS0__GPIO_4_24;
 
 			mxc_iomux_v3_setup_pad(&cspi1_ss0_gpio);
-			gpio_set_value(GP_CSP1_SS0_GPIO, 1 & (~status));
+			gpio_set_value(GP_CSP1_SS0, 1 & (~status));
 			break;
 			}
 		default:
