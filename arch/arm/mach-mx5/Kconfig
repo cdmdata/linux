@@ -43,36 +43,36 @@ config MACH_MX51_BABBAGE
 	  peripherals.
 
 config MACH_NITROGEN_IMX51
-	bool "Support MX51 Nitrogen platform"
+	bool "Support MX51 Nitrogen E platform"
 	select ARCH_MX51
 	help
 	  Include support for Boundary Devices' MX51 Nitrogen platform
 	  This includes specific configurations for the board and its peripherals.
-
-choice
-	prompt "Nitrogen i.MX51 Variant"
-	default NITROGEN_E
-	depends on MACH_NITROGEN_IMX51
-
-config NITROGEN_E
-	bool "Nitrogen-E (Ethernet)"
-	help
-	  Nitrogen Ethernet version
 	  See http://boundarydevices.com/NitrogenE.php for a photo.
 
-config NITROGEN_VM
-	bool "Nitrogen-VM (Vertical mount)"
+config MACH_NITROGEN_VM_IMX51
+	bool "Support MX51 Nitrogen VM (Vertical Mount) platform"
+	select ARCH_MX51
 	help
-	  Nitrogen Vertical mount. Typically used for player tracking.
+	  Include support for Boundary Devices' MX51 Nitrogen Vertical
+	  mount platform, typically used for player tracking.
+	  This includes specific configurations for the board and its peripherals.
 	  See http://boundarydevices.com/NitrogenVM.php for a photo.
 
-config NITROGEN_P
-	bool "Nitrogen-P (Portable)"
+config MACH_NITROGEN_P_IMX51
+	bool "Support MX51 Nitrogen P(Portable) platform"
+	select ARCH_MX51
 	help
-	  Nitrogen Portable version.
+	  Include support for Boundary Devices' MX51 Nitrogen platform
+	  This includes specific configurations for the board and its peripherals.
 	  See http://boundarydevices.com/NitrogenP.php for a photo.
 
-endchoice
+config MACH_NITROGEN_EJ_IMX51
+	bool "Support MX51 Nitrogen EJ (Jumpered) platform"
+	select ARCH_MX51
+	help
+	  Include support for Boundary Devices' MX51 Nitrogen EJ platform.
+	  This is an internal testing board that has GP1[22] jumpered to I2C connector.
 
 config MACH_MX53_EVK
 	bool "Support MX53 EVK platform"

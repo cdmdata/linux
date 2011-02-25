@@ -34,6 +34,7 @@
 static void __iomem *wdog_base;
 extern int dvfs_core_is_active;
 extern void stop_dvfs(void);
+extern void mx51_reboot_setup();
 
 /*
  * Reset the system. It is called by machine_restart().
@@ -55,6 +56,8 @@ void arch_reset(char mode, const char *cmd)
 	 */
 	 if (cpu_is_mx51() || cpu_is_mx53())
 		__raw_writel(0x20600, IO_ADDRESS(NFC_BASE_ADDR) + 0x28);
+	 if (cpu_is_mx51())
+		mx51_reboot_setup();
 #endif
 
 #ifdef CONFIG_ARCH_MX5
