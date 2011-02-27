@@ -1170,6 +1170,10 @@ static void mxc_power_off(void)
 		(PWGT1SPIEN|PWGT2SPIEN));
 }
 
+void mx51_reboot_setup()
+{
+}
+
 /*!
  * Power Key interrupt handler.
  */
