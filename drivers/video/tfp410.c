@@ -364,14 +364,8 @@ static int __devinit tfp410_probe(struct i2c_client *client,
 
 	gp_i2c_sel = (plat) ? plat->gp_i2c_sel : -1;
 	printk(KERN_INFO "%s: tfp410 gp_i2c_sel=%i\n", __func__, gp_i2c_sel);
-	if (gp_i2c_sel >= 0) {
-		if (gpio_request(gp_i2c_sel, "tfp410 i2c mode")) {
-			dev_err(&client->dev, "gp_i2c_sel for i2c mode unavailable\n");
-			gp_i2c_sel = -1;
-		} else {
-			gpio_set_value(gp_i2c_sel, 1);	/* enable i2c mode */
-		}
-	}
+	if (gp_i2c_sel >= 0)
+		gpio_set_value(gp_i2c_sel, 1);	/* enable i2c mode */
 	if (i2c_smbus_read_i2c_block_data(client, TFP410_VID_LO, 4, (unsigned char *)&vid_did) < 4) {
 		dev_err(&client->dev, "i2c block read failed\n");
 		result = -EIO;
@@ -420,7 +414,7 @@ free_tfp:
 	kfree(tfp);
 release_gpio:
 	if (gp_i2c_sel >= 0)
-		gpio_free(gp_i2c_sel);
+		gpio_set_value(gp_i2c_sel, 0);	/* disable i2c mode */
 	return result;
 }
 
@@ -430,8 +424,6 @@ static int __devexit tfp410_remove(struct i2c_client *client)
 	int result = tfp410_off(tfp);
 	device_remove_file(&client->dev, &dev_attr_tfp410_reg);
 	if (tfp) {
-		if (tfp->gp_i2c_sel >=0)
-			gpio_free(tfp->gp_i2c_sel);
 		if (tfp->irq >= 0)
 			free_irq(tfp->irq, tfp);
 		tfp_deinit(tfp);

@@ -35,6 +35,7 @@
 #include <linux/mxcfb.h>
 #include <linux/pwm_backlight.h>
 #include <linux/powerkey.h>
+#include <linux/gpio.h>
 #include <mach/common.h>
 #include <mach/hardware.h>
 #include <asm/setup.h>
@@ -85,43 +86,23 @@
  * EIM_D17	GP2_1		USB/Audio clock enable		N/C			I2C(Pic) interrupt
  */
 
-struct input_gp {
-	const char *name;
-	int gp;
-};
-
-struct output_gp {
-	const char *name;
-	int gp;
-	int val;
-};
-
 #define GP_SD1_CD			MAKE_GP(1, 0)
 #define GP_SD1_WP			MAKE_GP(1, 1)
-#define GP_SD2_WP			MAKE_GP(1, 5)
-#define GP_SD2_CD			MAKE_GP(1, 6)
 #define GP_POWER_KEY			MAKE_GP(2, 21)
 #define GP_HEADPHONE_DET		MAKE_GP(3, 26)
 
-#define GP_FREE (1 << 30)
-
-struct input_gp input_gps[] __initdata = {
-	{.name="I2C connector int",	.gp = MAKE_GP(4, 26)},	/* overriden by i2c_generic_data.gp, DON'T REORDER  */
-	{.name="tfp410int",		.gp = MAKE_GP(3, 28)},	/* overriden by i2c_tfp410_data.gp, DON'T REORDER  */
-	{.name="sdhc1-detect",		.gp = GP_SD1_CD},		/* MAKE_GP(1, 0) */
-	{.name="sdhc1-wp",		.gp = GP_SD1_WP},		/* MAKE_GP(1, 1) */
-	{.name="sdhc2-wp",		.gp = GP_SD2_WP},		/* MAKE_GP(1, 5) */
-	{.name="sdhc2-detect",		.gp = GP_SD2_CD},		/* MAKE_GP(1, 6) */
-	{.name="pmic-int",		.gp = MAKE_GP(1, 8)},
-	{.name="power-key",		.gp = GP_POWER_KEY},		/* MAKE_GP(2, 21) */
-	{.name="hphone-det",		.gp = GP_HEADPHONE_DET},	/* MAKE_GP(3, 26) */
-	{.name="dvi-detect",		.gp = MAKE_GP(3, 28)},
-	{.name="hs_i2c_clk",		.gp = MAKE_GP(4, 16)},
-	{.name="hs_i2c_data",		.gp = MAKE_GP(4, 17)},
-	{.name="gp_4_30",		.gp = MAKE_GP(4, 30) | GP_FREE},
-	{.name="gp_4_31",		.gp = MAKE_GP(4, 31) | GP_FREE},
-	{.name= NULL}
-};
+struct gpio nitrogen_gpios[] __initdata = {
+	{.label="I2C_connector_int",	.gpio = MAKE_GP(4, 26),		.flags = GPIOF_DIR_IN},	/* overriden by i2c_generic_data.gp, DON'T REORDER  */
+	{.label="sdhc1-detect",		.gpio = GP_SD1_CD,		.flags = GPIOF_DIR_IN},		/* MAKE_GP(1, 0) */
+	{.label="sdhc1-wp",		.gpio = GP_SD1_WP,		.flags = GPIOF_DIR_IN},		/* MAKE_GP(1, 1) */
+	{.label="pmic-int",		.gpio = MAKE_GP(1, 8),		.flags = GPIOF_DIR_IN},
+	{.label="power-key",		.gpio = GP_POWER_KEY,		.flags = GPIOF_DIR_IN},		/* MAKE_GP(2, 21) */
+	{.label="hphone-det",		.gpio = GP_HEADPHONE_DET,	.flags = GPIOF_DIR_IN},		/* MAKE_GP(3, 26) */
+	{.label="tfp410int",		.gpio = MAKE_GP(3, 28),		.flags = GPIOF_DIR_IN},		/* same as i2c_tfp410_data.gp */
+	{.label="hs_i2c_clk",		.gpio = MAKE_GP(4, 16),		.flags = GPIOF_DIR_IN},
+	{.label="hs_i2c_data",		.gpio = MAKE_GP(4, 17),		.flags = GPIOF_DIR_IN},
+	{.label="gp_4_30",		.gpio = MAKE_GP(4, 30),		.flags = GPIOF_DIR_IN},		/* release immediately */
+	{.label="gp_4_31",		.gpio = MAKE_GP(4, 31),		.flags = GPIOF_DIR_IN},		/* release immediately */
 
 #define GP_USBH1_HUB_RST		MAKE_GP(1, 7)
 #define GP_FEC_PHY_RESET		MAKE_GP(2, 14)
@@ -137,40 +118,37 @@ struct input_gp input_gps[] __initdata = {
 #define GP_CSP1_SS0			MAKE_GP(4, 24)
 #define GP_CSP1_SS1			MAKE_GP(4, 25)
 
-struct output_gp output_gps[] __initdata = {
-	{.name="usb-clk_en_b",	.gp = -1,			.val = 1},	/* NITROGEN_P only, DON'T REORDER, MAKE_GP(2, 1) */
-	{.name="audio-clk-en",	.gp = -1,			.val = 0},	/* NITROGEN_P only, DON'T REORDER, MAKE_GP(4, 26) */
-	{.name="gp_1_5",	.gp = MAKE_GP(1, 5),		.val = 1},
-	{.name="gp_1_6",	.gp = MAKE_GP(1, 6),		.val = 1},
-	{.name="hub-rst",	.gp = GP_USBH1_HUB_RST,		.val = 0},	/* MAKE_GP(1, 7) */
-	{.name="osc-en",	.gp = MAKE_GP(2, 2),		.val = 1},
-	{.name="usb-phy-reset",	.gp = MAKE_GP(2, 5),		.val = 1},
-	{.name="cam-reset",	.gp = MAKE_GP(2, 7),		.val = 1},
-	{.name="fec-phy-reset", .gp = GP_FEC_PHY_RESET,		.val = 0},	/* MAKE_GP(2, 14) */
-	{.name="fm-reset",	.gp = GP_FM_RESET,		.val = 0},	/* MAKE_GP(2, 15) */
-	{.name="audioamp-stdby",.gp = GP_AUDAMP_STBY,		.val = 0},	/* MAKE_GP(2, 17) */
-	{.name="26m-osc-en",	.gp = GP_26M_OSC_EN,		.val = 1},	/* MAKE_GP(3, 1) */
-	{.name="lvds-power-down", .gp = GP_LVDS_POWER_DOWN,	.val = 0},	/* MAKE_GP(3, 3) */
-	{.name="disp-brightness-ctl", .gp = GP_DISP_BRIGHTNESS_CTL, .val = 0},	/* MAKE_GP(3, 4) */
-	{.name="lcd-3v3-on",	.gp = GP_LCD_3V3_ON,		.val = 0},	/* MAKE_GP(4, 9) */
-	{.name="lcd-5v-on",	.gp = GP_LCD_5V_ON,		.val = 0},	/* MAKE_GP(4, 10) */
-	{.name="cam-low-power",	.gp = MAKE_GP(4, 12),		.val = 0},
-	{.name="cspi1-ss0",	.gp = GP_CSP1_SS0,		.val = 0},	/* MAKE_GP(4, 24) */
-	{.name="cspi1-ss1",	.gp = GP_CSP1_SS1,		.val = 1},	/* MAKE_GP(4, 25) */
-	{.name= NULL}
+	{.label = "gp_1_5",		.gpio = MAKE_GP(1, 5),		.flags = GPIOF_INIT_HIGH},
+	{.label = "gp_1_6",		.gpio = MAKE_GP(1, 6),		.flags = GPIOF_INIT_HIGH},
+	{.label = "hub-rst",		.gpio = GP_USBH1_HUB_RST,	.flags = 0},			/* MAKE_GP(1, 7) */
+	{.label = "osc-en",		.gpio = MAKE_GP(2, 2),		.flags = GPIOF_INIT_HIGH},
+	{.label = "usb-phy-reset",	.gpio = MAKE_GP(2, 5),		.flags = GPIOF_INIT_HIGH},
+	{.label = "cam-reset",		.gpio = MAKE_GP(2, 7),		.flags = GPIOF_INIT_HIGH},
+	{.label = "fec-phy-reset",	.gpio = GP_FEC_PHY_RESET,	.flags = 0},			/* MAKE_GP(2, 14) */
+	{.label = "fm-reset",		.gpio = GP_FM_RESET,		.flags = 0},			/* MAKE_GP(2, 15) */
+	{.label = "audioamp-stdby",	.gpio = GP_AUDAMP_STBY,		.flags = 0},			/* MAKE_GP(2, 17) */
+	{.label = "26m-osc-en",		.gpio = GP_26M_OSC_EN,		.flags = GPIOF_INIT_HIGH},	/* MAKE_GP(3, 1) */
+	{.label = "lvds-power-down",	.gpio = GP_LVDS_POWER_DOWN,	.flags = 0},			/* MAKE_GP(3, 3) */
+	{.label = "disp-brightness",	.gpio = GP_DISP_BRIGHTNESS_CTL, .flags = 0},			/* MAKE_GP(3, 4) */
+	{.label = "tfp410_i2cmode",	.gpio = MAKE_GP(3, 5),		.flags = 0},			/* same as i2c_tfp410_data.gp_i2c_sel */
+	{.label = "lcd-3v3-on",		.gpio = GP_LCD_3V3_ON,		.flags = 0},			/* MAKE_GP(4, 9) */
+	{.label = "lcd-5v-on",		.gpio = GP_LCD_5V_ON,		.flags = 0},			/* MAKE_GP(4, 10) */
+	{.label = "cam-low-power",	.gpio = MAKE_GP(4, 12),		.flags = 0},
+	{.label = "cspi1-ss0",		.gpio = GP_CSP1_SS0,		.flags = 0},			/* MAKE_GP(4, 24) */
+	{.label = "cspi1-ss1",		.gpio = GP_CSP1_SS1,		.flags = GPIOF_INIT_HIGH},	/* MAKE_GP(4, 25) */
 };
 
-void mx51_reboot_setup()
+void mx51_reboot_setup(void)
 {
 	/* workaround for ENGcm09397 - Fix SPI NOR reset issue*/
 	/* de-select SS0 of instance: eCSPI1 */
 	struct pad_desc cspi1_ss0_gpio = MX51_PAD_CSPI1_SS0__GPIO_4_24;
 	struct pad_desc cspi1_ss1_gpio = MX51_PAD_CSPI1_SS1__GPIO_4_25;
-	mxc_iomux_v3_setup_pad(&cspi1_ss0_gpio);
-	mxc_iomux_v3_setup_pad(&cspi1_ss1_gpio);
 
 	gpio_set_value(GP_CSP1_SS0, 0);	/* SS0 high active */
 	gpio_set_value(GP_CSP1_SS1, 1); /* SS1 low active */
+	mxc_iomux_v3_setup_pad(&cspi1_ss0_gpio);
+	mxc_iomux_v3_setup_pad(&cspi1_ss1_gpio);
 }
 
 
@@ -1017,30 +995,37 @@ static struct spi_board_info mxc_dataflash_device[] __initdata = {
 	 .platform_data = &mxc_spi_flash_data[1],},
 };
 
+/*
+ * Out: 0 - card not write protected, 1 - card write protected
+ */
 static int sdhc_write_protect(struct device *dev)
 {
-	unsigned short rc = 0;
+	int ret;
 
 	if (to_platform_device(dev)->id == 0)
-		rc = gpio_get_value(GP_SD1_WP);
-	else
-		rc = gpio_get_value(GP_SD2_WP);
-
-	return rc;
+		ret = gpio_get_value(GP_SD1_WP);
+	else {
+//		rc = gpio_get_value(GP_SD2_WP);
+		ret = 0;
+	}
+	return ret;
 }
 
+/*
+ * Out: 0 - card present, 1 - card not present
+ */
 static unsigned int sdhc_get_card_det_status(struct device *dev)
 {
 	int ret;
 
 	if (to_platform_device(dev)->id == 0) {
 		ret = gpio_get_value(GP_SD1_CD);
-		return ret;
 	} else {		/* config the det pin for SDHC2 */
 		/* BB2.5 */
-		ret = gpio_get_value(GP_SD2_CD);
-		return ret;
+//		ret = gpio_get_value(GP_SD2_CD);
+		ret = 0;
 	}
+	return ret;
 }
 
 static struct mxc_mmc_platform_data mmc1_data = {
@@ -1370,34 +1355,24 @@ static struct power_key_platform_data pwrkey_data = {
 
 static void __init mx51_nitrogen_io_init(void)
 {
-	const struct input_gp *pi = input_gps;
-	const struct output_gp *po = output_gps;
+	/*
+	 * Configure gpio direction/value before
+	 * configuring the muxc to avoid glitches
+	 */
+	nitrogen_gpios[0].gpio = i2c_generic_data.gp;
+	if (gpio_request_array(nitrogen_gpios, ARRAY_SIZE(nitrogen_gpios))) {
+		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
+	}
+	gpio_free(MAKE_GP(4, 30));
+	gpio_free(MAKE_GP(4, 31));
+
 	mxc_iomux_v3_setup_multiple_pads(mx51nitrogen_pads,
-					ARRAY_SIZE(mx51nitrogen_pads));
+			ARRAY_SIZE(mx51nitrogen_pads));
 	if (i2c_generic_data.gp == MAKE_GP(1, 22)) {
 		struct pad_desc pd = MX51_PAD_UART3_RXD__GPIO_1_22;
 		mxc_iomux_v3_setup_pad(&pd);
 	}
-	input_gps[0].gp = i2c_generic_data.gp;
-	input_gps[1].gp = i2c_tfp410_data.gp;
-	while (pi->name) {
-		int gp = pi->gp & ~GP_FREE;
-		if (gp >= 0) {
-			gpio_request(gp, pi->name);
-			gpio_direction_input(gp);
-		}
-		if (pi->gp & GP_FREE)
-			gpio_free(gp);
-		pi++;
-	}
 
-	while (po->name) {
-		if (po->gp >= 0) {
-			gpio_request(po->gp, po->name);
-			gpio_direction_output(po->gp, po->val);
-		}
-		po++;
-	}
 	/* release usbh1 hub reset */
 	msleep(1);
 	gpio_set_value(GP_USBH1_HUB_RST, 1);
@@ -1428,9 +1403,10 @@ static void __init mxc_board_init(void)
 
 	mxc_spdif_data.spdif_core_clk = clk_get(NULL, "spdif_xtal_clk");
 	clk_put(mxc_spdif_data.spdif_core_clk);
+
 	/* SD card detect irqs */
-	mxcsdhc2_device.resource[2].start = IOMUX_TO_IRQ_V3(GP_SD2_CD);
-	mxcsdhc2_device.resource[2].end = IOMUX_TO_IRQ_V3(GP_SD2_CD);
+	mxcsdhc2_device.resource[2].start = IOMUX_TO_IRQ_V3(MAKE_GP(1, 6));
+	mxcsdhc2_device.resource[2].end = IOMUX_TO_IRQ_V3(MAKE_GP(1, 6));
 	mxcsdhc1_device.resource[2].start = IOMUX_TO_IRQ_V3(GP_SD1_CD);
 	mxcsdhc1_device.resource[2].end = IOMUX_TO_IRQ_V3(GP_SD1_CD);
 
@@ -1609,6 +1585,11 @@ static struct i2c_board_info mxc_i2c_hs_board_info_nitrogen_p[] __initdata = {
 	}
 };
 
+struct gpio extra_gpios[] __initdata = {
+	{.label="usb-clk_en_b",		.gpio = MAKE_GP(2, 1),			.flags = GPIOF_INIT_HIGH},
+	{.label="audio-clk-en",		.gpio = MAKE_GP(4, 26),			.flags = 0},
+};
+
 static void __init mxc_board_init_nitrogen_p(void)
 {
 	/* NITROGEN_P keys */
@@ -1618,9 +1599,10 @@ static void __init mxc_board_init_nitrogen_p(void)
 	nitrogen_gpio_keys[2].gpio = MAKE_GP(4, 30);
 	nitrogen_gpio_keys[3].gpio = MAKE_GP(1, 3);
 #endif
-	output_gps[0].gp = MAKE_GP(2, 1);
-	output_gps[1].gp = MAKE_GP(4, 26);
 	mxc_board_init();
+	if (gpio_request_array(extra_gpios, ARRAY_SIZE(extra_gpios))) {
+		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
+	}
 	i2c_register_board_info(0, mxc_i2c0_board_info_nitrogen_p,
 			ARRAY_SIZE(mxc_i2c0_board_info_nitrogen_p));
 	i2c_register_board_info(1, mxc_i2c1_board_info_nitrogen_p,
