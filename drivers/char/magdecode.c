@@ -212,21 +212,15 @@ static int mag_decode(struct mag_dev *dev, char *buf)
 	return i + 1;
 }
 
-/**************************************
-* interrupt handler / timer functions *
-**************************************/
-// Perform on switch flip
-static irqreturn_t mag_switch_handler(int irq, void *dev_id)
+static void check_pin(struct mag_dev *dev, int pin)
 {
 	u8 level, event;
-	struct mag_dev *dev = dev_id;
+	level = gpio_get_value(pin);
 
 	// Determine which switch it was, and whether it was opened or closed
-	if (irq == gpio_to_irq(dev->pindef->front_pin)) {
-		level = gpio_get_value(dev->pindef->front_pin);
+	if (pin == dev->pindef->front_pin) {
 		event = 'F' | (level << 5);
 	} else {
-		level = gpio_get_value(dev->pindef->rear_pin);
 		event = 'R' | (level << 5);
 	}
 
@@ -244,7 +238,17 @@ static irqreturn_t mag_switch_handler(int irq, void *dev_id)
 	// advance e_add
 	dev->e_add = (dev->e_add + 1) & EVENTMASK;
 	wake_up(&dev->queue);
+}
 
+/**************************************
+* interrupt handler / timer functions *
+**************************************/
+// Perform on switch flip
+static irqreturn_t mag_switch_handler(int irq, void *dev_id)
+{
+	struct mag_dev *dev = dev_id;
+
+	check_pin(dev,irq_to_gpio(irq));
 	return IRQ_HANDLED;
 }
 
@@ -371,6 +375,8 @@ static int mag_open(struct inode *inode, struct file *file)
 		set_irq_type(gpio_to_irq(dev->pindef->clock_pin),
 			dev->pindef->edge ?
 			IRQ_TYPE_EDGE_RISING : IRQ_TYPE_EDGE_FALLING);
+		check_pin(dev,dev->pindef->rear_pin);
+		check_pin(dev,dev->pindef->front_pin);
 		if ((result = request_irq(gpio_to_irq(dev->pindef->front_pin),
 			mag_switch_handler, 0, my_name, file->private_data)))
 			goto fail_rirq1;
