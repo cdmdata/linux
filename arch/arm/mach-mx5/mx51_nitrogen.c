@@ -104,7 +104,8 @@ struct gpio nitrogen_gpios[] __initdata = {
 	{.label="gp_4_30",		.gpio = MAKE_GP(4, 30),		.flags = GPIOF_DIR_IN},		/* release immediately */
 	{.label="gp_4_31",		.gpio = MAKE_GP(4, 31),		.flags = GPIOF_DIR_IN},		/* release immediately */
 
-#define GP_USBH1_HUB_RST		MAKE_GP(1, 7)
+#define GP_USBH1_HUB_RST		MAKE_GP(1, 7)		//Normally, gpio1[7] is esdhc2 - wp
+								//Normally, gpio1[8] is esdhc2 - cd
 #define GP_FEC_PHY_RESET		MAKE_GP(2, 14)
 #define GP_FM_RESET			MAKE_GP(2, 15)
 #define GP_AUDAMP_STBY			MAKE_GP(2, 17)
