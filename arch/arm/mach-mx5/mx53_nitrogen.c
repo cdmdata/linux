@@ -104,7 +104,6 @@
 #define MX53_CAN2_EN2			MAKE_GP(4,4)
 #define MX53_12V_EN			MAKE_GP(4,5)
 
-#define MX53_DVI_RESET			MAKE_GP(5,0)
 #define EVK_USB_HUB_RESET		MAKE_GP(5,20)
 #define MX53_TVIN_PWR			MAKE_GP(5,23)
 #define MX53_CAN2_EN1			MAKE_GP(5,24)
@@ -868,10 +867,6 @@ static struct mxc_camera_platform_data camera_data = {
 
 static void sii9022_hdmi_reset(void)
 {
-	gpio_set_value(MX53_DVI_RESET, 0);
-	msleep(10);
-	gpio_set_value(MX53_DVI_RESET, 1);
-	msleep(10);
 }
 
 static struct mxc_lcd_platform_data sii9022_hdmi_data = {
@@ -1688,8 +1683,8 @@ static void __init mx53_evk_io_init(void)
 	gpio_request(MX53_DVI_DETECT, "dvi-detect");
 	gpio_direction_input(MX53_DVI_DETECT);
 	/* DVI Reset - Assert for i2c disabled mode */
-	gpio_request(MX53_DVI_RESET, "dvi-reset");
-	gpio_direction_output(MX53_DVI_RESET, 0);
+	gpio_request(MAKE_GP(5,0), "USB HUB reset");
+	gpio_direction_output(MAKE_GP(5,0), 0);
 
 	/* DVI I2C enable */
 	gpio_request(MX53_DVI_I2C, "dvi-i2c");
@@ -1746,6 +1741,7 @@ static void __init mx53_evk_io_init(void)
 #if defined(CONFIG_FB_MXC_PMIC_LCD_MODULE) || defined(CONFIG_FB_MXC_PMIC_LCD)
 	platform_device_register(&lcd_pmic_device);
 #endif
+	gpio_direction_output(MAKE_GP(5,0), 1);		//release USB Hub reset
 }
 
 static void nitrogen_power_off(void)
