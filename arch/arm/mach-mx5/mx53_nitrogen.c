@@ -84,39 +84,49 @@
 
 #define MAKE_GP(port, bit) ((port - 1) * 32 + bit)
 
-#define GP_PMIC_IRQ			MAKE_GP(7,11)	/* pad GPIO_16 */
-
-#define N53_AMP_ENABLE			MAKE_GP(4,7)	/* KEY_ROW0 */
-#define N53_PHY_RESET			MAKE_GP(7,13)
-
-#define MX53_HP_DETECT			MAKE_GP(2,5)
-
-#define EVK_SD3_CD			MAKE_GP(3,11)
-#define EVK_SD3_WP			MAKE_GP(3,12)
-#define EVK_SD1_CD			MAKE_GP(3,13)
-#define EVK_SD1_WP			MAKE_GP(3,14)
-#define EVK_TS_INT			MAKE_GP(3,26)
-#define MX53_DVI_I2C			MAKE_GP(3,28)
-#define MX53_DVI_DETECT			MAKE_GP(3,31)
-
-#define MX53_CAM_RESET			MAKE_GP(4,0)
-#define MX53_ESAI_RESET			MAKE_GP(4,2)
-#define MX53_CAN2_EN2			MAKE_GP(4,4)
-#define MX53_12V_EN			MAKE_GP(4,5)
-
-#define EVK_USB_HUB_RESET		MAKE_GP(5,20)
-#define MX53_TVIN_PWR			MAKE_GP(5,23)
-#define MX53_CAN2_EN1			MAKE_GP(5,24)
-#define MX53_TVIN_RESET			MAKE_GP(5,25)
-
-#define EVK_OTG_VBUS			MAKE_GP(6,6)
-
-#define EVK_USBH1_VBUS			MAKE_GP(7,8)
-#define MX53_PMIC_INT			MAKE_GP(7,11)
-#ifdef CONFIG_CAN
-#define MX53_CAN1_EN1			MAKE_GP(7,12)
+struct gpio nitrogen53_gpios[] __initdata = {
+#ifdef REV1
+	{.label = "touch_int_gp1_0",	.gpio = MAKE_GP(1, 0),		.flags = GPIOF_DIR_IN},
 #endif
-//#define MX53_CAN1_EN2			MAKE_GP(7,13)
+#define MX53_HP_DETECT				MAKE_GP(2, 5)
+	{.label = "hp-detect",		.gpio = MAKE_GP(2, 5),		.flags = GPIOF_DIR_IN},
+#define EVK_SD3_CD				MAKE_GP(3, 11)
+	{.label = "sdhc3-cd",		.gpio = MAKE_GP(3, 11),		.flags = GPIOF_DIR_IN},
+#define EVK_SD3_WP				MAKE_GP(3, 12)
+	{.label = "sdhc3-wp",		.gpio = MAKE_GP(3, 12),		.flags = GPIOF_DIR_IN},
+#define EVK_SD1_CD				MAKE_GP(3, 13)
+	{.label = "sdhc1-cd",		.gpio = MAKE_GP(3, 13),		.flags = GPIOF_DIR_IN},
+#define EVK_SD1_WP				MAKE_GP(3, 14)
+	{.label = "sdhc1-wp",		.gpio = MAKE_GP(3, 14),		.flags = GPIOF_DIR_IN},
+#define MX53_DVI_DETECT				MAKE_GP(3, 31)
+	{.label = "dvi-detect",		.gpio = MAKE_GP(3, 31),		.flags = GPIOF_DIR_IN},
+#define GP_PMIC_IRQ				MAKE_GP(7, 11)		/* pad GPIO_16 */
+	{.label = "pmic-int",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
+#define N53_I2C_CONNECTOR_INT			MAKE_GP(7, 12)
+	{.label = "i2c_int",		.gpio = MAKE_GP(7, 12),		.flags = GPIOF_DIR_IN},
+/* Outputs */
+	{.label = "dvi-i2c",		.gpio = MAKE_GP(3, 28),		.flags = 0},
+	{.label = "cam-reset",		.gpio = MAKE_GP(4, 0),		.flags = GPIOF_INIT_HIGH},
+	{.label = "fesai-reset",	.gpio = MAKE_GP(4, 2),		.flags = 0},
+	{.label = "can2-en2",		.gpio = MAKE_GP(4, 4),		.flags = 0},
+#define N53_AMP_ENABLE				MAKE_GP(4, 7)	/* KEY_ROW0 */
+	{.label = "speaker_amp",	.gpio = MAKE_GP(4, 7),		.flags = 0},
+#define N53_USB_HUB_RESET			MAKE_GP(5, 0)
+	{.label = "USB HUB reset",	.gpio = MAKE_GP(5, 0),		.flags = 0},
+#define EVK_USB_HUB_RESET			MAKE_GP(5, 20)
+	{.label = "usb-hub-reset",	.gpio = MAKE_GP(5, 20),		.flags = 0},
+#define MX53_TVIN_RESET				MAKE_GP(5, 25)
+	{.label = "tvin-reset",		.gpio = MAKE_GP(5, 25),		.flags = 0},
+#define MX53_TVIN_PWR				MAKE_GP(5, 23)
+	{.label = "tvin-pwr",		.gpio = MAKE_GP(5, 23),		.flags = 0},
+	{.label = "can2-en1",		.gpio = MAKE_GP(5, 24),		.flags = 0},
+#define EVK_OTG_VBUS				MAKE_GP(6, 6)
+	{.label = "otg-vbus",		.gpio = MAKE_GP(6, 6),		.flags = GPIOF_INIT_HIGH},	/* disable VBUS */
+#define EVK_USBH1_VBUS				MAKE_GP(7, 8)
+	{.label = "usbh1-vbus",		.gpio = MAKE_GP(7, 8),		.flags = 0},
+#define N53_PHY_RESET				MAKE_GP(7, 13)
+	{.label = "ICS1893 reset",	.gpio = MAKE_GP(7, 13),		.flags = 0},	/* ICS1893 Ethernet PHY reset */
+};
 
 /*!
  * @file mach-mx53/mx53_evk.c
@@ -753,28 +763,16 @@ static struct mxc_iim_data iim_data = {
 
 static void gpio_usbotg_vbus_active(void)
 {
-	if (board_is_mx53_evk_a()) {
-		/* MX53 EVK board ver A*/
-		/* Enable OTG VBus with GPIO low */
-		gpio_set_value(EVK_OTG_VBUS, 0);
-	} else  if (board_is_mx53_evk_b()) {
-		/* MX53 EVK board ver B*/
-		/* Enable OTG VBus with GPIO high */
-		gpio_set_value(EVK_OTG_VBUS, 1);
-	}
+	/* MX53 EVK board ver A*/
+	/* Enable OTG VBus with GPIO low */
+	gpio_set_value(EVK_OTG_VBUS, 0);
 }
 
 static void gpio_usbotg_vbus_inactive(void)
 {
-	if (board_is_mx53_evk_a()) {
-		/* MX53 EVK board ver A*/
-		/* Disable OTG VBus with GPIO high */
-		gpio_set_value(EVK_OTG_VBUS, 1);
-	} else  if (board_is_mx53_evk_b()) {
-		/* MX53 EVK board ver B*/
-		/* Disable OTG VBus with GPIO low */
-		gpio_set_value(EVK_OTG_VBUS, 0);
-	}
+	/* MX53 EVK board ver A*/
+	/* Disable OTG VBus with GPIO high */
+	gpio_set_value(EVK_OTG_VBUS, 1);
 }
 
 static void mx53_gpio_usbotg_driver_vbus(bool on)
@@ -852,9 +850,7 @@ device_initcall(mxc_init_fb);
 
 static void camera_pwdn(int pwdn)
 {
-	gpio_request(MX53_TVIN_PWR, "tvin-pwr");
 	gpio_set_value(MX53_TVIN_PWR, pwdn);
-	gpio_free(MX53_TVIN_PWR);
 }
 
 static struct mxc_camera_platform_data camera_data = {
@@ -879,7 +875,7 @@ struct plat_i2c_generic_data {
 };
 
 static struct plat_i2c_generic_data i2c_generic_data = {
-	IOMUX_TO_IRQ_V3(MAKE_GP(7,12)), MAKE_GP(7,12)
+	IOMUX_TO_IRQ_V3(N53_I2C_CONNECTOR_INT), N53_I2C_CONNECTOR_INT
 };
 
 #if defined(CONFIG_REGULATOR_DA905X_MODULE) || defined(CONFIG_REGULATOR_DA905X)
@@ -1618,122 +1614,18 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 
 static void __init mx53_evk_io_init(void)
 {
-	mxc_iomux_v3_setup_multiple_pads(mx53common_pads,
-					ARRAY_SIZE(mx53common_pads));
-
 	/* MX53 Nitrogen board */
-	pr_info("MX53 Nitrogen board \n");
+	if (gpio_request_array(nitrogen53_gpios, ARRAY_SIZE(nitrogen53_gpios))) {
+		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
+	}
+	mxc_iomux_v3_setup_multiple_pads(mx53common_pads,
+			ARRAY_SIZE(mx53common_pads));
 	mxc_iomux_v3_setup_multiple_pads(mx53evk_pads,
 			ARRAY_SIZE(mx53evk_pads));
-
-	gpio_request(N53_AMP_ENABLE, "speaker_amp_enable");
-	gpio_direction_output(N53_AMP_ENABLE, 0);
-	gpio_request(N53_PHY_RESET, "ICS1893 reset");
-#ifdef REV1
-	gpio_request(MAKE_GP(1,0), "touch_int_gp1_0");
-	gpio_direction_input(MAKE_GP(1,0));
-#endif
-#if 0 //available for general GPIO use
-	gpio_request(MAKE_GP(1,10), "AUD4_RXFS_gp1_10");
-	gpio_request(MAKE_GP(1,11), "AUD4_RXC_gp1_11");
-	gpio_direction_input(MAKE_GP(1,10));
-	gpio_direction_input(MAKE_GP(1,11));
-#endif
-
-	/* Host1 Vbus with GPIO high */
-	gpio_request(EVK_USBH1_VBUS, "usbh1-vbus");
-	gpio_direction_output(EVK_USBH1_VBUS, 1);
-	/* shutdown the Host1 Vbus when system bring up,
-	* Vbus will be opened in Host1 driver's probe function */
-	gpio_set_value(EVK_USBH1_VBUS, 0);
-
-	/* USB HUB RESET - De-assert USB HUB RESET_N */
-	gpio_request(EVK_USB_HUB_RESET, "usb-hub-reset");
-	gpio_direction_output(EVK_USB_HUB_RESET, 0);
-	gpio_direction_output(N53_PHY_RESET, 0);	/* ICS1893 reset */
-	msleep(1);
-	gpio_set_value(EVK_USB_HUB_RESET, 1);
-	gpio_set_value(N53_PHY_RESET, 1);		/* ICS1893 reset */
-
-	/* Config GPIO for OTG VBus */
-	gpio_request(EVK_OTG_VBUS, "otg-vbus");
-	gpio_direction_output(EVK_OTG_VBUS, 0);
-	if (board_is_mx53_evk_a()) /*rev A,"1" disable, "0" enable vbus*/
-		gpio_set_value(EVK_OTG_VBUS, 1);
-	else if (board_is_mx53_evk_b()) /* rev B,"0" disable,"1" enable Vbus*/
-		gpio_set_value(EVK_OTG_VBUS, 0);
-
-	gpio_request(EVK_SD1_CD, "sdhc1-cd");
-	gpio_direction_input(EVK_SD1_CD);	/* SD1 CD */
-	gpio_request(EVK_SD1_WP, "sdhc1-wp");
-	gpio_direction_input(EVK_SD1_WP);	/* SD1 WP */
-
-	/* SD3 CD */
-	gpio_request(EVK_SD3_CD, "sdhc3-cd");
-	gpio_direction_input(EVK_SD3_CD);
-
-	/* SD3 WP */
-	gpio_request(EVK_SD3_WP, "sdhc3-wp");
-	gpio_direction_input(EVK_SD3_WP);
-
-	gpio_request(MX53_ESAI_RESET, "fesai-reset");
-	gpio_direction_output(MX53_ESAI_RESET, 0);
-
-	/* DVI Detect */
-	gpio_request(MX53_DVI_DETECT, "dvi-detect");
-	gpio_direction_input(MX53_DVI_DETECT);
-	/* DVI Reset - Assert for i2c disabled mode */
-	gpio_request(MAKE_GP(5,0), "USB HUB reset");
-	gpio_direction_output(MAKE_GP(5,0), 0);
-
-	/* DVI I2C enable */
-	gpio_request(MX53_DVI_I2C, "dvi-i2c");
-	gpio_direction_output(MX53_DVI_I2C, 0);
-
 	mxc_iomux_v3_setup_multiple_pads(mx53_nand_pads,
-					ARRAY_SIZE(mx53_nand_pads));
+			ARRAY_SIZE(mx53_nand_pads));
+	pr_info("MX53 Nitrogen board \n");
 
-	gpio_request(MX53_PMIC_INT, "pmic-int");
-	gpio_direction_input(MX53_PMIC_INT);	/*PMIC_INT*/
-
-	/* headphone_det_b */
-	gpio_request(MX53_HP_DETECT, "hp-detect");
-	gpio_direction_input(MX53_HP_DETECT);
-
-	/* power key */
-
-	/* LCD related gpio */
-
-	/* Camera reset */
-	gpio_request(MX53_CAM_RESET, "cam-reset");
-	gpio_direction_output(MX53_CAM_RESET, 1);
-
-	/* TVIN reset */
-	gpio_request(MX53_TVIN_RESET, "tvin-reset");
-	gpio_direction_output(MX53_TVIN_RESET, 0);
-	msleep(5);
-	gpio_set_value(MX53_TVIN_RESET, 1);
-
-	/* TVin power down */
-	gpio_request(MX53_TVIN_PWR, "tvin-pwr");
-	gpio_direction_output(MX53_TVIN_PWR, 0);
-
-	gpio_request(MAKE_GP(7,12), "i2c_int");
-	gpio_direction_input(MAKE_GP(7,12));
-
-//	gpio_request(MX53_CAN1_EN2, "can1-en2");
-//	gpio_direction_output(MX53_CAN1_EN2, 0);
-
-	/* CAN2 enable GPIO*/
-	gpio_request(MX53_CAN2_EN1, "can2-en1");
-	gpio_direction_output(MX53_CAN2_EN1, 0);
-
-	gpio_request(MX53_CAN2_EN2, "can2-en2");
-	gpio_direction_output(MX53_CAN2_EN2, 0);
-
-#if defined(CONFIG_PMIC_DA905X_MODULE) || defined(CONFIG_PMIC_DA905X)
-	gpio_direction_input(GP_PMIC_IRQ);
-#endif
 
 #ifdef CONFIG_KEYBOARD_GPIO
 	platform_device_register(&gpio_keys_device);
@@ -1741,7 +1633,11 @@ static void __init mx53_evk_io_init(void)
 #if defined(CONFIG_FB_MXC_PMIC_LCD_MODULE) || defined(CONFIG_FB_MXC_PMIC_LCD)
 	platform_device_register(&lcd_pmic_device);
 #endif
-	gpio_direction_output(MAKE_GP(5,0), 1);		//release USB Hub reset
+	msleep(5);
+	gpio_set_value(N53_USB_HUB_RESET, 1);		/* release USB Hub reset */
+	gpio_set_value(EVK_USB_HUB_RESET, 1);		/* release HUB reset */
+	gpio_set_value(N53_PHY_RESET, 1);		/* release ICS1893 Ethernet PHY reset */
+	gpio_set_value(MX53_TVIN_RESET, 1);		/* release */
 }
 
 static void nitrogen_power_off(void)
@@ -1776,8 +1672,6 @@ extern void mx53_gpio_host1_driver_vbus(bool on);
  */
 static void __init mxc_board_init(void)
 {
-	gpio_request(i2c_generic_data.gp, "I2C connector int");
-	gpio_direction_input(i2c_generic_data.gp);
 
 	mxc_ipu_data.di_clk[0] = clk_get(NULL, "ipu_di0_clk");
 	mxc_ipu_data.di_clk[1] = clk_get(NULL, "ipu_di1_clk");
@@ -1864,14 +1758,7 @@ static void __init mxc_board_init(void)
 
 static void __init mx53_evk_timer_init(void)
 {
-	struct clk *uart_clk;
-
 	mx53_clocks_init(32768, 24000000, 22579200, 24576000);
-
-#if defined(CONFIG_SERIAL_MXC) || defined(CONFIG_SERIAL_MXC_MODULE)
-	uart_clk = clk_get_sys("mxcintuart.1", NULL);
-	early_console_setup(MX53_BASE_ADDR(UART2_BASE_ADDR), uart_clk);
-#endif
 }
 
 static struct sys_timer mxc_timer = {
