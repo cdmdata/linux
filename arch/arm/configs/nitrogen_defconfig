@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.3
-# Thu Feb 24 11:48:12 2011
+# Tue Mar  8 16:28:06 2011
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -1753,7 +1753,7 @@ CONFIG_RTC_INTF_ALARM=y
 # CONFIG_RTC_DRV_M48T35 is not set
 # CONFIG_RTC_DRV_M48T59 is not set
 # CONFIG_RTC_DRV_MSM6242 is not set
-# CONFIG_RTC_MXC is not set
+CONFIG_RTC_MXC=y
 # CONFIG_RTC_DRV_BQ4802 is not set
 # CONFIG_RTC_DRV_RP5C01 is not set
 # CONFIG_RTC_DRV_V3020 is not set
