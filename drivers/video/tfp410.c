@@ -31,6 +31,7 @@
 #include <linux/hwmon.h>
 #include <linux/input-polldev.h>
 #include <linux/gpio.h>
+#include <linux/fb.h>
 
 //#define TESTING
 
@@ -91,6 +92,7 @@ struct tfp410_priv
 	int			irq;
 	unsigned		gp;
 	int			enabled;
+	int			displayoff;
 #ifdef TESTING
 	struct timeval	lastInterruptTime;
 #endif
@@ -142,6 +144,51 @@ static int tfp410_off(struct tfp410_priv *tfp)
 	return result;
 }
 
+struct tfp410_priv *g_tfp;
+
+static int lcd_fb_event(struct notifier_block *nb, unsigned long val, void *v)
+{
+	struct fb_event *event = v;
+	struct tfp410_priv *tfp = g_tfp;
+	struct device *dev;
+	if (!tfp)
+		return 0;
+	dev = &tfp->client->dev;
+	dev_info(dev, "%s: event %lx, display %s\n", __func__, val, event->info->fix.id);
+	if (strncmp(event->info->fix.id, "DISP3 BG",8)) {
+		return 0;
+	}
+
+	switch (val) {
+	case FB_EVENT_BLANK: {
+		int blankType = *((int *)event->data);
+		dev_info(dev, "%s: blank type 0x%x\n", __func__, blankType );
+		tfp->displayoff = (blankType == FB_BLANK_UNBLANK) ? 0 : 1;
+		break;
+	}
+	case FB_EVENT_SUSPEND : {
+		dev_info(dev, "%s: suspend\n", __func__ );
+		tfp->displayoff = 1;
+		break;
+	}
+	case FB_EVENT_RESUME : {
+		dev_info(dev, "%s: resume\n", __func__ );
+		tfp->displayoff = 0;
+		break;
+	}
+	default:
+		dev_info(dev, "%s: unknown event %lx\n", __func__, val);
+	}
+	tfp->bReady=1;
+	wmb();
+	wake_up(&tfp->sample_waitq);
+	return 0;
+}
+
+static struct notifier_block nb = {
+	.notifier_call = lcd_fb_event,
+};
+
 /*
  * This is a RT kernel thread that handles the I2c accesses
  * The I2c access functions are expected to be able to sleep.
@@ -166,7 +213,8 @@ static int tfp_thread(void *_tfp)
 //	tsk->rt_priority = 1;
 
 	complete(&tfp->init_exit);
-
+	fb_register_client(&nb);
+	g_tfp = tfp;
 	tfp->interruptCnt=0;
 	do {
 		int bit = -1;
@@ -182,7 +230,7 @@ static int tfp_thread(void *_tfp)
 			b = (__raw_readl(&g->in_data) >> (gp&0x1f))&1;
 #endif
 #ifdef TESTING
-			pr_info("tfp410: int bit=%i\n", b);
+			pr_info("tfp410: int bit=%d, displayoff=%d\n", b, tfp->displayoff);
 #endif
 			if (bit == b)
 				break;
@@ -194,6 +242,8 @@ static int tfp_thread(void *_tfp)
 			bit = (!ret) ? b : -1;
 		} while (1);
 
+		if (tfp->displayoff)
+			bit = 0;
 		if (bit != tfp->enabled) {
 			if (bit) {
 				tfp410_on(tfp);
@@ -208,6 +258,8 @@ static int tfp_thread(void *_tfp)
 			break;
 	} while (1);
 exit1:
+	fb_unregister_client(&nb);
+	g_tfp = NULL;
 	tfp410_off(tfp);
 	tfp->rtask = NULL;
 //	printk(KERN_ERR "%s: ts_thread exiting\n",client_name);
