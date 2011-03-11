@@ -100,11 +100,16 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "sdhc1-wp",		.gpio = MAKE_GP(3, 14),		.flags = GPIOF_DIR_IN},
 #define MX53_DVI_DETECT				MAKE_GP(3, 31)
 	{.label = "dvi-detect",		.gpio = MAKE_GP(3, 31),		.flags = GPIOF_DIR_IN},
+#define N53_TFP410_INT				MAKE_GP(4, 15)
+	{.label = "tfp410int",		.gpio = MAKE_GP(4, 15),		.flags = GPIOF_DIR_IN},		/* KEY_ROW4 */
 #define GP_PMIC_IRQ				MAKE_GP(7, 11)		/* pad GPIO_16 */
 	{.label = "pmic-int",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 #define N53_I2C_CONNECTOR_INT			MAKE_GP(7, 12)
 	{.label = "i2c_int",		.gpio = MAKE_GP(7, 12),		.flags = GPIOF_DIR_IN},
 /* Outputs */
+	// make sure gp2[29] is high, i2c_sel for tfp410
+#define N53_TFP410_I2CMODE			MAKE_GP(2, 29)
+	{.label = "tfp410_i2cmode",	.gpio = MAKE_GP(2, 29),		.flags = GPIOF_INIT_HIGH},	/* EIM_EB1 */
 	{.label = "dvi-i2c",		.gpio = MAKE_GP(3, 28),		.flags = 0},
 	{.label = "cam-reset",		.gpio = MAKE_GP(4, 0),		.flags = GPIOF_INIT_HIGH},
 	{.label = "fesai-reset",	.gpio = MAKE_GP(4, 2),		.flags = 0},
@@ -211,7 +216,8 @@ static struct pad_desc mx53common_pads[] = {
 	MX53_PAD_GPIO_5__GPIO_1_5,
 
 	MX53_PAD_KEY_COL4__TXCAN2,
-	MX53_PAD_KEY_ROW4__RXCAN2,
+	MX53_PAD_KEY_ROW4__GPIO_4_15,
+	MX53_PAD_EIM_EB1__GPIO_2_29,
 
 	/* CAN2 -- EN */
 	MX53_PAD_CSI0_D6__GPIO_5_24,
@@ -1002,6 +1008,17 @@ struct da905x_platform_data da905x_data = {
 };
 #endif
 
+struct plat_i2c_tfp410_data {
+	int irq;
+	int gp;
+	int gp_i2c_sel;
+};
+
+static struct plat_i2c_tfp410_data i2c_tfp410_data = {
+	.irq = IOMUX_TO_IRQ_V3(N53_TFP410_INT), .gp = N53_TFP410_INT,
+	.gp_i2c_sel = N53_TFP410_I2CMODE
+};
+
 static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
 	{
 	.type = "sii9022",
@@ -1031,6 +1048,11 @@ static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
 	 .platform_data  = &da905x_data,
 	 },
 #endif
+	{
+	 .type = "tfp410",
+	 .addr = 0x38,
+	 .platform_data  = &i2c_tfp410_data,
+	}
 };
 
 /* TO DO add platform data */
