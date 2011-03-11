@@ -1064,7 +1064,7 @@ int32_t ipu_init_sync_panel(int disp, uint32_t pixel_clk,
 	int ipu_freq_scaling_enabled = 0;
 	struct clk *di_parent;
 
-	dev_dbg(g_ipu_dev, "panel size = %d x %d\n", width, height);
+	dev_info(g_ipu_dev, "DI%d: %dx%d, pixclk=%d\n", disp, width, height, pixel_clk);
 
 	if ((v_sync_width == 0) || (h_sync_width == 0))
 		return EINVAL;
@@ -1095,7 +1095,7 @@ int32_t ipu_init_sync_panel(int disp, uint32_t pixel_clk,
 		 * we will only use 1/2 fraction for ipu clk,
 		 * so if the clk rate is not fit, try ext clk.
 		 */
-		if (!sig.int_clk &&
+		if (sig.int_clk &&
 			((rounded_pixel_clk >= pixel_clk + pixel_clk/16) ||
 			(rounded_pixel_clk <= pixel_clk - pixel_clk/16)) &&
 			(clk_get(NULL, "pll3") != di_parent)) {
@@ -1108,6 +1108,7 @@ int32_t ipu_init_sync_panel(int disp, uint32_t pixel_clk,
 				clk_round_rate(g_di_clk[disp], pixel_clk);
 			clk_set_rate(g_di_clk[disp], rounded_pixel_clk);
 			clk_set_parent(g_pixel_clk[disp], g_di_clk[disp]);
+			sig.int_clk = 0;
 		}
 	}
 	rounded_pixel_clk = clk_round_rate(g_pixel_clk[disp], pixel_clk);
