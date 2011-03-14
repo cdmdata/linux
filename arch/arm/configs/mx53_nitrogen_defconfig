@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.3
-# Mon Mar 14 16:19:49 2011
+# Mon Mar 14 16:21:43 2011
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -791,10 +791,10 @@ CONFIG_NETDEV_10000=y
 CONFIG_WLAN=y
 # CONFIG_LIBERTAS_THINFIRM is not set
 # CONFIG_AT76C50X_USB is not set
-CONFIG_USB_ZD1201=m
+# CONFIG_USB_ZD1201 is not set
 # CONFIG_USB_NET_RNDIS_WLAN is not set
 # CONFIG_RTL8187 is not set
-# CONFIG_RTL8712U is not set
+CONFIG_RTL8712U=m
 # CONFIG_MAC80211_HWSIM is not set
 # CONFIG_ATH_COMMON is not set
 # CONFIG_B43 is not set
