@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.3
-# Mon Mar 14 16:24:04 2011
+# Mon Mar 14 16:33:00 2011
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -782,7 +782,7 @@ CONFIG_PHYLIB=y
 # CONFIG_MICREL_PHY is not set
 # CONFIG_FIXED_PHY is not set
 # CONFIG_MDIO_BITBANG is not set
-# CONFIG_MDIO_ICS1893 is not set
+CONFIG_MDIO_ICS1893=y
 CONFIG_NET_ETHERNET=y
 CONFIG_MII=y
 # CONFIG_AX88796 is not set
