@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.3
-# Mon Mar 14 16:50:18 2011
+# Mon Mar 14 16:51:54 2011
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -1411,7 +1411,7 @@ CONFIG_BOUNDARY_CAMERA_CSI0=y
 #
 # CONFIG_VGASTATE is not set
 # CONFIG_VIDEO_OUTPUT_CONTROL is not set
-# CONFIG_DVI_TFP410 is not set
+CONFIG_DVI_TFP410=y
 CONFIG_FB=y
 # CONFIG_FIRMWARE_EDID is not set
 # CONFIG_FB_DDC is not set
