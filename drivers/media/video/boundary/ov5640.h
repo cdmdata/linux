@@ -44,9 +44,17 @@ struct ov5640_setting {
 	unsigned 			data_en_pol ;
 	unsigned 			reg_count ;
 	unsigned 			crc ;
+#if 4 == __SIZEOF_POINTER__
 	unsigned			pad ;
+#endif
 	struct ov5640_reg_value const 	*registers ;
 };
+
+#if 4 == __SIZEOF_POINTER__
+#define OV5640_SETTING_SIZE	(sizeof(struct ov5640_setting)-sizeof(unsigned)-sizeof(void *))
+#else
+#define OV5640_SETTING_SIZE	(sizeof(struct ov5640_setting)-sizeof(void *))
+#endif
 
 #define MAX_REGS 1024
 #define MIN_REGNUM 0x3000

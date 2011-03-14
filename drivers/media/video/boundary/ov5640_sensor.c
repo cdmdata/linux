@@ -670,7 +670,7 @@ static int validate_fw
 		unsigned early_crc,crc ;
 		unsigned reg_bytes ;
                 struct ov5640_setting *s = sensor->settings+i ;
-		if (0 != next_field(&data,&left,s,sizeof(*s))) {
+		if (0 != next_field(&data,&left,s,OV5640_SETTING_SIZE)) {
 			printk (KERN_ERR "%s: Error reading setting %u\n", __func__, i );
 			goto free_data ;
 		}
@@ -678,7 +678,7 @@ static int validate_fw
 		save_crc = s->crc ;
 		s->crc = 0 ;		// clear dynamic fields
 		s->registers = 0 ;
-		early_crc = zlib_adler32(0,(Byte *)s,sizeof(*s));
+		early_crc = zlib_adler32(0,(Byte *)s,OV5640_SETTING_SIZE);
                 reg_bytes = s->reg_count*sizeof(s->registers[0]);
 		s->registers = (struct ov5640_reg_value *)kzalloc(reg_bytes,GFP_KERNEL);
 		if (0 == s->registers) {

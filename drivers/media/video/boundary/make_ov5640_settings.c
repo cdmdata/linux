@@ -207,7 +207,7 @@ struct ov5640_setting *process_file (char const *dname, char const *fname) {
 			unsigned long early_crc;
 			s->crc = 0 ;
 			s->registers = 0 ; // until after CRC
-			early_crc = adler32(0,(const Bytef *)s,sizeof(*s));
+			early_crc = adler32(0,(const Bytef *)s,OV5640_SETTING_SIZE);
 			s->crc = adler32(early_crc,(const Bytef *)regs,s->reg_count*sizeof(regs[0]));
 			printf ("%s:%u registers: %08lx/%08x\n",path, s->reg_count,early_crc,s->crc);
                         s->registers = regs ;
@@ -255,7 +255,7 @@ int main (int argc, char const **argv) {
 			fwrite (&num_valid,1,sizeof(num_valid),fOut);
 			for (file_count = 0 ; file_count < num_valid ; file_count++) {
                                 struct ov5640_setting *s = settings[file_count];
-				fwrite(s,sizeof(*s),1,fOut);
+				fwrite(s,OV5640_SETTING_SIZE,1,fOut);
 				fwrite(s->registers,s->reg_count*sizeof(s->registers[0]),1,fOut);
 			}
 			fclose (fOut);

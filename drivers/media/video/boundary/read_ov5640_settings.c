@@ -36,13 +36,13 @@ int main (int argc, char const **argv) {
 			settings = (struct ov5640_setting *)malloc(num_settings*sizeof(*settings));
 			for (i = 0; i < num_settings; i++) {
                                 struct ov5640_setting *s = settings+i ;
-				if (sizeof(*s) == fread(s,1,sizeof(*s),fIn)) {
+				if (OV5640_SETTING_SIZE == fread(s,1,OV5640_SETTING_SIZE,fIn)) {
 					unsigned file_crc = s->crc ;
 					unsigned crc ; 
 					unsigned const regsize = s->reg_count*sizeof(s->registers[0]);
 					s->registers = 0 ; // force NULL pointer for CRC
 					s->crc = 0 ;
-                                        crc = adler32(0,(Bytef *)s,sizeof(*s));
+                                        crc = adler32(0,(Bytef *)s,OV5640_SETTING_SIZE);
 					s->crc = file_crc ;
 					s->registers = (struct ov5640_reg_value *)malloc(regsize);
 					if (regsize == fread((void *)s->registers,1,regsize,fIn)) {
