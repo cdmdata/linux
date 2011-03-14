@@ -90,6 +90,8 @@
 #define GP_SD1_WP			MAKE_GP(1, 1)
 #define GP_POWER_KEY			MAKE_GP(2, 21)
 #define GP_HEADPHONE_DET		MAKE_GP(3, 26)
+#define CAMERA_POWERDOWN		MAKE_GP(4, 9)
+#define CAMERA_RESET			MAKE_GP(4, 14)
 
 struct gpio nitrogen_gpios[] __initdata = {
 	{.label="I2C_connector_int",	.gpio = MAKE_GP(4, 26),		.flags = GPIOF_DIR_IN},	/* overriden by i2c_generic_data.gp, DON'T REORDER  */
@@ -103,6 +105,12 @@ struct gpio nitrogen_gpios[] __initdata = {
 	{.label="hs_i2c_data",		.gpio = MAKE_GP(4, 17),		.flags = GPIOF_DIR_IN},
 	{.label="gp_4_30",		.gpio = MAKE_GP(4, 30),		.flags = GPIOF_DIR_IN},		/* release immediately */
 	{.label="gp_4_31",		.gpio = MAKE_GP(4, 31),		.flags = GPIOF_DIR_IN},		/* release immediately */
+#if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) \
+ || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
+	{.label="camera_powerdown",	.gpio = CAMERA_POWERDOWN,	.flags = GPIOF_DIR_OUT},
+	{.label="camera_reset",		.gpio = CAMERA_RESET,		.flags = GPIOF_DIR_OUT},
+#endif
+
 
 #define GP_USBH1_HUB_RST		MAKE_GP(1, 7)		//Normally, gpio1[7] is esdhc2 - wp
 								//Normally, gpio1[8] is esdhc2 - cd
@@ -919,6 +927,17 @@ static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
 	 },
 };
 
+static struct mxc_camera_platform_data camera_data = {
+	.io_regulator = "VGEN3",
+	.analog_regulator = "VVIDEO",
+	.mclk = 26000000,
+	.csi = 0,
+	.power_down = CAMERA_POWERDOWN,
+	.reset = CAMERA_RESET,
+	.i2c_bus = 1,
+	.i2c_id = 0x78,
+	.sensor_name = "ov5640",
+};
 
 static struct i2c_board_info mxc_i2c1_board_info[] __initdata = {
 };
@@ -1334,6 +1353,37 @@ static struct power_key_platform_data pwrkey_data = {
 	.get_key_status = mxc_pwrkey_getstatus,
 };
 
+#if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
+static struct platform_device boundary_camera_device = {
+	.name = "boundary_camera",
+};
+
+static struct platform_device boundary_camera_interfaces[] = {
+#ifdef CONFIG_BOUNDARY_CAMERA_CSI0
+	{ .name = "boundary_camera_csi0", },
+#endif
+#ifdef CONFIG_BOUNDARY_CAMERA_CSI1
+	{ .name = "boundary_camera_csi1", },
+#endif
+};
+
+static void init_camera()
+{
+	struct clk *clk ;
+	int i ;
+	clk = clk_get(NULL,"csi_mclk1");
+	if(clk){
+		clk_set_rate(clk,24000000);
+	} else
+		printk(KERN_ERR "%s: Error getting CSI clock\n", __func__ );
+
+	mxc_register_device(&boundary_camera_device, &camera_data);
+	for (i = 0 ; i < ARRAY_SIZE(boundary_camera_interfaces); i++ ){
+		mxc_register_device(&boundary_camera_interfaces[i], &camera_data);
+	}
+}
+#endif
+
 static void __init mx51_nitrogen_io_init(void)
 {
 	/*
@@ -1370,6 +1420,9 @@ static void __init mx51_nitrogen_io_init(void)
 		struct pad_desc onewire = MX51_PAD_OWIRE_LINE__OWIRE_LINE;
 		mxc_iomux_v3_setup_pad(&onewire);
 	}
+#if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
+	init_camera();
+#endif
 }
 
 /*!
