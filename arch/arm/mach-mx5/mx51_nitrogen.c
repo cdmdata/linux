@@ -1207,7 +1207,11 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 	struct tag *mem_tag = 0;
 	int total_mem = SZ_512M;
 	int left_mem = 0, temp_mem = 0;
+#if defined(CONFIG_MXC_AMD_GPU) || defined(CONFIG_MXC_AMD_GPU_MODULE)
 	int gpu_mem = SZ_16M;
+#else
+	int gpu_mem = 0;
+#endif
 	int fb_mem = SZ_32M;
 #ifdef CONFIG_ANDROID_PMEM
 	int pmem_gpu_size = android_pmem_gpu_data.size;
@@ -1230,12 +1234,14 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 				temp_mem = memparse(str, &str);
 			}
 
+#if defined(CONFIG_MXC_AMD_GPU) || defined(CONFIG_MXC_AMD_GPU_MODULE)
 			str = t->u.cmdline.cmdline;
 			str = strstr(str, "gpu_memory=");
 			if (str != NULL) {
 				str += 11;
 				gpu_mem = memparse(str, &str);
 			}
+#endif
 			break;
 		}
 	}
