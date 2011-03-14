@@ -1208,24 +1208,11 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 	struct tag *t;
 	struct tag *mem_tag = 0;
 	int total_mem = SZ_512M;
-	int left_mem = 0, temp_mem = 0;
-#if defined(CONFIG_MXC_AMD_GPU) || defined(CONFIG_MXC_AMD_GPU_MODULE)
-	int gpu_mem = SZ_16M;
-#else
-	int gpu_mem = 0;
-#endif
-	int fb_mem = SZ_32M;
-#ifdef CONFIG_ANDROID_PMEM
-	int pmem_gpu_size = android_pmem_gpu_data.size;
-	int pmem_adsp_size = android_pmem_data.size;
-	fb_mem = 0;
-#endif
+	int temp_mem = 0;
 
 	mxc_set_cpu_type(MXC_CPU_MX51);
-
 	get_cpu_wp = mx51_nitrogen_get_cpu_wp;
 	set_num_cpu_wp = mx51_nitrogen_set_num_cpu_wp;
-
 
 	for_each_tag(t, tags) {
 		if (t->hdr.tag == ATAG_CMDLINE) {
@@ -1251,50 +1238,35 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 	for_each_tag(mem_tag, tags) {
 		if (mem_tag->hdr.tag == ATAG_MEM) {
 			total_mem = mem_tag->u.mem.size;
-#ifdef CONFIG_ANDROID_PMEM
-			left_mem = total_mem - gpu_mem - pmem_gpu_size - pmem_adsp_size;
-#else
-			left_mem = total_mem - gpu_mem - fb_mem;
-#endif
 			break;
 		}
 	}
 
-	if (temp_mem > 0 && temp_mem < left_mem)
-		left_mem = temp_mem;
+	if (temp_mem > 0 && temp_mem < total_mem)
+		total_mem = temp_mem;
 
 	if (mem_tag) {
-#ifndef CONFIG_ANDROID_PMEM
-		fb_mem = total_mem - left_mem - gpu_mem;
-		if (fb_mem < 0) {
-			gpu_mem = total_mem - left_mem;
-			fb_mem = 0;
-		}
-#else
-		android_pmem_data.start = mem_tag->u.mem.start
-				+ left_mem + gpu_mem + pmem_gpu_size;
-		android_pmem_gpu_data.start = mem_tag->u.mem.start
-				+ left_mem + gpu_mem;
-#endif
-		mem_tag->u.mem.size = left_mem;
-
+#if defined(CONFIG_MXC_AMD_GPU) || defined(CONFIG_MXC_AMD_GPU_MODULE)
 		/*reserve memory for gpu*/
-		gpu_device.resource[5].start =
-				mem_tag->u.mem.start + left_mem;
-		gpu_device.resource[5].end =
-				gpu_device.resource[5].start + gpu_mem - 1;
-#if defined(CONFIG_FB_MXC_SYNC_PANEL) || \
-	defined(CONFIG_FB_MXC_SYNC_PANEL_MODULE)
-		if (fb_mem) {
-			mxcfb_resources[0].start =
-				gpu_device.resource[5].end + 1;
-			mxcfb_resources[0].end =
-				mxcfb_resources[0].start + fb_mem - 1;
-		} else {
-			mxcfb_resources[0].start = 0;
-			mxcfb_resources[0].end = 0;
-		}
+		gpu_device.resource[5].end = total_mem - 1 ;
+		gpu_device.resource[5].start = total_mem - SZ_16M ;
+		total_mem -= SZ_16M ;
 #endif
+
+#ifdef CONFIG_ANDROID_PMEM
+		android_pmem_data.end 	= mem_tag->u.mem.start + total_mem - 1 ;
+		android_pmem_data.start = android_pmem_data.end - android_pmem_data.size + 1 ;
+		total_mem -= android_pmem_data.size ;
+		android_pmem_gpu_data.end = mem_tag->u.mem.start + total_mem - 1 ;
+		android_pmem_gpu_data.start = android_pmem_gpu_data.end - android_pmem_gpu_data.size + 1 ;
+		total_mem -= android_pmem_gpu_data.size ;
+#endif
+#if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
+		camera_buf_phys = mem_tag->u.mem.start + total_mem - MAX_CAMERA_MEM ;
+		total_mem -= MAX_CAMERA_MEM ;
+		printk (KERN_INFO "0x%x bytes of camera mem at 0x%lx\n", MAX_CAMERA_MEM, camera_buf_phys);
+#endif
+		mem_tag->u.mem.size = total_mem ;
 	}
 #ifdef CONFIG_DEBUG_LL
 	mx5_map_uart();
