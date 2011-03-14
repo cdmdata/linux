@@ -1048,11 +1048,23 @@ static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
 	 .platform_data  = &da905x_data,
 	 },
 #endif
+#if CONFIG_DVI_TFP410
 	{
 	 .type = "tfp410",
 	 .addr = 0x38,
 	 .platform_data  = &i2c_tfp410_data,
 	}
+#endif
+#if CONFIG_TOUCHSCREEN_EP0700M01
+#ifdef CONFIG_DVI_TFP410
+#error cannot select both TFP410 and EP0700M01, address conflict
+#endif
+	{
+	 .type = "ep0700m01-ts",
+	 .addr = 0x38,
+	 .platform_data  = &i2c_generic_data,
+	}
+#endif
 };
 
 /* TO DO add platform data */
