@@ -3,7 +3,7 @@ if VIDEO_BOUNDARY_CAMERA
 menu "Boundary Camera Features support"
 config BOUNDARY_CAMERA_CSI0
 	bool "Support cameras on CSI0"
-	default y
+	default n
 	---help---
 	  Choose Y to include camera support on Camera Sensor #0
 
