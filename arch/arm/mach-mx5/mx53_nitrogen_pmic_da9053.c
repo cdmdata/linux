@@ -266,5 +266,9 @@ static struct i2c_board_info __initdata da9052_i2c_device = {
 
 int __init mx53_nitrogen_init_da9052(void)
 {
+#if defined(CONFIG_PMIC_DA9052) || defined(CONFIG_PMIC_DA9052_MODULE)
 	return i2c_register_board_info(0, &da9052_i2c_device, 1);
+#else
+	return 0 ;
+#endif
 }
