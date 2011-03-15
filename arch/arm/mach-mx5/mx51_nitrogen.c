@@ -927,18 +927,6 @@ static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
 	 },
 };
 
-static struct mxc_camera_platform_data camera_data = {
-	.io_regulator = "VGEN3",
-	.analog_regulator = "VVIDEO",
-	.mclk = 26000000,
-	.csi = 0,
-	.power_down = CAMERA_POWERDOWN,
-	.reset = CAMERA_RESET,
-	.i2c_bus = 1,
-	.i2c_id = 0x78,
-	.sensor_name = "ov5640",
-};
-
 static struct i2c_board_info mxc_i2c1_board_info[] __initdata = {
 };
 
@@ -1366,6 +1354,18 @@ static struct platform_device boundary_camera_interfaces[] = {
 #ifdef CONFIG_BOUNDARY_CAMERA_CSI1
 	{ .name = "boundary_camera_csi1", },
 #endif
+};
+
+static struct mxc_camera_platform_data camera_data = {
+	.io_regulator = "VGEN3",
+	.analog_regulator = "VVIDEO",
+	.mclk = 26000000,
+	.csi = 0,
+	.power_down = CAMERA_POWERDOWN,
+	.reset = CAMERA_RESET,
+	.i2c_bus = 1,
+	.i2c_id = 0x78,
+	.sensor_name = "ov5640",
 };
 
 static void init_camera()
