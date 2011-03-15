@@ -131,6 +131,10 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "usbh1-vbus",		.gpio = MAKE_GP(7, 8),		.flags = 0},
 #define N53_PHY_RESET				MAKE_GP(7, 13)
 	{.label = "ICS1893 reset",	.gpio = MAKE_GP(7, 13),		.flags = 0},	/* ICS1893 Ethernet PHY reset */
+#define CAMERA_RESET				MAKE_GP(4, 14)
+	{.label = "Camera reset",	.gpio = MAKE_GP(4, 14),		.flags = 0},
+#define CAMERA_POWERDOWN			MAKE_GP(1, 7)
+	{.label = "Camera power down",	.gpio = MAKE_GP(1, 7),		.flags = 0},
 };
 
 /*!
@@ -854,19 +858,6 @@ static int __init mxc_init_fb(void)
 }
 device_initcall(mxc_init_fb);
 
-static void camera_pwdn(int pwdn)
-{
-	gpio_set_value(MX53_TVIN_PWR, pwdn);
-}
-
-static struct mxc_camera_platform_data camera_data = {
-	.analog_regulator = "VSD",
-	.gpo_regulator = "VVIDEO",
-	.mclk = 24000000,
-	.csi = 0,
-	.pwdn = camera_pwdn,
-};
-
 static void sii9022_hdmi_reset(void)
 {
 }
@@ -1025,11 +1016,6 @@ static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
 	.addr = 0x39,
 	.platform_data = &sii9022_hdmi_data,
 	},
-	{
-	.type = "ov3640",
-	.addr = 0x3C,
-	.platform_data = (void *)&camera_data,
-	 },
 	{
 	 .type = "Pic16F616-ts",
 	 .addr = 0x22,
@@ -1542,6 +1528,22 @@ static struct android_usb_platform_data android_usb_data = {
 	.functions = usb_functions_all,
 };
 
+#if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
+#define MAX_CAMERA_FRAME_SIZE (((2592*1944*2+PAGE_SIZE-1)/PAGE_SIZE)*PAGE_SIZE)
+#define MAX_CAMERA_FRAME_COUNT 4
+#define MAX_CAMERA_MEM SZ_64M
+
+static unsigned long camera_buf_phys = 0UL ;
+unsigned long get_camera_phys(unsigned maxsize) {
+	if (maxsize <= MAX_CAMERA_MEM)
+		return camera_buf_phys ;
+	else
+		return 0UL ;
+}
+EXPORT_SYMBOL(get_camera_phys);
+
+#endif
+
 /*!
  * Board specific fixup function. It is called by \b setup_arch() in
  * setup.c file very early on during kernel starts. It allows the user to
@@ -1556,21 +1558,16 @@ static struct android_usb_platform_data android_usb_data = {
 static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 				   char **cmdline, struct meminfo *mi)
 {
+	char *str;
 	struct tag *t;
 	struct tag *mem_tag = 0;
 	int total_mem = SZ_1G;
-	int left_mem = 0, temp_mem = 0;
+	int temp_mem = 0;
+#if defined(CONFIG_MXC_AMD_GPU) || defined(CONFIG_MXC_AMD_GPU_MODULE)
 	int gpu_mem = SZ_64M;
-	int fb_mem = SZ_32M;
-	char *str;
-#ifdef CONFIG_ANDROID_PMEM
-	int pmem_gpu_size = android_pmem_gpu_data.size;
-	int pmem_adsp_size = android_pmem_data.size;
-	fb_mem = 0;
 #endif
 
 	mxc_set_cpu_type(MXC_CPU_MX53);
-
 	get_cpu_wp = mx53_evk_get_cpu_wp;
 	set_num_cpu_wp = mx53_evk_set_num_cpu_wp;
 
@@ -1583,12 +1580,14 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 				temp_mem = memparse(str, &str);
 			}
 
+#if defined(CONFIG_MXC_AMD_GPU) || defined(CONFIG_MXC_AMD_GPU_MODULE)
 			str = t->u.cmdline.cmdline;
 			str = strstr(str, "gpu_memory=");
 			if (str != NULL) {
 				str += 11;
 				gpu_mem = memparse(str, &str);
 			}
+#endif
 			break;
 		}
 	}
@@ -1596,55 +1595,81 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 	for_each_tag(mem_tag, tags) {
 		if (mem_tag->hdr.tag == ATAG_MEM) {
 			total_mem = mem_tag->u.mem.size;
-#ifdef CONFIG_ANDROID_PMEM
-			left_mem = total_mem - gpu_mem - pmem_gpu_size - pmem_adsp_size;
-#else
-			left_mem = total_mem - gpu_mem - fb_mem;
-#endif
 			break;
 		}
 	}
 
-	if (temp_mem > 0 && temp_mem < left_mem)
-		left_mem = temp_mem;
+	if (temp_mem > 0 && temp_mem < total_mem)
+		total_mem = temp_mem;
 
 	if (mem_tag) {
-#ifndef CONFIG_ANDROID_PMEM
-		fb_mem = total_mem - left_mem - gpu_mem;
-		if (fb_mem < 0) {
-			 gpu_mem = total_mem - left_mem;
-			 fb_mem = 0;
-		}
-#else
-		android_pmem_data.start = mem_tag->u.mem.start
-				+ left_mem + gpu_mem + pmem_gpu_size;
-		android_pmem_gpu_data.start = mem_tag->u.mem.start
-				+ left_mem + gpu_mem;
-#endif
-		mem_tag->u.mem.size = left_mem;
-
+#if defined(CONFIG_MXC_AMD_GPU) || defined(CONFIG_MXC_AMD_GPU_MODULE)
 		/*reserve memory for gpu*/
-		gpu_device.resource[5].start =
-				mem_tag->u.mem.start + left_mem;
-		gpu_device.resource[5].end =
-				gpu_device.resource[5].start + gpu_mem - 1;
-#if defined(CONFIG_FB_MXC_SYNC_PANEL) || \
-	defined(CONFIG_FB_MXC_SYNC_PANEL_MODULE)
-		if (fb_mem) {
-			mxcfb_resources[0].start =
-				gpu_device.resource[5].end + 1;
-			mxcfb_resources[0].end =
-				mxcfb_resources[0].start + fb_mem - 1;
-		} else {
-			mxcfb_resources[0].start = 0;
-			mxcfb_resources[0].end = 0;
-		}
+		gpu_device.resource[5].end = mem_tag->u.mem.start + total_mem - 1 ;
+		gpu_device.resource[5].start = mem_tag->u.mem.start + total_mem - gpu_mem ;
+		total_mem -= gpu_mem ;
 #endif
+
+#ifdef CONFIG_ANDROID_PMEM
+		android_pmem_data.start = mem_tag->u.mem.start + total_mem - android_pmem_data.size ;
+		total_mem -= android_pmem_data.size ;
+		android_pmem_gpu_data.start = mem_tag->u.mem.start + total_mem - android_pmem_gpu_data.size ;
+		total_mem -= android_pmem_gpu_data.size ;
+#endif
+#if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
+		camera_buf_phys = mem_tag->u.mem.start + total_mem - MAX_CAMERA_MEM ;
+		total_mem -= MAX_CAMERA_MEM ;
+		printk (KERN_INFO "0x%x bytes of camera mem at 0x%lx\n", MAX_CAMERA_MEM, camera_buf_phys);
+#endif
+		mem_tag->u.mem.size = total_mem ;
 	}
 #ifdef CONFIG_DEBUG_LL
 	mx5_map_uart();
 #endif
 }
+
+#if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
+static struct platform_device boundary_camera_device = {
+	.name = "boundary_camera",
+};
+
+static struct platform_device boundary_camera_interfaces[] = {
+#ifdef CONFIG_BOUNDARY_CAMERA_CSI0
+	{ .name = "boundary_camera_csi0", },
+#endif
+#ifdef CONFIG_BOUNDARY_CAMERA_CSI1
+	{ .name = "boundary_camera_csi1", },
+#endif
+};
+
+static struct mxc_camera_platform_data camera_data = {
+	.io_regulator = "VGEN3",
+	.analog_regulator = "VVIDEO",
+	.mclk = 26000000,
+	.csi = 0,
+	.power_down = CAMERA_POWERDOWN,
+	.reset = CAMERA_RESET,
+	.i2c_bus = 2,
+	.i2c_id = 0x78,
+	.sensor_name = "ov5640",
+};
+
+static void init_camera(void)
+{
+	struct clk *clk ;
+	int i ;
+	clk = clk_get(NULL,"csi_mclk1");
+	if(clk){
+		clk_set_rate(clk,24000000);
+	} else
+		printk(KERN_ERR "%s: Error getting CSI clock\n", __func__ );
+
+	mxc_register_device(&boundary_camera_device, &camera_data);
+	for (i = 0 ; i < ARRAY_SIZE(boundary_camera_interfaces); i++ ){
+		mxc_register_device(&boundary_camera_interfaces[i], &camera_data);
+	}
+}
+#endif
 
 static void __init mx53_evk_io_init(void)
 {
@@ -1672,6 +1697,9 @@ static void __init mx53_evk_io_init(void)
 	gpio_set_value(EVK_USB_HUB_RESET, 1);		/* release HUB reset */
 	gpio_set_value(N53_PHY_RESET, 1);		/* release ICS1893 Ethernet PHY reset */
 	gpio_set_value(MX53_TVIN_RESET, 1);		/* release */
+#if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
+	init_camera();
+#endif
 }
 
 static void nitrogen_power_off(void)
