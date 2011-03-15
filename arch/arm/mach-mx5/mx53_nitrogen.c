@@ -1055,7 +1055,7 @@ static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
 	 .platform_data  = &i2c_tfp410_data,
 	}
 #endif
-#if CONFIG_TOUCHSCREEN_EP0700M01
+#ifdef CONFIG_TOUCHSCREEN_EP0700M01
 #ifdef CONFIG_DVI_TFP410
 #error cannot select both TFP410 and EP0700M01, address conflict
 #endif
