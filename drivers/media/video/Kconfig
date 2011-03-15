@@ -731,7 +731,7 @@ config VIDEO_MXC_OPL
 config VIDEO_BOUNDARY_CAMERA
 	tristate "Boundary Devices Video For Linux Camera"
 	depends on VIDEO_DEV && ARCH_MXC
-	default y
+	default n
 	---help---
 	  This is another video4linux2 capture driver for the i.MX51.
 
