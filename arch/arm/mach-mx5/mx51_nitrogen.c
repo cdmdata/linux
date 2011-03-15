@@ -1228,6 +1228,9 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 	struct tag *mem_tag = 0;
 	int total_mem = SZ_512M;
 	int temp_mem = 0;
+#if defined(CONFIG_MXC_AMD_GPU) || defined(CONFIG_MXC_AMD_GPU_MODULE)
+	int gpu_mem = SZ_16M ;
+#endif
 
 	mxc_set_cpu_type(MXC_CPU_MX51);
 	get_cpu_wp = mx51_nitrogen_get_cpu_wp;
@@ -1267,17 +1270,15 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 	if (mem_tag) {
 #if defined(CONFIG_MXC_AMD_GPU) || defined(CONFIG_MXC_AMD_GPU_MODULE)
 		/*reserve memory for gpu*/
-		gpu_device.resource[5].end = total_mem - 1 ;
-		gpu_device.resource[5].start = total_mem - SZ_16M ;
-		total_mem -= SZ_16M ;
+		gpu_device.resource[5].end = mem_tag->u.mem.start + total_mem - 1 ;
+		gpu_device.resource[5].start = mem_tag->u.mem.start + total_mem - gpu_mem ;
+		total_mem -= gpu_mem ;
 #endif
 
 #ifdef CONFIG_ANDROID_PMEM
-		android_pmem_data.end 	= mem_tag->u.mem.start + total_mem - 1 ;
-		android_pmem_data.start = android_pmem_data.end - android_pmem_data.size + 1 ;
+		android_pmem_data.start = mem_tag->u.mem.start + total_mem - android_pmem_data.size ;
 		total_mem -= android_pmem_data.size ;
-		android_pmem_gpu_data.end = mem_tag->u.mem.start + total_mem - 1 ;
-		android_pmem_gpu_data.start = android_pmem_gpu_data.end - android_pmem_gpu_data.size + 1 ;
+		android_pmem_gpu_data.start = mem_tag->u.mem.start + total_mem - android_pmem_gpu_data.size ;
 		total_mem -= android_pmem_gpu_data.size ;
 #endif
 #if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
