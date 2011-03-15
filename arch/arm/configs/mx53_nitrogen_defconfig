@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.3
-# Mon Mar 14 16:58:19 2011
+# Mon Mar 14 17:23:27 2011
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -1390,14 +1390,7 @@ CONFIG_VIDEO_MXC_IPU_OUTPUT=y
 # CONFIG_VIDEO_MXC_IPUV1_WVGA_OUTPUT is not set
 # CONFIG_VIDEO_MXC_PXP_V4L2 is not set
 # CONFIG_VIDEO_MXC_OPL is not set
-CONFIG_VIDEO_BOUNDARY_CAMERA=y
-
-#
-# Boundary Camera Features support
-#
-CONFIG_BOUNDARY_CAMERA_CSI0=y
-# CONFIG_BOUNDARY_CAMERA_CSI1 is not set
-# CONFIG_BOUNDARY_CAMERA_OV5640 is not set
+# CONFIG_VIDEO_BOUNDARY_CAMERA is not set
 # CONFIG_VIDEO_SAA5246A is not set
 # CONFIG_VIDEO_SAA5249 is not set
 # CONFIG_SOC_CAMERA is not set
