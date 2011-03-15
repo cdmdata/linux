@@ -67,13 +67,6 @@
 #include <linux/usb/android_composite.h>
 //#define REV1
 
-#if defined(CONFIG_PMIC_DA905X_MODULE) || defined(CONFIG_PMIC_DA905X)
-#include <linux/mfd/da905x.h>
-#include <linux/regulator/machine.h>
-#include <linux/apm-emulation.h>
-#include <linux/power_supply.h>
-#endif
-
 #ifdef CONFIG_KEYBOARD_GPIO
 #include <linux/gpio_keys.h>
 #endif
@@ -875,130 +868,6 @@ static struct plat_i2c_generic_data i2c_generic_data = {
 	IOMUX_TO_IRQ_V3(N53_I2C_CONNECTOR_INT), N53_I2C_CONNECTOR_INT
 };
 
-#if defined(CONFIG_REGULATOR_DA905X_MODULE) || defined(CONFIG_REGULATOR_DA905X)
-static struct regulator_init_data display_power = {
-	.constraints = { /* board default 1.8V */
-		.name = "LDO10",
-		.min_uV = 2300000,
-		.max_uV = 3400000,
-	},
-};
-#endif
-
-#if defined(CONFIG_REGULATOR_DA905X_MODULE) || defined(CONFIG_REGULATOR_DA905X)
-static void battery_low(void)
-{
-	printk (KERN_ERR "%s\n", __func__ );
-#if defined(CONFIG_APM_EMULATION)
-	apm_queue_event(APM_LOW_BATTERY);
-#endif
-}
-
-static void battery_critical(void)
-{
-	printk (KERN_ERR "%s\n", __func__ );
-#if defined(CONFIG_APM_EMULATION)
-	apm_queue_event(APM_CRITICAL_SUSPEND);
-#endif
-}
-
-static void battery_change(void)
-{
-	printk (KERN_ERR "%s\n", __func__ );
-#if defined(CONFIG_APM_EMULATION)
-	apm_queue_event(APM_POWER_STATUS_CHANGE);
-#endif
-}
-#endif
-
-#if defined(CONFIG_FB_MXC_PMIC_LCD_MODULE) || defined(CONFIG_FB_MXC_PMIC_LCD)
-static struct mxc_lcd_platform_data lcd_pmic_data = {
-	.io_reg = "LDO10",
-};
-
-static struct platform_device lcd_pmic_device = {
-	.name = "lcd_pmic",
-	.dev = {
-		.platform_data = &lcd_pmic_data,
-		},
-};
-#endif
-
-#if defined(CONFIG_BATTERY_DA905X_MODULE) || defined(CONFIG_BATTERY_DA905X)
-static struct power_supply_info powersupply_info = {
-	.name = "battery",
-	.technology = POWER_SUPPLY_TECHNOLOGY_LIPO,
-	.voltage_max_design = 4200000,
-	.voltage_min_design = 3000000,
-	.use_for_apm = 1,
-};
-
-struct da905x_battery_info battery_info = {
-	.battery_info = &powersupply_info,
-
-	.charge_milliamp = 640,
-	.charge_millivolt = 4200,
-
-	.vbat_low = 3300,
-	.vbat_crit = 3200,
-	.vbat_charge_start = 4100,
-	.vbat_charge_stop = 4200,
-	.vbat_charge_restart = 4000,
-
-	.vcharge_min = 3200,
-	.vcharge_max = 5500,
-
-	.icharge_reduced = 50,
-	.icharge_end = 40,
-
-	.tbat_low = 197,
-	.tbat_high = 78,
-	.tbat_restart = 100,
-
-	.batmon_interval = 0,
-
-	.battery_low = battery_low,
-	.battery_critical = battery_critical,
-	.battery_change = battery_change
-};
-#endif
-
-/* I2C PMIC registers of interest
-
-3b	59	6C		DA9053_LDO10		LDO10 enabled @3.4V
-0f	15	7a		DA9053_CONTROL_B	!buck_merge/external power FET/require wakeup/OTP read enable/backup battery enable/page write mode
-3e	62	9d		DA9053_CHG_BUCK		CHG Temp en/use ISET_USB/no force sleep/auto charger/900mA ISET_BUCK
-40	64	d0		DA9053_ISET		900mA DCIN / 70mA USB in
-41	65	10		DA9053_BAT_CHG		60mA battery pre-charge/0b 10 1101 == 45*20= 900mA ICHG_BAT
-42		b5
-43	67	00		DA9053_INPUT_CONT	no charge timeout/no USB suspend/no DCIN susp/charge at VBAT-100mV/extend reduced charge
-
- */
-
-#if defined(CONFIG_PMIC_DA905X_MODULE) || defined(CONFIG_PMIC_DA905X)
-static struct da905x_subdev_info da905x_subdevs[] = {
-#if defined(CONFIG_REGULATOR_DA905X_MODULE) || defined(CONFIG_REGULATOR_DA905X)
-	{
-		.name = "da905x-regulator",
-		.id = DA9053_SUBDEV_ID_LDO10,
-		.platform_data = &display_power,
-	},
-#endif
-#if defined(CONFIG_BATTERY_DA905X_MODULE) || defined(CONFIG_BATTERY_DA905X)
-	{
-		.name = "da905x-battery",
-		.id = DA9053_SUBDEV_ID_BATTERY,
-		.platform_data = &battery_info,
-	},
-#endif
-};
-
-struct da905x_platform_data da905x_data = {
-	.num_subdevs = ARRAY_SIZE(da905x_subdevs),
-	.subdevs = da905x_subdevs
-};
-#endif
-
 struct plat_i2c_tfp410_data {
 	int irq;
 	int gp;
@@ -1026,14 +895,6 @@ static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
 	 .addr = 0x4c,
 	 .platform_data  = &i2c_generic_data,
 	},
-#if defined(CONFIG_PMIC_DA905X_MODULE) || defined(CONFIG_PMIC_DA905X)
-	{
-	 .type = "da9053",
-	 .addr = 0x48,
-	 .irq = gpio_to_irq(GP_PMIC_IRQ),
-	 .platform_data  = &da905x_data,
-	 },
-#endif
 #if CONFIG_DVI_TFP410
 	{
 	 .type = "tfp410",
@@ -1704,7 +1565,7 @@ static void __init mx53_evk_io_init(void)
 
 static void nitrogen_power_off(void)
 {
-#if defined(CONFIG_PMIC_DA905X_MODULE) || defined(CONFIG_PMIC_DA905X)
+#if defined(CONFIG_PMIC_DA9052_MODULE) || defined(CONFIG_PMIC_DA9052)
 	struct i2c_adapter *adap = i2c_get_adapter(0);
 
 	if (adap) {
