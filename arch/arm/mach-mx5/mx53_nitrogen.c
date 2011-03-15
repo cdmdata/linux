@@ -1506,8 +1506,7 @@ static struct platform_device boundary_camera_interfaces[] = {
 };
 
 static struct mxc_camera_platform_data camera_data = {
-	.io_regulator = "VGEN3",
-	.analog_regulator = "VVIDEO",
+	.analog_regulator = "DA9052_LDO9",
 	.mclk = 26000000,
 	.csi = 0,
 	.power_down = CAMERA_POWERDOWN,
