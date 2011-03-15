@@ -75,6 +75,8 @@
 #include "devices.h"
 #include "usb.h"
 
+extern int __init mx53_nitrogen_init_da9052(void);
+
 #define MAKE_GP(port, bit) ((port - 1) * 32 + bit)
 
 struct gpio nitrogen53_gpios[] __initdata = {
@@ -1608,7 +1610,6 @@ static void __init mxc_board_init(void)
 	mxcsdhc1_device.resource[2].start = IOMUX_TO_IRQ_V3(EVK_SD1_CD);
 	mxcsdhc1_device.resource[2].end = IOMUX_TO_IRQ_V3(EVK_SD1_CD);
 
-
 	mxc_cpu_common_init();
 	mx53_evk_io_init();
 
@@ -1619,6 +1620,8 @@ static void __init mxc_board_init(void)
 	mxc_register_device(&mxci2c_devices[1], &mxci2c_data);
 	mxc_register_device(&mxci2c_devices[2], &mxci2c_data);
 	mxc_register_device(&mxc_rtc_device, NULL);
+
+	mx53_nitrogen_init_da9052();
 
 	mxc_register_device(&mxc_w1_master_device, &mxc_w1_data);
 	mxc_register_device(&mxc_ipu_device, &mxc_ipu_data);
