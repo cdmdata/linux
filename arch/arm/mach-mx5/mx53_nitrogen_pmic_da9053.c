@@ -36,58 +36,336 @@
 #include <mach/irqs.h>
 #include <mach/iomux-mx53.h>
 
-#define DA9052_LDO(max, min, rname, suspend_mv) \
-{\
-	.constraints = {\
-		.name		= (rname), \
-		.max_uV		= (max) * 1000,\
-		.min_uV		= (min) * 1000,\
-		.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE\
-		|REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,\
-		.valid_modes_mask = REGULATOR_MODE_NORMAL,\
-		.state_mem = { \
-			.uV = suspend_mv * 1000, \
-			.mode = REGULATOR_MODE_NORMAL, \
-			.enabled = (0 == suspend_mv) ? 0 : 1, \
-			.disabled = 0, \
-		}, \
-	},\
-}
+#define mV_to_uV(mV) (mV * 1000)
 
-/* currently the suspend_mv here takes no effects for DA9053
+/* currently the .state_mem.uV here takes no effects for DA9053
 preset-voltage have to be done in the latest stage during
 suspend*/
 static struct regulator_init_data da9052_regulators_init[] = {
-	DA9052_LDO(DA9052_LDO1_VOLT_UPPER,
-		DA9052_LDO1_VOLT_LOWER, "DA9052_LDO1", 1300),
-	DA9052_LDO(DA9052_LDO2_VOLT_UPPER,
-		DA9052_LDO2_VOLT_LOWER, "DA9052_LDO2", 1300),
-	DA9052_LDO(DA9052_LDO34_VOLT_UPPER,
-		DA9052_LDO34_VOLT_LOWER, "DA9052_LDO3", 3300),
-	DA9052_LDO(DA9052_LDO34_VOLT_UPPER,
-		DA9052_LDO34_VOLT_LOWER, "DA9052_LDO4", 2775),
-	DA9052_LDO(DA9052_LDO567810_VOLT_UPPER,
-		DA9052_LDO567810_VOLT_LOWER, "DA9052_LDO5", 1300),
-	DA9052_LDO(DA9052_LDO567810_VOLT_UPPER,
-		DA9052_LDO567810_VOLT_LOWER, "DA9052_LDO6", 1200),
-	DA9052_LDO(DA9052_LDO567810_VOLT_UPPER,
-		DA9052_LDO567810_VOLT_LOWER, "DA9052_LDO7", 2750),
-	DA9052_LDO(DA9052_LDO567810_VOLT_UPPER,
-		DA9052_LDO567810_VOLT_LOWER, "DA9052_LDO8", 1800),
-	DA9052_LDO(DA9052_LDO9_VOLT_UPPER,
-		DA9052_LDO9_VOLT_LOWER, "DA9052_LDO9", 2500),
-	DA9052_LDO(DA9052_LDO567810_VOLT_UPPER,
-		DA9052_LDO567810_VOLT_LOWER, "DA9052_LDO10", 1200),
-
+	{
+		.constraints = {
+			/*
+			 * 0.6 - 1.8V, 40 mA MAX
+			 * default 1.2V(0x4c), Freescale 1.3V(0x4e)
+			 * R50(0x32), base 0.6V, step .05V
+			 */
+			.name		= "DA9052_LDO1",
+			.max_uV		= mV_to_uV(DA9052_LDO1_VOLT_UPPER),
+			.min_uV		= mV_to_uV(DA9052_LDO1_VOLT_LOWER),
+			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE |
+				REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,
+			.valid_modes_mask = REGULATOR_MODE_NORMAL,
+			.always_on = 1,
+			.boot_on = 1,
+			.state_mem = {
+				.uV = mV_to_uV(1300),
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 1,
+				.disabled = 0,
+			},
+		},
+	},
+	{
+		.constraints = {
+			/*
+			 * 0.6 - 1.8V, 100 mA MAX
+			 * default 1.2V(0x58), UBL 0.9V(0x4c)
+			 * R51(0x33), base 0.6V, step .05V
+			 */
+			.name		= "DA9052_LDO2",
+			.max_uV		= mV_to_uV(DA9052_LDO2_VOLT_UPPER),
+			.min_uV		= mV_to_uV(DA9052_LDO2_VOLT_LOWER),
+			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE |
+				REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,
+			.valid_modes_mask = REGULATOR_MODE_NORMAL,
+			.always_on = 1,
+			.boot_on = 1,
+			.state_mem = {
+				.uV = mV_to_uV(900),
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 1,
+				.disabled = 0,
+			},
+		},
+	},
+	{
+		.constraints = {
+			/*
+			 * 1.725 - 3.3V, 200 mA MAX
+			 * default 2.85V(0x6d), Freescale 3.3V(0x7f)
+			 * R52(0x34), base 1.725V, step .025V
+			 */
+			.name		= "DA9052_LDO3",
+			.max_uV		= mV_to_uV(DA9052_LDO34_VOLT_UPPER),
+			.min_uV		= mV_to_uV(DA9052_LDO34_VOLT_LOWER),
+			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE |
+				REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,
+			.valid_modes_mask = REGULATOR_MODE_NORMAL,
+			.always_on = 1,
+			.boot_on = 1,
+			.state_mem = {
+				.uV = mV_to_uV(3300),
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 1,
+				.disabled = 0,
+			},
+		},
+	},
+	{
+		.constraints = {
+			/*
+			 * Audio AMP Power
+			 * 1.725 - 3.3V, 150 mA MAX
+			 * default 2.85V(0x6d), Freescale 2.775V(0x6a), 3.3V(0x7f) Needed
+			 * R53(0x35), base 1.725V, step .025V
+			 */
+			.name		= "DA9052_LDO4",
+			.max_uV		= mV_to_uV(DA9052_LDO34_VOLT_UPPER),
+			.min_uV		= mV_to_uV(DA9052_LDO34_VOLT_LOWER),
+			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE |
+				REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,
+			.valid_modes_mask = REGULATOR_MODE_NORMAL,
+			.state_mem = {
+				.uV = mV_to_uV(3300),
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 1,
+				.disabled = 0,
+			},
+		},
+	},
+	{
+		.constraints = {
+			/*
+			 * SATA Power
+			 * 1.2 - 3.6V, 100 mA MAX
+			 * default 3.1V(0x66), Freescale 1.3V(0x42), 1.2V(0x40) Needed
+			 * R54(0x36), base 1.2V, step .05V
+			 */
+			.name		= "DA9052_LDO5",
+			.max_uV		= mV_to_uV(DA9052_LDO567810_VOLT_UPPER),
+			.min_uV		= mV_to_uV(DA9052_LDO567810_VOLT_LOWER),
+			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE |
+				REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,
+			.valid_modes_mask = REGULATOR_MODE_NORMAL,
+			.state_mem = {
+				.uV = mV_to_uV(1200),
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 1,
+				.disabled = 0,
+			},
+		},
+	},
+	{
+		.constraints = {
+			/*
+			 * 1.2 - 3.6V, 150 mA MAX
+			 * default 1.2V(0x40), Freescale 1.3V(0x42), 1.2V(0x40) Needed
+			 * R55(0x37), base 1.2V, step .05V
+			 */
+			.name		= "DA9052_LDO6",
+			.max_uV		= mV_to_uV(DA9052_LDO567810_VOLT_UPPER),
+			.min_uV		= mV_to_uV(DA9052_LDO567810_VOLT_LOWER),
+			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE |
+				REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,
+			.valid_modes_mask = REGULATOR_MODE_NORMAL,
+			.always_on = 1,
+			.boot_on = 1,
+			.state_mem = {
+				.uV = mV_to_uV(1200),
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 1,
+				.disabled = 0,
+			},
+		},
+	},
+	{
+		.constraints = {
+			/*
+			 * 1.2 - 3.6V, 200 mA MAX
+			 * default 3.1V(0x66), Freescale 2.75V(0x5f)
+			 * R56(0x38), base 1.2V, step .05V
+			 */
+			.name		= "DA9052_LDO7",
+			.max_uV		= mV_to_uV(DA9052_LDO567810_VOLT_UPPER),
+			.min_uV		= mV_to_uV(DA9052_LDO567810_VOLT_LOWER),
+			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE |
+				REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,
+			.valid_modes_mask = REGULATOR_MODE_NORMAL,
+			.always_on = 1,
+			.boot_on = 1,
+			.state_mem = {
+				.uV = mV_to_uV(2750),
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 1,
+				.disabled = 0,
+			},
+		},
+	},
+	{
+		.constraints = {
+			/*
+			 * Camera DB Power
+			 * 1.2 - 3.6V, 200 mA MAX
+			 * default 2.85V(0x61), Freescale 1.8V(0x4c)
+			 * R57(0x39), base 1.2V, step .05V
+			 */
+			.name		= "DA9052_LDO8",
+			.max_uV		= mV_to_uV(DA9052_LDO567810_VOLT_UPPER),
+			.min_uV		= mV_to_uV(DA9052_LDO567810_VOLT_LOWER),
+			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE |
+				REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,
+			.valid_modes_mask = REGULATOR_MODE_NORMAL,
+			.state_mem = {
+				.uV = mV_to_uV(1800),
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 1,
+				.disabled = 0,
+			},
+		},
+	},
+	{
+		.constraints = {
+			/*
+			 * Camera Power
+			 * 1.25 - 3.6V, 100 mA MAX
+			 * default 2.5V(0x59), Freescale 1.5V(0x45), need 2.8V(0x5f)
+			 * R58(0x3a), base 1.2V, step .05V
+			 */
+			.name		= "DA9052_LDO9",
+			.max_uV		= mV_to_uV(DA9052_LDO9_VOLT_UPPER),
+			.min_uV		= mV_to_uV(DA9052_LDO9_VOLT_LOWER),
+			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE |
+				REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,
+			.valid_modes_mask = REGULATOR_MODE_NORMAL,
+			.state_mem = {
+				.uV = mV_to_uV(2800),
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 1,
+				.disabled = 0,
+			},
+		},
+	},
+	{
+		.constraints = {
+			/*
+			 * Next board, expansion connector power
+			 * This board tfp410 3.3V(0x6a)
+			 * 1.2 - 3.6V, 250 mA MAX
+			 * default 1.8V(0x06), Freescale 1.3V(0x42), uboot 3.3V(0x6a)
+			 * R59(0x3b), base 1.2V, step .05V
+			 */
+			.name		= "DA9052_LDO10",
+			.max_uV		= mV_to_uV(DA9052_LDO567810_VOLT_UPPER),
+			.min_uV		= mV_to_uV(DA9052_LDO567810_VOLT_LOWER),
+			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE |
+				REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,
+			.valid_modes_mask = REGULATOR_MODE_NORMAL,
+			.always_on = 1,
+			.boot_on = 1,
+			.state_mem = {
+				.uV = mV_to_uV(3300),
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 0,
+				.disabled = 0,
+			},
+		},
+	},
 	/* BUCKS */
-	DA9052_LDO(DA9052_BUCK_CORE_PRO_VOLT_UPPER,
-		DA9052_BUCK_CORE_PRO_VOLT_LOWER, "DA9052_BUCK_CORE", 850),
-	DA9052_LDO(DA9052_BUCK_CORE_PRO_VOLT_UPPER,
-		DA9052_BUCK_CORE_PRO_VOLT_LOWER, "DA9052_BUCK_PRO", 950),
-	DA9052_LDO(DA9052_BUCK_MEM_VOLT_UPPER,
-		DA9052_BUCK_MEM_VOLT_LOWER, "DA9052_BUCK_MEM", 1500),
-	DA9052_LDO(DA9052_BUCK_PERI_VOLT_UPPER,
-		DA9052_BUCK_PERI_VOLT_LOWER, "DA9052_BUCK_PERI", 2500)
+	{
+		.constraints = {
+			/*
+			 * DDR power
+			 * 0.725 - 2.075V, 2 amps MAX
+			 * default 1.8V(0x74), UBL 1.8V(0x74)
+			 * R46(0x2e), base 0.5V, step .025V
+			 */
+			.name		= "DA9052_BUCK_CORE",
+			.max_uV		= mV_to_uV(DA9052_BUCK_CORE_PRO_VOLT_UPPER),
+			.min_uV		= mV_to_uV(DA9052_BUCK_CORE_PRO_VOLT_LOWER),
+			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE |
+				REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,
+			.valid_modes_mask = REGULATOR_MODE_NORMAL,
+			.always_on = 1,
+			.boot_on = 1,
+			.state_mem = {
+				.uV = mV_to_uV(1800),
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 1,
+				.disabled = 0,
+			},
+		},
+	},
+	{
+		.constraints = {
+			/*
+			 * 0.725 - 2.075V, 1 amp MAX, need 1.3V for 1Ghz CPU
+			 * default 1.2V(0x5c), Freescale 1.3V(0x60)
+			 * R47(0x2f), base 0.5V, step .025V
+			 */
+			.name		= "DA9052_BUCK_PRO",
+			.max_uV		= mV_to_uV(DA9052_BUCK_CORE_PRO_VOLT_UPPER),
+			.min_uV		= mV_to_uV(DA9052_BUCK_CORE_PRO_VOLT_LOWER),
+			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE |
+				REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,
+			.valid_modes_mask = REGULATOR_MODE_NORMAL,
+			.always_on = 1,
+			.boot_on = 1,
+			.state_mem = {
+				.uV = mV_to_uV(1300),
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 1,
+				.disabled = 0,
+			},
+		},
+	},
+	{
+		.constraints = {
+			/*
+			 * 0.925 - 2.5V, 1 amp MAX
+			 * default 2.0V(0x6b), UBL 1.8V(0x63)
+			 * R48(0x30), base 0.925V, step .025V
+			 * */
+			.name		= "DA9052_BUCK_MEM",
+			.max_uV		= mV_to_uV(DA9052_BUCK_MEM_VOLT_UPPER),
+			.min_uV		= mV_to_uV(DA9052_BUCK_MEM_VOLT_LOWER),
+			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE |
+				REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,
+			.valid_modes_mask = REGULATOR_MODE_NORMAL,
+			.always_on = 1,
+			.boot_on = 1,
+			.state_mem = {
+				.uV = mV_to_uV(1800),
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 1,
+				.disabled = 0,
+			},
+		},
+	},
+	{
+		.constraints = {
+			/*
+			 * 0.925 - 2.475V, 1 amp MAX
+			 * 1.7V setting gives 1.675V
+			 * 2.5V setting gives 2.475V
+			 * default 1.6V(0x5b), Freescale 2.475V(0x7e)
+			 * R49(0x31), base 0.925V, step .025V
+			 */
+			.name		= "DA9052_BUCK_PERI",
+			.max_uV		= mV_to_uV(DA9053_BUCK_PERI_VOLT_UPPER),
+			.min_uV		= mV_to_uV(DA9053_BUCK_PERI_VOLT_LOWER),
+			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE |
+				REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,
+			.valid_modes_mask = REGULATOR_MODE_NORMAL,
+			.always_on = 1,
+			.boot_on = 1,
+			.state_mem = {
+				.uV = mV_to_uV(2475),
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 1,
+				.disabled = 0,
+			},
+		},
+	},
 };
 
 
