@@ -1160,6 +1160,7 @@ static void da9052_tsi_penup_event(struct da9052_ts_priv *priv)
 	printk(KERN_INFO "The raw data count is %d \n", priv->raw_data_cnt);
 	printk(KERN_INFO "The OS data count is %d \n", priv->os_data_cnt);
 	printk(KERN_INFO "PEN UP DECLARED \n");
+	input_report_abs(ip_dev, ABS_PRESSURE, 0);
 	input_report_abs(ip_dev, BTN_TOUCH, 0);
 	input_sync(ip_dev);
 	priv->os_data_cnt = 0;
