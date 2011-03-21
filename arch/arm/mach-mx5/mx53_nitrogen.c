@@ -105,6 +105,8 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	// make sure gp2[29] is high, i2c_sel for tfp410
 #define N53_TFP410_I2CMODE			MAKE_GP(2, 29)
 	{.label = "tfp410_i2cmode",	.gpio = MAKE_GP(2, 29),		.flags = GPIOF_INIT_HIGH},	/* EIM_EB1 */
+#define N53_SS1					MAKE_GP(3, 19)
+	{.label = "ecspi_ss1",		.gpio = MAKE_GP(3, 19),		.flags = GPIOF_INIT_HIGH},	/* low active */
 	{.label = "dvi-i2c",		.gpio = MAKE_GP(3, 28),		.flags = 0},
 	{.label = "cam-reset",		.gpio = MAKE_GP(4, 0),		.flags = GPIOF_INIT_HIGH},
 	{.label = "fesai-reset",	.gpio = MAKE_GP(4, 2),		.flags = 0},
@@ -154,6 +156,7 @@ static struct pad_desc mx53common_pads[] = {
 	MX53_PAD_EIM_D16__CSPI1_SCLK,
 	MX53_PAD_EIM_D17__CSPI1_MISO,
 	MX53_PAD_EIM_D18__CSPI1_MOSI,
+	MX53_PAD_EIM_D19__GPIO_3_19,
 
 	MX53_PAD_EIM_D20__SER_DISP0_CS,
 
@@ -336,6 +339,10 @@ static struct pad_desc mx53common_pads[] = {
 	/* I2C3 */
 	MX53_PAD_GPIO_3__I2C3_SCL,
 	MX53_PAD_GPIO_6__I2C3_SDA,
+
+	/* I2C2 */
+	MX53_PAD_EIM_EB2__I2C2_SCL,
+	MX53_PAD_KEY_ROW3__I2C2_SDA,
 
 	/* I2C1 */
 	MX53_PAD_EIM_D21__I2C1_SCL,
@@ -625,62 +632,16 @@ static struct fec_platform_data fec_data = {
 static void mx53_evk_gpio_spi_chipselect_active(int cspi_mode, int status,
 					     int chipselect)
 {
-	switch (cspi_mode) {
-	case 1:
-		switch (chipselect) {
-		case 0x1:
-			{
-			struct pad_desc eim_d19_gpio = MX53_PAD_EIM_D19__GPIO_3_19;
-			struct pad_desc cspi_ss0 = MX53_PAD_EIM_EB2__CSPI_SS0;
-
-			/* de-select SS1 of instance: ecspi1. */
-			mxc_iomux_v3_setup_pad(&eim_d19_gpio);
-			mxc_iomux_v3_setup_pad(&cspi_ss0);
-			}
-			break;
-		case 0x2:
-			{
-			struct pad_desc eim_eb2_gpio = MX53_PAD_EIM_EB2__GPIO_2_30;
-			struct pad_desc cspi_ss1 = MX53_PAD_EIM_D19__CSPI_SS1;
-
-			/* de-select SS0 of instance: ecspi1. */
-			mxc_iomux_v3_setup_pad(&eim_eb2_gpio);
-			mxc_iomux_v3_setup_pad(&cspi_ss1);
-			}
-			break;
-		default:
-			break;
-		}
-		break;
-	case 2:
-		break;
-	case 3:
-		break;
-	default:
-		break;
+	if ((cspi_mode == 1) && (chipselect = 2)) {
+		gpio_set_value(N53_SS1, 0);		/* low active */
 	}
 }
 
 static void mx53_evk_gpio_spi_chipselect_inactive(int cspi_mode, int status,
 					       int chipselect)
 {
-	switch (cspi_mode) {
-	case 1:
-		switch (chipselect) {
-		case 0x1:
-			break;
-		case 0x2:
-			break;
-		default:
-			break;
-		}
-		break;
-	case 2:
-		break;
-	case 3:
-		break;
-	default:
-		break;
+	if ((cspi_mode == 1) && (chipselect = 2)) {
+		gpio_set_value(N53_SS1, 1);		/* low active */
 	}
 }
 
@@ -883,11 +844,6 @@ static struct plat_i2c_tfp410_data i2c_tfp410_data = {
 
 static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
 	{
-	.type = "sii9022",
-	.addr = 0x39,
-	.platform_data = &sii9022_hdmi_data,
-	},
-	{
 	 .type = "Pic16F616-ts",
 	 .addr = 0x22,
 	 .platform_data  = &i2c_generic_data,
@@ -897,23 +853,19 @@ static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
 	 .addr = 0x4c,
 	 .platform_data  = &i2c_generic_data,
 	},
-#if CONFIG_DVI_TFP410
 	{
 	 .type = "tfp410",
 	 .addr = 0x38,
 	 .platform_data  = &i2c_tfp410_data,
-	}
-#endif
-#ifdef CONFIG_TOUCHSCREEN_EP0700M01
-#ifdef CONFIG_DVI_TFP410
-#error cannot select both TFP410 and EP0700M01, address conflict
-#endif
+	},
+};
+
+static struct i2c_board_info mxc_i2c1_board_info[] __initdata = {
 	{
-	 .type = "ep0700m01-ts",
-	 .addr = 0x38,
-	 .platform_data  = &i2c_generic_data,
-	}
-#endif
+	 .type = "sii9022",
+	 .addr = 0x39,
+	 .platform_data = &sii9022_hdmi_data,
+	},
 };
 
 /* TO DO add platform data */
@@ -921,7 +873,12 @@ static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
 	{
 	 .type = "sgtl5000-i2c",
 	 .addr = 0x0a,
-	 },
+	},
+	{
+	 .type = "ep0700m01-ts",
+	 .addr = 0x38,
+	 .platform_data  = &i2c_generic_data,
+	},
 };
 
 static struct mtd_partition mxc_dataflash_partitions[] = {
@@ -1660,6 +1617,8 @@ static void __init mxc_board_init(void)
 				ARRAY_SIZE(mxc_dataflash_device));
 	i2c_register_board_info(0, mxc_i2c0_board_info,
 				ARRAY_SIZE(mxc_i2c0_board_info));
+	i2c_register_board_info(1, mxc_i2c1_board_info,
+				ARRAY_SIZE(mxc_i2c1_board_info));
 	i2c_register_board_info(2, mxc_i2c2_board_info,
 				ARRAY_SIZE(mxc_i2c2_board_info));
 
