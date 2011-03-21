@@ -1157,9 +1157,10 @@ static void da9052_tsi_penup_event(struct da9052_ts_priv *priv)
 	priv->debounce_over = FALSE;
 	priv->win_reference_valid = FALSE;
 
-	printk(KERN_INFO "The raw data count is %d \n", priv->raw_data_cnt);
-	printk(KERN_INFO "The OS data count is %d \n", priv->os_data_cnt);
-	printk(KERN_INFO "PEN UP DECLARED \n");
+	DA9052_DEBUG ("The raw data count is %d \n", priv->raw_data_cnt);
+	DA9052_DEBUG ("The OS data count is %d \n", priv->os_data_cnt);
+	DA9052_DEBUG ("PEN UP DECLARED \n");
+	input_report_abs(ip_dev, ABS_PRESSURE, 0);
 	input_report_abs(ip_dev, BTN_TOUCH, 0);
 	input_sync(ip_dev);
 	priv->os_data_cnt = 0;
@@ -1229,7 +1230,7 @@ fail:
 
 success:
 	ret = 0;
-	printk(KERN_INFO "Exiting PEN DOWN HANDLER \n");
+	DA9052_DEBUG ("Exiting PEN DOWN HANDLER \n");
 }
 
 void da9052_tsi_data_ready_handler(struct da9052_eh_nb *eh_data, u32 event)

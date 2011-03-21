@@ -1412,6 +1412,9 @@ fec_restart(struct net_device *dev, int duplex)
 	}
 #endif
 
+	writel(3, fep->hwp + FEC_X_WMRK); /* longer latency, looser on bandwidth */
+	writel(0, fep->hwp + FEC_MIB_CTRLSTAT); /* enable MIB counters */
+
 	/* And last, enable the transmit and receive processing */
 	reg |= 0x00000002;
 	writel(reg, fep->hwp + FEC_ECNTRL);
