@@ -38,6 +38,22 @@
 
 #define mV_to_uV(mV) (mV * 1000)
 
+static struct regulator_consumer_supply vbuckmem_consumers[] = {
+	{
+		/* sgtl5000 */
+		.supply = "VDDA",
+		.dev_name = "2-000a",
+	},
+};
+
+static struct regulator_consumer_supply ldo7_consumers[] = {
+	{
+		/* sgtl5000 */
+		.supply = "VDDIO",
+		.dev_name = "2-000a",
+	},
+};
+
 /* currently the .state_mem.uV here takes no effects for DA9053
 preset-voltage have to be done in the latest stage during
 suspend*/
@@ -200,6 +216,8 @@ static struct regulator_init_data da9052_regulators_init[] = {
 				.disabled = 0,
 			},
 		},
+		.num_consumer_supplies = ARRAY_SIZE(ldo7_consumers),
+		.consumer_supplies = ldo7_consumers,
 	},
 	{
 		.constraints = {
@@ -340,6 +358,8 @@ static struct regulator_init_data da9052_regulators_init[] = {
 				.disabled = 0,
 			},
 		},
+		.num_consumer_supplies = ARRAY_SIZE(vbuckmem_consumers),
+		.consumer_supplies = vbuckmem_consumers,
 	},
 	{
 		.constraints = {
