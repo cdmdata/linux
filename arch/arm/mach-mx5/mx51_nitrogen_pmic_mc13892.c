@@ -101,7 +101,7 @@ static struct regulator_consumer_supply vdig_consumers[] = {
 	{
 		/* sgtl5000 */
 		.supply = "VDDA",
-		.dev_name = "1-000a",
+		.dev_name = "0-000a",
 	},
 };
 
@@ -109,7 +109,7 @@ static struct regulator_consumer_supply vvideo_consumers[] = {
 	{
 		/* sgtl5000 */
 		.supply = "VDDIO",
-		.dev_name = "1-000a",
+		.dev_name = "0-000a",
 	},
 };
 
