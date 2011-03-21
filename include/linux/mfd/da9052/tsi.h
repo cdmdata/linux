@@ -423,5 +423,6 @@ u32 get_reg_free_space_cnt(struct da9052_ts_priv *priv);
 void da9052_tsi_process_reg_data(struct da9052_ts_priv *priv);
 void da9052_tsi_pen_down_handler(struct da9052_eh_nb *eh_data, u32 event);
 void da9052_tsi_data_ready_handler(struct da9052_eh_nb *eh_data, u32 event);
+int *da9052_get_calibration(void);
 
 #endif /* __LINUX_MFD_DA9052_TSI_H */
