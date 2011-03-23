@@ -27,7 +27,7 @@
 #include <linux/mfd/da9052/tsi_calibrate.h>
 #include <linux/mfd/da9052/pm.h>
 
-#define DA9052_TSI_DEVICE_NAME		"da9052-tsi"
+#define DA9052_TSI_DEVICE_NAME		"da9052_tsi"
 #define DA9052_TSI_INPUT_DEV		DA9052_TSI_DEVICE_NAME
 
 #define TSI_VERSION 			0x0101
@@ -423,5 +423,6 @@ u32 get_reg_free_space_cnt(struct da9052_ts_priv *priv);
 void da9052_tsi_process_reg_data(struct da9052_ts_priv *priv);
 void da9052_tsi_pen_down_handler(struct da9052_eh_nb *eh_data, u32 event);
 void da9052_tsi_data_ready_handler(struct da9052_eh_nb *eh_data, u32 event);
+int *da9052_get_calibration(void);
 
 #endif /* __LINUX_MFD_DA9052_TSI_H */

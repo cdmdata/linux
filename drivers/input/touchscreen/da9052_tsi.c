@@ -29,6 +29,14 @@
 #define WAIT_FOR_SAMPLING	1
 #define SAMPLING_ACTIVE		2
 
+static int calibration[7];
+module_param_array(calibration, int, NULL, S_IRUGO | S_IWUSR);
+
+int *da9052_get_calibration(void)
+{
+	return calibration ;
+}
+
 static ssize_t __init da9052_tsi_create_input_dev(struct input_dev **ip_dev,
 					u8 n);
 static ssize_t read_da9052_reg(struct da9052 *da9052, u8 reg_addr);
@@ -1161,7 +1169,7 @@ static void da9052_tsi_penup_event(struct da9052_ts_priv *priv)
 	DA9052_DEBUG ("The OS data count is %d \n", priv->os_data_cnt);
 	DA9052_DEBUG ("PEN UP DECLARED \n");
 	input_report_abs(ip_dev, ABS_PRESSURE, 0);
-	input_report_abs(ip_dev, BTN_TOUCH, 0);
+	input_report_key(ip_dev, BTN_TOUCH, 0);
 	input_sync(ip_dev);
 	priv->os_data_cnt = 0;
 	priv->raw_data_cnt = 0;

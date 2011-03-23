@@ -49,7 +49,7 @@
 #define TSI_FAST_MODE			1
 #define DEFAULT_TSI_SAMPLING_MODE	TSI_FAST_MODE
 
-#define TSI_USE_CALIBRATION   		1
+#define TSI_USE_CALIBRATION   		0
 
 #define DA9052_TSI_CALIB_AN		1
 #define DA9052_TSI_CALIB_BN		0
@@ -65,9 +65,9 @@
 #define TS_Y_MAX	(1023)
 
 #define DISPLAY_X_MIN	(0)
-#define DISPLAY_X_MAX	(1023)
+#define DISPLAY_X_MAX	(2047)
 #define DISPLAY_Y_MIN	(0)
-#define DISPLAY_Y_MAX	(1023)
+#define DISPLAY_Y_MAX	(2047)
 
 #define ENABLE_TSI_DEBOUNCE		0
 
