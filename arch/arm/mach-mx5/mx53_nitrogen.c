@@ -1031,7 +1031,7 @@ static struct gpio_keys_button gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.gpio	= MAKE_GP(3,29),
-		.code	= KEY_HOME,
+		.code	= KEY_HOME,		/* 102 (0x66) */
 		.desc	= "Home Button",
 		.wakeup	= 1,
 		.active_low = 1,
@@ -1040,7 +1040,7 @@ static struct gpio_keys_button gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.gpio	= MAKE_GP(3,26),
-		.code	= KEY_BACK,
+		.code	= KEY_BACK,		/* 158 (0x9E) */
 		.desc	= "Back Button",
 		.wakeup	= 1,
 		.active_low = 1,
@@ -1049,7 +1049,7 @@ static struct gpio_keys_button gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.gpio	= MAKE_GP(3,25),
-		.code	= KEY_MENU,
+		.code	= KEY_MENU,		/* 139 (0x88) */
 		.desc	= "Menu Button",
 		.wakeup	= 1,
 		.active_low = 1,
@@ -1058,7 +1058,7 @@ static struct gpio_keys_button gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.gpio	= MAKE_GP(3,27),
-		.code	= KEY_SEARCH,
+		.code	= KEY_SEARCH,		/* 217 (0xD9) */
 		.desc	= "Search Button",
 		.wakeup	= 1,
 		.active_low = 1,
