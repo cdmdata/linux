@@ -1239,10 +1239,7 @@ int32_t ipu_update_channel_buffer(ipu_channel_t channel, ipu_buffer_t type,
 	else
 		reg = __raw_readl(IPU_CHA_BUF1_RDY(dma_chan));
 
-	if ((reg & idma_mask(dma_chan)) == 0)
-		_ipu_ch_param_set_buffer(dma_chan, bufNum, phyaddr);
-	else
-		ret = -EACCES;
+	_ipu_ch_param_set_buffer(dma_chan, bufNum, phyaddr);
 
 	spin_unlock_irqrestore(&ipu_lock, lock_flags);
 	return ret;
