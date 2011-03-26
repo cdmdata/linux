@@ -270,11 +270,13 @@ static int __init mxc_init_uart(void)
 	/* Register all the MXC UART platform device structures */
 	platform_device_register(&mxc_uart_device1);
 	platform_device_register(&mxc_uart_device2);
+#ifndef CONFIG_MACH_NITROGEN_IMX53
 	platform_device_register(&mxc_uart_device3);
 	if (cpu_is_mx53()) {
 		platform_device_register(&mxc_uart_device4);
 		platform_device_register(&mxc_uart_device5);
 	}
+#endif
 	return 0;
 }
 

@@ -799,7 +799,6 @@ static int ldb_probe(struct platform_device *pdev)
 			if (0 == ldb_clk_prate) {
 				ldb_clk_prate = PICOS2KHZ(registered_fb[i]->var.pixclock)*1000*7 ;
 			}
-			fb_videomode_to_var(&ldb.fbi[i]->var, &m);
 			/*
 			 * Default ldb mode:
 			 * 1080p: DI0 split, SPWG or DI1 split, SPWG

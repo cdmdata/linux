@@ -139,6 +139,12 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "Camera power down",	.gpio = MAKE_GP(1, 7),		.flags = 0},
 };
 
+#define BUTTON_PAD_CTRL	(PAD_CTL_HYS | PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_22K_UP | PAD_CTL_DSE_HIGH)
+#define BUTTON_EIM_D25__GPIO_3_25		IOMUX_PAD(0x488, 0x140, 1, 0x0, 0, BUTTON_PAD_CTRL)
+#define BUTTON_EIM_D26__GPIO_3_26		IOMUX_PAD(0x48C, 0x144, 1, 0x0, 0, BUTTON_PAD_CTRL)
+#define BUTTON_EIM_D27__GPIO_3_27		IOMUX_PAD(0x490, 0x148, 1, 0x0, 0, BUTTON_PAD_CTRL)
+#define BUTTON_EIM_D29__GPIO_3_29		IOMUX_PAD(0x498, 0x150, 1, 0x0, 0, BUTTON_PAD_CTRL)
+	
 /*!
  * @file mach-mx53/mx53_evk.c
  *
@@ -168,9 +174,11 @@ static struct pad_desc mx53common_pads[] = {
 	MX53_PAD_EIM_D23__DI0_D0_CS,
 
 	MX53_PAD_EIM_D24__GPIO_3_24,
-	MX53_PAD_EIM_D26__GPIO_3_26,
-
-	MX53_PAD_EIM_D29__DISPB0_SER_RS,
+	
+	BUTTON_EIM_D25__GPIO_3_25,
+	BUTTON_EIM_D26__GPIO_3_26,
+	BUTTON_EIM_D27__GPIO_3_27,
+	BUTTON_EIM_D29__GPIO_3_29,
 
 	MX53_PAD_EIM_D30__DI0_PIN11,
 	MX53_PAD_EIM_D31__DI0_PIN12,
@@ -187,9 +195,6 @@ static struct pad_desc mx53common_pads[] = {
 	MX53_PAD_ATA_DMARQ__UART2_TXD,
 	MX53_PAD_ATA_DIOR__UART2_RTS,
 	MX53_PAD_ATA_INTRQ__UART2_CTS,
-
-	MX53_PAD_EIM_D24__UART3_TXD,
-	MX53_PAD_EIM_D25__UART3_RXD,
 
 	/* AUD4 */
 	MX53_PAD_SD2_CLK__GPIO_1_10,	/* temp AUD4_RXFS */
@@ -396,9 +401,6 @@ static struct pad_desc mx53evk_pads[] = {
 
 	/* USB HOST CARD_RST */
 	MX53_PAD_ATA_DATA7__GPIO_2_7,
-
-	/* USB HOST WAN_WAKE */
-	MX53_PAD_EIM_D25__GPIO_3_25,
 
 	/* GPIO keys */
 #ifdef CONFIG_KEYBOARD_GPIO
@@ -1030,7 +1032,7 @@ static struct gpio_keys_button gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.gpio	= MAKE_GP(3,29),
-		.code	= KEY_HOME,
+		.code	= KEY_HOME,		/* 102 (0x66) */
 		.desc	= "Home Button",
 		.wakeup	= 1,
 		.active_low = 1,
@@ -1039,7 +1041,7 @@ static struct gpio_keys_button gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.gpio	= MAKE_GP(3,26),
-		.code	= KEY_BACK,
+		.code	= KEY_BACK,		/* 158 (0x9E) */
 		.desc	= "Back Button",
 		.wakeup	= 1,
 		.active_low = 1,
@@ -1048,7 +1050,7 @@ static struct gpio_keys_button gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.gpio	= MAKE_GP(3,25),
-		.code	= KEY_MENU,
+		.code	= KEY_MENU,		/* 139 (0x88) */
 		.desc	= "Menu Button",
 		.wakeup	= 1,
 		.active_low = 1,
@@ -1057,7 +1059,7 @@ static struct gpio_keys_button gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 		.gpio	= MAKE_GP(3,27),
-		.code	= KEY_SEARCH,
+		.code	= KEY_SEARCH,		/* 217 (0xD9) */
 		.desc	= "Search Button",
 		.wakeup	= 1,
 		.active_low = 1,

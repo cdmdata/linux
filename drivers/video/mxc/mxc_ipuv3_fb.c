@@ -73,16 +73,11 @@ struct mxcfb_info {
 	void *alpha_virt_addr1;
 	uint32_t alpha_mem_len;
 	uint32_t ipu_ch_irq;
-	uint32_t cur_ipu_buf;
-	uint32_t cur_ipu_alpha_buf;
 
 	u32 pseudo_palette[16];
 
-	bool wait4vsync;
-	uint32_t waitcnt;
-	struct semaphore flip_sem;
-	struct semaphore alpha_flip_sem;
-	struct completion vsync_complete;
+	unsigned vsync_count;
+	wait_queue_head_t vsync_complete;
 };
 
 struct mxcfb_alloc_list {
@@ -231,19 +226,6 @@ static int _setup_disp_channel2(struct fb_info *fbi)
 		fb_stride = fbi->fix.line_length;
 	}
 
-	mxc_fbi->cur_ipu_buf = 1;
-#ifdef CONFIG_FB_MXC_SYNC_PANDISPLAY
-	if (mxc_fbi->ipu_ch != MEM_BG_SYNC)
-		sema_init(&mxc_fbi->flip_sem, 1);
-	else
-		sema_init(&mxc_fbi->flip_sem, 0);
-#else
-	sema_init(&mxc_fbi->flip_sem, 1);
-#endif
-	if (mxc_fbi->alpha_chan_en) {
-		mxc_fbi->cur_ipu_alpha_buf = 1;
-		sema_init(&mxc_fbi->alpha_flip_sem, 1);
-	}
 	fbi->var.xoffset = 0;
 
 	base = (fbi->var.yoffset * fbi->var.xres_virtual + fbi->var.xoffset);
@@ -421,6 +403,7 @@ static int mxcfb_set_par(struct fb_info *fbi)
 		return retval;
 
 	ipu_enable_channel(mxc_fbi->ipu_ch);
+	ipu_enable_irq(mxc_fbi->ipu_ch_irq);
 
 	mxc_fbi->cur_blank = FB_BLANK_UNBLANK;
 
@@ -463,6 +446,7 @@ static int _swap_channels(struct fb_info *fbi,
 		if (retval)
 			return retval;
 		ipu_enable_channel(mxc_fbi_to->ipu_ch);
+		ipu_enable_irq(mxc_fbi_to->ipu_ch_irq);
 	}
 
 	return retval;
@@ -854,7 +838,7 @@ static int mxcfb_ioctl(struct fb_info *fbi, unsigned int cmd, unsigned long arg)
 	case MXCFB_SET_LOC_ALP_BUF:
 		{
 			unsigned long base;
-			uint32_t ipu_alp_ch_irq;
+			uint32_t ipu_alp_ch_irq, which;
 
 			if (!(((mxc_fbi->ipu_ch == MEM_FG_SYNC) ||
 			     (mxc_fbi->ipu_ch == MEM_BG_SYNC)) &&
@@ -882,26 +866,20 @@ static int mxcfb_ioctl(struct fb_info *fbi, unsigned int cmd, unsigned long arg)
 			else
 				ipu_alp_ch_irq = IPU_IRQ_BG_ALPHA_SYNC_EOF;
 
-			down(&mxc_fbi->alpha_flip_sem);
-
-			mxc_fbi->cur_ipu_alpha_buf =
-						!mxc_fbi->cur_ipu_alpha_buf;
+                        which = ipu_get_cur_buffer_idx(mxc_fbi->ipu_ch, IPU_ALPHA_IN_BUFFER) ^ 1 ;
 			if (ipu_update_channel_buffer(mxc_fbi->ipu_ch,
 						      IPU_ALPHA_IN_BUFFER,
-						      mxc_fbi->
-							cur_ipu_alpha_buf,
+						      which,
 						      base) == 0) {
 				ipu_select_buffer(mxc_fbi->ipu_ch,
 						  IPU_ALPHA_IN_BUFFER,
-						  mxc_fbi->cur_ipu_alpha_buf);
-				ipu_clear_irq(ipu_alp_ch_irq);
-				ipu_enable_irq(ipu_alp_ch_irq);
+						  which);
 			} else {
 				dev_err(fbi->device,
 					"Error updating %s SDC alpha buf %d "
 					"to address=0x%08lX\n",
 					fbi->fix.id,
-					mxc_fbi->cur_ipu_alpha_buf, base);
+					which, base);
 			}
 			break;
 		}
@@ -934,6 +912,8 @@ static int mxcfb_ioctl(struct fb_info *fbi, unsigned int cmd, unsigned long arg)
 		}
 	case MXCFB_WAIT_FOR_VSYNC:
 		{
+			unsigned count ;
+
 			if (mxc_fbi->ipu_ch == MEM_FG_SYNC) {
 				struct mxcfb_info *bg_mxcfbi = NULL;
 				int i;
@@ -953,23 +933,14 @@ static int mxcfb_ioctl(struct fb_info *fbi, unsigned int cmd, unsigned long arg)
 				retval = -EINVAL;
 				break;
 			}
-
-			init_completion(&mxc_fbi->vsync_complete);
-
-			ipu_clear_irq(mxc_fbi->ipu_ch_irq);
-			mxc_fbi->wait4vsync = 1;
-			ipu_enable_irq(mxc_fbi->ipu_ch_irq);
-			retval = wait_for_completion_interruptible_timeout(
-				&mxc_fbi->vsync_complete, 1 * HZ);
-			if (retval == 0) {
+			count = mxc_fbi->vsync_count ;
+			if (wait_event_interruptible(mxc_fbi->vsync_complete,count!=mxc_fbi->vsync_count)) {
 				dev_err(fbi->device,
 					"MXCFB_WAIT_FOR_VSYNC: timeout %d\n",
 					retval);
-				mxc_fbi->wait4vsync = 0;
-				retval = -ETIME;
-			} else if (retval > 0) {
-				retval = 0;
-			}
+				retval = -EINTR ;
+			} else
+				retval = 0 ;
 
 			break;
 		}
@@ -1188,6 +1159,8 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 	unsigned long base, active_alpha_phy_addr = 0;
 	bool loc_alpha_en = false;
 	int i = 0;
+        uint32_t which ;
+	int res ;
 
 	if (var->xoffset > 0) {
 		dev_dbg(info->device, "x panning not supported\n");
@@ -1227,7 +1200,8 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 	base = (var->bits_per_pixel) * base / 8;
 	base += info->fix.smem_start;
 
-	/* Check if DP local alpha is enabled and find the graphic fb */
+        which = ipu_get_cur_buffer_idx(mxc_fbi->ipu_ch, IPU_INPUT_BUFFER) ^ 1 ;
+        /* Check if DP local alpha is enabled and find the graphic fb */
 	if (mxc_fbi->ipu_ch == MEM_BG_SYNC || mxc_fbi->ipu_ch == MEM_FG_SYNC) {
 		for (i = 0; i < num_registered_fb; i++) {
 			char *idstr = registered_fb[i]->fix.id;
@@ -1238,62 +1212,42 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 				loc_alpha_en = true;
 				mxc_graphic_fbi = (struct mxcfb_info *)
 						(registered_fb[i]->par);
-				active_alpha_phy_addr = mxc_fbi->cur_ipu_buf ?
+				active_alpha_phy_addr = which ?
 					mxc_graphic_fbi->alpha_phy_addr1 :
 					mxc_graphic_fbi->alpha_phy_addr0;
 				dev_dbg(info->device, "Updating SDC graphic "
 					"buf %d address=0x%08lX\n",
-					mxc_fbi->cur_ipu_buf,
+					which,
 					active_alpha_phy_addr);
 				break;
 			}
 		}
 	}
 
-#ifdef CONFIG_FB_MXC_SYNC_PANDISPLAY
-	if (mxc_fbi->ipu_ch != MEM_BG_SYNC)
-		down(&mxc_fbi->flip_sem);
-#else
-	down(&mxc_fbi->flip_sem);
-#endif
-
-	mxc_fbi->cur_ipu_buf = !mxc_fbi->cur_ipu_buf;
-
 	dev_dbg(info->device, "Updating SDC %s buf %d address=0x%08lX\n",
-		info->fix.id, mxc_fbi->cur_ipu_buf, base);
+		info->fix.id, which, base);
 
-	if (ipu_update_channel_buffer(mxc_fbi->ipu_ch, IPU_INPUT_BUFFER,
-				      mxc_fbi->cur_ipu_buf, base) == 0) {
+	if ((res=ipu_update_channel_buffer(mxc_fbi->ipu_ch, IPU_INPUT_BUFFER,
+				      which, base)) == 0) {
 		/* Update the DP local alpha buffer only for graphic plane */
 		if (loc_alpha_en && mxc_graphic_fbi == mxc_fbi &&
 		    ipu_update_channel_buffer(mxc_graphic_fbi->ipu_ch,
 					      IPU_ALPHA_IN_BUFFER,
-					      mxc_fbi->cur_ipu_buf,
+					      which,
 					      active_alpha_phy_addr) == 0) {
 			ipu_select_buffer(mxc_graphic_fbi->ipu_ch,
 					  IPU_ALPHA_IN_BUFFER,
-					  mxc_fbi->cur_ipu_buf);
+					  which);
 		}
 
 		ipu_select_buffer(mxc_fbi->ipu_ch, IPU_INPUT_BUFFER,
-				  mxc_fbi->cur_ipu_buf);
-		ipu_clear_irq(mxc_fbi->ipu_ch_irq);
-		ipu_enable_irq(mxc_fbi->ipu_ch_irq);
+				  which);
 	} else {
 		dev_err(info->device,
-			"Error updating SDC buf %d to address=0x%08lX\n",
-			mxc_fbi->cur_ipu_buf, base);
-		mxc_fbi->cur_ipu_buf = !mxc_fbi->cur_ipu_buf;
-		ipu_clear_irq(mxc_fbi->ipu_ch_irq);
-		ipu_enable_irq(mxc_fbi->ipu_ch_irq);
+			"Error %d updating SDC buf %d to address=0x%08lX\n",
+			res, which, base);
 		return -EBUSY;
 	}
-
-#ifdef CONFIG_FB_MXC_SYNC_PANDISPLAY
-	if (mxc_fbi->ipu_ch == MEM_BG_SYNC)
-		down(&mxc_fbi->flip_sem);
-#endif
-	dev_dbg(info->device, "Update complete\n");
 
 	info->var.xoffset = var->xoffset;
 	info->var.yoffset = var->yoffset;
@@ -1384,63 +1338,13 @@ static irqreturn_t mxcfb_irq_handler(int irq, void *dev_id)
 	struct fb_info *fbi = dev_id;
 	struct mxcfb_info *mxc_fbi = fbi->par;
 
-	if (mxc_fbi->wait4vsync) {
-		complete(&mxc_fbi->vsync_complete);
-		ipu_disable_irq(irq);
-		mxc_fbi->wait4vsync = 0;
-	} else {
-#ifndef CONFIG_FB_MXC_SYNC_PANDISPLAY
-		if (!ipu_check_buffer_busy(mxc_fbi->ipu_ch,
-				IPU_INPUT_BUFFER, mxc_fbi->cur_ipu_buf)
-				|| (mxc_fbi->waitcnt > 2)) {
-			/*
-			 * This interrupt come after pan display select
-			 * cur_ipu_buf buffer, this buffer should become
-			 * idle after show. If it keep busy, clear it manually.
-			 */
-			if (mxc_fbi->waitcnt > 2)
-				ipu_clear_buffer_ready(mxc_fbi->ipu_ch,
-						IPU_INPUT_BUFFER,
-						mxc_fbi->cur_ipu_buf);
-			up(&mxc_fbi->flip_sem);
-			ipu_disable_irq(irq);
-			mxc_fbi->waitcnt = 0;
-		} else
-			mxc_fbi->waitcnt++;
-#else
-		if (mxc_fbi->ipu_ch != MEM_BG_SYNC) {
-			if (!ipu_check_buffer_busy(mxc_fbi->ipu_ch,
-						IPU_INPUT_BUFFER, mxc_fbi->cur_ipu_buf)
-					|| (mxc_fbi->waitcnt > 2)) {
-				/*
-				 * This interrupt come after pan display select
-				 * cur_ipu_buf buffer, this buffer should become
-				 * idle after show. If it keep busy, clear it manually.
-				 */
-				if (mxc_fbi->waitcnt > 2)
-					ipu_clear_buffer_ready(mxc_fbi->ipu_ch,
-							IPU_INPUT_BUFFER,
-							mxc_fbi->cur_ipu_buf);
-				up(&mxc_fbi->flip_sem);
-				ipu_disable_irq(irq);
-				mxc_fbi->waitcnt = 0;
-			} else
-				mxc_fbi->waitcnt++;
-		} else {
-			up(&mxc_fbi->flip_sem);
-			ipu_disable_irq(irq);
-		}
-#endif
-	}
+	mxc_fbi->vsync_count++ ;
+	wake_up_all(&mxc_fbi->vsync_complete);
 	return IRQ_HANDLED;
 }
 
 static irqreturn_t mxcfb_alpha_irq_handler(int irq, void *dev_id)
 {
-	struct fb_info *fbi = dev_id;
-	struct mxcfb_info *mxc_fbi = fbi->par;
-
-	up(&mxc_fbi->alpha_flip_sem);
 	ipu_disable_irq(irq);
 	return IRQ_HANDLED;
 }
@@ -1822,6 +1726,9 @@ static int mxcfb_probe(struct platform_device *pdev)
 	if (!res || !res->end)
 		if (mxcfb_map_video_memory(fbi) < 0)
 			return -ENOMEM;
+
+	init_waitqueue_head(&mxcfbi->vsync_complete);
+	ipu_enable_irq(mxcfbi->ipu_ch_irq);
 
 	ret = register_framebuffer(fbi);
 	if (ret < 0)

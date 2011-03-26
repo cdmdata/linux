@@ -106,10 +106,10 @@ int main (int argc, char const **argv) {
 						vtotal = (vtotal&0xff00)|r->value;
 					}
 				}
-	printf("sizeof(struct ov5640_setting) == %u\n", sizeof(struct ov5640_setting));
-	printf("offsetof(struct ov5640_setting,fps) == %u\n", offsetof(struct ov5640_setting,fps));
-	printf("offsetof(struct ov5640_setting,mclk) == %u\n", offsetof(struct ov5640_setting,mclk));
-	printf("offsetof(struct ov5640_setting,registers) == %u\n", offsetof(struct ov5640_setting,registers));
+	printf("sizeof(struct ov5640_setting) == %lu\n", sizeof(struct ov5640_setting));
+	printf("offsetof(struct ov5640_setting,fps) == %lu\n", offsetof(struct ov5640_setting,fps));
+	printf("offsetof(struct ov5640_setting,mclk) == %lu\n", offsetof(struct ov5640_setting,mclk));
+	printf("offsetof(struct ov5640_setting,registers) == %lu\n", offsetof(struct ov5640_setting,registers));
 	printf("htotal == %u, hmarg == %u\n", htotal, htotal-s->xres);
 	printf("vtotal == %u, vmarg == %u\n", vtotal, vtotal-s->yres);
 			}
