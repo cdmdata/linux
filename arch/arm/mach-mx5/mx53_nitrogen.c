@@ -93,8 +93,12 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "sdhc1-cd",		.gpio = MAKE_GP(3, 13),		.flags = GPIOF_DIR_IN},
 #define EVK_SD1_WP				MAKE_GP(3, 14)
 	{.label = "sdhc1-wp",		.gpio = MAKE_GP(3, 14),		.flags = GPIOF_DIR_IN},
-#define MX53_DVI_DETECT				MAKE_GP(3, 31)
-	{.label = "dvi-detect",		.gpio = MAKE_GP(3, 31),		.flags = GPIOF_DIR_IN},
+//The gpio_keys.c file will request these, they are here for documentation only
+//	{.label = "Menu key",		.gpio = MAKE_GP(3, 25),		.flags = GPIOF_DIR_IN},
+//	{.label = "Back key",		.gpio = MAKE_GP(3, 26),		.flags = GPIOF_DIR_IN},
+//	{.label = "Search key",		.gpio = MAKE_GP(3, 27),		.flags = GPIOF_DIR_IN},
+//	{.label = "Home key",		.gpio = MAKE_GP(3, 29),		.flags = GPIOF_DIR_IN},
+	{.label = "On/Off key",		.gpio = MAKE_GP(3, 30),		.flags = GPIOF_DIR_IN},
 #define N53_TFP410_INT				MAKE_GP(4, 15)
 	{.label = "tfp410int",		.gpio = MAKE_GP(4, 15),		.flags = GPIOF_DIR_IN},		/* KEY_ROW4 */
 #define GP_PMIC_IRQ				MAKE_GP(7, 11)		/* pad GPIO_16 */
@@ -108,11 +112,6 @@ struct gpio nitrogen53_gpios[] __initdata = {
 #define N53_SS1					MAKE_GP(3, 19)
 	{.label = "ecspi_ss1",		.gpio = MAKE_GP(3, 19),		.flags = GPIOF_INIT_HIGH},	/* low active */
 	{.label = "dvi-i2c",		.gpio = MAKE_GP(3, 28),		.flags = 0},
-	{.label = "Menu key",		.gpio = MAKE_GP(3, 25),		.flags = 0},
-	{.label = "Back key",		.gpio = MAKE_GP(3, 26),		.flags = 0},
-	{.label = "Search key",		.gpio = MAKE_GP(3, 27),		.flags = 0},
-	{.label = "Home key",		.gpio = MAKE_GP(3, 29),		.flags = 0},
-	{.label = "On/Off key",		.gpio = MAKE_GP(3, 30),		.flags = 0},
 	{.label = "Shutdown output",	.gpio = MAKE_GP(3, 31),		.flags = 0},
 	{.label = "cam-reset",		.gpio = MAKE_GP(4, 0),		.flags = GPIOF_INIT_HIGH},
 	{.label = "fesai-reset",	.gpio = MAKE_GP(4, 2),		.flags = 0},
