@@ -339,8 +339,32 @@ static ssize_t tfp410_reg_show(struct device *dev,
 	return sprintf(buf, "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n", tmp[0], tmp[1], tmp[2], tmp[3], tmp[4],
 			tmp[5], tmp[6], tmp[7], tmp[8], tmp[9], tmp[10]);
 }
+static ssize_t tfp410_reg_store(struct device *dev, struct device_attribute *attr,
+	const char *buf, size_t count)
+{
+	unsigned val;
+	int result;
+	struct tfp410_priv *tfp = dev_get_drvdata(dev);
+	char *endp;
+	unsigned reg = simple_strtol(buf, &endp, 16);
+	if (reg >= 0x3e)
+		return count;
+	if (endp)
+		if (*endp == 0x20)
+			endp++;
+	val = simple_strtol(endp, &endp, 16);
+	if (val >= 0x100)
+		return count;
+	dev_err(dev, "%s:reg=0x%x, val=0x%x\n", __func__, reg, val);
+	result = i2c_smbus_write_byte_data(tfp->client, reg, val);
+	if (result < 0) {
+		dev_err(dev, "i2c_smbus_write_byte_data failed(%i)\n", result);
+		return -EIO;
+	}
+	return count;
+}
 
-static DEVICE_ATTR(tfp410_reg, 0444, tfp410_reg_show, NULL);
+static DEVICE_ATTR(tfp410_reg, 0644, tfp410_reg_show, tfp410_reg_store);
 
 static ssize_t tfp410_enable_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
@@ -400,6 +424,7 @@ static int __devinit tfp410_probe(struct i2c_client *client,
 	int result;
 	int gp_i2c_sel;
 	int ret;
+	unsigned retry = 0;
 	struct tfp410_priv *tfp;
 	struct i2c_adapter *adapter;
 	struct plat_i2c_tfp410_data *plat = client->dev.platform_data;
@@ -418,11 +443,17 @@ static int __devinit tfp410_probe(struct i2c_client *client,
 	printk(KERN_INFO "%s: tfp410 gp_i2c_sel=%i\n", __func__, gp_i2c_sel);
 	if (gp_i2c_sel >= 0)
 		gpio_set_value(gp_i2c_sel, 1);	/* enable i2c mode */
-	if (i2c_smbus_read_i2c_block_data(client, TFP410_VID_LO, 4, (unsigned char *)&vid_did) < 4) {
-		dev_err(&client->dev, "i2c block read failed\n");
-		result = -EIO;
-		goto release_gpio;
-	}
+	do {
+		msleep(2);
+		if (i2c_smbus_read_i2c_block_data(client, TFP410_VID_LO, 4, (unsigned char *)&vid_did) == 4)
+			break;
+		dev_err(&client->dev, "i2c block read failed, retry=%d\n", retry);
+		if  (retry++ > 6) {
+			result = -EIO;
+			goto release_gpio;
+		}
+	} while (1);
+
 	if (vid_did != TFP410_VID_DID) {
 		dev_err(&client->dev, "id match failed %x != %x\n", vid_did, TFP410_VID_DID);
 		result = -EIO;
