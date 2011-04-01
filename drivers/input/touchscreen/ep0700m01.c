@@ -59,7 +59,7 @@ struct ep0700m01_ts {
 	unsigned gp;
 	struct proc_dir_entry *procentry;
 };
-static const char *client_name = "ep0700m01-ts";
+static const char *client_name = "ep0700m01";
 
 struct ep0700m01_ts* gts;
 
@@ -183,7 +183,7 @@ static inline int ts_register(struct ep0700m01_ts *ts)
 		return -ENOMEM;
 	}
 	ts->idev = idev;
-	idev->name      = "i2c_touch";
+	idev->name      = procentryname ;
 	idev->id.product = ts->client->addr;
 	idev->open      = ts_open;
 	idev->close     = ts_close;
@@ -269,7 +269,6 @@ static int ts_thread(void *_ts)
 			for (i = 0; i < buttons; i++) {
 				points[i].x = ((p[0] << 8) | p[1]) & 0x7ff;
 				points[i].y = ((p[2] << 8) | p[3]) & 0x7ff;
-				i++;
 				p += 4;
 			}
 		}
@@ -483,7 +482,7 @@ static void __exit ts_exit(void)
 }
 
 MODULE_AUTHOR("Troy Kisky <troy.kisky@boundarydevices.com>");
-MODULE_DESCRIPTION("I2C interface for ep0700m01 touch screen controller.");
+MODULE_DESCRIPTION("I2C interface for Emerging Display Technologies ep0700m01 touch screen controller.");
 MODULE_LICENSE("GPL");
 
 module_init(ts_init)
