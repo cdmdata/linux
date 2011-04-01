@@ -83,8 +83,15 @@ struct gpio nitrogen53_gpios[] __initdata = {
 #ifdef REV1
 	{.label = "touch_int_gp1_0",	.gpio = MAKE_GP(1, 0),		.flags = GPIOF_DIR_IN},
 #endif
+#define N53_I2C_2_SCL				MAKE_GP(1, 3)
+	{.label = "i2c-2-scl",		.gpio = MAKE_GP(1, 3),		.flags = GPIOF_DIR_IN},
+#define N53_I2C_2_SDA				MAKE_GP(1, 6)
+	{.label = "i2c-2-sda",		.gpio = MAKE_GP(1, 6),		.flags = GPIOF_DIR_IN},
+
 #define MX53_HP_DETECT				MAKE_GP(2, 5)
 	{.label = "hp-detect",		.gpio = MAKE_GP(2, 5),		.flags = GPIOF_DIR_IN},
+#define N53_I2C_1_SCL				MAKE_GP(2, 30)
+	{.label = "i2c-1-scl",		.gpio = MAKE_GP(2, 30),		.flags = GPIOF_DIR_IN},
 #define EVK_SD3_CD				MAKE_GP(3, 11)
 	{.label = "sdhc3-cd",		.gpio = MAKE_GP(3, 11),		.flags = GPIOF_DIR_IN},
 #define EVK_SD3_WP				MAKE_GP(3, 12)
@@ -93,31 +100,43 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "sdhc1-cd",		.gpio = MAKE_GP(3, 13),		.flags = GPIOF_DIR_IN},
 #define EVK_SD1_WP				MAKE_GP(3, 14)
 	{.label = "sdhc1-wp",		.gpio = MAKE_GP(3, 14),		.flags = GPIOF_DIR_IN},
+#define N53_I2C_0_SCL				MAKE_GP(3, 21)
+	{.label = "i2c-0-scl",		.gpio = MAKE_GP(3, 21),		.flags = GPIOF_DIR_IN},
+#define N53_I2C_0_SDA				MAKE_GP(3, 28)
+	{.label = "i2c-0-sda",		.gpio = MAKE_GP(3, 38),		.flags = GPIOF_DIR_IN},
 //The gpio_keys.c file will request these, they are here for documentation only
 //	{.label = "Menu key",		.gpio = MAKE_GP(3, 25),		.flags = GPIOF_DIR_IN},
 //	{.label = "Back key",		.gpio = MAKE_GP(3, 26),		.flags = GPIOF_DIR_IN},
 //	{.label = "Search key",		.gpio = MAKE_GP(3, 27),		.flags = GPIOF_DIR_IN},
 //	{.label = "Home key",		.gpio = MAKE_GP(3, 29),		.flags = GPIOF_DIR_IN},
 	{.label = "On/Off key",		.gpio = MAKE_GP(3, 30),		.flags = GPIOF_DIR_IN},
+#define N53_I2C_1_SDA				MAKE_GP(4, 13)
+	{.label = "i2c-1-sda",		.gpio = MAKE_GP(4, 13),		.flags = GPIOF_DIR_IN},
 #define N53_TFP410_INT				MAKE_GP(4, 15)
 	{.label = "tfp410int",		.gpio = MAKE_GP(4, 15),		.flags = GPIOF_DIR_IN},		/* KEY_ROW4 */
 #define GP_PMIC_IRQ				MAKE_GP(7, 11)		/* pad GPIO_16 */
 	{.label = "pmic-int",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 #define N53_I2C_CONNECTOR_INT			MAKE_GP(7, 12)
 	{.label = "i2c_int",		.gpio = MAKE_GP(7, 12),		.flags = GPIOF_DIR_IN},
+
 /* Outputs */
+#define CAMERA_POWERDOWN			MAKE_GP(1, 7)
+	{.label = "Camera power down",	.gpio = MAKE_GP(1, 7),		.flags = 0},
 	// make sure gp2[29] is high, i2c_sel for tfp410
 #define N53_TFP410_I2CMODE			MAKE_GP(2, 29)
 	{.label = "tfp410_i2cmode",	.gpio = MAKE_GP(2, 29),		.flags = GPIOF_INIT_HIGH},	/* EIM_EB1 */
+#define N53_I2C_CONNECTOR_BUFFER_ENABLE		MAKE_GP(3, 10)
+	{.label = "I2C conn. buf en",	.gpio = MAKE_GP(3, 10),		.flags = 0},			/* EIM_DA10 */
 #define N53_SS1					MAKE_GP(3, 19)
 	{.label = "ecspi_ss1",		.gpio = MAKE_GP(3, 19),		.flags = GPIOF_INIT_HIGH},	/* low active */
-	{.label = "dvi-i2c",		.gpio = MAKE_GP(3, 28),		.flags = 0},
 	{.label = "Shutdown output",	.gpio = MAKE_GP(3, 31),		.flags = 0},
 	{.label = "cam-reset",		.gpio = MAKE_GP(4, 0),		.flags = GPIOF_INIT_HIGH},
 	{.label = "fesai-reset",	.gpio = MAKE_GP(4, 2),		.flags = 0},
 	{.label = "can2-en2",		.gpio = MAKE_GP(4, 4),		.flags = 0},
 #define N53_AMP_ENABLE				MAKE_GP(4, 7)	/* KEY_ROW0 */
 	{.label = "speaker_amp",	.gpio = MAKE_GP(4, 7),		.flags = 0},
+#define CAMERA_RESET				MAKE_GP(4, 14)
+	{.label = "Camera reset",	.gpio = MAKE_GP(4, 14),		.flags = 0},
 #define N53_USB_HUB_RESET			MAKE_GP(5, 0)
 	{.label = "USB HUB reset",	.gpio = MAKE_GP(5, 0),		.flags = 0},
 #define EVK_USB_HUB_RESET			MAKE_GP(5, 20)
@@ -133,10 +152,6 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "usbh1-vbus",		.gpio = MAKE_GP(7, 8),		.flags = 0},
 #define N53_PHY_RESET				MAKE_GP(7, 13)
 	{.label = "ICS1893 reset",	.gpio = MAKE_GP(7, 13),		.flags = 0},	/* ICS1893 Ethernet PHY reset */
-#define CAMERA_RESET				MAKE_GP(4, 14)
-	{.label = "Camera reset",	.gpio = MAKE_GP(4, 14),		.flags = 0},
-#define CAMERA_POWERDOWN			MAKE_GP(1, 7)
-	{.label = "Camera power down",	.gpio = MAKE_GP(1, 7),		.flags = 0},
 };
 
 #define BUTTON_PAD_CTRL	(PAD_CTL_HYS | PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_22K_UP | PAD_CTL_DSE_HIGH)
@@ -222,8 +237,9 @@ static struct pad_desc mx53common_pads[] = {
 
 	MX53_PAD_GPIO_10__GPIO_4_0,
 
-	/* CAN1 -- STBY */
-	MX53_PAD_GPIO_17__GPIO_7_12,
+
+	MX53_PAD_EIM_DA10__GPIO_3_10,	/* I2C Connector Buffer enable */
+	MX53_PAD_GPIO_17__GPIO_7_12,	/* I2C Connector interrupt */
 	/* CAN1 -- NERR */
 	MX53_PAD_GPIO_5__GPIO_1_5,
 
@@ -347,16 +363,16 @@ static struct pad_desc mx53common_pads[] = {
 	MX53_PAD_FEC_MDC__FEC_MDC,
 
 	/* I2C3 */
-	MX53_PAD_GPIO_3__I2C3_SCL,
-	MX53_PAD_GPIO_6__I2C3_SDA,
+	MX53_PAD_GPIO_3__I2C3_SCL,	/* GPIO1[3] */
+	MX53_PAD_GPIO_6__I2C3_SDA,	/* GPIO1[6] */
 
 	/* I2C2 */
-	MX53_PAD_EIM_EB2__I2C2_SCL,
-	MX53_PAD_KEY_ROW3__I2C2_SDA,
+	MX53_PAD_EIM_EB2__I2C2_SCL,	/* GPIO2[30] */
+	MX53_PAD_KEY_ROW3__I2C2_SDA,	/* GPIO4[13] */
 
 	/* I2C1 */
-	MX53_PAD_EIM_D21__I2C1_SCL,
-	MX53_PAD_EIM_D28__I2C1_SDA,
+	MX53_PAD_EIM_D21__I2C1_SCL,	/* GPIO3[21] */
+	MX53_PAD_EIM_D28__I2C1_SDA,	/* GPIO3[28] */
 };
 
 
@@ -659,8 +675,85 @@ static struct mxc_spi_master mxcspi1_data = {
 	.chipselect_inactive = mx53_evk_gpio_spi_chipselect_inactive,
 };
 
-static struct imxi2c_platform_data mxci2c_data = {
+#define PRINT_SDA
+#define PD_CLK_I2C	0
+#define PD_CLK_GP	1
+#define PD_SDA_I2C	2
+#define PD_SDA_GP	3
+/* Generate a pulse on the i2c clock pin. */
+static void i2c_clock_toggle(unsigned gp_clk, unsigned gp_dat, const struct pad_desc *pd)
+{
+	unsigned i;
+	printk(KERN_INFO "%s\n", __FUNCTION__);
+	gpio_direction_input(gp_clk);
+	mxc_iomux_v3_setup_pad(&pd[PD_CLK_GP]);
+
+#ifdef PRINT_SDA
+	gpio_direction_input(gp_dat);
+	mxc_iomux_v3_setup_pad(&pd[PD_SDA_GP]);
+	printk(KERN_INFO "%s dat = %i\n", __FUNCTION__, gpio_get_value(gp_dat));
+#endif
+	/* Send high and low on the SCL line */
+	for (i = 0; i < 9; i++) {
+		gpio_direction_output(gp_clk,0);
+		udelay(20);
+		gpio_direction_input(gp_clk);
+#ifdef PRINT_SDA
+		printk(KERN_INFO "%s dat = %i\n", __FUNCTION__, gpio_get_value(gp_dat));
+#endif
+		udelay(20);
+	}
+
+        mxc_iomux_v3_setup_pad(&pd[PD_CLK_I2C]);
+#ifdef PRINT_SDA
+	mxc_iomux_v3_setup_pad(&pd[PD_SDA_I2C]);
+#endif
+}
+
+static void i2c_clock_toggle0(void)
+{
+	const struct pad_desc pd[] = {
+		MX53_PAD_EIM_D21__I2C1_SCL, MX53_PAD_EIM_D21__GPIO_3_21,
+		MX53_PAD_EIM_D28__I2C1_SDA, MX53_PAD_EIM_D28__GPIO_3_28,
+	};
+	i2c_clock_toggle(N53_I2C_0_SCL, N53_I2C_0_SDA, pd);
+}
+
+#define MX53_PAD_EIM_EB2__GPIO_2_30_I2C		IOMUX_PAD(0x45C, 0x114, 1 | IOMUX_CONFIG_SION, 0x0, 0, PAD_CTRL_9)
+#define MX53_PAD_KEY_ROW3__GPIO_4_13_I2C	IOMUX_PAD(0x368, 0x40, 1 | IOMUX_CONFIG_SION, 0x0, 0, PAD_CTRL_9)
+
+static void i2c_clock_toggle1(void)
+{
+	const struct pad_desc pd[] = {
+		MX53_PAD_EIM_EB2__I2C2_SCL, MX53_PAD_EIM_EB2__GPIO_2_30_I2C,
+		MX53_PAD_KEY_ROW3__I2C2_SDA, MX53_PAD_KEY_ROW3__GPIO_4_13_I2C,
+	};
+	i2c_clock_toggle(N53_I2C_1_SCL, N53_I2C_1_SDA, pd);
+}
+
+#define MX53_PAD_GPIO_3__GPIO_1_3_I2C		IOMUX_PAD(0x6B0, 0x320, 1 | IOMUX_CONFIG_SION, 0x0, 0, PAD_CTRL_9)
+#define MX53_PAD_GPIO_6__GPIO_1_6_I2C		IOMUX_PAD(0x6B4, 0x324, 1 | IOMUX_CONFIG_SION, 0x0, 0, PAD_CTRL_9)
+
+static void i2c_clock_toggle2(void)
+{
+	const struct pad_desc pd[] = {
+		MX53_PAD_GPIO_3__I2C3_SCL, MX53_PAD_GPIO_3__GPIO_1_3_I2C,
+		MX53_PAD_GPIO_6__I2C3_SDA, MX53_PAD_GPIO_6__GPIO_1_6_I2C,
+	};
+	i2c_clock_toggle(N53_I2C_2_SCL, N53_I2C_2_SDA, pd);
+}
+
+static struct imxi2c_platform_data mxci2c0_data = {
 	.bitrate = 100000,
+	.i2c_clock_toggle = i2c_clock_toggle0,
+};
+static struct imxi2c_platform_data mxci2c1_data = {
+	.bitrate = 100000,
+	.i2c_clock_toggle = i2c_clock_toggle1,
+};
+static struct imxi2c_platform_data mxci2c2_data = {
+	.bitrate = 100000,
+	.i2c_clock_toggle = i2c_clock_toggle2,
 };
 
 static struct mxc_dvfs_platform_data dvfs_core_data = {
@@ -821,21 +914,16 @@ static int __init mxc_init_fb(void)
 }
 device_initcall(mxc_init_fb);
 
-static void sii9022_hdmi_reset(void)
-{
-}
-
-static struct mxc_lcd_platform_data sii9022_hdmi_data = {
-	.reset = sii9022_hdmi_reset,
-};
-
 struct plat_i2c_generic_data {
 	unsigned irq;
 	unsigned gp;
+	unsigned buffer_enable_gp;
 };
 
 static struct plat_i2c_generic_data i2c_generic_data = {
-	IOMUX_TO_IRQ_V3(N53_I2C_CONNECTOR_INT), N53_I2C_CONNECTOR_INT
+	.irq = IOMUX_TO_IRQ_V3(N53_I2C_CONNECTOR_INT),
+	.gp = N53_I2C_CONNECTOR_INT,
+	.buffer_enable_gp = N53_I2C_CONNECTOR_BUFFER_ENABLE,
 };
 
 struct plat_i2c_tfp410_data {
@@ -849,44 +937,6 @@ static struct plat_i2c_tfp410_data i2c_tfp410_data = {
 	.gp_i2c_sel = N53_TFP410_I2CMODE
 };
 
-static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
-	{
-	 .type = "Pic16F616-ts",
-	 .addr = 0x22,
-	 .platform_data  = &i2c_generic_data,
-	},
-	{
-	 .type = "mma7660",
-	 .addr = 0x4c,
-	 .platform_data  = &i2c_generic_data,
-	},
-	{
-	 .type = "tfp410",
-	 .addr = 0x38,
-	 .platform_data  = &i2c_tfp410_data,
-	},
-};
-
-static struct i2c_board_info mxc_i2c1_board_info[] __initdata = {
-	{
-	 .type = "sii9022",
-	 .addr = 0x39,
-	 .platform_data = &sii9022_hdmi_data,
-	},
-};
-
-/* TO DO add platform data */
-static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
-	{
-	 .type = "sgtl5000-i2c",
-	 .addr = 0x0a,
-	},
-	{
-	 .type = "ep0700m01-ts",
-	 .addr = 0x38,
-	 .platform_data  = &i2c_generic_data,
-	},
-};
 
 static struct mtd_partition mxc_dataflash_partitions[] = {
 	{
@@ -1459,7 +1509,9 @@ extern void mx53_gpio_host1_driver_vbus(bool on);
 /*!
  * Board specific initialization.
  */
-static void __init mxc_board_init(void)
+static void __init mxc_board_init(struct i2c_board_info *bi0, int bi0_size,
+	struct i2c_board_info *bi1, int bi1_size,
+	struct i2c_board_info *bi2, int bi2_size)
 {
 
 	mxc_ipu_data.di_clk[0] = clk_get(NULL, "ipu_di0_clk");
@@ -1480,9 +1532,9 @@ static void __init mxc_board_init(void)
 	mxc_register_device(&mxc_dma_device, NULL);
 	mxc_register_device(&mxc_wdt_device, NULL);
 	mxc_register_device(&mxcspi1_device, &mxcspi1_data);
-	mxc_register_device(&mxci2c_devices[0], &mxci2c_data);
-	mxc_register_device(&mxci2c_devices[1], &mxci2c_data);
-	mxc_register_device(&mxci2c_devices[2], &mxci2c_data);
+	mxc_register_device(&mxci2c_devices[0], &mxci2c0_data);
+	mxc_register_device(&mxci2c_devices[1], &mxci2c1_data);
+	mxc_register_device(&mxci2c_devices[2], &mxci2c2_data);
 	mxc_register_device(&mxc_rtc_device, NULL);
 
 	mx53_nitrogen_init_da9052();
@@ -1523,12 +1575,12 @@ static void __init mxc_board_init(void)
 
 	spi_register_board_info(mxc_dataflash_device,
 				ARRAY_SIZE(mxc_dataflash_device));
-	i2c_register_board_info(0, mxc_i2c0_board_info,
-				ARRAY_SIZE(mxc_i2c0_board_info));
-	i2c_register_board_info(1, mxc_i2c1_board_info,
-				ARRAY_SIZE(mxc_i2c1_board_info));
-	i2c_register_board_info(2, mxc_i2c2_board_info,
-				ARRAY_SIZE(mxc_i2c2_board_info));
+	if (bi0)
+		i2c_register_board_info(0, bi0, bi0_size);
+	if (bi1)
+		i2c_register_board_info(1, bi1, bi1_size);
+	if (bi2)
+		i2c_register_board_info(2, bi2, bi2_size);
 
 	pm_power_off = nitrogen_power_off;
 
@@ -1557,15 +1609,100 @@ static struct sys_timer mxc_timer = {
 	.init	= mx53_evk_timer_init,
 };
 
-/*
- * The following uses standard kernel macros define in arch.h in order to
- * initialize __mach_desc_MX53_EVK data structure.
- */
+
+#ifdef CONFIG_MACH_NITROGEN_IMX53
+static struct i2c_board_info mxc_i2c1_board_info[] __initdata = {
+#if 0
+	{
+	 .type = "Pic16F616-ts",
+	 .addr = 0x22,
+	 .platform_data  = &i2c_generic_data,
+	},
+#endif
+	{
+	 .type = "mma7660",
+	 .addr = 0x4c,
+	 .platform_data  = &i2c_generic_data,
+	},
+	{
+	 .type = "tfp410",
+	 .addr = 0x38,
+	 .platform_data  = &i2c_tfp410_data,
+	},
+};
+
+static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
+	{
+	 .type = "sgtl5000-i2c",
+	 .addr = 0x0a,
+	},
+	{
+	 .type = "ep0700m01-ts",
+	 .addr = 0x38,
+	 .platform_data  = &i2c_generic_data,
+	},
+};
+static void __init mxc_board_init_nitrogen(void)
+{
+	mxc_board_init(NULL, 0,
+		mxc_i2c1_board_info, ARRAY_SIZE(mxc_i2c1_board_info),
+		mxc_i2c2_board_info, ARRAY_SIZE(mxc_i2c2_board_info));
+}
+
 MACHINE_START(NITROGEN_IMX53, "Boundary Devices Nitrogen MX53 Board")
 	/* Maintainer: Freescale Semiconductor, Inc. */
 	.fixup = fixup_mxc_board,
 	.map_io = mx5_map_io,
 	.init_irq = mx5_init_irq,
-	.init_machine = mxc_board_init,
+	.init_machine = mxc_board_init_nitrogen,
 	.timer = &mxc_timer,
 MACHINE_END
+#endif
+
+#ifdef CONFIG_MACH_NITROGEN_V1_IMX53
+static struct i2c_board_info mxc_i2c0_board_info_v1[] __initdata = {
+	{
+	 .type = "Pic16F616-ts",
+	 .addr = 0x22,
+	 .platform_data  = &i2c_generic_data,
+	},
+	{
+	 .type = "mma7660",
+	 .addr = 0x4c,
+	 .platform_data  = &i2c_generic_data,
+	},
+	{
+	 .type = "tfp410",
+	 .addr = 0x38,
+	 .platform_data  = &i2c_tfp410_data,
+	},
+};
+
+static struct i2c_board_info mxc_i2c2_board_info_v1[] __initdata = {
+	{
+	 .type = "sgtl5000-i2c",
+	 .addr = 0x0a,
+	},
+	{
+	 .type = "ep0700m01-ts",
+	 .addr = 0x38,
+	 .platform_data  = &i2c_generic_data,
+	},
+};
+
+static void __init mxc_board_init_nitrogen_v1(void)
+{
+	mxc_board_init(	mxc_i2c0_board_info_v1, ARRAY_SIZE(mxc_i2c0_board_info_v1),
+		NULL, 0,
+		mxc_i2c2_board_info_v1, ARRAY_SIZE(mxc_i2c2_board_info_v1));
+}
+
+MACHINE_START(NITROGEN_V1_IMX53, "Boundary Devices Nitrogen MX53 rev. 1 Board")
+	/* Maintainer: Freescale Semiconductor, Inc. */
+	.fixup = fixup_mxc_board,
+	.map_io = mx5_map_io,
+	.init_irq = mx5_init_irq,
+	.init_machine = mxc_board_init_nitrogen_v1,
+	.timer = &mxc_timer,
+MACHINE_END
+#endif

@@ -63,7 +63,7 @@ EXPORT_SYMBOL(mxc_iomux_v3_get_multiple_pads);
 /*
  * setups a single pad in the iomuxer
  */
-int mxc_iomux_v3_setup_pad(struct pad_desc *pad)
+int mxc_iomux_v3_setup_pad(const struct pad_desc *pad)
 {
 	if (pad->mux_ctrl_ofs)
 		__raw_writel(pad->mux_mode, base + pad->mux_ctrl_ofs);

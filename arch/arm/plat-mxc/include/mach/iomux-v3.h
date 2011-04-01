@@ -101,7 +101,7 @@ struct pad_cfg {
  * read/write a single pad in the iomuxer
  */
 int mxc_iomux_v3_get_pad(struct pad_desc *pad);
-int mxc_iomux_v3_setup_pad(struct pad_desc *pad);
+int mxc_iomux_v3_setup_pad(const struct pad_desc *pad);
 int mxc_iomux_v3_setup_pad_ext(struct pad_cfg *pad);
 
 /*
