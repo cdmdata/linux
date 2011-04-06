@@ -810,22 +810,21 @@ static struct regulator *init_regulator(char const *name, struct device *dev,int
 {
 	struct regulator *rval = 0 ;
 	if (name) {
-printk(KERN_ERR "%s: have platform regulator: %s\n", __func__, name );
 		rval = regulator_get(dev, name);
                 if (!IS_ERR(rval)) {
-printk(KERN_ERR "%s: setting regulator %s voltage to %u/%u\n", __func__, name, min_uV, max_uV );
+                	dev_info(dev, "%s: setting regulator %s voltage to %u/%u\n", __func__, name, min_uV, max_uV );
 			if ((0 <= min_uV) && (0 <= max_uV)) {
 				regulator_set_voltage(rval, min_uV, max_uV );
 			}
 			if (0 == regulator_enable(rval)) {
-				printk(KERN_ERR "%s: enabled regulator %s\n", __func__, name );
+				dev_info(dev, "%s: enabled regulator %s\n", __func__, name );
 			} else {
 				dev_err(dev, "%s: error enabling regulator %s\n", __func__, name );
 				regulator_put(rval);
 				rval = 0 ;
 			}
 		} else {
-printk(KERN_ERR "%s: error gettin regulator %s\n", __func__, name);
+			dev_err(dev, "%s: error getting regulator %s\n", __func__, name);
 			rval = 0 ;
 		}
 	}
@@ -926,8 +925,7 @@ static int ov5640_probe(struct i2c_client *client,
 	dev_set_drvdata(&client->dev,sensor);
 	sensor->ident = V4L2_IDENT_OV5640 ;
 
-	v4l_info(client, "chip found @ 0x%x (%s)\n",
-			client->addr << 1, client->adapter->name);
+	v4l_info(client, "chip found @ 0x%x (%s)\n", client->addr, client->adapter->name);
 
 	sensor->platform_data = plat_data ; 
 printk(KERN_ERR "%s: i2c addr 0x%x, csi %d, clock %d, priv %p, drvier data %p\n", __func__, client->addr, plat_data->csi, plat_data->mclk, client->dev.p, dev_get_drvdata(&client->dev));
