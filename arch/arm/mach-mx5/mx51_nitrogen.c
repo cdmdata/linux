@@ -1357,14 +1357,14 @@ static struct platform_device boundary_camera_interfaces[] = {
 };
 
 static struct mxc_camera_platform_data camera_data = {
-	.io_regulator = "VGEN3",
-	.analog_regulator = "VVIDEO",
+	.io_regulator = "VDD_IO",
+	.analog_regulator = "VDD_A",
 	.mclk = 26000000,
 	.csi = 0,
 	.power_down = CAMERA_POWERDOWN,
 	.reset = CAMERA_RESET,
 	.i2c_bus = 1,
-	.i2c_id = 0x78,
+	.i2c_id = 0x3c,
 	.sensor_name = "ov5640",
 };
 

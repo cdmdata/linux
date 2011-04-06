@@ -952,7 +952,7 @@ static int boundary_camera_driver_probe(struct platform_device *pdev)
 #endif
         memset(&board_info,0,sizeof(board_info));
 	strcpy(board_info.type,plat_data->sensor_name);
-	board_info.addr = plat_data->i2c_id >> 1 ;
+	board_info.addr = plat_data->i2c_id;
 	board_info.platform_data = plat_data ;
 	cam->subdev = v4l2_i2c_new_subdev_board(&cam->v4l2_dev,
 						i2c_adapter, 
