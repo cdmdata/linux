@@ -25,6 +25,7 @@
 #include <linux/irq.h>
 #include <linux/io.h>
 #include <linux/fsl_devices.h>
+#include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <sound/core.h>
 #include <sound/pcm.h>
@@ -172,6 +173,17 @@ static int imx_3stack_audio_hw_params(struct snd_pcm_substream *substream,
 
 static int imx_3stack_startup(struct snd_pcm_substream *substream)
 {
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		struct imx_3stack_priv *priv = &card_priv;
+		struct regulator *reg_amp;
+		reg_amp = regulator_get(&priv->pdev->dev, "VDD_AMP");
+		if (IS_ERR(reg_amp)) {
+			dev_err(&priv->pdev->dev, "get VDD_AMP error.\n");
+		} else {
+			regulator_enable(reg_amp);
+			regulator_put(reg_amp);
+		}
+	}
 #if defined(CONFIG_MXC_ASRC) || defined(CONFIG_MXC_ASRC_MODULE)
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		if (asrc_ssi_data.output_sample_rate != 0) {
@@ -214,6 +226,16 @@ static void imx_3stack_shutdown(struct snd_pcm_substream *substream)
 #endif
 
 	priv->hw = 0;
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		struct regulator *reg_amp;
+		reg_amp = regulator_get(&priv->pdev->dev, "VDD_AMP");
+		if (IS_ERR(reg_amp)) {
+			dev_err(&priv->pdev->dev, "get VDD_AMP error.\n");
+		} else {
+			regulator_disable(reg_amp);
+			regulator_put(reg_amp);
+		}
+	}
 }
 
 /*
