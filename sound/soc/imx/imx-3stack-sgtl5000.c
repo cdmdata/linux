@@ -340,11 +340,13 @@ static void headphone_detect_handler(struct work_struct *work)
 	kobject_uevent_env(&pdev->dev.kobj, KOBJ_CHANGE, envp);
 	kfree(buf);
 
-	if (hp_status)
-		set_irq_type(plat->hp_irq, IRQ_TYPE_EDGE_FALLING);
-	else
-		set_irq_type(plat->hp_irq, IRQ_TYPE_EDGE_RISING);
-	enable_irq(plat->hp_irq);
+	if (plat->hp_irq) {
+		if (hp_status)
+			set_irq_type(plat->hp_irq, IRQ_TYPE_EDGE_FALLING);
+		else
+			set_irq_type(plat->hp_irq, IRQ_TYPE_EDGE_RISING);
+		enable_irq(plat->hp_irq);
+	}
 }
 
 static DECLARE_DELAYED_WORK(hp_event, headphone_detect_handler);
@@ -645,19 +647,20 @@ static int __devinit imx_3stack_sgtl5000_probe(struct platform_device *pdev)
 	   cycles after all power rails have been brought up. After this time
 	   communication can start */
 
-	if (plat->hp_status())
-		ret = request_irq(plat->hp_irq,
+	if (plat->hp_irq) {
+		if (plat->hp_status())
+			ret = request_irq(plat->hp_irq,
 				  imx_headphone_detect_handler,
 				  IRQ_TYPE_EDGE_FALLING, pdev->name, priv);
-	else
-		ret = request_irq(plat->hp_irq,
+		else
+			ret = request_irq(plat->hp_irq,
 				  imx_headphone_detect_handler,
 				  IRQ_TYPE_EDGE_RISING, pdev->name, priv);
-	if (ret < 0) {
-		pr_err("%s: request irq failed\n", __func__);
-		goto err_card_reg;
+		if (ret < 0) {
+			pr_err("%s: request irq failed\n", __func__);
+			goto err_card_reg;
+		}
 	}
-
 	setup = kzalloc(sizeof(struct sgtl5000_setup_data), GFP_KERNEL);
 	if (!setup) {
 		pr_err("%s: kzalloc sgtl5000_setup_data failed\n", __func__);
@@ -686,7 +689,8 @@ static int imx_3stack_sgtl5000_remove(struct platform_device *pdev)
 	struct mxc_audio_platform_data *plat = pdev->dev.platform_data;
 	struct imx_3stack_priv *priv = &card_priv;
 
-	free_irq(plat->hp_irq, priv);
+	if (plat->hp_irq)
+		free_irq(plat->hp_irq, priv);
 
 	if (plat->finit)
 		plat->finit();

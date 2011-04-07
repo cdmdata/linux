@@ -88,8 +88,6 @@ struct gpio nitrogen53_gpios[] __initdata = {
 #define N53_I2C_2_SDA				MAKE_GP(1, 6)
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(1, 6),		.flags = GPIOF_DIR_IN},
 
-#define MX53_HP_DETECT				MAKE_GP(2, 5)
-	{.label = "hp-detect",		.gpio = MAKE_GP(2, 5),		.flags = GPIOF_DIR_IN},
 #define N53_I2C_1_SCL				MAKE_GP(2, 30)
 	{.label = "i2c-1-scl",		.gpio = MAKE_GP(2, 30),		.flags = GPIOF_DIR_IN},
 #define EVK_SD3_CD				MAKE_GP(3, 11)
@@ -1035,7 +1033,6 @@ static struct mxc_audio_platform_data sgtl5000_data = {
 	.ssi_num = 1,
 	.src_port = 2,
 	.ext_port = 4,
-	.hp_irq = IOMUX_TO_IRQ(MX53_HP_DETECT),
 	.hp_status = headphone_det_status,
 	.amp_enable = mxc_sgtl5000_amp_enable,
 	.sysclk = 26000000,
