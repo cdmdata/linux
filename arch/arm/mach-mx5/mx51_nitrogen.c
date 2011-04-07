@@ -1069,7 +1069,7 @@ static int mxc_sgtl5000_amp_enable(int enable)
 
 static int headphone_det_status(void)
 {
-	return 1 ;
+	return 0 ;
 }
 
 static struct mxc_audio_platform_data sgtl5000_data = {

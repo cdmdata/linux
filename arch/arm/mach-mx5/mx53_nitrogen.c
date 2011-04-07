@@ -1025,8 +1025,7 @@ static int mxc_sgtl5000_amp_enable(int enable)
 
 static int headphone_det_status(void)
 {
-	return 1;
-	return (gpio_get_value(MX53_HP_DETECT) == 0);
+	return 0;
 }
 
 static int mxc_sgtl5000_init(void);
