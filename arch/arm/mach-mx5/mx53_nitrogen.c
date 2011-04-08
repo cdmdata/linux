@@ -140,7 +140,7 @@ struct gpio nitrogen53_gpios[] __initdata = {
 #define N53_USB_HUB_RESET			MAKE_GP(5, 0)
 	{.label = "USB HUB reset",	.gpio = MAKE_GP(5, 0),		.flags = 0},
 #define N53_CAMERA_STANDBY			MAKE_GP(5, 20)
-	{.label = "usb-hub-reset",	.gpio = MAKE_GP(5, 20),		.flags = 0},
+	{.label = "Camera standby",	.gpio = MAKE_GP(5, 20),		.flags = 0},
 #define MX53_TVIN_RESET				MAKE_GP(5, 25)
 	{.label = "tvin-reset",		.gpio = MAKE_GP(5, 25),		.flags = 0},
 #define MX53_TVIN_PWR				MAKE_GP(5, 23)
@@ -302,6 +302,10 @@ static struct pad_desc mx53common_pads[] = {
 	MX53_PAD_LVDS1_TX1_P__LVDS1_TX1,
 	MX53_PAD_LVDS1_TX0_P__LVDS1_TX0,
 
+//	MX53_PAD_CSI0_D8__CSI0_D8,	/* ov5640 doesn't use D8-D11 */
+//	MX53_PAD_CSI0_D9__CSI0_D9,
+//	MX53_PAD_CSI0_D10__CSI0_D10,
+//	MX53_PAD_CSI0_D11__CSI0_D11,
 	MX53_PAD_CSI0_D12__CSI0_D12,
 	MX53_PAD_CSI0_D13__CSI0_D13,
 	MX53_PAD_CSI0_D14__CSI0_D14,
