@@ -126,9 +126,6 @@ static struct regulator_consumer_supply vgen3_consumers[] = {
 	},
 };
 
-static struct regulator_consumer_supply vvideo_consumers[] = {
-};
-
 struct mc13892;
 
 static struct regulator_init_data sw1_init = {
@@ -315,7 +312,7 @@ static struct regulator_init_data vgen3_init = {
 		.max_uV = mV_to_uV(2900),
 		.valid_ops_mask = REGULATOR_CHANGE_VOLTAGE,
 		.always_on = 1,
-	}
+	},
 	.num_consumer_supplies = ARRAY_SIZE(vgen3_consumers),
 	.consumer_supplies = vgen3_consumers,
 };
