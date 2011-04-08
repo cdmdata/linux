@@ -319,7 +319,7 @@ DEBUGMSG ("%s\n", __func__ );
  */
 static int ioctl_s_parm(struct v4l2_subdev *s, struct v4l2_streamparm *a)
 {
-	struct sensor *sensor = s->priv;
+	struct sensor *sensor = to_sensor(s);
 	int ret = 0;
 
 	if (a->type==V4L2_BUF_TYPE_VIDEO_CAPTURE) {
@@ -928,7 +928,7 @@ static int ov5640_probe(struct i2c_client *client,
 	v4l_info(client, "chip found @ 0x%x (%s)\n", client->addr, client->adapter->name);
 
 	sensor->platform_data = plat_data ; 
-printk(KERN_ERR "%s: i2c addr 0x%x, csi %d, clock %d, priv %p, drvier data %p\n", __func__, client->addr, plat_data->csi, plat_data->mclk, client->dev.p, dev_get_drvdata(&client->dev));
+printk(KERN_ERR "%s: i2c addr 0x%x, csi %d, clock %d, priv %p, driver data %p\n", __func__, client->addr, plat_data->csi, plat_data->mclk, client->dev.p, dev_get_drvdata(&client->dev));
 
 	if(plat_data->power_down) {
 		printk(KERN_ERR "%s: power-down pin 0x%x, level %u\n", __func__, plat_data->power_down, gpio_get_value(plat_data->power_down) );
