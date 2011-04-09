@@ -60,7 +60,7 @@ static struct v4l2_i2c_driver_data v4l2_i2c_data = {
 
 #define OV5640_VOLTAGE_ANALOG               2775000
 #define OV5640_VOLTAGE_DIGITAL_CORE         1500000
-#define OV5640_VOLTAGE_DIGITAL_IO           1800000
+#define OV5640_VOLTAGE_DIGITAL_IO           2500000
 #define OV5640_VOLTAGE_GPIO           	    -1
 
 #define OV5640_XCLK_MIN 6000000
