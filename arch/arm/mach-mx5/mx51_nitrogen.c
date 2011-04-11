@@ -89,7 +89,8 @@
 #define GP_SD1_CD			MAKE_GP(1, 0)
 #define GP_SD1_WP			MAKE_GP(1, 1)
 #define GP_POWER_KEY			MAKE_GP(2, 21)
-#define CAMERA_POWERDOWN		MAKE_GP(4, 9)
+#define CAMERA_STROBE			MAKE_GP(4, 9)
+#define CAMERA_POWERDOWN		MAKE_GP(4, 10)
 #define CAMERA_RESET			MAKE_GP(4, 14)
 
 struct gpio nitrogen_gpios[] __initdata = {
@@ -105,6 +106,7 @@ struct gpio nitrogen_gpios[] __initdata = {
 	{.label="gp_4_31",		.gpio = MAKE_GP(4, 31),		.flags = GPIOF_DIR_IN},		/* release immediately */
 #if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) \
  || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
+	{.label="camera_strobe",	.gpio = CAMERA_STROBE,		.flags = GPIOF_DIR_OUT},
 	{.label="camera_powerdown",	.gpio = CAMERA_POWERDOWN,	.flags = GPIOF_DIR_OUT},
 	{.label="camera_reset",		.gpio = CAMERA_RESET,		.flags = GPIOF_DIR_OUT},
 #endif
