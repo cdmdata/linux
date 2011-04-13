@@ -111,6 +111,19 @@ static struct regulator_consumer_supply vvideo_consumers[] = {
 		.supply = "VDDIO",
 		.dev_name = "0-000a",
 	},
+	{
+		/* Camera 2.75V */
+		.supply = "VDD_A",
+		.dev_name = "1-003c",
+	},
+};
+
+static struct regulator_consumer_supply vgen3_consumers[] = {
+	{
+		/* Camera 1.8V  */
+		.supply = "VDD_IO",
+		.dev_name = "1-003c",
+	},
 };
 
 struct mc13892;
@@ -299,7 +312,9 @@ static struct regulator_init_data vgen3_init = {
 		.max_uV = mV_to_uV(2900),
 		.valid_ops_mask = REGULATOR_CHANGE_VOLTAGE,
 		.always_on = 1,
-	}
+	},
+	.num_consumer_supplies = ARRAY_SIZE(vgen3_consumers),
+	.consumer_supplies = vgen3_consumers,
 };
 
 static struct regulator_init_data gpo1_init = {

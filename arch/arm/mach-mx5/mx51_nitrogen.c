@@ -89,7 +89,6 @@
 #define GP_SD1_CD			MAKE_GP(1, 0)
 #define GP_SD1_WP			MAKE_GP(1, 1)
 #define GP_POWER_KEY			MAKE_GP(2, 21)
-#define GP_HEADPHONE_DET		MAKE_GP(3, 26)
 #define CAMERA_POWERDOWN		MAKE_GP(4, 9)
 #define CAMERA_RESET			MAKE_GP(4, 14)
 
@@ -99,7 +98,6 @@ struct gpio nitrogen_gpios[] __initdata = {
 	{.label="sdhc1-wp",		.gpio = GP_SD1_WP,		.flags = GPIOF_DIR_IN},		/* MAKE_GP(1, 1) */
 	{.label="pmic-int",		.gpio = MAKE_GP(1, 8),		.flags = GPIOF_DIR_IN},
 	{.label="power-key",		.gpio = GP_POWER_KEY,		.flags = GPIOF_DIR_IN},		/* MAKE_GP(2, 21) */
-	{.label="hphone-det",		.gpio = GP_HEADPHONE_DET,	.flags = GPIOF_DIR_IN},		/* MAKE_GP(3, 26) */
 	{.label="tfp410int",		.gpio = MAKE_GP(3, 28),		.flags = GPIOF_DIR_IN},		/* same as i2c_tfp410_data.gp */
 	{.label="hs_i2c_clk",		.gpio = MAKE_GP(4, 16),		.flags = GPIOF_DIR_IN},
 	{.label="hs_i2c_data",		.gpio = MAKE_GP(4, 17),		.flags = GPIOF_DIR_IN},
@@ -1069,14 +1067,13 @@ static int mxc_sgtl5000_amp_enable(int enable)
 
 static int headphone_det_status(void)
 {
-	return 1 ;
+	return 0 ;
 }
 
 static struct mxc_audio_platform_data sgtl5000_data = {
 	.ssi_num = 1,
 	.src_port = 2,
 	.ext_port = 3,
-	.hp_irq = IOMUX_TO_IRQ_V3(GP_HEADPHONE_DET),
 	.hp_status = headphone_det_status,
 	.amp_enable = mxc_sgtl5000_amp_enable,
 	.sysclk = 26000000,	//12288000,
@@ -1357,14 +1354,14 @@ static struct platform_device boundary_camera_interfaces[] = {
 };
 
 static struct mxc_camera_platform_data camera_data = {
-	.io_regulator = "VGEN3",
-	.analog_regulator = "VVIDEO",
+	.io_regulator = "VDD_IO",
+	.analog_regulator = "VDD_A",
 	.mclk = 26000000,
 	.csi = 0,
 	.power_down = CAMERA_POWERDOWN,
 	.reset = CAMERA_RESET,
 	.i2c_bus = 1,
-	.i2c_id = 0x78,
+	.i2c_id = 0x3c,
 	.sensor_name = "ov5640",
 };
 

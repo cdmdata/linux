@@ -46,11 +46,43 @@ static struct regulator_consumer_supply vbuckmem_consumers[] = {
 	},
 };
 
+static struct regulator_consumer_supply ldo4_consumers[] = {
+	{
+		/* audio amp */
+		.supply = "VDD_AMP",
+		.dev_name = "imx-3stack-sgtl5000.0",
+	},
+};
+
+static struct regulator_consumer_supply ldo5_consumers[] = {
+	{
+		/* sata */
+		.supply = "VDD_CORE",
+		.dev_name = "ahci.0",
+	},
+};
+
 static struct regulator_consumer_supply ldo7_consumers[] = {
 	{
 		/* sgtl5000 */
 		.supply = "VDDIO",
 		.dev_name = "2-000a",
+	},
+};
+
+static struct regulator_consumer_supply ldo8_consumers[] = {
+	{
+		/* Camera 1.8V  */
+		.supply = "VDD_IO",
+		.dev_name = "1-003c",
+	},
+};
+
+static struct regulator_consumer_supply ldo9_consumers[] = {
+	{
+		/* Camera 2.75V */
+		.supply = "VDD_A",
+		.dev_name = "1-003c",
 	},
 };
 
@@ -148,6 +180,8 @@ static struct regulator_init_data da9052_regulators_init[] = {
 				.disabled = 0,
 			},
 		},
+		.num_consumer_supplies = ARRAY_SIZE(ldo4_consumers),
+		.consumer_supplies = ldo4_consumers,
 	},
 	{
 		.constraints = {
@@ -170,6 +204,8 @@ static struct regulator_init_data da9052_regulators_init[] = {
 				.disabled = 0,
 			},
 		},
+		.num_consumer_supplies = ARRAY_SIZE(ldo5_consumers),
+		.consumer_supplies = ldo5_consumers,
 	},
 	{
 		.constraints = {
@@ -240,6 +276,8 @@ static struct regulator_init_data da9052_regulators_init[] = {
 				.disabled = 0,
 			},
 		},
+		.num_consumer_supplies = ARRAY_SIZE(ldo8_consumers),
+		.consumer_supplies = ldo8_consumers,
 	},
 	{
 		.constraints = {
@@ -262,6 +300,8 @@ static struct regulator_init_data da9052_regulators_init[] = {
 				.disabled = 0,
 			},
 		},
+		.num_consumer_supplies = ARRAY_SIZE(ldo9_consumers),
+		.consumer_supplies = ldo9_consumers,
 	},
 	{
 		.constraints = {

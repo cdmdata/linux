@@ -88,8 +88,6 @@ struct gpio nitrogen53_gpios[] __initdata = {
 #define N53_I2C_2_SDA				MAKE_GP(1, 6)
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(1, 6),		.flags = GPIOF_DIR_IN},
 
-#define MX53_HP_DETECT				MAKE_GP(2, 5)
-	{.label = "hp-detect",		.gpio = MAKE_GP(2, 5),		.flags = GPIOF_DIR_IN},
 #define N53_I2C_1_SCL				MAKE_GP(2, 30)
 	{.label = "i2c-1-scl",		.gpio = MAKE_GP(2, 30),		.flags = GPIOF_DIR_IN},
 #define EVK_SD3_CD				MAKE_GP(3, 11)
@@ -120,8 +118,10 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "i2c_int",		.gpio = MAKE_GP(7, 12),		.flags = GPIOF_DIR_IN},
 
 /* Outputs */
-#define CAMERA_POWERDOWN			MAKE_GP(1, 7)
-	{.label = "Camera power down",	.gpio = MAKE_GP(1, 7),		.flags = 0},
+#define CAMERA_POWERDOWN			MAKE_GP(1, 2)
+	{.label = "Camera power down",	.gpio = MAKE_GP(1, 2),		.flags = GPIOF_INIT_HIGH},
+#define CAMERA_STROBE				MAKE_GP(1, 7)
+	{.label = "Camera strobe",	.gpio = MAKE_GP(1, 7),		.flags = 0},
 	// make sure gp2[29] is high, i2c_sel for tfp410
 #define N53_TFP410_I2CMODE			MAKE_GP(2, 29)
 	{.label = "tfp410_i2cmode",	.gpio = MAKE_GP(2, 29),		.flags = GPIOF_INIT_HIGH},	/* EIM_EB1 */
@@ -139,8 +139,8 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "Camera reset",	.gpio = MAKE_GP(4, 14),		.flags = 0},
 #define N53_USB_HUB_RESET			MAKE_GP(5, 0)
 	{.label = "USB HUB reset",	.gpio = MAKE_GP(5, 0),		.flags = 0},
-#define EVK_USB_HUB_RESET			MAKE_GP(5, 20)
-	{.label = "usb-hub-reset",	.gpio = MAKE_GP(5, 20),		.flags = 0},
+#define N53_CAMERA_STANDBY			MAKE_GP(5, 20)
+	{.label = "Camera standby",	.gpio = MAKE_GP(5, 20),		.flags = 0},
 #define MX53_TVIN_RESET				MAKE_GP(5, 25)
 	{.label = "tvin-reset",		.gpio = MAKE_GP(5, 25),		.flags = 0},
 #define MX53_TVIN_PWR				MAKE_GP(5, 23)
@@ -229,10 +229,7 @@ static struct pad_desc mx53common_pads[] = {
 
 	MX53_PAD_CSI0_D7__GPIO_5_25,
 
-	MX53_PAD_GPIO_2__MLBDAT,
-
 	MX53_PAD_GPIO_4__GPIO_1_4,
-	MX53_PAD_GPIO_7__GPIO_1_7,
 	MX53_PAD_GPIO_8__GPIO_1_8,
 
 	MX53_PAD_GPIO_10__GPIO_4_0,
@@ -243,7 +240,6 @@ static struct pad_desc mx53common_pads[] = {
 	/* CAN1 -- NERR */
 	MX53_PAD_GPIO_5__GPIO_1_5,
 
-	MX53_PAD_KEY_COL4__TXCAN2,
 	MX53_PAD_KEY_ROW4__GPIO_4_15,
 	MX53_PAD_EIM_EB1__GPIO_2_29,
 
@@ -306,6 +302,10 @@ static struct pad_desc mx53common_pads[] = {
 	MX53_PAD_LVDS1_TX1_P__LVDS1_TX1,
 	MX53_PAD_LVDS1_TX0_P__LVDS1_TX0,
 
+//	MX53_PAD_CSI0_D8__CSI0_D8,	/* ov5640 doesn't use D8-D11 */
+//	MX53_PAD_CSI0_D9__CSI0_D9,
+//	MX53_PAD_CSI0_D10__CSI0_D10,
+//	MX53_PAD_CSI0_D11__CSI0_D11,
 	MX53_PAD_CSI0_D12__CSI0_D12,
 	MX53_PAD_CSI0_D13__CSI0_D13,
 	MX53_PAD_CSI0_D14__CSI0_D14,
@@ -318,6 +318,9 @@ static struct pad_desc mx53common_pads[] = {
 	MX53_PAD_CSI0_VSYNC__CSI0_VSYNC,
 	MX53_PAD_CSI0_MCLK__CSI0_HSYNC,
 	MX53_PAD_CSI0_PIXCLK__CSI0_PIXCLK,
+	MX53_PAD_GPIO_2__GPIO_1_2,	/* CAMERA_POWERDOWN */
+	MX53_PAD_GPIO_7__GPIO_1_7,	/* CAMERA_STROBE */
+	MX53_PAD_KEY_COL4__GPIO_4_14,	/* CAMERA_RESET */
 	/* Camera low power */
 	MX53_PAD_CSI0_D5__GPIO_5_23,
 
@@ -1025,8 +1028,7 @@ static int mxc_sgtl5000_amp_enable(int enable)
 
 static int headphone_det_status(void)
 {
-	return 1;
-	return (gpio_get_value(MX53_HP_DETECT) == 0);
+	return 0;
 }
 
 static int mxc_sgtl5000_init(void);
@@ -1035,7 +1037,6 @@ static struct mxc_audio_platform_data sgtl5000_data = {
 	.ssi_num = 1,
 	.src_port = 2,
 	.ext_port = 4,
-	.hp_irq = IOMUX_TO_IRQ(MX53_HP_DETECT),
 	.hp_status = headphone_det_status,
 	.amp_enable = mxc_sgtl5000_amp_enable,
 	.sysclk = 26000000,
@@ -1421,13 +1422,14 @@ static struct platform_device boundary_camera_interfaces[] = {
 };
 
 static struct mxc_camera_platform_data camera_data = {
-	.analog_regulator = "DA9052_LDO9",
+	.io_regulator = "VDD_IO",
+	.analog_regulator = "VDD_A",
 	.mclk = 26000000,
 	.csi = 0,
 	.power_down = CAMERA_POWERDOWN,
 	.reset = CAMERA_RESET,
-	.i2c_bus = 2,
-	.i2c_id = 0x78,
+	.i2c_bus = 1,
+	.i2c_id = 0x3c,
 	.sensor_name = "ov5640",
 };
 
@@ -1471,7 +1473,6 @@ static void __init mx53_evk_io_init(void)
 #endif
 	msleep(5);
 	gpio_set_value(N53_USB_HUB_RESET, 1);		/* release USB Hub reset */
-	gpio_set_value(EVK_USB_HUB_RESET, 1);		/* release HUB reset */
 	gpio_set_value(N53_PHY_RESET, 1);		/* release ICS1893 Ethernet PHY reset */
 	gpio_set_value(MX53_TVIN_RESET, 1);		/* release */
 #if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)

@@ -182,7 +182,7 @@ static ssize_t sata_ahci_current_tmp(struct device *dev, struct device_attribute
 	/* map the IO addr */
 	mmio = ioremap(MX53_SATA_BASE_ADDR, SZ_2K);
 	if (mmio == NULL) {
-		printk(KERN_ERR "Failed to map SATA REGS\n");
+		dev_err(dev, "Failed to map SATA REGS\n");
 		return 1;
 	}
 
@@ -192,17 +192,17 @@ static ssize_t sata_ahci_current_tmp(struct device *dev, struct device_attribute
 	sata_phy_cr_write(read_sum, mmio);
 	sata_phy_cr_read(&read_sum, mmio);
 	if ((read_sum & 0xffff) != 0)
-		printk(KERN_ERR "Read/Write REG error, 0x%x!\n", read_sum);
+		dev_err(dev, "Read/Write REG error, 0x%x!\n", read_sum);
 
 	sata_phy_cr_write(0x5A5A, mmio);
 	sata_phy_cr_read(&read_sum, mmio);
 	if ((read_sum & 0xffff) != 0x5A5A)
-		printk(KERN_ERR "Read/Write REG error, 0x%x!\n", read_sum);
+		dev_err(dev, "Read/Write REG error, 0x%x!\n", read_sum);
 
 	sata_phy_cr_write(0x1234, mmio);
 	sata_phy_cr_read(&read_sum, mmio);
 	if ((read_sum & 0xffff) != 0x1234)
-		printk(KERN_ERR "Read/Write REG error, 0x%x!\n", read_sum);
+		dev_err(dev, "Read/Write REG error, 0x%x!\n", read_sum);
 
 	/* stat temperature test */
 	sata_phy_cr_addr(SATA_PHY_CR_CLOCK_MPLL_TST, mmio);
@@ -250,7 +250,7 @@ static ssize_t sata_ahci_current_tmp(struct device *dev, struct device_attribute
 			index = index + 1;
 		read_sum++;
 		if (read_sum > 100000) {
-			printk(KERN_ERR "Read REG more than 100000 times!\n");
+			dev_err(dev, "Read REG more than 100000 times!\n");
 			break;
 		}
 	}
@@ -284,7 +284,7 @@ static ssize_t sata_ahci_current_tmp(struct device *dev, struct device_attribute
 			index = index + 1;
 		read_sum++;
 		if (read_sum > 100000) {
-			printk(KERN_ERR "Read REG more than 100000 times!\n");
+			dev_err(dev, "Read REG more than 100000 times!\n");
 			break;
 		}
 	}
@@ -355,25 +355,26 @@ static int sata_init(struct device *dev)
 		reg_2v5 = regulator_get(dev, "DA9052_BUCK_PERI");
 		ret = IS_ERR(reg_2v5);
 		if (ret) {
-			printk(KERN_ERR "AHCI can't get 2v5 PWR.\n");
+			dev_err(dev, "can't get 2v5 PWR.\n");
 			goto err0;
 		}
 		ret = regulator_enable(reg_2v5);
 		if (ret) {
-			printk(KERN_ERR "AHCI: enable 2v5 regulator error.\n");
+			dev_err(dev, "enable 2v5 regulator error.\n");
 			goto err0;
 		}
 		msleep(25);
-
-		reg_1v3 = regulator_get(dev, "DA9052_LDO5");
+	}
+	if (machine_is_mx53_smd() || machine_is_mx53_loco() || machine_is_nitrogen_imx53()) {
+		reg_1v3 = regulator_get(dev, "VDD_CORE");
 		ret = IS_ERR(reg_1v3);
 		if (ret) {
-			printk(KERN_ERR "AHCI can't get 1v3 PWR.\n");
+			dev_err(dev, "can't get VDD_CORE\n");
 			goto err0;
 		}
 		ret = regulator_enable(reg_1v3);
 		if (ret) {
-			printk(KERN_ERR "AHCI: enable 1v3 regulator error.\n");
+			dev_err(dev, "enable VDD_CORE error.\n");
 			goto err0;
 		}
 		msleep(25);
@@ -382,12 +383,12 @@ static int sata_init(struct device *dev)
 	clk = clk_get(dev, "imx_sata_clk");
 	ret = IS_ERR(clk);
 	if (ret) {
-		printk(KERN_ERR "AHCI can't get clock.\n");
+		dev_err(dev, "can't get clock.\n");
 		goto err0;
 	}
 	ret = clk_enable(clk);
 	if (ret) {
-		printk(KERN_ERR "AHCI can't enable clock.\n");
+		dev_err(dev, "can't enable clock.\n");
 		goto err0;
 	}
 
@@ -395,13 +396,13 @@ static int sata_init(struct device *dev)
 	clk = clk_get(NULL, "ahb_clk");
 	ret = IS_ERR(clk);
 	if (ret) {
-		printk(KERN_ERR "AHCI can't get AHB clock.\n");
+		dev_err(dev, "can't get AHB clock.\n");
 		goto err0;
 	}
 
 	mmio = ioremap(MX53_SATA_BASE_ADDR, SZ_2K);
 	if (mmio == NULL) {
-		printk(KERN_ERR "Failed to map SATA REGS\n");
+		dev_err(dev, "Failed to map SATA REGS\n");
 		goto err0;
 	}
 
@@ -425,18 +426,18 @@ static int sata_init(struct device *dev)
 		clk = clk_get(dev, "iim_clk");
 		ret = IS_ERR(clk);
 		if (ret) {
-			printk(KERN_ERR "AHCI can't get IIM CLK.\n");
+			dev_err(dev, "can't get IIM CLK.\n");
 			goto err0;
 		}
 		ret = clk_enable(clk);
 		if (ret) {
-			printk(KERN_ERR "AHCI can't enable IIM clock.\n");
+			dev_err(dev, "can't enable IIM clock.\n");
 			goto err0;
 		}
 		/* SMD or loco boards use the IC internal clk */
 		mmio = ioremap(0x63F98000 + 0x180C, SZ_16);
 		if (mmio == NULL) {
-			printk(KERN_ERR "Failed to map IIM interface.\n");
+			dev_err(dev, "Failed to map IIM interface.\n");
 			goto err0;
 		}
 		/* USB_PHY1 clk, fuse bank4 row3 bit2 */
@@ -448,12 +449,12 @@ static int sata_init(struct device *dev)
 		clk = clk_get(dev, "usb_phy1_clk");
 		ret = IS_ERR(clk);
 		if (ret) {
-			printk(KERN_ERR "AHCI can't get USB PHY1 CLK.\n");
+			dev_err(dev, "can't get USB PHY1 CLK.\n");
 			goto err0;
 		}
 		ret = clk_enable(clk);
 		if (ret) {
-			printk(KERN_ERR "AHCI Can't enable USB PHY1 clock.\n");
+			dev_err(dev, "Can't enable USB PHY1 clock.\n");
 			goto err0;
 		}
 	} else {
@@ -545,7 +546,7 @@ static void sata_exit(struct device *dev)
 	clk = clk_get(dev, "usb_phy1_clk");
 	if (IS_ERR(clk)) {
 		clk = NULL;
-		printk(KERN_ERR "AHCI can't get USB PHY1 CLK.\n");
+		dev_err(dev, "can't get USB PHY1 CLK.\n");
 	} else {
 		clk_disable(clk);
 		clk_put(clk);
@@ -554,7 +555,7 @@ static void sata_exit(struct device *dev)
 	clk = clk_get(dev, "imx_sata_clk");
 	if (IS_ERR(clk)) {
 		clk = NULL;
-		printk(KERN_ERR "IMX SATA can't get clock.\n");
+		dev_err(dev, "IMX SATA can't get clock.\n");
 	} else {
 		clk_disable(clk);
 		clk_put(clk);
@@ -564,16 +565,17 @@ static void sata_exit(struct device *dev)
 	if (machine_is_mx53_smd() || machine_is_mx53_loco()) {
 		reg_2v5 = regulator_get(dev, "DA9052_BUCK_PERI");
 		if (IS_ERR(reg_2v5)) {
-			printk(KERN_ERR "AHCI: get 2v5 regulator error.\n");
+			dev_err(dev, "get 2v5 regulator error.\n");
 			reg_2v5 = NULL;
 		} else {
 			regulator_disable(reg_2v5);
 			regulator_put(reg_2v5);
 		}
-
-		reg_1v3 = regulator_get(dev, "DA9052_LDO5");
+	}
+	if (machine_is_mx53_smd() || machine_is_mx53_loco() || machine_is_nitrogen_imx53()) {
+		reg_1v3 = regulator_get(dev, "VDD_CORE");
 		if (IS_ERR(reg_1v3)) {
-			printk(KERN_ERR "AHCI: get 2v5 regulator error.\n");
+			dev_err(dev, "get VDD_CORE error.\n");
 			reg_1v3 = NULL;
 		} else {
 			regulator_disable(reg_1v3);
