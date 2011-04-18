@@ -920,13 +920,11 @@ device_initcall(mxc_init_fb);
 struct plat_i2c_generic_data {
 	unsigned irq;
 	unsigned gp;
-	unsigned buffer_enable_gp;
 };
 
 static struct plat_i2c_generic_data i2c_generic_data = {
 	.irq = IOMUX_TO_IRQ_V3(N53_I2C_CONNECTOR_INT),
 	.gp = N53_I2C_CONNECTOR_INT,
-	.buffer_enable_gp = N53_I2C_CONNECTOR_BUFFER_ENABLE,
 };
 
 struct plat_i2c_tfp410_data {
