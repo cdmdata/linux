@@ -255,13 +255,23 @@ static struct regulator_init_data vvideo_init = {
 	.consumer_supplies = vvideo_consumers,
 };
 
+static struct regulator_consumer_supply vaudio_consumers[] = {
+	{
+		/* audio amp */
+		.supply = "VDD_AMP",
+		.dev_name = "imx-3stack-sgtl5000.0",
+	},
+};
+
 static struct regulator_init_data vaudio_init = {
 	.constraints = {
 		.name = "VAUDIO",
 		.min_uV = mV_to_uV(2300),
 		.max_uV = mV_to_uV(3000),
 		.valid_ops_mask = REGULATOR_CHANGE_VOLTAGE,
-	}
+	},
+	.num_consumer_supplies = ARRAY_SIZE(vaudio_consumers),
+	.consumer_supplies = vaudio_consumers,
 };
 
 static struct regulator_init_data vsd_init = {
