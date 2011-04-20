@@ -934,14 +934,17 @@ static int mxcfb_ioctl(struct fb_info *fbi, unsigned int cmd, unsigned long arg)
 				break;
 			}
 			count = mxc_fbi->vsync_count ;
+
+			release_console_sem();
+			mutex_unlock(&fbi->lock);
+
 			if (wait_event_interruptible(mxc_fbi->vsync_complete,count!=mxc_fbi->vsync_count)) {
-				dev_err(fbi->device,
-					"MXCFB_WAIT_FOR_VSYNC: timeout %d\n",
-					retval);
 				retval = -EINTR ;
 			} else
 				retval = 0 ;
 
+			mutex_lock(&fbi->lock);
+			acquire_console_sem();
 			break;
 		}
 	case FBIO_ALLOC:
