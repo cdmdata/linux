@@ -1476,6 +1476,10 @@ static void __init mx53_evk_io_init(void)
 #if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
 	init_camera();
 #endif
+
+#if defined (CONFIG_TOUCHSCREEN_I2C)
+	gpio_set_value(N53_I2C_CONNECTOR_BUFFER_ENABLE,1);
+#endif
 }
 
 static void nitrogen_power_off(void)
@@ -1611,7 +1615,7 @@ static struct sys_timer mxc_timer = {
 
 #ifdef CONFIG_MACH_NITROGEN_IMX53
 static struct i2c_board_info mxc_i2c1_board_info[] __initdata = {
-#if 0
+#if defined (CONFIG_TOUCHSCREEN_I2C)
 	{
 	 .type = "Pic16F616-ts",
 	 .addr = 0x22,
