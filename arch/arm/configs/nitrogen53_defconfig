@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.3
-# Tue Mar 15 17:02:23 2011
+# Sat Apr 30 15:06:06 2011
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -265,6 +265,8 @@ CONFIG_FORCE_MAX_ZONEORDER=13
 # CONFIG_MACH_MX53_SMD is not set
 # CONFIG_MACH_MX53_LOCO is not set
 CONFIG_MACH_NITROGEN_IMX53=y
+CONFIG_MACH_NITROGEN_V1_IMX53=y
+CONFIG_MACH_NITROGEN_A_IMX53=y
 # CONFIG_MACH_MX50_ARM2 is not set
 # CONFIG_MACH_MX50_RDP is not set
 

@@ -570,18 +570,10 @@ static void da9052_init_ssc_cache(struct da9052 *da9052)
 }
 
 
-#define MX53_Nitrogen_DA9052_IRQ			(6*32 + 11)	/* GPIO7_11 */
 
 static int __init nitrogen_da9052_init(struct da9052 *da9052)
 {
-	/* Configuring for DA9052 interrupt servce */
-	/* s3c_gpio_setpull(DA9052_IRQ_PIN, S3C_GPIO_PULL_UP);*/
-
-	/* Set interrupt as LOW LEVEL interrupt source */
-	set_irq_type(IOMUX_TO_IRQ_V3(MX53_Nitrogen_DA9052_IRQ), IRQF_TRIGGER_LOW);
-
 	da9052_init_ssc_cache(da9052);
-
 	return 0;
 }
 
@@ -598,12 +590,14 @@ static struct da9052_platform_data __initdata da9052_plat = {
 
 static struct i2c_board_info __initdata da9052_i2c_device = {
 	I2C_BOARD_INFO(DA9052_SSC_I2C_DEVICE_NAME, DA9052_I2C_ADDR >> 1),
-	.irq = IOMUX_TO_IRQ_V3(MX53_Nitrogen_DA9052_IRQ),
 	.platform_data = &da9052_plat,
 };
 
-int __init mx53_nitrogen_init_da9052(void)
+int __init mx53_nitrogen_init_da9052(unsigned da9052_irq)
 {
+	da9052_i2c_device.irq = da9052_irq;
+	/* Set interrupt as LOW LEVEL interrupt source */
+	set_irq_type(da9052_irq, IRQF_TRIGGER_LOW);
 #if defined(CONFIG_PMIC_DA9052) || defined(CONFIG_PMIC_DA9052_MODULE)
 	return i2c_register_board_info(0, &da9052_i2c_device, 1);
 #else
