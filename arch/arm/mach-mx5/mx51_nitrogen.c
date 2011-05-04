@@ -1461,6 +1461,7 @@ static void __init mxc_board_init(void)
 	mxc_register_device(&i2c_devices[0], &mxci2c_data[0]);
 	mxc_register_device(&i2c_devices[1], &mxci2c_data[1]);
 	mxc_register_device(&mxci2c_hs_device, &mxci2c_hs_data);
+	mxc_register_device(&mxc_rtc_device, NULL);
 	mxc_register_device(&mxc_w1_master_device, &mxc_w1_data);
 	mxc_register_device(&mxc_ipu_device, &mxc_ipu_data);
 	mxc_register_device(&mxc_tve_device, &tve_data);
