@@ -98,7 +98,9 @@ struct gpio nitrogen_gpios[] __initdata = {
 	{.label="sdhc1-detect",		.gpio = GP_SD1_CD,		.flags = GPIOF_DIR_IN},		/* MAKE_GP(1, 0) */
 	{.label="sdhc1-wp",		.gpio = GP_SD1_WP,		.flags = GPIOF_DIR_IN},		/* MAKE_GP(1, 1) */
 	{.label="pmic-int",		.gpio = MAKE_GP(1, 8),		.flags = GPIOF_DIR_IN},
+	{.label="usb-overcurrent",	.gpio = MAKE_GP(1, 9),		.flags = GPIOF_DIR_IN},		/* current rev */
 	{.label="power-key",		.gpio = GP_POWER_KEY,		.flags = GPIOF_DIR_IN},		/* MAKE_GP(2, 21) */
+	{.label="usb-overcurrent_r1",	.gpio = MAKE_GP(3, 0),		.flags = GPIOF_DIR_IN},		/* 1st rev */
 	{.label="tfp410int",		.gpio = MAKE_GP(3, 28),		.flags = GPIOF_DIR_IN},		/* same as i2c_tfp410_data.gp */
 	{.label="hs_i2c_clk",		.gpio = MAKE_GP(4, 16),		.flags = GPIOF_DIR_IN},
 	{.label="hs_i2c_data",		.gpio = MAKE_GP(4, 17),		.flags = GPIOF_DIR_IN},
@@ -133,6 +135,8 @@ struct gpio nitrogen_gpios[] __initdata = {
 	{.label = "osc-en",		.gpio = MAKE_GP(2, 2),		.flags = GPIOF_INIT_HIGH},
 	{.label = "usb-phy-reset",	.gpio = MAKE_GP(2, 5),		.flags = GPIOF_INIT_HIGH},
 	{.label = "cam-reset",		.gpio = MAKE_GP(2, 7),		.flags = GPIOF_INIT_HIGH},
+	{.label = "OTG_power_enable",	.gpio = MAKE_GP(2, 10),		.flags = GPIOF_INIT_HIGH},
+	{.label = "on_off_to_pmic",	.gpio = MAKE_GP(2, 11),		.flags = GPIOF_INIT_HIGH},
 	{.label = "fec-phy-reset",	.gpio = GP_FEC_PHY_RESET,	.flags = 0},			/* MAKE_GP(2, 14) */
 	{.label = "fm-reset",		.gpio = GP_FM_RESET,		.flags = 0},			/* MAKE_GP(2, 15) */
 	{.label = "audioamp-stdby",	.gpio = GP_AUDAMP_STBY,		.flags = 0},			/* MAKE_GP(2, 17) */
@@ -197,6 +201,7 @@ static struct pad_desc mx51nitrogen_pads[] __initdata = {
 	MX51_PAD_GPIO_1_6__GPIO_1_6,
 	MX51_PAD_GPIO_1_7__GPIO_1_7,
 	MX51_PAD_GPIO_1_8__GPIO_1_8,
+	MX51_PAD_GPIO_1_9__GPIO_1_9,
 	MX51_PAD_UART3_RXD__UART3_RXD,
         MX51_PAD_UART3_TXD__UART3_TXD,
 
@@ -217,6 +222,7 @@ static struct pad_desc mx51nitrogen_pads[] __initdata = {
 	MX51_PAD_EIM_A27__GPIO_2_21,
 	MX51_PAD_EIM_DTACK__GPIO_2_31,
 
+	MX51_PAD_DI1_PIN11__GPIO_3_0,
 	MX51_PAD_EIM_LBA__GPIO_3_1,
 	MX51_PAD_DI1_D0_CS__GPIO_3_3,
 	MX51_PAD_DISPB2_SER_DIN__GPIO_3_5,
