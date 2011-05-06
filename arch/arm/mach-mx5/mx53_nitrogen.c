@@ -216,6 +216,9 @@ static struct pad_desc mx53common_pads[] = {
 	MX53_PAD_ATA_DIOR__UART2_RTS,
 	MX53_PAD_ATA_INTRQ__UART2_CTS,
 
+	MX53_PAD_ATA_CS_0__UART3_TXD,
+	MX53_PAD_ATA_CS_1__UART3_RXD,
+
 	/* AUD4 */
 	MX53_PAD_SD2_CLK__GPIO_1_10,	/* temp AUD4_RXFS */
 	MX53_PAD_SD2_CMD__GPIO_1_11,	/* temp AUD4_RXC */
