@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.3
-# Mon Mar 21 18:59:09 2011
+# Wed May  4 16:07:06 2011
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -265,6 +265,8 @@ CONFIG_MACH_NITROGEN_EJ_IMX51=y
 # CONFIG_MACH_MX53_SMD is not set
 # CONFIG_MACH_MX53_LOCO is not set
 # CONFIG_MACH_NITROGEN_IMX53 is not set
+# CONFIG_MACH_NITROGEN_V1_IMX53 is not set
+# CONFIG_MACH_NITROGEN_A_IMX53 is not set
 # CONFIG_MACH_MX50_ARM2 is not set
 # CONFIG_MACH_MX50_RDP is not set
 
@@ -1755,7 +1757,7 @@ CONFIG_RTC_INTF_ALARM=y
 # CONFIG_RTC_DRV_M48T35 is not set
 # CONFIG_RTC_DRV_M48T59 is not set
 # CONFIG_RTC_DRV_MSM6242 is not set
-CONFIG_RTC_MXC=y
+# CONFIG_RTC_MXC is not set
 # CONFIG_RTC_DRV_BQ4802 is not set
 # CONFIG_RTC_DRV_RP5C01 is not set
 # CONFIG_RTC_DRV_V3020 is not set
@@ -1763,7 +1765,7 @@ CONFIG_RTC_MXC=y
 #
 # on-CPU RTC drivers
 #
-# CONFIG_RTC_DRV_MXC_V2 is not set
+CONFIG_RTC_DRV_MXC_V2=y
 # CONFIG_RTC_DRV_IMXDI is not set
 CONFIG_RTC_MC13892=y
 # CONFIG_DMADEVICES is not set
