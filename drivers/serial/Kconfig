@@ -974,6 +974,39 @@ config SERIAL_IMX_CONSOLE
 	  your boot loader (lilo or loadlin) about how to pass options to the
 	  kernel at boot time.)
 
+config SERIAL_IMX_RS485
+	bool "RS-485 half duplex control"
+	depends on SERIAL_IMX
+	default N
+	help
+	  Use this to allow a GPIO to control 'transmit enable' on an
+	  RS-485 link.
+
+config SERIAL_IMX_RS485_GPIO
+	int "GPIO number"
+	depends on SERIAL_IMX_RS485
+	default 54
+	help
+	  Select the GPIO pin to use for transmit-enable. Note that the
+	  platform must configure the pin-mux pin for GPIO. The GPIO
+	  pins are numbered such that GPIO1:0 (first bank, pin 0) is 0,
+	  and GPIO2:0 is 32.
+
+config SERIAL_IMX_RS485_GPIO_ACTIVE_HIGH982
+
+	bool "GPIO is active high (transmit enabled when high)"
+	depends on SERIAL_IMX_RS485
+	default y
+	help
+	  If set to true, the GPIO pin will be set high (1) when transmitting.
+
+config SERIAL_IMX_RS485_PORT
+	hex "Serial Port number (0..2) for RS-485"
+	depends on SERIAL_IMX_RS485
+	default 2
+	help
+	  Use this to select the UART whose transmitter controls the GPIO
+
 config SERIAL_UARTLITE
 	tristate "Xilinx uartlite serial port support"
 	depends on PPC32 || MICROBLAZE || MFD_TIMBERDALE
