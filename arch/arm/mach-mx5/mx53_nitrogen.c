@@ -92,8 +92,6 @@ struct gpio nitrogen53_gpios[] __initdata = {
 #endif
 #define N53_I2C_2_SCL				MAKE_GP(1, 3)
 	{.label = "i2c-2-scl",		.gpio = MAKE_GP(1, 3),		.flags = GPIOF_DIR_IN},
-#define N53_I2C_2_SDA				MAKE_GP(1, 6)
-	{.label = "i2c-2-sda",		.gpio = MAKE_GP(1, 6),		.flags = GPIOF_DIR_IN},
 
 #define N53_I2C_1_SCL				MAKE_GP(2, 30)
 	{.label = "i2c-1-scl",		.gpio = MAKE_GP(2, 30),		.flags = GPIOF_DIR_IN},
@@ -264,7 +262,6 @@ static struct pad_desc mx53common_pads[] = {
 	MX53_PAD_GPIO_11__GPIO_4_1,
 	MX53_PAD_GPIO_12__GPIO_4_2,
 	MX53_PAD_GPIO_13__GPIO_4_3,
-	MX53_PAD_GPIO_16__GPIO_7_11,
 
 	/* DI0 display clock */
 	MX53_PAD_DI0_DISP_CLK__DI0_DISP_CLK,
@@ -698,7 +695,7 @@ static struct mxc_spi_master mxcspi1_data = {
 static void i2c_clock_toggle(unsigned gp_clk, unsigned gp_dat, const struct pad_desc *pd)
 {
 	unsigned i;
-	printk(KERN_INFO "%s\n", __FUNCTION__);
+	printk(KERN_INFO "%s, gp_clk=0x%x, gp_dat=0x%x\n", __FUNCTION__, gp_clk, gp_dat);
 	gpio_direction_input(gp_clk);
 	mxc_iomux_v3_setup_pad(&pd[PD_CLK_GP]);
 
@@ -747,6 +744,8 @@ static void i2c_clock_toggle1(void)
 
 #define MX53_PAD_GPIO_3__GPIO_1_3_I2C		IOMUX_PAD(0x6B0, 0x320, 1 | IOMUX_CONFIG_SION, 0x0, 0, PAD_CTRL_9)
 #define MX53_PAD_GPIO_6__GPIO_1_6_I2C		IOMUX_PAD(0x6B4, 0x324, 1 | IOMUX_CONFIG_SION, 0x0, 0, PAD_CTRL_9)
+
+#define N53_I2C_2_SDA				MAKE_GP(1, 6)
 
 static void i2c_clock_toggle2(void)
 {
@@ -1529,7 +1528,8 @@ extern void mx53_gpio_host1_driver_vbus(bool on);
  */
 static void __init mxc_board_init(struct i2c_board_info *bi0, int bi0_size,
 	struct i2c_board_info *bi1, int bi1_size,
-	struct i2c_board_info *bi2, int bi2_size, unsigned da9052_irq)
+	struct i2c_board_info *bi2, int bi2_size,
+	unsigned da9052_irq, struct imxi2c_platform_data *i2c2_data)
 {
 
 	mxc_ipu_data.di_clk[0] = clk_get(NULL, "ipu_di0_clk");
@@ -1552,7 +1552,7 @@ static void __init mxc_board_init(struct i2c_board_info *bi0, int bi0_size,
 	mxc_register_device(&mxcspi1_device, &mxcspi1_data);
 	mxc_register_device(&mxci2c_devices[0], &mxci2c0_data);
 	mxc_register_device(&mxci2c_devices[1], &mxci2c1_data);
-	mxc_register_device(&mxci2c_devices[2], &mxci2c2_data);
+	mxc_register_device(&mxci2c_devices[2], i2c2_data);
 	mxc_register_device(&mxc_rtc_device, NULL);
 
 	mx53_nitrogen_init_da9052(da9052_irq);
@@ -1667,7 +1667,26 @@ static struct pad_desc nitrogen53_pads_specific_a[] __initdata = {
 };
 
 struct gpio nitrogen53_gpios_specific_a[] __initdata = {
-	{.label = "pmic-int",	.gpio = MAKE_GP(2, 21),	.flags = GPIOF_DIR_IN},
+#define N53_I2C_2_SDA_A				MAKE_GP(7, 11)
+	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
+	{.label = "pmic-int",		.gpio = MAKE_GP(2, 21),		.flags = GPIOF_DIR_IN},
+};
+
+#define MX53_PAD_GPIO_16__GPIO_7_11_I2C		IOMUX_PAD(0x6CC, 0x33C, 1 | IOMUX_CONFIG_SION, 0x0, 0, PAD_CTRL_9)
+
+static void i2c_clock_toggle2_a(void)
+{
+	const struct pad_desc pd[] = {
+		MX53_PAD_GPIO_3__I2C3_SCL, MX53_PAD_GPIO_3__GPIO_1_3_I2C,
+		MX53_PAD_GPIO_16__I2C3_SDA, MX53_PAD_GPIO_16__GPIO_7_11_I2C,
+	};
+	i2c_clock_toggle(N53_I2C_2_SCL, N53_I2C_2_SDA_A, pd);
+}
+
+
+static struct imxi2c_platform_data mxci2c2_data_a = {
+	.bitrate = 100000,
+	.i2c_clock_toggle = i2c_clock_toggle2_a,
 };
 
 static void __init mxc_board_init_nitrogen_a(void)
@@ -1681,7 +1700,8 @@ static void __init mxc_board_init_nitrogen_a(void)
 			ARRAY_SIZE(nitrogen53_pads_specific_a));
 	mxc_board_init(NULL, 0,
 		mxc_i2c1_board_info_a, ARRAY_SIZE(mxc_i2c1_board_info_a),
-		mxc_i2c2_board_info_a, ARRAY_SIZE(mxc_i2c2_board_info_a), da9052_irq);
+		mxc_i2c2_board_info_a, ARRAY_SIZE(mxc_i2c2_board_info_a),
+		da9052_irq, &mxci2c2_data_a);
 }
 
 MACHINE_START(NITROGEN_A_IMX53, "Boundary Devices Nitrogen_A MX53 Board")
@@ -1731,10 +1751,12 @@ static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
 
 static struct pad_desc nitrogen53_pads_specific[] __initdata = {
 	MX53_PAD_GPIO_6__I2C3_SDA,	/* GPIO1[6] */
+	MX53_PAD_GPIO_16__GPIO_7_11,
 };
 
 struct gpio nitrogen53_gpios_specific[] __initdata = {
-	{.label = "pmic-int",	.gpio = MAKE_GP(7, 11),	.flags = GPIOF_DIR_IN},
+	{.label = "i2c-2-sda",		.gpio = MAKE_GP(1, 6),		.flags = GPIOF_DIR_IN},
+	{.label = "pmic-int",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 };
 
 static void __init mxc_board_init_nitrogen(void)
@@ -1748,7 +1770,8 @@ static void __init mxc_board_init_nitrogen(void)
 			ARRAY_SIZE(nitrogen53_pads_specific));
 	mxc_board_init(NULL, 0,
 		mxc_i2c1_board_info, ARRAY_SIZE(mxc_i2c1_board_info),
-		mxc_i2c2_board_info, ARRAY_SIZE(mxc_i2c2_board_info), da9052_irq);
+		mxc_i2c2_board_info, ARRAY_SIZE(mxc_i2c2_board_info),
+		da9052_irq, &mxci2c2_data);
 }
 
 MACHINE_START(NITROGEN_IMX53, "Boundary Devices Nitrogen MX53 Board")
@@ -1796,10 +1819,12 @@ static struct i2c_board_info mxc_i2c2_board_info_v1[] __initdata = {
 
 static struct pad_desc nitrogen53_pads_specific_v1[] __initdata = {
 	MX53_PAD_GPIO_6__I2C3_SDA,	/* GPIO1[6] */
+	MX53_PAD_GPIO_16__GPIO_7_11,
 };
 
 struct gpio nitrogen53_gpios_specific_v1[] __initdata = {
-	{.label = "pmic-int",	.gpio = MAKE_GP(7, 11),	.flags = GPIOF_DIR_IN},
+	{.label = "i2c-2-sda",		.gpio = MAKE_GP(1, 6),		.flags = GPIOF_DIR_IN},
+	{.label = "pmic-int",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 };
 
 static void __init mxc_board_init_nitrogen_v1(void)
@@ -1813,7 +1838,8 @@ static void __init mxc_board_init_nitrogen_v1(void)
 			ARRAY_SIZE(nitrogen53_pads_specific_v1));
 	mxc_board_init(	mxc_i2c0_board_info_v1, ARRAY_SIZE(mxc_i2c0_board_info_v1),
 		NULL, 0,
-		mxc_i2c2_board_info_v1, ARRAY_SIZE(mxc_i2c2_board_info_v1), da9052_irq);
+		mxc_i2c2_board_info_v1, ARRAY_SIZE(mxc_i2c2_board_info_v1),
+		da9052_irq, &mxci2c2_data);
 }
 
 MACHINE_START(NITROGEN_V1_IMX53, "Boundary Devices Nitrogen MX53 rev. 1 Board")
