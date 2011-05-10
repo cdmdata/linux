@@ -48,6 +48,25 @@
 #include <linux/rational.h>
 #include <linux/slab.h>
 
+#ifdef CONFIG_SERIAL_IMX_RS485
+
+#include <linux/gpio.h>
+
+#define ACTIVE_STATE CONFIG_SERIAL_IMX_RS485_GPIO_ACTIVE_HIGH
+#define INACTIVE_STATE (CONFIG_SERIAL_IMX_RS485_GPIO_ACTIVE_HIGH^1)
+
+inline int is_485_port(int p){
+	return (p == CONFIG_SERIAL_IMX_RS485_PORT);
+}
+inline void set_transmit_active(int active) {
+	gpio_set_value( CONFIG_SERIAL_IMX_RS485_GPIO,
+			active ? ACTIVE_STATE : INACTIVE_STATE );
+}
+#else
+#define is_485_port(p) 0
+inline void set_transmit_active(int){}
+#endif
+
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <mach/hardware.h>
@@ -352,6 +371,9 @@ static void imx_start_tx(struct uart_port *port)
 	struct imx_port *sport = (struct imx_port *)port;
 	unsigned long temp;
 
+	if (is_485_port(sport->port.line))
+		set_transmit_active(1);
+
 	if (USE_IRDA(sport)) {
 		/* half duplex in IrDA mode; have to disable receive mode */
 		temp = readl(sport->port.membase + UCR4);
@@ -504,6 +526,14 @@ static irqreturn_t imx_int(int irq, void *dev_id)
 	if (sts & USR1_RTSD)
 		imx_rtsint(irq, dev_id);
 
+	if (is_485_port(sport->port.line)) {
+		if ((readl(sport->port.membase + USR2) & USR2_TXDC)
+		    &&
+		    (gpio_get_value(CONFIG_SERIAL_IMX_RS485_GPIO) == ACTIVE_STATE)){
+			set_transmit_active(0);
+		}
+	}
+
 	return IRQ_HANDLED;
 }
 
@@ -513,7 +543,6 @@ static irqreturn_t imx_int(int irq, void *dev_id)
 static unsigned int imx_tx_empty(struct uart_port *port)
 {
 	struct imx_port *sport = (struct imx_port *)port;
-
 	return (readl(sport->port.membase + USR2) & USR2_TXDC) ?  TIOCSER_TEMT : 0;
 }
 
@@ -747,6 +776,9 @@ static void imx_shutdown(struct uart_port *port)
 	struct imx_port *sport = (struct imx_port *)port;
 	unsigned long temp;
 
+	if (is_485_port(sport->port.line))
+		set_transmit_active(0);
+
 	temp = readl(sport->port.membase + UCR2);
 	temp &= ~(UCR2_TXEN);
 	writel(temp, sport->port.membase + UCR2);
@@ -956,9 +988,12 @@ static void imx_release_port(struct uart_port *port)
 {
 	struct platform_device *pdev = to_platform_device(port->dev);
 	struct resource *mmres;
+	struct imx_port *sport = (struct imx_port *)port;
 
 	mmres = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	release_mem_region(mmres->start, mmres->end - mmres->start + 1);
+	if (is_485_port(sport->port.line))
+		set_transmit_active(0);
 }
 
 /*
@@ -1298,6 +1333,9 @@ static int serial_imx_probe(struct platform_device *pdev)
 	if (ret)
 		goto deinit;
 	platform_set_drvdata(pdev, &sport->port);
+
+	if (is_485_port(sport->port.line))
+		set_transmit_active(0);
 
 	return 0;
 deinit:

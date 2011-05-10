@@ -155,6 +155,9 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "usbh1-vbus",		.gpio = MAKE_GP(7, 8),		.flags = 0},
 #define N53_PHY_RESET				MAKE_GP(7, 13)
 	{.label = "ICS1893 reset",	.gpio = MAKE_GP(7, 13),		.flags = 0},	/* ICS1893 Ethernet PHY reset */
+#if defined(CONFIG_SERIAL_IMX_RS485)
+	{.label = "RS485 transmit enable",.gpio = CONFIG_SERIAL_IMX_RS485_GPIO,	.flags = 0},
+#endif
 };
 
 #define BUTTON_PAD_CTRL	(PAD_CTL_HYS | PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_22K_UP | PAD_CTL_DSE_HIGH)
@@ -429,7 +432,6 @@ static struct pad_desc mx53evk_pads[] = {
 	IOMUX_PAD(0x4C4, 0x178, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_A17__GPIO_2_21,
 	/* GPIO keys */
 #ifdef CONFIG_KEYBOARD_GPIO
-	IOMUX_PAD(0x4C8, 0x17C, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_A16__GPIO_2_22,
 	IOMUX_PAD(0x4C0, 0x174, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_A18__GPIO_2_20,
 	IOMUX_PAD(0x4BC, 0x170, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_A19__GPIO_2_19,
 	IOMUX_PAD(0x4B8, 0x16C, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_A20__GPIO_2_18,
@@ -444,6 +446,7 @@ static struct pad_desc mx53evk_pads[] = {
 	IOMUX_PAD(0x470, 0x128, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_D20__GPIO_3_20,
 	IOMUX_PAD(0x484, 0x13C, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_D24__GPIO_3_24,
 #endif
+	IOMUX_PAD(0x4C8, 0x17C, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_A16__GPIO_2_22,
 };
 
 static struct pad_desc mx53_nand_pads[] = {
@@ -1486,6 +1489,10 @@ static void __init mx53_evk_io_init(void)
 
 #if defined (CONFIG_TOUCHSCREEN_I2C)
 	gpio_set_value(N53_I2C_CONNECTOR_BUFFER_ENABLE,1);
+#endif
+
+#if defined(CONFIG_SERIAL_IMX_RS485)
+	gpio_set_value(CONFIG_SERIAL_IMX_RS485_GPIO,CONFIG_SERIAL_IMX_RS485_GPIO_ACTIVE_HIGH^1);
 #endif
 }
 
