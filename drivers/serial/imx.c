@@ -64,7 +64,7 @@ inline void set_transmit_active(int active) {
 }
 #else
 #define is_485_port(p) 0
-inline void set_transmit_active(int){}
+inline void set_transmit_active(int active){}
 #endif
 
 #include <asm/io.h>
@@ -526,6 +526,7 @@ static irqreturn_t imx_int(int irq, void *dev_id)
 	if (sts & USR1_RTSD)
 		imx_rtsint(irq, dev_id);
 
+#ifdef CONFIG_SERIAL_IMX_RS485
 	if (is_485_port(sport->port.line)) {
 		if ((readl(sport->port.membase + USR2) & USR2_TXDC)
 		    &&
@@ -533,6 +534,7 @@ static irqreturn_t imx_int(int irq, void *dev_id)
 			set_transmit_active(0);
 		}
 	}
+#endif
 
 	return IRQ_HANDLED;
 }
@@ -988,7 +990,9 @@ static void imx_release_port(struct uart_port *port)
 {
 	struct platform_device *pdev = to_platform_device(port->dev);
 	struct resource *mmres;
+#ifdef CONFIG_SERIAL_IMX_RS485
 	struct imx_port *sport = (struct imx_port *)port;
+#endif
 
 	mmres = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	release_mem_region(mmres->start, mmres->end - mmres->start + 1);
