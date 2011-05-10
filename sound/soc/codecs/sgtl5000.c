@@ -1216,6 +1216,7 @@ static __devinit int sgtl5000_i2c_probe(struct i2c_client *client,
 	struct regulator *reg;
 	int ret = 0;
 	u32 val;
+	int retry = 0;
 
 	if (sgtl5000_codec) {
 		dev_err(&client->dev,
@@ -1273,13 +1274,17 @@ static __devinit int sgtl5000_i2c_probe(struct i2c_client *client,
 
 	msleep(1);
 
-	val = sgtl5000_read(codec, SGTL5000_CHIP_ID);
-	if (((val & SGTL5000_PARTID_MASK) >> SGTL5000_PARTID_SHIFT) !=
-	    SGTL5000_PARTID_PART_ID) {
+	do {
+		val = sgtl5000_read(codec, SGTL5000_CHIP_ID);
+		if (((val & SGTL5000_PARTID_MASK) >> SGTL5000_PARTID_SHIFT)
+				== SGTL5000_PARTID_PART_ID)
+			break;
 		pr_err("Device with ID register %x is not a SGTL5000\n", val);
-		ret = -ENODEV;
-		goto err_codec_reg;
-	}
+		if (++retry == 5) {
+			ret = -ENODEV;
+			goto err_codec_reg;
+		}
+	} while (1);
 
 	sgtl5000->rev = (val & SGTL5000_REVID_MASK) >> SGTL5000_REVID_SHIFT;
 	dev_info(&client->dev, "SGTL5000 revision %d\n", sgtl5000->rev);
