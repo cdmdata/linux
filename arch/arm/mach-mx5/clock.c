@@ -4318,7 +4318,11 @@ static struct clk_lookup lookups[] = {
 	_REGISTER_CLOCK(NULL, "tve_clk", tve_clk),
 	_REGISTER_CLOCK(NULL, "uart_main_clk", uart_main_clk),
 	_REGISTER_CLOCK(UART_CLOCK ".0", NULL, uart1_clk[0]),
+#if defined(CONFIG_TOUCHSCREEN_IRTOUCH_IMX) || defined(CONFIG_TOUCHSCREEN_IRTOUCH_IMX_MODULE)
+	_REGISTER_CLOCK("irtouch.1", NULL, uart2_clk[0]),
+#else
 	_REGISTER_CLOCK(UART_CLOCK ".1", NULL, uart2_clk[0]),
+#endif
 	_REGISTER_CLOCK(UART_CLOCK ".2", NULL, uart3_clk[0]),
 	_REGISTER_CLOCK(NULL, "ipg_perclk", ipg_perclk),
 	_REGISTER_CLOCK("imx-i2c.0", NULL, i2c_clk[0]),
