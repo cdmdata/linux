@@ -259,7 +259,6 @@ static struct pad_desc mx53common_pads[] = {
 	MX53_PAD_GPIO_11__GPIO_4_1,
 	MX53_PAD_GPIO_12__GPIO_4_2,
 	MX53_PAD_GPIO_13__GPIO_4_3,
-	MX53_PAD_GPIO_16__GPIO_7_11,
 
 	/* DI0 display clock */
 	MX53_PAD_DI0_DISP_CLK__DI0_DISP_CLK,
@@ -693,7 +692,7 @@ static struct mxc_spi_master mxcspi1_data = {
 static void i2c_clock_toggle(unsigned gp_clk, unsigned gp_dat, const struct pad_desc *pd)
 {
 	unsigned i;
-	printk(KERN_INFO "%s\n", __FUNCTION__);
+	printk(KERN_INFO "%s, gp_clk=0x%x, gp_dat=0x%x\n", __FUNCTION__, gp_clk, gp_dat);
 	gpio_direction_input(gp_clk);
 	mxc_iomux_v3_setup_pad(&pd[PD_CLK_GP]);
 
@@ -1745,6 +1744,7 @@ static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
 
 static struct pad_desc nitrogen53_pads_specific[] __initdata = {
 	MX53_PAD_GPIO_6__I2C3_SDA,	/* GPIO1[6] */
+	MX53_PAD_GPIO_16__GPIO_7_11,
 };
 
 struct gpio nitrogen53_gpios_specific[] __initdata = {
@@ -1812,6 +1812,7 @@ static struct i2c_board_info mxc_i2c2_board_info_v1[] __initdata = {
 
 static struct pad_desc nitrogen53_pads_specific_v1[] __initdata = {
 	MX53_PAD_GPIO_6__I2C3_SDA,	/* GPIO1[6] */
+	MX53_PAD_GPIO_16__GPIO_7_11,
 };
 
 struct gpio nitrogen53_gpios_specific_v1[] __initdata = {
