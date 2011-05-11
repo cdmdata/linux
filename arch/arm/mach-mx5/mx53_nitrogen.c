@@ -142,6 +142,7 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "Camera reset",	.gpio = MAKE_GP(4, 14),		.flags = 0},
 #define N53_USB_HUB_RESET			MAKE_GP(5, 0)
 	{.label = "USB HUB reset",	.gpio = MAKE_GP(5, 0),		.flags = 0},
+	{.label = "eMMC reset",		.gpio = MAKE_GP(5, 2),		.flags = GPIOF_INIT_HIGH},	/* EIM_A25 */
 #define N53_CAMERA_STANDBY			MAKE_GP(5, 20)
 	{.label = "Camera standby",	.gpio = MAKE_GP(5, 20),		.flags = 0},
 #define MX53_TVIN_RESET				MAKE_GP(5, 25)
@@ -183,7 +184,7 @@ static struct pad_desc mx53common_pads[] = {
 	MX53_PAD_EIM_OE__DI1_PIN7,
 	MX53_PAD_EIM_RW__DI1_PIN8,
 
-	MX53_PAD_EIM_A25__DI0_D1_CS,
+	MX53_PAD_EIM_A25__GPIO_5_2,
 
 	MX53_PAD_EIM_D16__CSPI1_SCLK,
 	MX53_PAD_EIM_D17__CSPI1_MISO,
