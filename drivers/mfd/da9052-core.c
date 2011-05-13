@@ -28,6 +28,16 @@
 #include <linux/mfd/da9052/adc.h>
 #include <linux/mfd/da9052/tsi.h>
 
+#define DA9052_EVENTA_REG			5
+#define DA9052_EVENTB_REG			6
+#define DA9052_EVENTC_REG			7
+#define DA9052_EVENTD_REG			8
+
+#define DA9052_IRQMASKA_REG			10
+#define DA9052_IRQMASKB_REG			11
+#define DA9052_IRQMASKC_REG			12
+#define DA9052_IRQMASKD_REG			13
+
 #define SUCCESS		0
 #define FAILURE		1
 
@@ -167,6 +177,30 @@ int da9052_ssc_read_many(struct da9052 *da9052, struct da9052_ssc_msg *sscmsg,
 	return ret;
 }
 
+int da9052_ssc_modify_many(struct da9052 *da9052,
+	struct da9052_ssc_msg *sscmsg,
+	struct da9052_modify_msg *modmsg, int cnt)
+{
+	int i;
+	int ret;
+	da9052_lock(da9052);
+	ret = da9052->read_many(da9052, sscmsg, cnt);
+	if (ret) {
+		DA9052_DEBUG("%s: read_many failed\n", __FUNCTION__);
+		goto exit1;
+	}
+	for (i = 0; i < cnt; i++) {
+		sscmsg[i].data &= ~modmsg[i].clear_mask;
+		sscmsg[i].data |= modmsg[i].set_mask;
+	}
+	ret = da9052->write_many(da9052, sscmsg, cnt);
+	if (ret)
+		DA9052_DEBUG("%s: write_many failed\n", __FUNCTION__);
+exit1:
+	da9052_unlock(da9052);
+	return ret;
+}
+
 static irqreturn_t da9052_eh_isr(int irq, void *dev_id)
 {
 	struct da9052 *da9052 = dev_id;
@@ -223,6 +257,36 @@ int eh_unregister_nb(struct da9052 *da9052, struct da9052_eh_nb *nb)
 	up(&eve_nb_array_lock);
 
 	return 0;
+}
+
+int reg_modify(struct da9052 *da9052, unsigned reg,
+		unsigned clear_mask, unsigned set_mask)
+{
+	int ret;
+	struct da9052_ssc_msg sscmsg;
+	sscmsg.addr = reg;
+	sscmsg.data = 0;
+	da9052_lock(da9052);
+	ret = da9052_ssc_read(da9052, &sscmsg);
+	if (ret >= 0) {
+		sscmsg.data &= ~clear_mask;
+		sscmsg.data |= ~set_mask;
+		ret = da9052_ssc_write(da9052, &sscmsg);
+	}
+	da9052_unlock(da9052);
+	return ret;
+}
+
+int eh_enable(struct da9052 *da9052, unsigned char eve_type)
+{
+	return reg_modify(da9052, DA9052_IRQMASKA_REG + (eve_type >> 3),
+			(1 << (eve_type & 7)), 0);
+}
+
+int eh_disable(struct da9052 *da9052, unsigned char eve_type)
+{
+	return reg_modify(da9052, DA9052_IRQMASKA_REG + (eve_type >> 3),
+			0, (1 << (eve_type & 7)));
 }
 
 static int process_events(struct da9052 *da9052, int events_sts)
@@ -461,6 +525,7 @@ int da9052_ssc_init(struct da9052 *da9052)
 	da9052->write = da9052_ssc_write;
 	da9052->read_many = da9052_ssc_read_many;
 	da9052->write_many = da9052_ssc_write_many;
+	da9052->modify_many = da9052_ssc_modify_many;
 
 	if (SPI  == da9052->connecting_device && ssc_ops.write == NULL) {
 		/* Assign the read/write pointers to SPI/read/write */
@@ -481,6 +546,9 @@ int da9052_ssc_init(struct da9052 *da9052)
 	/* Assign the EH notifier block register/de-register functions */
 	da9052->register_event_notifier = eh_register_nb;
 	da9052->unregister_event_notifier = eh_unregister_nb;
+	da9052->event_enable = eh_enable;
+	da9052->event_disable = eh_disable;
+	da9052->register_modify = reg_modify;
 
 	/* Initialize ssc lock */
 	mutex_init(&da9052->ssc_lock);

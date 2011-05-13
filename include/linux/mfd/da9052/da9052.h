@@ -80,6 +80,11 @@ struct da9052_ssc_msg {
 	unsigned char	addr;
 };
 
+struct da9052_modify_msg {
+	unsigned char	clear_mask;
+	unsigned char	set_mask;
+};
+
 struct ssc_cache_entry{
 	 unsigned char	val;
 	 unsigned char	type:4;
@@ -145,10 +150,17 @@ struct da9052 {
 		struct da9052_ssc_msg *sscmsg, int cnt);
 	int (*write_many)(struct da9052 *da9052,
 		struct da9052_ssc_msg *sscmsg, int cnt);
+	int (*modify_many)(struct da9052 *da9052,
+		struct da9052_ssc_msg *sscmsg,
+		struct da9052_modify_msg *modmsg, int cnt);
 	int (*register_event_notifier)(struct da9052 *da9052,
 		struct da9052_eh_nb *nb);
 	int (*unregister_event_notifier)(struct da9052 *da9052,
 		struct da9052_eh_nb *nb);
+	int (*event_enable)(struct da9052 *da9052, unsigned char eve_type);
+	int (*event_disable)(struct da9052 *da9052, unsigned char eve_type);
+	int (*register_modify)(struct da9052 *da9052, unsigned reg,
+			unsigned clear_mask, unsigned set_mask);
 	int num_regulators;
 	int connecting_device;
 	int irq;

@@ -85,9 +85,6 @@
 
 #define INVALID_LDO9_VOLT_VALUE			17
 
-#define set_bits(value, mask)		(value | mask)
-#define clear_bits(value, mask)		(value & ~(mask))
-
 #define SUCCESS		0
 #define FAILURE		1
 
@@ -149,13 +146,6 @@ enum TSI_MUX_SEL
 	TSI_MUX_YMINUS	= 3
 };
 
-
-enum TSI_IRQ{
-	TSI_PEN_DWN,
-	TSI_DATA_RDY
-};
-
-
 enum TSI_COORDINATE{
 	X_COORDINATE,
 	Y_COORDINATE,
@@ -201,14 +191,11 @@ union da9052_tsi_man_cont_reg {
 };
 
 struct da9052_tsi_conf {
-	union da9052_tsi_cont_reg	auto_cont;
 	union da9052_tsi_man_cont_reg	man_cont;
 	u8 				tsi_adc_sample_intervel:1;
 	enum TSI_STATE 			state;
 	u8 				ldo9_en:1;
 	u8 				ldo9_conf:1;
-	u8 				tsi_ready_irq_mask:1;
-	u8 				tsi_pendown_irq_mask:1;
 };
 
 
@@ -235,7 +222,6 @@ struct da9052_tsi_info {
 	u32			tsi_penup_count;
 	u32			tsi_zero_data_cnt;
 	u8			pen_dwn_event;
-	u8			tsi_rdy_event;
 	u8			pd_reg_status;	
 	u8			datardy_reg_status;
 }; 
@@ -251,6 +237,8 @@ struct da9052_tsi {
  
  struct da9052_ts_priv {
 	struct da9052	*da9052;
+	struct da9052_tsi tsi_reg;
+	struct da9052_tsi_info tsi_info;
 	struct da9052_eh_nb pd_nb;
 	struct da9052_eh_nb datardy_nb;
 
@@ -303,16 +291,6 @@ static inline u8  disable_ldo9(u8 val)
 	return (val &= ~DA9052_LDO9_LDO9EN);
 } 
 
-static inline u8  set_auto_tsi_en(u8 val)
-{
-	return (val |=DA9052_TSICONTA_AUTOTSIEN);
-}
-
-static inline u8  reset_auto_tsi_en(u8 val)
-{
-	return (val &=~DA9052_TSICONTA_AUTOTSIEN);
-}
-
 static inline u8  enable_pen_detect(u8 val)
 {
 	return (val |=DA9052_TSICONTA_PENDETEN);
@@ -321,26 +299,6 @@ static inline u8  enable_pen_detect(u8 val)
 static inline u8  disable_pen_detect(u8 val) 
 {
 	return (val &=~DA9052_TSICONTA_PENDETEN);
-}
-
-static inline u8  enable_xyzp_mode(u8 val)
-{
-	return (val &= ~DA9052_TSICONTA_TSIMODE);
-}
-
-static inline u8  enable_xp_mode(u8 val)
-{
-	return(val |= DA9052_TSICONTA_TSIMODE);
-}
-
-static inline u8  enable_tsi_manual_mode(u8 val)
-{
-	return(val |= DA9052_TSICONTB_TSIMAN);
-}
-
-static inline u8  disable_tsi_manual_mode(u8 val)
-{
-	return(val &= ~DA9052_TSICONTB_TSIMAN);
 }
 
 static inline u8 tsi_sel_xplus_close(u8 val)
@@ -383,15 +341,6 @@ static inline u8 tsi_sel_yminus_open(u8 val)
 	return(val &= ~DA9052_TSICONTB_TSISEL3);
 }
 
-static inline u8 adc_mode_economy_mode(u8 val)
-{
-	return(val &= ~DA9052_ADCCONT_ADCMODE);
-}
-
-static inline u8 adc_mode_fast_mode(u8 val)
-{
-	return(val |= DA9052_ADCCONT_ADCMODE);
-}
 int da9052_tsi_get_calib_display_point(struct da9052_tsi_data *display);
 
 struct da9052_ldo_config {
@@ -421,8 +370,7 @@ void clean_tsi_fifos(struct da9052_ts_priv *priv);
 u32 get_reg_data_cnt (struct da9052_ts_priv *priv);
 u32 get_reg_free_space_cnt(struct da9052_ts_priv *priv);
 void da9052_tsi_process_reg_data(struct da9052_ts_priv *priv);
-void da9052_tsi_pen_down_handler(struct da9052_eh_nb *eh_data, u32 event);
-void da9052_tsi_data_ready_handler(struct da9052_eh_nb *eh_data, u32 event);
 int *da9052_get_calibration(void);
+u32 da9052_tsi_get_input_dev(struct da9052_tsi_info *ts, u8 off);
 
 #endif /* __LINUX_MFD_DA9052_TSI_H */

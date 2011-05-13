@@ -268,10 +268,10 @@ s32 da9052_tsi_raw_proc_thread(void *ptr)
 	struct da9052_tsi_data coord;
 	u8 calib_ok, range_ok;
 	struct calib_cfg_t *tsi_calib = get_calib_config();
-	struct input_dev *ip_dev = (struct input_dev *)
-				da9052_tsi_get_input_dev(
-						(u8)TSI_INPUT_DEVICE_OFF);
 	struct da9052_ts_priv *priv = (struct da9052_ts_priv *)ptr;
+	struct input_dev *ip_dev = (struct input_dev *)
+				da9052_tsi_get_input_dev(&priv->tsi_info,
+						(u8)TSI_INPUT_DEVICE_OFF);
 	int *calibration ;
 
 	set_freezable();

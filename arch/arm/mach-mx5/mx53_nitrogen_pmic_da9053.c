@@ -497,6 +497,12 @@ static void da9052_init_ssc_cache(struct da9052 *da9052)
 	da9052->ssc_cache[DA9052_STATUSB_REG].type = VOLATILE;
 	da9052->ssc_cache[DA9052_STATUSC_REG].type = VOLATILE;
 	da9052->ssc_cache[DA9052_STATUSD_REG].type = VOLATILE;
+
+#define DA9052_EVENTA_REG			5
+#define DA9052_EVENTB_REG			6
+#define DA9052_EVENTC_REG			7
+#define DA9052_EVENTD_REG			8
+
 	da9052->ssc_cache[DA9052_EVENTA_REG].type = VOLATILE;
 	da9052->ssc_cache[DA9052_EVENTB_REG].type = VOLATILE;
 	da9052->ssc_cache[DA9052_EVENTC_REG].type = VOLATILE;

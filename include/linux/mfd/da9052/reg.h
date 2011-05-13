@@ -27,15 +27,8 @@
 #define DA9052_STATUSB_REG			2
 #define DA9052_STATUSC_REG			3
 #define DA9052_STATUSD_REG			4
-#define DA9052_EVENTA_REG			5
-#define DA9052_EVENTB_REG			6
-#define DA9052_EVENTC_REG			7
-#define DA9052_EVENTD_REG			8
 #define DA9052_FAULTLOG_REG			9
-#define DA9052_IRQMASKA_REG			10
-#define DA9052_IRQMASKB_REG			11
-#define DA9052_IRQMASKC_REG			12
-#define DA9052_IRQMASKD_REG			13
+/* IRQMASK and EVENT registers are only referenced in da9052-core */
 #define DA9052_CONTROLA_REG			14
 #define DA9052_CONTROLB_REG			15
 #define DA9052_CONTROLC_REG			16

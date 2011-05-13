@@ -25,6 +25,7 @@
 #include <linux/mfd/da9052/gpio.h>
 #include <linux/mfd/da9052/adc.h>
 
+//#define CONFIG_FIVE_WIRE
 #define WAIT_FOR_PEN_DOWN	0
 #define WAIT_FOR_SAMPLING	1
 #define SAMPLING_ACTIVE		2
@@ -37,47 +38,80 @@ int *da9052_get_calibration(void)
 	return calibration ;
 }
 
-static ssize_t __init da9052_tsi_create_input_dev(struct input_dev **ip_dev,
-					u8 n);
-static ssize_t read_da9052_reg(struct da9052 *da9052, u8 reg_addr);
-static ssize_t write_da9052_reg(struct da9052 *da9052, u8 reg_addr, u8 data);
-
 static void da9052_tsi_reg_pendwn_event(struct da9052_ts_priv *priv);
 static void da9052_tsi_reg_datardy_event(struct da9052_ts_priv *priv);
-static ssize_t da9052_tsi_config_delay(struct da9052_ts_priv *priv,
-					enum TSI_DELAY delay);
-static ssize_t da9052_tsi_config_measure_seq(struct da9052_ts_priv *priv,
-					enum TSI_MEASURE_SEQ seq);
-static ssize_t da9052_tsi_config_state(struct da9052_ts_priv *ts,
-					enum TSI_STATE state);
-static ssize_t da9052_tsi_set_sampling_mode(struct da9052_ts_priv *priv,
-					u8 interval);
-static ssize_t da9052_tsi_config_skip_slots(struct da9052_ts_priv *priv,
-					enum TSI_SLOT_SKIP skip);
-static ssize_t da9052_tsi_config_pen_detect(struct da9052_ts_priv *priv,
-					u8 flag);
-static ssize_t da9052_tsi_disable_irq(struct da9052_ts_priv *priv,
-					enum TSI_IRQ tsi_irq);
-static ssize_t da9052_tsi_enable_irq(struct da9052_ts_priv *priv,
-					enum TSI_IRQ tsi_irq);
-static ssize_t da9052_tsi_config_manual_mode(struct da9052_ts_priv *priv,
-					u8 coordinate);
-static ssize_t da9052_tsi_config_auto_mode(struct da9052_ts_priv *priv,
-					u8 state);
-static ssize_t da9052_tsi_config_gpio(struct da9052_ts_priv *priv);
 static ssize_t da9052_tsi_config_power_supply(struct da9052_ts_priv *priv,
 					u8 state);
-static struct da9052_tsi_info *get_tsi_drvdata(void);
 static void da9052_tsi_penup_event(struct da9052_ts_priv *priv);
-static s32 da9052_tsi_get_rawdata(struct da9052_tsi_reg *buf, u8 cnt);
 static ssize_t da9052_tsi_reg_proc_thread(void *ptr);
-static ssize_t da9052_tsi_resume(struct platform_device *dev);
-static ssize_t da9052_tsi_suspend(struct platform_device *dev,
-					pm_message_t state);
-/* void tsi_reg_proc_work(struct work_struct *work); */
 
-struct da9052_tsi tsi_reg;
-struct da9052_tsi_info gda9052_tsi_info;
+u32 da9052_tsi_get_input_dev(struct da9052_tsi_info *ts, u8 off)
+{
+	if (off > NUM_INPUT_DEVS-1)
+		return -EINVAL;
+	return (u32)ts->input_devs[off];
+}
+
+static s32 da9052_tsi_get_rawdata(struct da9052_tsi *tsi, struct da9052_tsi_reg *buf, u8 cnt) {
+	u32 data_cnt = 0;
+	u32 rem_data_cnt = 0;
+
+	mutex_lock(&tsi->tsi_fifo_lock);
+
+	if (tsi->tsi_fifo_start < tsi->tsi_fifo_end) {
+		data_cnt = (tsi->tsi_fifo_end - tsi->tsi_fifo_start);
+
+		if (cnt < data_cnt)
+			data_cnt = cnt;
+
+		memcpy(buf, &tsi->tsi_fifo[tsi->tsi_fifo_start],
+				sizeof(struct da9052_tsi_reg) * data_cnt);
+
+		tsi->tsi_fifo_start += data_cnt;
+
+		if (tsi->tsi_fifo_start == tsi->tsi_fifo_end) {
+			tsi->tsi_fifo_start = 0;
+			tsi->tsi_fifo_end = 0;
+		}
+	} else if (tsi->tsi_fifo_start > tsi->tsi_fifo_end) {
+		data_cnt = ((TSI_FIFO_SIZE - tsi->tsi_fifo_start)
+		+ tsi->tsi_fifo_end);
+
+		if (cnt < data_cnt)
+			data_cnt = cnt;
+
+		if (data_cnt <= (TSI_FIFO_SIZE - tsi->tsi_fifo_start)) {
+			memcpy(buf, &tsi->tsi_fifo[tsi->tsi_fifo_start],
+				sizeof(struct da9052_tsi_reg) * data_cnt);
+
+			tsi->tsi_fifo_start += data_cnt;
+			if (tsi->tsi_fifo_start >= TSI_FIFO_SIZE)
+				tsi->tsi_fifo_start = 0;
+		} else {
+			memcpy(buf, &tsi->tsi_fifo[tsi->tsi_fifo_start],
+				sizeof(struct da9052_tsi_reg)
+				* (TSI_FIFO_SIZE - tsi->tsi_fifo_start));
+
+			rem_data_cnt = (data_cnt -
+				(TSI_FIFO_SIZE - tsi->tsi_fifo_start));
+
+			memcpy(buf, &tsi->tsi_fifo[0],
+				sizeof(struct da9052_tsi_reg) * rem_data_cnt);
+
+			tsi->tsi_fifo_start = rem_data_cnt;
+		}
+
+		if (tsi->tsi_fifo_start == tsi->tsi_fifo_end) {
+				tsi->tsi_fifo_start = 0;
+			tsi->tsi_fifo_end = 0;
+		}
+	} else
+		data_cnt = 0;
+
+	mutex_unlock(&tsi->tsi_fifo_lock);
+
+	return data_cnt;
+}
 
 static ssize_t write_da9052_reg(struct da9052 *da9052, u8 reg_addr, u8 data)
 {
@@ -95,110 +129,136 @@ static ssize_t write_da9052_reg(struct da9052 *da9052, u8 reg_addr, u8 data)
 	return ret;
 }
 
-static ssize_t read_da9052_reg(struct da9052 *da9052, u8 reg_addr)
+static ssize_t da9052_tsi_config_auto_mode(struct da9052_ts_priv *priv,
+						u8 state)
 {
-	 ssize_t ret = 0;
-	 struct da9052_ssc_msg ssc_msg;
-
-	ssc_msg.addr =  reg_addr;
-	ssc_msg.data =  0;
-	ret = da9052->read(da9052, &ssc_msg);
-	if (ret) {
-		DA9052_DEBUG("%s: ",__FUNCTION__);
-		DA9052_DEBUG("da9052_ssc_read Failed => %d\n" ,ret);
-		return -ret;
+	unsigned set_mask;
+	if (state == ENABLE)
+		set_mask = DA9052_TSICONTA_AUTOTSIEN;
+	else if (state == DISABLE)
+		set_mask = 0;
+	else {
+		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
+		DA9052_DEBUG("Invalid Parameter Passed \n" );
+		return -EINVAL;
 	}
-	return ssc_msg.data;
+	return priv->da9052->register_modify(priv->da9052, DA9052_TSICONTA_REG,
+			DA9052_TSICONTA_AUTOTSIEN, set_mask);
 }
 
-static struct da9052_tsi_info *get_tsi_drvdata(void)
+static ssize_t da9052_tsi_config_manual_mode(struct da9052_ts_priv *priv,
+						u8 state)
 {
-	return &gda9052_tsi_info;
+	ssize_t ret=0;
+	struct da9052_tsi_info *ts = &priv->tsi_info;
+	unsigned set_mask;
+	if (state == ENABLE)
+		set_mask = DA9052_TSICONTB_TSIMAN;
+	else if (state == DISABLE)
+		set_mask = 0;
+	else {
+		DA9052_DEBUG("DA9052_TSI: %s: ", __FUNCTION__);
+		DA9052_DEBUG("Invalid state Passed\n" );
+		return -EINVAL;
+	}
+	ret = priv->da9052->register_modify(priv->da9052, DA9052_TSICONTB_REG,
+			DA9052_TSICONTB_TSIMAN, set_mask);
+	if (ret)
+		return ret;
+
+	if (state == DISABLE)
+		ts->tsi_conf.man_cont.tsi_cont_b.tsi_man = RESET;
+	else
+		ts->tsi_conf.man_cont.tsi_cont_b.tsi_man = SET;
+
+	ret = write_da9052_reg(priv->da9052, DA9052_ADCMAN_REG, DA9052_ADC_TSI);
+	if (ret) {
+		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
+		DA9052_DEBUG("ADC write Failed \n" );
+	}
+	return ret;
+}
+
+static ssize_t da9052_tsi_config_pen_detect(struct da9052_ts_priv *priv,
+						u8 flag)
+{
+	unsigned set_mask;
+	if (flag == ENABLE)
+		set_mask = DA9052_TSICONTA_PENDETEN;
+	else if (flag == DISABLE)
+		set_mask = 0;
+	else {
+		DA9052_DEBUG("%s:", __FUNCTION__);
+		DA9052_DEBUG(" Invalid flag passed \n" );
+		return -EINVAL;
+	}
+	return priv->da9052->register_modify(priv->da9052, DA9052_TSICONTA_REG,
+			DA9052_TSICONTA_PENDETEN, set_mask);
+}
+
+static ssize_t da9052_tsi_config_gpio(struct da9052_ts_priv *priv)
+{
+	ssize_t ret = 0;
+	struct da9052_ssc_msg ssc_msg[3];
+	struct da9052_modify_msg mod_msg[3];
+
+	ssc_msg[0].addr  = DA9052_GPIO0203_REG;
+	ssc_msg[1].addr  = DA9052_GPIO0405_REG;
+	ssc_msg[2].addr  = DA9052_GPIO0607_REG;
+
+	mod_msg[0].clear_mask = DA9052_GPIO0203_GPIO3PIN;
+	mod_msg[0].set_mask = 0;
+	mod_msg[1].clear_mask = (DA9052_GPIO0405_GPIO4PIN | DA9052_GPIO0405_GPIO5PIN);
+	mod_msg[1].set_mask = 0;
+	mod_msg[2].clear_mask = (DA9052_GPIO0607_GPIO6PIN | DA9052_GPIO0607_GPIO7PIN);
+	mod_msg[2].set_mask = 0;
+
+	ret = priv->da9052->modify_many(priv->da9052, ssc_msg, mod_msg, 3);
+	if (ret) {
+		DA9052_DEBUG("%s: da9052_ssc_modify_many Failed\n", __FUNCTION__);
+	}
+	return ret;
 }
 
 static ssize_t da9052_tsi_config_measure_seq(struct da9052_ts_priv *priv,
 						enum TSI_MEASURE_SEQ seq)
 {
-	ssize_t ret = 0;
-	u8 data = 0;
-	struct da9052_tsi_info *ts = get_tsi_drvdata();
-
-	if (seq > 1)
-		return -EINVAL;
-
-	da9052_lock(priv->da9052);
-	ret = read_da9052_reg(priv->da9052, DA9052_TSICONTA_REG);
-	if (ret < 0) {
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
-		DA9052_DEBUG("read_da9052_reg Failed \n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-
-	data = (u8)ret;
-
+	unsigned set_mask;
 	if (seq == XYZP_MODE)
-		data = enable_xyzp_mode(data);
+		set_mask = 0;
 	else if (seq == XP_MODE)
-		data = enable_xp_mode(data);
+		set_mask = DA9052_TSICONTA_TSIMODE;
 	else {
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
 		DA9052_DEBUG("Invalid Value passed \n" );
-		da9052_unlock(priv->da9052);
 		return -EINVAL;
 	}
-
-	ret = write_da9052_reg(priv->da9052, DA9052_TSICONTA_REG, data);
-	if (ret) {
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
-		DA9052_DEBUG(" write_da9052_reg Failed \n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-	da9052_unlock(priv->da9052);
-
-	ts->tsi_conf.auto_cont.da9052_tsi_cont_a = data;
-
-	return 0;
+	return priv->da9052->register_modify(priv->da9052, DA9052_TSICONTA_REG,
+			DA9052_TSICONTA_TSIMODE, set_mask);
 }
 
 static ssize_t da9052_tsi_set_sampling_mode(struct da9052_ts_priv *priv,
 					u8 mode)
 {
-	u8 data = 0;
+	struct da9052_tsi_info *ts = &priv->tsi_info;
 	ssize_t ret = 0;
-	struct da9052_tsi_info *ts = get_tsi_drvdata();
-
-	da9052_lock(priv->da9052);
-
-	ret = read_da9052_reg(priv->da9052, DA9052_ADCCONT_REG);
-	if (ret < 0) {
-		DA9052_DEBUG("DA9052_TSI:%s:", __FUNCTION__);
-		DA9052_DEBUG("read_da9052_reg Failed \n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-	data = (u8)ret;
-
+	unsigned set_mask;
 	if (mode == ECONOMY_MODE)
-		data = adc_mode_economy_mode(data);
+		set_mask = 0;
 	else if (mode == FAST_MODE)
-		data = adc_mode_fast_mode(data);
+		set_mask = DA9052_ADCCONT_ADCMODE;
 	else {
 		DA9052_DEBUG("DA9052_TSI:%s:", __FUNCTION__);
 		DA9052_DEBUG("Invalid interval passed \n" );
-		da9052_unlock(priv->da9052);
 		return -EINVAL;
 	}
 
-	ret = write_da9052_reg(priv->da9052, DA9052_ADCCONT_REG, data);
+	ret = priv->da9052->register_modify(priv->da9052, DA9052_ADCCONT_REG,
+			DA9052_ADCCONT_ADCMODE, set_mask);
 	if (ret) {
 		DA9052_DEBUG("DA9052_TSI:%s:", __FUNCTION__);
 		DA9052_DEBUG("write_da9052_reg Failed \n" );
-		da9052_unlock(priv->da9052);
 		return ret;
 	}
-	da9052_unlock(priv->da9052);
 
 	switch (mode) {
 	case ECONOMY_MODE:
@@ -213,10 +273,6 @@ static ssize_t da9052_tsi_set_sampling_mode(struct da9052_ts_priv *priv,
 		priv->tsi_raw_data_poll_interval =
 			TSI_FAST_MODE_RAW_DATA_PROCESSING_INTERVAL;
 		break;
-	default:
-		DA9052_DEBUG("DA9052_TSI:%s:", __FUNCTION__);
-		DA9052_DEBUG("Invalid interval passed \n" );
-		return -EINVAL;
 	}
 
 	ts->tsi_penup_count =
@@ -229,90 +285,213 @@ static ssize_t da9052_tsi_set_sampling_mode(struct da9052_ts_priv *priv,
 static ssize_t da9052_tsi_config_delay(struct da9052_ts_priv *priv,
 					enum TSI_DELAY delay)
 {
-	ssize_t ret = 0;
-	u8 data = 0;
-	struct da9052_tsi_info *ts = get_tsi_drvdata();
-
 	if (delay > priv->tsi_pdata->max_tsi_delay) {
 		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
 		DA9052_DEBUG(" invalid value for tsi delay!!!\n" );
 		return -EINVAL;
 	}
-
-	da9052_lock(priv->da9052);
-
-	ret = read_da9052_reg(priv->da9052, DA9052_TSICONTA_REG);
-	if(ret < 0) {
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
-		DA9052_DEBUG("read_da9052_reg Failed \n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-
-	data = clear_bits((u8)ret, DA9052_TSICONTA_TSIDELAY);
-
-	data = set_bits(data, (delay << priv->tsi_pdata->tsi_delay_bit_shift));
-
-	ret = write_da9052_reg(priv->da9052, DA9052_TSICONTA_REG, data);
-	if (ret) {
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
-		DA9052_DEBUG(" write_da9052_reg Failed \n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-	da9052_unlock(priv->da9052);
-
-	ts->tsi_conf.auto_cont.da9052_tsi_cont_a = data;
-
-	return 0;
+	return priv->da9052->register_modify(priv->da9052, DA9052_TSICONTA_REG,
+			DA9052_TSICONTA_TSIDELAY,
+			(delay << priv->tsi_pdata->tsi_delay_bit_shift));
 }
 
-ssize_t da9052_tsi_config_skip_slots(struct da9052_ts_priv *priv,
+static ssize_t da9052_tsi_config_skip_slots(struct da9052_ts_priv *priv,
 					enum TSI_SLOT_SKIP skip)
 {
-	ssize_t ret = 0;
-	u8 data = 0;
-	struct da9052_tsi_info *ts = get_tsi_drvdata();
-
 	if (skip > priv->tsi_pdata->max_tsi_skip_slot) {
 		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
 		DA9052_DEBUG(" invalid value for tsi skip slots!!!\n" );
 		return -EINVAL;
 	}
+	return priv->da9052->register_modify(priv->da9052, DA9052_TSICONTA_REG,
+			DA9052_TSICONTA_TSISKIP,
+			(skip << priv->tsi_pdata->tsi_skip_bit_shift));
+}
+
+static void da9052_tsi_5w_pen_down_handler(struct da9052_eh_nb *eh_data, u32 event)
+{
+
+}
+
+static void da9052_tsi_pen_down_handler(struct da9052_eh_nb *eh_data, u32 event)
+{
+	ssize_t ret = 0;
+	struct da9052_ts_priv *priv =
+		container_of(eh_data, struct da9052_ts_priv, pd_nb);
+	struct da9052_tsi_info *ts = &priv->tsi_info;
+	struct input_dev *ip_dev =
+		(struct input_dev*)da9052_tsi_get_input_dev(&priv->tsi_info,
+		(u8)TSI_INPUT_DEVICE_OFF);
+
+	if (priv->tsi_reg.tsi_state !=  WAIT_FOR_PEN_DOWN)
+		return;
+	DA9052_DEBUG("EH notified the pendown event 0x%x\n", event);
+
+	priv->tsi_reg.tsi_state = WAIT_FOR_SAMPLING;
+
+	if (ts->tsi_conf.state != TSI_AUTO_MODE) {
+		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
+		DA9052_DEBUG(" Configure TSI to auto mode.\n" );
+		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
+		DA9052_DEBUG(" Then call this API.\n" );
+		goto fail;
+	}
+
+	if (da9052_tsi_config_power_supply(priv, ENABLE))
+		goto fail;
+
+	if (priv->da9052->event_disable(priv->da9052, priv->pd_nb.eve_type))
+		goto fail;
+
+	if (priv->da9052->event_enable(priv->da9052, priv->datardy_nb.eve_type))
+		goto fail;
+
+	if (da9052_tsi_config_auto_mode(priv, ENABLE))
+		goto fail;
+
+	input_sync(ip_dev);
+
+	ts->pen_dwn_event = 1;
+
+	priv->tsi_reg.tsi_state =  SAMPLING_ACTIVE;
+
+	goto success;
+
+fail:
+	if (ts->pd_reg_status) {
+		priv->da9052->unregister_event_notifier(priv->da9052,
+						&priv->pd_nb);
+		ts->pd_reg_status = RESET;
+
+		priv->da9052->register_event_notifier(priv->da9052,
+					&priv->datardy_nb);
+		da9052_tsi_reg_pendwn_event(priv);
+	}
+
+success:
+	ret = 0;
+	DA9052_DEBUG ("Exiting PEN DOWN HANDLER \n");
+}
+
+static void da9052_tsi_reg_pendwn_event(struct da9052_ts_priv *priv)
+{
+	ssize_t ret = 0;
+	struct da9052_tsi_info  *ts = &priv->tsi_info;
+
+	if (ts->pd_reg_status) {
+		DA9052_DEBUG("%s: Pen down ",__FUNCTION__);
+		DA9052_DEBUG("Registeration is already done \n");
+		return;
+	}
+
+#ifdef CONFIG_FIVE_WIRE
+	priv->pd_nb.eve_type = GPI2_EVE;
+	priv->pd_nb.call_back = &da9052_tsi_5w_pen_down_handler;
+#else
+	priv->pd_nb.eve_type = PEN_DOWN_EVE;
+	priv->pd_nb.call_back = &da9052_tsi_pen_down_handler;
+#endif
+	ret = priv->da9052->register_event_notifier(priv->da9052, &priv->pd_nb);
+	if (ret) {
+		DA9052_DEBUG("%s: EH Registeration",__FUNCTION__);
+		DA9052_DEBUG(" Failed: ret = %d\n",ret );
+		ts->pd_reg_status = RESET;
+	} else
+		ts->pd_reg_status = SET;
+
+	priv->os_data_cnt = 0;
+	priv->raw_data_cnt = 0;
+
+	return;
+}
+
+static void da9052_tsi_5w_data_ready_handler(struct da9052_eh_nb *eh_data, u32 event)
+{
+
+}
+
+static void da9052_tsi_data_ready_handler(struct da9052_eh_nb *eh_data, u32 event)
+{
+	struct da9052_ssc_msg tsi_data[4];
+	s32 ret;
+	struct da9052_ts_priv *priv =
+		container_of(eh_data, struct da9052_ts_priv, datardy_nb);
+
+	if (priv->tsi_reg.tsi_state !=  SAMPLING_ACTIVE)
+		return;
+
+	tsi_data[0].addr  = DA9052_TSIXMSB_REG;
+	tsi_data[1].addr  = DA9052_TSIYMSB_REG;
+	tsi_data[2].addr  = DA9052_TSILSB_REG;
+	tsi_data[3].addr  = DA9052_TSIZMSB_REG;
+
+	tsi_data[0].data  = 0;
+	tsi_data[1].data  = 0;
+	tsi_data[2].data  = 0;
+	tsi_data[3].data  = 0;
 
 	da9052_lock(priv->da9052);
 
-	ret = read_da9052_reg(priv->da9052, DA9052_TSICONTA_REG);
-	if (ret < 0) {
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
-		DA9052_DEBUG("read_da9052_reg Failed \n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-
-	data = clear_bits((u8)ret, DA9052_TSICONTA_TSISKIP);
-
-	data = set_bits(data, (skip << priv->tsi_pdata->tsi_skip_bit_shift));
-
-	ret = write_da9052_reg(priv->da9052, DA9052_TSICONTA_REG, data);
-	if (ret) {
-		DA9052_DEBUG("DA9052_TSI:da9052_tsi_config_skip_slots:");
-		DA9052_DEBUG(" write_da9052_reg Failed \n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
+	ret = priv->da9052->read_many(priv->da9052, tsi_data, 4);
 	da9052_unlock(priv->da9052);
+	if (ret) {
+		DA9052_DEBUG("Error in reading TSI data \n" );
+		return;
+	}
 
-	ts->tsi_conf.auto_cont.da9052_tsi_cont_a = data;
+	mutex_lock(&priv->tsi_reg.tsi_fifo_lock);
 
-	return 0;
+	priv->tsi_reg.tsi_fifo[priv->tsi_reg.tsi_fifo_end].x_msb = tsi_data[0].data;
+	priv->tsi_reg.tsi_fifo[priv->tsi_reg.tsi_fifo_end].y_msb = tsi_data[1].data;
+	priv->tsi_reg.tsi_fifo[priv->tsi_reg.tsi_fifo_end].lsb   = tsi_data[2].data;
+	priv->tsi_reg.tsi_fifo[priv->tsi_reg.tsi_fifo_end].z_msb = tsi_data[3].data;
+	incr_with_wrap(priv->tsi_reg.tsi_fifo_end);
+
+	if (priv->tsi_reg.tsi_fifo_end == priv->tsi_reg.tsi_fifo_start)
+		priv->tsi_reg.tsi_fifo_start++;
+
+	mutex_unlock(&priv->tsi_reg.tsi_fifo_lock);
+
+}
+
+static void da9052_tsi_reg_datardy_event(struct da9052_ts_priv *priv)
+{
+	ssize_t ret = 0;
+	struct da9052_tsi_info  *ts = &priv->tsi_info;
+
+	if(ts->datardy_reg_status)
+	{
+		DA9052_DEBUG("%s: Data Ready ",__FUNCTION__);
+		DA9052_DEBUG("Registeration is already done \n");
+		return;
+	}
+
+#ifdef CONFIG_FIVE_WIRE
+	priv->datardy_nb.eve_type = ADC_EOM_EVE;
+	priv->datardy_nb.call_back = &da9052_tsi_5w_data_ready_handler;
+#else
+	priv->datardy_nb.eve_type = TSI_READY_EVE;
+	priv->datardy_nb.call_back = &da9052_tsi_data_ready_handler;
+#endif
+	ret = priv->da9052->register_event_notifier(priv->da9052,
+						&priv->datardy_nb);
+
+	if(ret)
+	{
+		DA9052_DEBUG("%s: EH Registeration",__FUNCTION__);
+		DA9052_DEBUG(" Failed: ret = %d\n",ret );
+		ts->datardy_reg_status = RESET;
+	} else
+		ts->datardy_reg_status = SET;
+
+	return;
 }
 
 static ssize_t da9052_tsi_config_state(struct da9052_ts_priv *priv,
 					enum TSI_STATE state)
 {
 	s32 ret;
-	struct da9052_tsi_info *ts = get_tsi_drvdata();
+	struct da9052_tsi_info *ts = &priv->tsi_info;
 
 	if (ts->tsi_conf.state == state)
 		return 0;
@@ -338,15 +517,13 @@ static ssize_t da9052_tsi_config_state(struct da9052_ts_priv *priv,
 		if (ret)
 			return ret;
 
-		ret = da9052_tsi_enable_irq(priv, TSI_PEN_DWN);
+		ret = priv->da9052->event_enable(priv->da9052, priv->pd_nb.eve_type);
 		if (ret)
 			return ret;
-		ts->tsi_conf.tsi_pendown_irq_mask = RESET;
 
-		ret = da9052_tsi_disable_irq(priv, TSI_DATA_RDY);
+		ret = priv->da9052->event_disable(priv->da9052, priv->datardy_nb.eve_type);
 		if (ret)
 			return ret;
-		ts->tsi_conf.tsi_ready_irq_mask	  = SET;
 
 		da9052_tsi_reg_pendwn_event(priv);
 		da9052_tsi_reg_datardy_event(priv);
@@ -393,62 +570,6 @@ static ssize_t da9052_tsi_config_state(struct da9052_ts_priv *priv,
 	return 0;
 }
 
-static void da9052_tsi_reg_pendwn_event(struct da9052_ts_priv *priv)
-{
-	ssize_t ret = 0;
-	struct da9052_tsi_info  *ts = get_tsi_drvdata();
-
-	if (ts->pd_reg_status) {
-		DA9052_DEBUG("%s: Pen down ",__FUNCTION__);
-		DA9052_DEBUG("Registeration is already done \n");
-		return;
-	}
-
-	priv->pd_nb.eve_type = PEN_DOWN_EVE;
-	priv->pd_nb.call_back = &da9052_tsi_pen_down_handler;
-
-	ret = priv->da9052->register_event_notifier(priv->da9052, &priv->pd_nb);
-	if (ret) {
-		DA9052_DEBUG("%s: EH Registeration",__FUNCTION__);
-		DA9052_DEBUG(" Failed: ret = %d\n",ret );
-		ts->pd_reg_status = RESET;
-	} else
-		ts->pd_reg_status = SET;
-
-	priv->os_data_cnt = 0;
-	priv->raw_data_cnt = 0;
-
-	return;
-}
-
-static void da9052_tsi_reg_datardy_event(struct da9052_ts_priv *priv)
-{
-	ssize_t ret = 0;
-	struct da9052_tsi_info  *ts = get_tsi_drvdata();
-
-	if(ts->datardy_reg_status)
-	{
-		DA9052_DEBUG("%s: Data Ready ",__FUNCTION__);
-		DA9052_DEBUG("Registeration is already done \n");
-		return;
-	}
-
-	priv->datardy_nb.eve_type = TSI_READY_EVE;
-	priv->datardy_nb.call_back = &da9052_tsi_data_ready_handler;
-
-	ret = priv->da9052->register_event_notifier(priv->da9052,
-						&priv->datardy_nb);
-
-	if(ret)
-	{
-		DA9052_DEBUG("%s: EH Registeration",__FUNCTION__);
-		DA9052_DEBUG(" Failed: ret = %d\n",ret );
-		ts->datardy_reg_status = RESET;
-	} else
-		ts->datardy_reg_status = SET;
-
-	return;
-}
 
 static ssize_t __init da9052_tsi_create_input_dev(struct input_dev **ip_dev,
 							u8 n)
@@ -512,7 +633,7 @@ static ssize_t __init da9052_tsi_init_drv(struct da9052_ts_priv *priv)
 {
 	u8 cnt = 0;
 	ssize_t ret = 0;
-	struct da9052_tsi_info  *ts = get_tsi_drvdata();
+	struct da9052_tsi_info  *ts = &priv->tsi_info;
 
 	if ((DA9052_GPIO_PIN_3 != DA9052_GPIO_CONFIG_TSI) ||
 		(DA9052_GPIO_PIN_4 != DA9052_GPIO_CONFIG_TSI) ||
@@ -571,213 +692,13 @@ static ssize_t __init da9052_tsi_init_drv(struct da9052_ts_priv *priv)
 	return 0;
 }
 
-u32 da9052_tsi_get_input_dev(u8 off)
-{
-	struct da9052_tsi_info   *ts = get_tsi_drvdata();
-
-	if (off > NUM_INPUT_DEVS-1)
-		return -EINVAL;
-
-	return (u32)ts->input_devs[off];
-}
-
-static ssize_t da9052_tsi_config_pen_detect(struct da9052_ts_priv *priv,
-						u8 flag)
-{
-	u8 data;
-	u32 ret;
-	struct da9052_tsi_info  *ts = get_tsi_drvdata();
-
-	da9052_lock(priv->da9052);
-	ret = read_da9052_reg(priv->da9052, DA9052_TSICONTA_REG);
-	if (ret < 0) {
-		DA9052_DEBUG("%s:", __FUNCTION__);
-		DA9052_DEBUG(" read_da9052_reg	Failed\n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-
-	if (flag == ENABLE)
-		data = set_bits((u8)ret, DA9052_TSICONTA_PENDETEN);
-	else if (flag == DISABLE)
-		data = clear_bits((u8)ret, DA9052_TSICONTA_PENDETEN);
-	else {
-		DA9052_DEBUG("%s:", __FUNCTION__);
-		DA9052_DEBUG(" Invalid flag passed \n" );
-		da9052_unlock(priv->da9052);
-		return -EINVAL;
-	}
-
-	ret = write_da9052_reg(priv->da9052, DA9052_TSICONTA_REG, data);
-	if (ret < 0) {
-		DA9052_DEBUG("%s:", __FUNCTION__);
-		DA9052_DEBUG(" write_da9052_reg	Failed\n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-	da9052_unlock(priv->da9052);
-
-	ts->tsi_conf.auto_cont.da9052_tsi_cont_a = data;
-	return 0;
-}
-
-static ssize_t da9052_tsi_disable_irq(struct da9052_ts_priv *priv,
-					enum TSI_IRQ tsi_irq)
-{
-	u8 data = 0;
-	ssize_t ret =0;
-	struct da9052_tsi_info	*ts = get_tsi_drvdata();
-
-	da9052_lock(priv->da9052);
-	ret = read_da9052_reg(priv->da9052, DA9052_IRQMASKB_REG);
-	if (ret < 0)	{
-		DA9052_DEBUG("DA9052_TSI:da9052_tsi_disable_irq:");
-		DA9052_DEBUG("read_da9052_reg Failed \n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-	data = ret;
-	switch (tsi_irq) {
-	case TSI_PEN_DWN:
-		data = mask_pendwn_irq(data);
-	break;
-	case TSI_DATA_RDY:
-		data = mask_tsi_rdy_irq(data);
-	break;
-	default:
-		DA9052_DEBUG("DA9052_TSI:da9052_tsi_disable_irq:");
-		DA9052_DEBUG("Invalid IRQ passed \n" );
-		da9052_unlock(priv->da9052);
-		return -EINVAL;
-	}
-	ret = write_da9052_reg(priv->da9052, DA9052_IRQMASKB_REG, data);
-	if (ret) {
-		DA9052_DEBUG("DA9052_TSI:da9052_tsi_disable_irq:");
-		DA9052_DEBUG("write_da9052_reg Failed \n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-	da9052_unlock(priv->da9052);
-	switch (tsi_irq) {
-	case TSI_PEN_DWN:
-		ts->tsi_conf.tsi_pendown_irq_mask = SET;
-	break;
-	case TSI_DATA_RDY:
-		ts->tsi_conf.tsi_ready_irq_mask = SET;
-	break;
-	default:
-		return -EINVAL;
-	}
-
-	return 0; 
-
-}
-
-static ssize_t da9052_tsi_enable_irq(struct da9052_ts_priv *priv,
-					enum TSI_IRQ tsi_irq)
-{
-	u8 data =0;
-	ssize_t ret =0;
-	struct da9052_tsi_info  *ts = get_tsi_drvdata();
-
-	da9052_lock(priv->da9052);
-	ret = read_da9052_reg(priv->da9052, DA9052_IRQMASKB_REG);
-	if (ret < 0) {
-		DA9052_DEBUG("DA9052_TSI:da9052_tsi_enable_irq:");
-		DA9052_DEBUG("read_da9052_reg Failed \n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-
-	data = ret;
-	switch (tsi_irq) {
-	case TSI_PEN_DWN:
-		data = unmask_pendwn_irq(data);
-	break;
-	case TSI_DATA_RDY:
-		data = unmask_tsi_rdy_irq(data);
-	break;
-	default:
-		DA9052_DEBUG("DA9052_TSI:da9052_tsi_enable_irq:");
-		DA9052_DEBUG("Invalid IRQ passed \n" );
-		da9052_unlock(priv->da9052);
-		return -EINVAL;
-	}
-	ret = write_da9052_reg(priv->da9052, DA9052_IRQMASKB_REG, data);
-	if (ret) {
-		DA9052_DEBUG("DA9052_TSI:da9052_tsi_enable_irq:");
-		DA9052_DEBUG("write_da9052_reg Failed \n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-	da9052_unlock(priv->da9052);
-	switch (tsi_irq) {
-	case TSI_PEN_DWN:
-		ts->tsi_conf.tsi_pendown_irq_mask = RESET;
-	break;
-	case TSI_DATA_RDY:
-		ts->tsi_conf.tsi_ready_irq_mask = RESET;
-	break;
-	default:
-		return -EINVAL;
-	}
-
-	return 0;
- }
-
-static ssize_t da9052_tsi_config_gpio(struct da9052_ts_priv *priv)
-{
-	u8 idx = 0;
-	ssize_t ret = 0;
-	struct da9052_ssc_msg ssc_msg[priv->tsi_pdata->num_gpio_tsi_register];
-
-	ssc_msg[idx++].addr  = DA9052_GPIO0203_REG;
-	ssc_msg[idx++].addr  = DA9052_GPIO0405_REG;
-	ssc_msg[idx++].addr  = DA9052_GPIO0607_REG;
-
-	da9052_lock(priv->da9052);
-	ret = priv->da9052->read_many(priv->da9052, ssc_msg,idx);
-	if (ret) {
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
-		DA9052_DEBUG("da9052_ssc_read_many Failed\n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-
-	idx = 0;
-	ssc_msg[idx].data = clear_bits(ssc_msg[idx].data,
-						DA9052_GPIO0203_GPIO3PIN);
-	idx++;
-	ssc_msg[idx].data = clear_bits(ssc_msg[idx].data,
-		(DA9052_GPIO0405_GPIO4PIN | DA9052_GPIO0405_GPIO5PIN));
-	idx++;
-	ssc_msg[idx].data = clear_bits(ssc_msg[idx].data,
-		(DA9052_GPIO0607_GPIO6PIN | DA9052_GPIO0607_GPIO7PIN));
-	idx++;
-
-	ret = priv->da9052->write_many(priv->da9052, ssc_msg,idx);
-	if (ret) {
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
-		DA9052_DEBUG("da9052_ssc_read_many Failed\n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-	da9052_unlock(priv->da9052);
-
-	return 0;
-}
-
 s32 da9052_pm_configure_ldo(struct da9052_ts_priv *priv,
 				struct da9052_ldo_config ldo_config)
 {
-	struct da9052_ssc_msg msg;
-	u8 reg_num;
 	u8 ldo_volt;
-	u8 ldo_volt_bit = 0;
-	u8 ldo_conf_bit = 0;
-	u8 ldo_en_bit = 0;
 	s8 ldo_pd_bit = -1;
 	s32 ret = 0;
+	unsigned sum;
 
 	DA9052_DEBUG("I am in function: %s\n", __FUNCTION__);
 	if (validate_ldo9_mV(ldo_config.ldo_volt))
@@ -785,96 +706,32 @@ s32 da9052_pm_configure_ldo(struct da9052_ts_priv *priv,
 
 	ldo_volt = ldo9_mV_to_reg(ldo_config.ldo_volt);
 
-	reg_num = DA9052_LDO9_REG;
-	ldo_volt_bit = DA9052_LDO9_VLDO9;
-	ldo_conf_bit = DA9052_LDO9_LDO9CONF;
-	ldo_en_bit = DA9052_LDO9_LDO9EN;
-
-	da9052_lock(priv->da9052);
-
-	msg.addr = reg_num;
-
-	ret = priv->da9052->read(priv->da9052, &msg);
-	if (ret) {
-		da9052_unlock(priv->da9052);
-		return -EINVAL;
-	}
-	msg.data = ldo_volt |
-		(ldo_config.ldo_conf ? ldo_conf_bit : 0) |
-		(msg.data & ldo_en_bit);
-
-	ret = priv->da9052->write(priv->da9052, &msg);
-	if (ret) {
-		da9052_unlock(priv->da9052);
-		return -EINVAL;
-	}
-
-	if (-1 != ldo_pd_bit) {
-		msg.addr = DA9052_PULLDOWN_REG;
-		ret = priv->da9052->read(priv->da9052, &msg);
-		if (ret) {
-			da9052_unlock(priv->da9052);
-			return -EINVAL;
-		}
-
-		msg.data = (ldo_config.ldo_pd ?
-				set_bits(msg.data, ldo_pd_bit) :
-				clear_bits(msg.data, ldo_pd_bit));
-
-		ret = priv->da9052->write(priv->da9052, &msg);
-		if (ret) {
-			da9052_unlock(priv->da9052);
-			return -EINVAL;
-		}
+	sum = ldo_volt | (ldo_config.ldo_conf ? DA9052_LDO9_LDO9CONF : 0);
+	ret =  priv->da9052->register_modify(priv->da9052, DA9052_LDO9_REG,
+			~DA9052_LDO9_LDO9EN, sum);
+	if ((!ret) && (-1 != ldo_pd_bit)) {
+		/* Never executes */
+		ret =  priv->da9052->register_modify(priv->da9052, DA9052_PULLDOWN_REG,
+				ldo_pd_bit, ldo_config.ldo_pd ? ldo_pd_bit : 0);
 
 	}
-	da9052_unlock(priv->da9052);
-
-	return 0;
+	return ret;
 }
 
 
 s32 da9052_pm_set_ldo(struct da9052_ts_priv *priv, u8 ldo_num, u8 flag)
 {
-	struct da9052_ssc_msg msg;
-	u8 reg_num = 0;
-	u8 value = 0;
-	s32 ret = 0;
-
 	DA9052_DEBUG("I am in function: %s\n", __FUNCTION__);
 
-	reg_num = DA9052_LDO9_REG;
-	value =	DA9052_LDO9_LDO9EN;
-	da9052_lock(priv->da9052);
-
-	msg.addr = reg_num;
-
-	ret = priv->da9052->read(priv->da9052, &msg);
-	if (ret) {
-		da9052_unlock(priv->da9052);
-		return -EINVAL;
-	}
-
-	msg.data = flag ?
-		set_bits(msg.data, value) :
-		clear_bits(msg.data, value);
-
-	ret = priv->da9052->write(priv->da9052, &msg);
-	if (ret) {
-		da9052_unlock(priv->da9052);
-		return -EINVAL;
-	}
-
-	da9052_unlock(priv->da9052);
-
-	return 0;
+	return priv->da9052->register_modify(priv->da9052, DA9052_LDO9_REG,
+			DA9052_LDO9_LDO9EN, (flag) ? DA9052_LDO9_LDO9EN : 0);
 }
 
 static ssize_t da9052_tsi_config_power_supply(struct da9052_ts_priv *priv,
 						u8 state)
 {
 	struct da9052_ldo_config ldo_config;
-	struct da9052_tsi_info *ts = get_tsi_drvdata();
+	struct da9052_tsi_info *ts = &priv->tsi_info;
 
 	if (state != ENABLE && state != DISABLE) {
 		DA9052_DEBUG("DA9052_TSI: %s: ", __FUNCTION__);
@@ -900,108 +757,6 @@ static ssize_t da9052_tsi_config_power_supply(struct da9052_ts_priv *priv,
 	return 0;
 }
 
-static ssize_t da9052_tsi_config_auto_mode(struct da9052_ts_priv *priv,
-						u8 state)
-{
-	u8 data;
-	s32 ret = 0;
-	struct da9052_tsi_info *ts = get_tsi_drvdata();
-
-	if (state != ENABLE && state != DISABLE)
-		return -EINVAL;
-
-	da9052_lock(priv->da9052);
-
-	ret = read_da9052_reg(priv->da9052, DA9052_TSICONTA_REG);
-	if (ret < 0) {
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
-		DA9052_DEBUG("read_da9052_reg Failed \n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-
-	data = (u8)ret;
-
-	if (state == ENABLE)
-		data = set_auto_tsi_en(data);
-	else if (state == DISABLE)
-		data = reset_auto_tsi_en(data);
-	else {
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
-		DA9052_DEBUG("Invalid Parameter Passed \n" );
-		da9052_unlock(priv->da9052);
-		return -EINVAL;
-	}
-
-	ret = write_da9052_reg(priv->da9052, DA9052_TSICONTA_REG, data);
-	if (ret) {
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
-		DA9052_DEBUG(" Failed to configure Auto TSI mode\n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-	da9052_unlock(priv->da9052);
-	ts->tsi_conf.auto_cont.da9052_tsi_cont_a = data;
-	return 0;
-}
-
-static ssize_t da9052_tsi_config_manual_mode(struct da9052_ts_priv *priv,
-						u8 state)
-{
-	u8 data = 0;
-	ssize_t ret=0;
-	struct da9052_tsi_info *ts = get_tsi_drvdata();
-
-	if (state != ENABLE && state != DISABLE) {
-		DA9052_DEBUG("DA9052_TSI: %s: ", __FUNCTION__);
-		DA9052_DEBUG("Invalid state Passed\n" );
-		return -EINVAL;
-	}
-
-	da9052_lock(priv->da9052);
-
-	ret = read_da9052_reg(priv->da9052, DA9052_TSICONTB_REG);
-	if (ret < 0) {
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
-		DA9052_DEBUG("read_da9052_reg Failed \n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-
-	data = (u8)ret;
-	if (state == DISABLE)
-		data = disable_tsi_manual_mode(data);
-	else
-		data = enable_tsi_manual_mode(data);
-
-	ret = write_da9052_reg(priv->da9052, DA9052_TSICONTB_REG, data);
-	if (ret) {
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
-		DA9052_DEBUG("write_da9052_reg Failed \n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-
-	if (state == DISABLE)
-		ts->tsi_conf.man_cont.tsi_cont_b.tsi_man = RESET;
-	else
-		ts->tsi_conf.man_cont.tsi_cont_b.tsi_man = SET;
-
-	data = 0;
-	data = set_bits(data, DA9052_ADC_TSI);
-
-	ret = write_da9052_reg(priv->da9052, DA9052_ADCMAN_REG, data);
-	if (ret) {
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
-		DA9052_DEBUG("ADC write Failed \n" );
-		da9052_unlock(priv->da9052);
-		return ret;
-	}
-	da9052_unlock(priv->da9052);
-
-	return 0;
-}
-
 static u32 da9052_tsi_get_reg_data(struct da9052_ts_priv *priv)
 {
 	u32 free_cnt, copy_cnt, cnt;
@@ -1016,7 +771,7 @@ static u32 da9052_tsi_get_reg_data(struct da9052_ts_priv *priv)
 		if (free_cnt > TSI_POLL_SAMPLE_CNT)
 			free_cnt = TSI_POLL_SAMPLE_CNT;
 
-		cnt = da9052_tsi_get_rawdata(
+		cnt = da9052_tsi_get_rawdata(&priv->tsi_reg,
 			&priv->tsi_reg_fifo.data[priv->tsi_reg_fifo.tail],
 			free_cnt);
 
@@ -1036,7 +791,7 @@ static u32 da9052_tsi_get_reg_data(struct da9052_ts_priv *priv)
 		if (free_cnt > TSI_POLL_SAMPLE_CNT) {
 			free_cnt = TSI_POLL_SAMPLE_CNT;
 
-			cnt = da9052_tsi_get_rawdata(
+			cnt = da9052_tsi_get_rawdata(&priv->tsi_reg,
 			&priv->tsi_reg_fifo.data[priv->tsi_reg_fifo.tail],
 			free_cnt);
 			if (cnt > free_cnt) {
@@ -1050,12 +805,9 @@ static u32 da9052_tsi_get_reg_data(struct da9052_ts_priv *priv)
 						priv->tsi_reg_fifo.tail);
 		} else {
 			if (free_cnt) {
-				cnt = da9052_tsi_get_rawdata(
-					&priv->
-					tsi_reg_fifo.data[priv->
-					tsi_reg_fifo.tail],
-					free_cnt
-					);
+				cnt = da9052_tsi_get_rawdata(&priv->tsi_reg,
+					&priv->tsi_reg_fifo.data[priv->
+					tsi_reg_fifo.tail], free_cnt);
 				if (cnt > free_cnt) {
 					DA9052_DEBUG("EH copied more data");
 					return -EINVAL;
@@ -1069,10 +821,9 @@ static u32 da9052_tsi_get_reg_data(struct da9052_ts_priv *priv)
 			if (free_cnt > TSI_POLL_SAMPLE_CNT - copy_cnt)
 				free_cnt = TSI_POLL_SAMPLE_CNT - copy_cnt;
 			if (free_cnt) {
-				cnt = da9052_tsi_get_rawdata(
+				cnt = da9052_tsi_get_rawdata(&priv->tsi_reg,
 					&priv->tsi_reg_fifo.data[priv->
-					tsi_reg_fifo.tail], free_cnt
-					);
+					tsi_reg_fifo.tail], free_cnt);
 				if (cnt > free_cnt) {
 					DA9052_DEBUG("EH copied more data");
 					return -EINVAL;
@@ -1110,7 +861,7 @@ static ssize_t da9052_tsi_reg_proc_thread(void *ptr)
 		schedule_timeout(msecs_to_jiffies(priv->
 					tsi_reg_data_poll_interval));
 
-		ts = get_tsi_drvdata();
+		ts = &priv->tsi_info;
 
 		if (!ts->pen_dwn_event)
 			continue;
@@ -1138,27 +889,24 @@ static ssize_t da9052_tsi_reg_proc_thread(void *ptr)
 static void da9052_tsi_penup_event(struct da9052_ts_priv *priv)
 {
 
-	struct da9052_tsi_info *ts = get_tsi_drvdata();
+	struct da9052_tsi_info *ts = &priv->tsi_info;
 	struct input_dev *ip_dev =
-		(struct input_dev *)da9052_tsi_get_input_dev(
+		(struct input_dev *)da9052_tsi_get_input_dev(&priv->tsi_info,
 		(u8)TSI_INPUT_DEVICE_OFF);
 
 	if (da9052_tsi_config_auto_mode(priv, DISABLE))
 		goto exit;
-
-	ts->tsi_conf.auto_cont.tsi_cont_a.auto_tsi_en = RESET;
 
 	if (da9052_tsi_config_power_supply(priv, ENABLE))
 		goto exit;
 
 	ts->tsi_conf.ldo9_en = RESET;
 
-	if (da9052_tsi_enable_irq(priv, TSI_PEN_DWN))
+	if (priv->da9052->event_enable(priv->da9052, priv->pd_nb.eve_type))
 		goto exit;
 
-	ts->tsi_conf.tsi_pendown_irq_mask = RESET;
 
-	tsi_reg.tsi_state =  WAIT_FOR_PEN_DOWN;
+	priv->tsi_reg.tsi_state =  WAIT_FOR_PEN_DOWN;
 
 	ts->tsi_zero_data_cnt = 0;
 	priv->early_data_flag = TRUE;
@@ -1177,174 +925,6 @@ static void da9052_tsi_penup_event(struct da9052_ts_priv *priv)
 exit:
 	clean_tsi_fifos(priv);
 	return;
-}
-
-void da9052_tsi_pen_down_handler(struct da9052_eh_nb *eh_data, u32 event)
-{
-	ssize_t ret = 0;
-	struct da9052_ts_priv *priv =
-		container_of(eh_data, struct da9052_ts_priv, pd_nb);
-	struct da9052_tsi_info *ts = get_tsi_drvdata();
-	struct input_dev *ip_dev = 
-		(struct input_dev*)da9052_tsi_get_input_dev(
-		(u8)TSI_INPUT_DEVICE_OFF);
-
-	if (tsi_reg.tsi_state !=  WAIT_FOR_PEN_DOWN)
-		return;
-	DA9052_DEBUG("EH notified the pendown event 0x%x\n", event);
-
-	tsi_reg.tsi_state = WAIT_FOR_SAMPLING;
-
-	if (ts->tsi_conf.state != TSI_AUTO_MODE) {
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
-		DA9052_DEBUG(" Configure TSI to auto mode.\n" );
-		DA9052_DEBUG("DA9052_TSI: %s:", __FUNCTION__);
-		DA9052_DEBUG(" Then call this API.\n" );
-		goto fail;
-	}
-
-	if (da9052_tsi_config_power_supply(priv, ENABLE))
-		goto fail;
-
-	if (da9052_tsi_disable_irq(priv, TSI_PEN_DWN))
-		goto fail;
-
-	if (da9052_tsi_enable_irq(priv, TSI_DATA_RDY))
-		goto fail;
-
-	if (da9052_tsi_config_auto_mode(priv, ENABLE))
-		goto fail;
-	ts->tsi_conf.auto_cont.tsi_cont_a.auto_tsi_en = SET;
-
-	input_sync(ip_dev);
-
-	ts->tsi_rdy_event = (DA9052_EVENTB_ETSIREADY & (event>>8));
-	ts->pen_dwn_event = (DA9052_EVENTB_EPENDOWN & (event>>8));
-
-	tsi_reg.tsi_state =  SAMPLING_ACTIVE;
-
-	goto success;
-
-fail:
-	if (ts->pd_reg_status) {
-		priv->da9052->unregister_event_notifier(priv->da9052,
-						&priv->pd_nb);
-		ts->pd_reg_status = RESET;
-
-		priv->da9052->register_event_notifier(priv->da9052,
-					&priv->datardy_nb);
-		da9052_tsi_reg_pendwn_event(priv);
-	}
-
-success:
-	ret = 0;
-	DA9052_DEBUG ("Exiting PEN DOWN HANDLER \n");
-}
-
-void da9052_tsi_data_ready_handler(struct da9052_eh_nb *eh_data, u32 event)
-{
-	struct da9052_ssc_msg tsi_data[4];
-	s32 ret;
-	struct da9052_ts_priv *priv =
-		container_of(eh_data, struct da9052_ts_priv, datardy_nb);
-
-	if (tsi_reg.tsi_state !=  SAMPLING_ACTIVE)
-		return;
-
-	tsi_data[0].addr  = DA9052_TSIXMSB_REG;
-	tsi_data[1].addr  = DA9052_TSIYMSB_REG;
-	tsi_data[2].addr  = DA9052_TSILSB_REG;
-	tsi_data[3].addr  = DA9052_TSIZMSB_REG;
-
-	tsi_data[0].data  = 0;
-	tsi_data[1].data  = 0;
-	tsi_data[2].data  = 0;
-	tsi_data[3].data  = 0;
-
-	da9052_lock(priv->da9052);
-
-	ret = priv->da9052->read_many(priv->da9052, tsi_data, 4);
-	if (ret) {
-		DA9052_DEBUG("Error in reading TSI data \n" );
-		da9052_unlock(priv->da9052);
-		return;
-	}
-	da9052_unlock(priv->da9052);
-
-	mutex_lock(&tsi_reg.tsi_fifo_lock);
-
-	tsi_reg.tsi_fifo[tsi_reg.tsi_fifo_end].x_msb = tsi_data[0].data;
-	tsi_reg.tsi_fifo[tsi_reg.tsi_fifo_end].y_msb = tsi_data[1].data;
-	tsi_reg.tsi_fifo[tsi_reg.tsi_fifo_end].lsb   = tsi_data[2].data;
-	tsi_reg.tsi_fifo[tsi_reg.tsi_fifo_end].z_msb = tsi_data[3].data;
-	incr_with_wrap(tsi_reg.tsi_fifo_end);
-
-	if (tsi_reg.tsi_fifo_end == tsi_reg.tsi_fifo_start)
-		tsi_reg.tsi_fifo_start++;
-
-	mutex_unlock(&tsi_reg.tsi_fifo_lock);
-
-}
-
-static s32 da9052_tsi_get_rawdata(struct da9052_tsi_reg *buf, u8 cnt) {
-	u32 data_cnt = 0;
-	u32 rem_data_cnt = 0;
-
-	mutex_lock(&tsi_reg.tsi_fifo_lock);
-
-	if (tsi_reg.tsi_fifo_start < tsi_reg.tsi_fifo_end) {
-		data_cnt = (tsi_reg.tsi_fifo_end - tsi_reg.tsi_fifo_start);
-
-		if (cnt < data_cnt)
-			data_cnt = cnt;
-
-		memcpy(buf, &tsi_reg.tsi_fifo[tsi_reg.tsi_fifo_start],
-				sizeof(struct da9052_tsi_reg) * data_cnt);
-
-		tsi_reg.tsi_fifo_start += data_cnt;
-
-		if (tsi_reg.tsi_fifo_start == tsi_reg.tsi_fifo_end) {
-			tsi_reg.tsi_fifo_start = 0;
-			tsi_reg.tsi_fifo_end = 0;
-		}
-	} else if (tsi_reg.tsi_fifo_start > tsi_reg.tsi_fifo_end) {
-		data_cnt = ((TSI_FIFO_SIZE - tsi_reg.tsi_fifo_start)
-		+ tsi_reg.tsi_fifo_end);
-
-		if (cnt < data_cnt)
-			data_cnt = cnt;
-
-		if (data_cnt <= (TSI_FIFO_SIZE - tsi_reg.tsi_fifo_start)) {
-			memcpy(buf, &tsi_reg.tsi_fifo[tsi_reg.tsi_fifo_start],
-				sizeof(struct da9052_tsi_reg) * data_cnt);
-
-			tsi_reg.tsi_fifo_start += data_cnt;
-			if (tsi_reg.tsi_fifo_start >= TSI_FIFO_SIZE)
-				tsi_reg.tsi_fifo_start = 0;
-		} else {
-			memcpy(buf, &tsi_reg.tsi_fifo[tsi_reg.tsi_fifo_start],
-				sizeof(struct da9052_tsi_reg)
-				* (TSI_FIFO_SIZE - tsi_reg.tsi_fifo_start));
-
-			rem_data_cnt = (data_cnt -
-				(TSI_FIFO_SIZE - tsi_reg.tsi_fifo_start));
-
-			memcpy(buf, &tsi_reg.tsi_fifo[0],
-				sizeof(struct da9052_tsi_reg) * rem_data_cnt);
-
-			tsi_reg.tsi_fifo_start = rem_data_cnt;
-		}
-
-		if (tsi_reg.tsi_fifo_start == tsi_reg.tsi_fifo_end) {
-				tsi_reg.tsi_fifo_start = 0;
-			tsi_reg.tsi_fifo_end = 0;
-		}
-	} else
-		data_cnt = 0;
-
-	mutex_unlock(&tsi_reg.tsi_fifo_lock);
-
-	return data_cnt;
 }
 
 static ssize_t da9052_tsi_suspend(struct platform_device *dev, 
@@ -1369,16 +949,15 @@ static s32 __devinit da9052_tsi_probe(struct platform_device *pdev)
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
+	mutex_init(&priv->tsi_reg.tsi_fifo_lock);
+	priv->tsi_reg.tsi_state = WAIT_FOR_PEN_DOWN;
 	priv->da9052 = dev_get_drvdata(pdev->dev.parent);
 	platform_set_drvdata(pdev, priv);
-
 	priv->tsi_pdata = pdata;
 
 	if (da9052_tsi_init_drv(priv))
 			return -EFAULT;
 
-	mutex_init(&tsi_reg.tsi_fifo_lock);
-	tsi_reg.tsi_state = WAIT_FOR_PEN_DOWN;
 
 	printk(KERN_INFO "TSI Drv Successfully Inserted %s\n",
 					DA9052_TSI_DEVICE_NAME);
@@ -1388,7 +967,7 @@ static s32 __devinit da9052_tsi_probe(struct platform_device *pdev)
 static int __devexit da9052_tsi_remove(struct platform_device *pdev)
 {
 	struct da9052_ts_priv *priv = platform_get_drvdata(pdev);
-	struct da9052_tsi_info *ts = get_tsi_drvdata();
+	struct da9052_tsi_info *ts = &priv->tsi_info;
 	s32 ret = 0, i = 0;
 
 	ret = da9052_tsi_config_state(priv, TSI_IDLE);
@@ -1407,7 +986,7 @@ static int __devexit da9052_tsi_remove(struct platform_device *pdev)
 		ts->datardy_reg_status = RESET;
 	}
 
-	mutex_destroy(&tsi_reg.tsi_fifo_lock);
+	mutex_destroy(&priv->tsi_reg.tsi_fifo_lock);
 
 	priv->tsi_reg_proc_thread.state = INACTIVE;
 	wait_for_completion(&priv->tsi_reg_proc_thread.notifier);
