@@ -1671,9 +1671,9 @@ struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 #define N53_I2C_2_SDA_A				MAKE_GP(7, 11)
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 	{.label = "pmic-int",		.gpio = MAKE_GP(2, 21),		.flags = GPIOF_DIR_IN},
-	{.label = "led0",		.gpio = MAKE_GP(4, 2),		.flags = 0},
+//	{.label = "led0",		.gpio = MAKE_GP(4, 2),		.flags = 0},
 	{.label = "led1",		.gpio = MAKE_GP(4, 3),		.flags = 0},
-	{.label = "led2",		.gpio = MAKE_GP(4, 4),		.flags = 0},
+//	{.label = "led2",		.gpio = MAKE_GP(4, 4),		.flags = 0},
 };
 #endif
 
