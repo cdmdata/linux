@@ -450,24 +450,14 @@ static struct pad_desc mx53evk_pads[] = {
 };
 
 static struct pad_desc mx53_nand_pads[] = {
-	MX53_PAD_NANDF_CLE__NANDF_CLE,
-	MX53_PAD_NANDF_ALE__NANDF_ALE,
-	MX53_PAD_NANDF_WP_B__NANDF_WP_B,
-	MX53_PAD_NANDF_WE_B__NANDF_WE_B,
-	MX53_PAD_NANDF_RE_B__NANDF_RE_B,
-	MX53_PAD_NANDF_RB0__NANDF_RB0,
-	MX53_PAD_NANDF_CS0__NANDF_CS0,
-	MX53_PAD_NANDF_CS1__NANDF_CS1	,
-	MX53_PAD_NANDF_CS2__NANDF_CS2,
-	MX53_PAD_NANDF_CS3__NANDF_CS3	,
-	MX53_PAD_EIM_DA0__EIM_DA0,
-	MX53_PAD_EIM_DA1__EIM_DA1,
-	MX53_PAD_EIM_DA2__EIM_DA2,
-	MX53_PAD_EIM_DA3__EIM_DA3,
-	MX53_PAD_EIM_DA4__EIM_DA4,
-	MX53_PAD_EIM_DA5__EIM_DA5,
-	MX53_PAD_EIM_DA6__EIM_DA6,
-	MX53_PAD_EIM_DA7__EIM_DA7,
+	MX53_PAD_NANDF_CLE__GPIO_6_7
+,	MX53_PAD_NANDF_ALE__GPIO_6_8
+,	MX53_PAD_NANDF_WP_B__GPIO_6_9
+,	MX53_PAD_NANDF_RB0__GPIO_6_10
+,	MX53_PAD_NANDF_CS0__GPIO_6_11
+,	MX53_PAD_NANDF_CS1__GPIO_6_14
+,	MX53_PAD_NANDF_CS2__GPIO_6_15
+,	MX53_PAD_NANDF_CS3__GPIO_6_16
 };
 
 /* working point(wp): 0 - 800MHz; 1 - 166.25MHz; */
@@ -1674,6 +1664,7 @@ struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 //	{.label = "led0",		.gpio = MAKE_GP(4, 2),		.flags = 0},
 	{.label = "led1",		.gpio = MAKE_GP(4, 3),		.flags = 0},
 //	{.label = "led2",		.gpio = MAKE_GP(4, 4),		.flags = 0},
+	{.label = "mic_mux",		.gpio = MAKE_GP(6, 16),		.flags = 0},
 };
 #endif
 
