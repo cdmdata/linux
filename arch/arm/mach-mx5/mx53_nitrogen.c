@@ -142,6 +142,7 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "Camera reset",	.gpio = MAKE_GP(4, 14),		.flags = 0},
 #define N53_USB_HUB_RESET			MAKE_GP(5, 0)
 	{.label = "USB HUB reset",	.gpio = MAKE_GP(5, 0),		.flags = 0},
+	{.label = "eMMC reset",		.gpio = MAKE_GP(5, 2),		.flags = GPIOF_INIT_HIGH},	/* EIM_A25 */
 #define N53_CAMERA_STANDBY			MAKE_GP(5, 20)
 	{.label = "Camera standby",	.gpio = MAKE_GP(5, 20),		.flags = 0},
 #define MX53_TVIN_RESET				MAKE_GP(5, 25)
@@ -183,7 +184,7 @@ static struct pad_desc mx53common_pads[] = {
 	MX53_PAD_EIM_OE__DI1_PIN7,
 	MX53_PAD_EIM_RW__DI1_PIN8,
 
-	MX53_PAD_EIM_A25__DI0_D1_CS,
+	MX53_PAD_EIM_A25__GPIO_5_2,
 
 	MX53_PAD_EIM_D16__CSPI1_SCLK,
 	MX53_PAD_EIM_D17__CSPI1_MISO,
@@ -415,7 +416,8 @@ static struct pad_desc mx53evk_pads[] = {
 	MX53_PAD_EIM_DA12__GPIO_3_12,
 
 	/* PWM backlight */
-	MX53_PAD_GPIO_1__PWMO,
+	MX53_PAD_GPIO_9__PWMO,		/* pwm1 */
+	MX53_PAD_GPIO_1__PWMO,		/* pwm2 */
 
 	/* USB HOST USB_PWR */
 	MX53_PAD_ATA_DA_2__GPIO_7_8,
@@ -630,8 +632,17 @@ static struct mxc_w1_config mxc_w1_data = {
 	.search_rom_accelerator = 1,
 };
 
-static struct platform_pwm_backlight_data mxc_pwm_backlight_data = {
+/* GPIO_1 lcd backlight(pwm2) */
+static struct platform_pwm_backlight_data mxc_backlight_data1 = {
 	.pwm_id = 1,
+	.max_brightness = 255,
+	.dft_brightness = 128,
+	.pwm_period_ns = 50000,
+};
+
+/* GPIO_9 backlight (pwm1) */
+static struct platform_pwm_backlight_data mxc_backlight_data2 = {
+	.pwm_id = 0,
 	.max_brightness = 255,
 	.dft_brightness = 128,
 	.pwm_period_ns = 50000,
@@ -1566,8 +1577,10 @@ static void __init mxc_board_init(struct i2c_board_info *bi0, int bi0_size,
 	*/
 
 	mxc_register_device(&mxc_iim_device, &iim_data);
+	mxc_register_device(&mxc_pwm1_device, NULL);
 	mxc_register_device(&mxc_pwm2_device, NULL);
-	mxc_register_device(&mxc_pwm1_backlight_device,	&mxc_pwm_backlight_data);
+	mxc_register_device(&mxc_pwm1_backlight_device,	&mxc_backlight_data1);
+	mxc_register_device(&mxc_pwm2_backlight_device,	&mxc_backlight_data2);
 
 
 /*	mxc_register_device(&mxc_keypad_device, &keypad_plat_data); */
