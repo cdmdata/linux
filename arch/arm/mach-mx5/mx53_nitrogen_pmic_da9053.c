@@ -332,10 +332,13 @@ static struct regulator_init_data da9052_regulators_init[] = {
 	{
 		.constraints = {
 			/*
+			 * 1st rev was
 			 * DDR power
 			 * 0.725 - 2.075V, 2 amps MAX
 			 * default 1.8V(0x74), UBL 1.8V(0x74)
 			 * R46(0x2e), base 0.5V, step .025V
+			 *
+			 * Now, it is VDD_GP, graphic processor power 1.15V
 			 */
 			.name		= "DA9052_BUCK_CORE",
 			.max_uV		= mV_to_uV(DA9052_BUCK_CORE_PRO_VOLT_UPPER),
@@ -346,7 +349,7 @@ static struct regulator_init_data da9052_regulators_init[] = {
 			.always_on = 1,
 			.boot_on = 1,
 			.state_mem = {
-				.uV = mV_to_uV(1800),
+				.uV = mV_to_uV(1150),	//1800 for rev 1 of board
 				.mode = REGULATOR_MODE_NORMAL,
 				.enabled = 1,
 				.disabled = 0,
