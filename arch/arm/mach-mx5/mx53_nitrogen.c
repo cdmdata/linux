@@ -1125,6 +1125,17 @@ static struct gpio_keys_button gpio_keys[] = {
 		.active_low = 1,
 		.debounce_interval = 30,
 	},
+#ifdef CONFIG_MACH_NITROGEN_A_IMX53
+	{
+		.type	= EV_KEY,
+		.gpio	= MAKE_GP(3,22),
+		.code	= KEY_POWER,		/* 116 (0x74) */
+		.desc	= "Power Button",
+		.wakeup	= 1,
+		.active_low = 1,
+		.debounce_interval = 30,
+	},
+#endif
 };
 
 static struct gpio_keys_platform_data gpio_keys_platform_data = {
@@ -1518,6 +1529,10 @@ static void nitrogen_power_off(void)
 		printk (KERN_ERR "%s: xfer %d:%02x:0x%02x\n", __func__, ret, 15, data.byte );
 	}
 #endif
+#if defined(CONFIG_MACH_NITROGEN_A_IMX53)
+#define POWER_LATCH	MAKE_GP(3,23)
+	gpio_set_value(POWER_LATCH, 0);
+#endif
 	while (1) {
 	}
 }
@@ -1678,6 +1693,7 @@ struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "led1",		.gpio = MAKE_GP(4, 3),		.flags = 0},
 //	{.label = "led2",		.gpio = MAKE_GP(4, 4),		.flags = 0},
 	{.label = "mic_mux",		.gpio = MAKE_GP(6, 16),		.flags = 0},
+	{.label = "power_latch",	.gpio = POWER_LATCH,		.flags = GPIOF_INIT_HIGH},
 };
 #endif
 
