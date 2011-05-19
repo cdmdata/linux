@@ -403,6 +403,9 @@ static struct pad_desc mx53evk_pads[] = {
 	/* DVI DET */
 	MX53_PAD_EIM_D31__GPIO_3_31,
 
+	/* GPIO spare on Nitrogen53A */
+	MX53_PAD_EIM_DA6__GPIO_3_6,
+
 	/* SDHC1 SD_CD */
 	MX53_PAD_EIM_DA13__GPIO_3_13,
 
@@ -1530,8 +1533,8 @@ static void nitrogen_power_off(void)
 	}
 #endif
 #if defined(CONFIG_MACH_NITROGEN_A_IMX53)
-#define POWER_LATCH	MAKE_GP(3,23)
-	gpio_set_value(POWER_LATCH, 0);
+#define POWER_DOWN	MAKE_GP(3,23)
+	gpio_set_value(POWER_DOWN, 1);
 #endif
 	while (1) {
 	}
@@ -1693,7 +1696,8 @@ struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "led1",		.gpio = MAKE_GP(4, 3),		.flags = 0},
 //	{.label = "led2",		.gpio = MAKE_GP(4, 4),		.flags = 0},
 	{.label = "mic_mux",		.gpio = MAKE_GP(6, 16),		.flags = 0},
-	{.label = "power_latch",	.gpio = POWER_LATCH,		.flags = GPIOF_INIT_HIGH},
+	{.label = "power_down_req",	.gpio = POWER_DOWN,		.flags = 0},
+	{.label = "gpio_spare",		.gpio = MAKE_GP(3,0),		.flags = GPIOF_DIR_IN},
 };
 #endif
 
