@@ -200,10 +200,10 @@ struct da9052_tsi_conf {
 
 
 struct da9052_tsi_reg {
- 	u8	x_msb;
-	u8	y_msb;
-	u8	z_msb;
-	u8	lsb;
+ 	u16	x;
+	u16	y;
+	u16	z;
+	u16	pressed;
  };
 
 
@@ -231,8 +231,14 @@ struct da9052_tsi {
 	struct mutex tsi_fifo_lock;
 	u8 tsi_sampling;
 	u8 tsi_state;
+#define ST_CUR_IDLE 0
+#define ST_CUR_X 1
+#define ST_CUR_Y 2
+#define ST_CUR_Z 3
+	u8 cur_state;
 	u32 tsi_fifo_start;
 	u32 tsi_fifo_end;
+	struct da9052_tsi_reg cur_sample;
 };
  
  struct da9052_ts_priv {
@@ -349,20 +355,6 @@ struct da9052_ldo_config {
 	u8 		ldo_conf:1;
 	u8 		ldo_pd:1;
 };
-
-static inline  u8 ldo9_mV_to_reg(u16 value)
-{
-	return ((value - DA9052_LDO9_VOLT_LOWER)/DA9052_LDO9_VOLT_STEP);
-}
-
-static inline  u8 validate_ldo9_mV(u16 value)
-{
-	if ((value >= DA9052_LDO9_VOLT_LOWER) && \
-					(value <= DA9052_LDO9_VOLT_UPPER))
-		return 
-			(((value - DA9052_LDO9_VOLT_LOWER) % DA9052_LDO9_VOLT_STEP > 0) ? -1 : 0);
-	return FAILURE;
-}
 
 s32 da9052_tsi_raw_proc_thread (void *ptr);
 void __init da9052_init_tsi_fifos (struct da9052_ts_priv *priv);

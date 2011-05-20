@@ -51,8 +51,10 @@ void da9052_rtc_notifier(struct da9052_eh_nb *eh_data, unsigned int event)
 		da9052_rtc_enable_alarm(rtc->da9052, 0);
 		printk(KERN_INFO "RTC: TIMER ALARM\n");
 	} else {
-		kobject_uevent(&rtc->rtc->dev.kobj, KOBJ_CHANGE);
-		printk(KERN_INFO "RTC: TICK ALARM\n");
+		if (rtc->rtc) {
+			kobject_uevent(&rtc->rtc->dev.kobj, KOBJ_CHANGE);
+			printk(KERN_INFO "RTC: TICK ALARM\n");
+		}
 	}
 }
 

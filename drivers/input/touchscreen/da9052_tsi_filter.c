@@ -201,14 +201,9 @@ static void da9052_tsi_convert_reg_to_coord(struct da9052_ts_priv *priv,
 
 	src = &priv->tsi_reg_fifo.data[priv->tsi_reg_fifo.head];
 
-	dst->x = (src->x_msb << X_MSB_SHIFT);
-	dst->x |= (src->lsb & X_LSB_MASK) >> X_LSB_SHIFT;
-
-	dst->y = (src->y_msb << Y_MSB_SHIFT);
-	dst->y |= (src->lsb & Y_LSB_MASK) >> Y_LSB_SHIFT;
-
-	dst->z = (src->z_msb << Z_MSB_SHIFT);
-	dst->z |= (src->lsb & Z_LSB_MASK) >> Z_LSB_SHIFT;
+	dst->x = src->x;
+	dst->y = src->y;
+	dst->z = src->z;
 
 #if DA9052_TSI_RAW_DATA_PROFILING
 	printk("R\tX\t%4d\tY\t%4d\tZ\t%4d\n",
