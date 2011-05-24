@@ -1660,11 +1660,6 @@ static struct i2c_board_info mxc_i2c1_board_info_a[] __initdata = {
 	},
 #endif
 	{
-	 .type = "mma7660",
-	 .addr = 0x4c,
-	 .platform_data  = &i2c_generic_data,
-	},
-	{
 	 .type = "tfp410",
 	 .addr = 0x38,
 	 .platform_data  = &i2c_tfp410_data,
@@ -1755,11 +1750,6 @@ static struct i2c_board_info mxc_i2c1_board_info[] __initdata = {
 	},
 #endif
 	{
-	 .type = "mma7660",
-	 .addr = 0x4c,
-	 .platform_data  = &i2c_generic_data,
-	},
-	{
 	 .type = "tfp410",
 	 .addr = 0x38,
 	 .platform_data  = &i2c_tfp410_data,
@@ -1820,11 +1810,6 @@ static struct i2c_board_info mxc_i2c0_board_info_v1[] __initdata = {
 	{
 	 .type = "Pic16F616-ts",
 	 .addr = 0x22,
-	 .platform_data  = &i2c_generic_data,
-	},
-	{
-	 .type = "mma7660",
-	 .addr = 0x4c,
 	 .platform_data  = &i2c_generic_data,
 	},
 	{
