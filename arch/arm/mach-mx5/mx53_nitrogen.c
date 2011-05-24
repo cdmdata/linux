@@ -65,7 +65,11 @@
 #include <linux/ldb.h>
 #include <linux/android_pmem.h>
 #include <linux/usb/android_composite.h>
-//#define REV1	//this board should be gone
+
+#ifdef CONFIG_MACH_NITROGEN_V1_IMX53
+#define REV1
+#endif
+
 /*
  * board changes needed for esai1 pins
  * Pad		gpio		nitrogen53	nitrogen53_a
