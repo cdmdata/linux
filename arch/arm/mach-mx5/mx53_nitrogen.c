@@ -1682,7 +1682,6 @@ static struct pad_desc nitrogen53_pads_specific_a[] __initdata = {
 	MX53_PAD_GPIO_16__I2C3_SDA,	/* gpio7[11] */
 };
 
-#if defined (CONFIG_MACH_NITROGEN_A_IMX53)
 struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 #define N53_I2C_2_SDA_A				MAKE_GP(7, 11)
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
@@ -1694,7 +1693,6 @@ struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "power_down_req",	.gpio = POWER_DOWN,		.flags = 0},
 	{.label = "gpio_spare",		.gpio = MAKE_GP(3,0),		.flags = GPIOF_DIR_IN},
 };
-#endif
 
 #define MX53_PAD_GPIO_16__GPIO_7_11_I2C		IOMUX_PAD(0x6CC, 0x33C, 1 | IOMUX_CONFIG_SION, 0x0, 0, PAD_CTRL_9)
 
