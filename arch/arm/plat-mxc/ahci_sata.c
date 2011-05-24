@@ -365,7 +365,10 @@ static int sata_init(struct device *dev)
 		}
 		msleep(25);
 	}
-	if (machine_is_mx53_smd() || machine_is_mx53_loco() || machine_is_nitrogen_imx53()) {
+	if (machine_is_mx53_smd() || machine_is_mx53_loco() 
+	    || machine_is_nitrogen_imx53()
+	    || machine_is_nitrogen_v2_imx53()
+	    || machine_is_nitrogen_a_imx53()) {
 		reg_1v3 = regulator_get(dev, "VDD_CORE");
 		ret = IS_ERR(reg_1v3);
 		if (ret) {
@@ -572,7 +575,10 @@ static void sata_exit(struct device *dev)
 			regulator_put(reg_2v5);
 		}
 	}
-	if (machine_is_mx53_smd() || machine_is_mx53_loco() || machine_is_nitrogen_imx53()) {
+	if (machine_is_mx53_smd() || machine_is_mx53_loco() 
+	    || machine_is_nitrogen_imx53()
+	    || machine_is_nitrogen_v2_imx53()
+	    || machine_is_nitrogen_a_imx53()) {
 		reg_1v3 = regulator_get(dev, "VDD_CORE");
 		if (IS_ERR(reg_1v3)) {
 			dev_err(dev, "get VDD_CORE error.\n");
