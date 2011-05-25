@@ -412,12 +412,14 @@ static struct keypad_data keypad_plat_data = {
 	.matrix = keymapping,
 };
 
+#if defined(CONFIG_MXC_PWM) && defined(CONFIG_BACKLIGHT_PWM)
 static struct platform_pwm_backlight_data mxc_pwm_backlight_data = {
 	.pwm_id = 0,
 	.max_brightness = 255,
 	.dft_brightness = 128,
 	.pwm_period_ns = 78770,
 };
+#endif
 
 extern void mx5_ipu_reset(void);
 static struct mxc_ipu_config mxc_ipu_data = {
@@ -1476,7 +1478,9 @@ static void __init mxc_board_init(void)
 	mxc_register_device(&mxc_dvfs_per_device, &dvfs_per_data);
 	mxc_register_device(&mxc_iim_device, &iim_data);
 	mxc_register_device(&mxc_pwm1_device, NULL);
+#if defined(CONFIG_MXC_PWM) && defined(CONFIG_BACKLIGHT_PWM)
 	mxc_register_device(&mxc_pwm1_backlight_device,&mxc_pwm_backlight_data);
+#endif
 	mxc_register_device(&mxc_keypad_device, &keypad_plat_data);
 	mxc_register_device(&mxcsdhc1_device, &mmc1_data);
 	mxc_register_device(&mxcsdhc2_device, &mmc2_data);

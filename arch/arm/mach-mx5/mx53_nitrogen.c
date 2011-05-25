@@ -654,21 +654,25 @@ static struct mxc_w1_config mxc_w1_data = {
 	.search_rom_accelerator = 1,
 };
 
+#if defined(CONFIG_MXC_PWM) && defined(CONFIG_BACKLIGHT_PWM)
 /* GPIO_1 lcd backlight(pwm2) */
 static struct platform_pwm_backlight_data mxc_backlight_data1 = {
 	.pwm_id = 1,
 	.max_brightness = 255,
-	.dft_brightness = 128,
+	.dft_brightness = CONFIG_DEFAULT_PWM0_BACKLIGHT,
 	.pwm_period_ns = 50000,
 };
+#endif
 
+#if defined(CONFIG_MXC_PWM) && defined(CONFIG_BACKLIGHT_PWM)
 /* GPIO_9 backlight (pwm1) */
 static struct platform_pwm_backlight_data mxc_backlight_data2 = {
 	.pwm_id = 0,
 	.max_brightness = 255,
-	.dft_brightness = 128,
+	.dft_brightness = CONFIG_DEFAULT_PWM1_BACKLIGHT,
 	.pwm_period_ns = 50000,
 };
+#endif
 
 extern void mx5_ipu_reset(void);
 static struct mxc_ipu_config mxc_ipu_data = {
@@ -1615,9 +1619,10 @@ static void __init mxc_board_init(struct i2c_board_info *bi0, int bi0_size,
 	mxc_register_device(&mxc_iim_device, &iim_data);
 	mxc_register_device(&mxc_pwm1_device, NULL);
 	mxc_register_device(&mxc_pwm2_device, NULL);
+#if defined(CONFIG_MXC_PWM) && defined(CONFIG_BACKLIGHT_PWM)
 	mxc_register_device(&mxc_pwm1_backlight_device,	&mxc_backlight_data1);
 	mxc_register_device(&mxc_pwm2_backlight_device,	&mxc_backlight_data2);
-
+#endif
 
 /*	mxc_register_device(&mxc_keypad_device, &keypad_plat_data); */
 

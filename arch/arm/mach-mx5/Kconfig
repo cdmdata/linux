@@ -180,4 +180,24 @@ config MXC_BLUETOOTH_RFKILL
        depends on RFKILL
        ---help---
 	Say Y to get the standard rfkill interface of Bluetooth
+
+config DEFAULT_PWM0_BACKLIGHT
+	int "Default PWM0 backlight value"
+	range 0 255
+	default 128
+	depends on MXC_PWM
+	depends on BACKLIGHT_PWM
+	help
+	Specify initial value for /sys/class/backlight/pwm-backlight.0/brightness
+
+config DEFAULT_PWM1_BACKLIGHT
+	int "Default PWM1 backlight value"
+	range 0 255
+	default 128
+	depends on MXC_PWM
+	depends on BACKLIGHT_PWM
+	help
+	Specify initial value for PWM1
+	Specify initial value for /sys/class/backlight/pwm-backlight.1/brightness
+
 endif
