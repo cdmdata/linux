@@ -165,8 +165,8 @@ struct gpio nitrogen53_gpios[] __initdata = {
 #define MX53_TVIN_PWR				MAKE_GP(5, 23)
 	{.label = "tvin-pwr",		.gpio = MAKE_GP(5, 23),		.flags = 0},
 	{.label = "can2-en1",		.gpio = MAKE_GP(5, 24),		.flags = 0},
-#define EVK_OTG_VBUS				MAKE_GP(6, 6)
-	{.label = "otg-vbus",		.gpio = MAKE_GP(6, 6),		.flags = GPIOF_INIT_HIGH},	/* disable VBUS */
+#define N53_OTG_VBUS				MAKE_GP(6, 6)
+	{.label = "otg-vbus",		.gpio = MAKE_GP(6, 6),		.flags = 0},	/* disable VBUS */
 #define EVK_USBH1_VBUS				MAKE_GP(7, 8)
 	{.label = "usbh1-vbus",		.gpio = MAKE_GP(7, 8),		.flags = 0},
 #define N53_PHY_RESET				MAKE_GP(7, 13)
@@ -866,34 +866,19 @@ static struct mxc_iim_data iim_data = {
 	.disable_fuse = mxc_iim_disable_fuse,
 };
 
-static void gpio_usbotg_vbus_active(void)
-{
-	/* MX53 EVK board ver A*/
-	/* Enable OTG VBus with GPIO low */
-	gpio_set_value(EVK_OTG_VBUS, 0);
-}
-
-static void gpio_usbotg_vbus_inactive(void)
-{
-	/* MX53 EVK board ver A*/
-	/* Disable OTG VBus with GPIO high */
-	gpio_set_value(EVK_OTG_VBUS, 1);
-}
 
 static void mx53_gpio_usbotg_driver_vbus(bool on)
 {
-	if (on)
-		gpio_usbotg_vbus_active();
-	else
-		gpio_usbotg_vbus_inactive();
+	/* Enable OTG VBus with GPIO high */
+	/* Disable OTG VBus with GPIO low */
+	gpio_set_value(N53_OTG_VBUS, on ? 1 : 0);
+	pr_info("%s: on=%d\n", __func__, on);
 }
 
 static void mx53_gpio_host1_driver_vbus(bool on)
 {
-	if (on)
-		gpio_set_value(EVK_USBH1_VBUS, 1);
-	else
-		gpio_set_value(EVK_USBH1_VBUS, 0);
+	gpio_set_value(EVK_USBH1_VBUS, on ? 1 : 0);
+	pr_info("%s: on=%d\n", __func__, on);
 }
 
 static struct resource mxcfb_resources[] = {
@@ -1562,8 +1547,6 @@ static void nitrogen_power_off(void)
 	}
 }
 
-extern void mx53_gpio_usbotg_driver_vbus(bool on);
-extern void mx53_gpio_host1_driver_vbus(bool on);
 /*!
  * Board specific initialization.
  */
