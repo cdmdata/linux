@@ -1511,7 +1511,8 @@ static void __init mx53_evk_io_init(void)
 	init_camera();
 #endif
 
-#if defined (CONFIG_TOUCHSCREEN_I2C)
+#if defined (CONFIG_TOUCHSCREEN_I2C) || defined (CONFIG_TOUCHSCREEN_I2C_MODULE) \
+ ||  defined (CONFIG_TOUCHSCREEN_EP0700M01) || defined (CONFIG_TOUCHSCREEN_EP0700M01_MODULE)
 	gpio_set_value(N53_I2C_CONNECTOR_BUFFER_ENABLE,1);
 #endif
 
@@ -1660,10 +1661,17 @@ static struct sys_timer mxc_timer = {
 	/* Stuff common to MX53_NITROGEN and MX53_NITROGEN_A */
 #if defined(CONFIG_MACH_NITROGEN_IMX53) || defined(CONFIG_MACH_NITROGEN_A_IMX53)
 static struct i2c_board_info mxc_i2c1_board_info[] __initdata = {
-#if defined (CONFIG_TOUCHSCREEN_I2C)
+#if defined (CONFIG_TOUCHSCREEN_I2C) || defined (CONFIG_TOUCHSCREEN_I2C_MODULE)
 	{
 	 .type = "Pic16F616-ts",
 	 .addr = 0x22,
+	 .platform_data  = &i2c_generic_data,
+	},
+#endif
+#if defined (CONFIG_TOUCHSCREEN_EP0700M01) || defined (CONFIG_TOUCHSCREEN_EP0700M01_MODULE)
+	{
+	 .type = "ep0700m01-ts",
+	 .addr = 0x38,
 	 .platform_data  = &i2c_generic_data,
 	},
 #endif
@@ -1678,11 +1686,6 @@ static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
 	{
 	 .type = "sgtl5000-i2c",
 	 .addr = 0x0a,
-	},
-	{
-	 .type = "ep0700m01-ts",
-	 .addr = 0x38,
-	 .platform_data  = &i2c_generic_data,
 	},
 };
 
