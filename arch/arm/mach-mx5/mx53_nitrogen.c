@@ -1743,7 +1743,7 @@ struct gpio nitrogen53_gpios_specific[] __initdata = {
 
 static void __init mxc_board_init_nitrogen(void)
 {
-	unsigned da9052_irq = IOMUX_TO_IRQ_V3(MAKE_GP(7, 11));	/* pad GPIO_16 */
+	unsigned da9052_irq = IOMUX_TO_IRQ_V3(MAKE_GP(2, 21));	/* pad EIM_A17 */
 	if (gpio_request_array(nitrogen53_gpios_specific,
 			ARRAY_SIZE(nitrogen53_gpios_specific))) {
 		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
