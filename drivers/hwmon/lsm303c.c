@@ -168,9 +168,9 @@ lsm303_compass_probe(struct i2c_client *client, const struct i2c_device_id *id)
 				input_dev->dev.parent = &client->dev;
 
 				set_bit(EV_ABS, input_dev->evbit);
-				input_set_abs_params(input_dev, ABS_X, MIN_VALUE, MAX_VALUE, 0, 0);
-				input_set_abs_params(input_dev, ABS_Y, MIN_VALUE, MAX_VALUE, 0, 0);
-				input_set_abs_params(input_dev, ABS_Z, MIN_VALUE, MAX_VALUE, 0, 0);
+				input_set_abs_params(input_dev, ABS_X, X_TO_UTESLA(MIN_VALUE), X_TO_UTESLA(MAX_VALUE), 0, 0);
+				input_set_abs_params(input_dev, ABS_Y, Y_TO_UTESLA(MIN_VALUE), Y_TO_UTESLA(MAX_VALUE), 0, 0);
+				input_set_abs_params(input_dev, ABS_Z, Z_TO_UTESLA(MIN_VALUE), Z_TO_UTESLA(MAX_VALUE), 0, 0);
 
 				retval = input_register_polled_device(compass->idev);
 				if (0 == retval) {
