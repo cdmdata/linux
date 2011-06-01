@@ -1680,6 +1680,18 @@ static struct i2c_board_info mxc_i2c1_board_info[] __initdata = {
 	 .addr = 0x38,
 	 .platform_data  = &i2c_tfp410_data,
 	},
+#if defined(CONFIG_MACH_NITROGEN_A_IMX53)
+	{
+	 .type = "lsm303c",
+	 .addr = 0x1e,
+	 .platform_data  = &i2c_generic_data,
+	},
+	{
+	 .type = "lsm303a",
+	 .addr = 0x19,
+	 .platform_data  = &i2c_generic_data,
+	},
+#endif
 };
 
 static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
