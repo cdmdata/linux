@@ -25,17 +25,6 @@ struct lsm303_compass {
 	struct input_polled_dev	*idev;
 };
 
-/* LSM303 compass registers */
-#define LSM303_CRA_REG_M	0x00
-#define LSM303_CRB_REG_M	0x01
-#define LSM303_MR_REG_M		0x02
-#define LSM303_OUT_X_M		0x03
-#define LSM303_OUT_Y_M		0x05
-#define LSM303_OUT_Z_M  	0x07
-#define LSM303_SR_REG_M		0x09
-#define LSM303_IR_REG_M		0x0A
-#define LSM303_BLOCKOP		0x80
-
 static char const identbytes[] = {
 	'H','4','3'
 };
@@ -50,7 +39,7 @@ static unsigned const num_identbytes = ARRAY_SIZE(identbytes);
 #define SR_REG_M	0x09
 #define IDENTOFFS 	0x0a
 
-#define DRVNAME			"lsm303c"
+#define DRVNAME		"lsm303c"
 
 /* returns 0..0xff for success, negative for failure */
 static s32 read_reg(struct i2c_client *client, u8 address) {
@@ -173,7 +162,7 @@ lsm303_compass_probe(struct i2c_client *client, const struct i2c_device_id *id)
 				compass->idev->poll_interval_max = 2000;
 				input_dev = compass->idev->input;
 
-				input_dev->name       = "ST LS303DLH Magnetometer";
+				input_dev->name       = DRVNAME;
 				input_dev->id.bustype = BUS_HOST;
 				input_dev->id.vendor  = 0;
 				input_dev->dev.parent = &client->dev;
@@ -262,7 +251,7 @@ static void __exit sensors_lsm303_compass_exit(void)
 	i2c_del_driver(&lsm303_compass_driver);
 }
 
-MODULE_AUTHOR("Guillaume Ligneul <guillaume.ligneul@gmail.com>");
+MODULE_AUTHOR("Eric Nelson <eric.nelson@boundarydevices.com>");
 MODULE_DESCRIPTION("LSM303 Compass driver");
 MODULE_LICENSE("GPL");
 
