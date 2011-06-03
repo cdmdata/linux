@@ -134,10 +134,26 @@ lsm303_accel_probe(struct i2c_client *client, const struct i2c_device_id *id)
 			retval = i2c_smbus_write_byte_data(client,CTRL_REG1_A,0x27); /* start sampling */
 			if (0 == retval) {
 				printk (KERN_INFO "%s: LSM303DLH accelerometer driver loaded\n", __func__ );
+#if 2 == CONFIG_SENSORS_LSM303_ACCELEROMETER_RANGE
+				/* factory default */
+#elif 4 == CONFIG_SENSORS_LSM303_ACCELEROMETER_RANGE
+				retval = i2c_smbus_write_byte_data(client,CTRL_REG4_A,0x10); /* 8G full-scale */
+				if (0 != retval)
+					printk (KERN_ERR "%s: error %d setting full-scale range to 8G\n",
+						__func__, retval);
+#elif 8 == CONFIG_SENSORS_LSM303_ACCELEROMETER_RANGE
+				retval = i2c_smbus_write_byte_data(client,CTRL_REG4_A,0x30); /* 8G full-scale */
+				if (0 != retval)
+					printk (KERN_ERR "%s: error %d setting full-scale range to 8G\n",
+						__func__, retval);
+#else
+	#error only 2,4,8G full-scale ranges are supported by LSM303
+#endif
 			} else {
 				printk (KERN_ERR "%s: error %d enabling accelerometer\n", __func__, retval );
-                                input_unregister_polled_device(accel->idev);
 			}
+			if (0 != retval)
+				input_unregister_polled_device(accel->idev);
 		} else {
 			printk (KERN_ERR "%s: error %d registering polled device\n", __func__, retval );
 			input_free_polled_device(accel->idev);

@@ -1109,13 +1109,20 @@ config SENSORS_LIS3_I2C
 config SENSORS_LSM303_ACCELEROMETER
 	tristate "ST Microelectronics LSM303DLH accelerometer"
 	depends on INPUT && I2C
+	select INPUT_POLLDEV
 	default n
 	help
 	This driver provides support for the LSM303DLH accelerometer.
 
+config SENSORS_LSM303_ACCELEROMETER_RANGE
+	int "LSM303 Accelerometer range (in G's)"
+	default 8
+	depends on SENSORS_LSM303_ACCELEROMETER
+
 config SENSORS_LSM303_COMPASS
 	tristate "ST Microelectronics LSM303DLH magnetometer"
 	depends on INPUT && I2C
+	select INPUT_POLLDEV
 	default n
 	help
 	This driver provides support for the LSM303DLH magnetometer (compass).
