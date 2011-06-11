@@ -127,14 +127,18 @@ struct bq20z75_info {
 static int bq20z75_read_word_data(struct i2c_client *client, u8 address)
 {
 	s32 ret;
-
-	ret = i2c_smbus_read_word_data(client, address);
-	if (ret < 0) {
-		dev_err(&client->dev,
-			"%s: i2c read at address 0x%x failed\n",
-			__func__, address);
-		return ret;
-	}
+	int iters = 0 ;
+	do {
+		ret = i2c_smbus_read_word_data(client, address);
+		if (ret < 0) {
+			dev_err(&client->dev,
+				"%s: i2c read at address 0x%x failed: %d\n",
+				__func__, address, ret);
+			if (iters++)
+				return ret;
+		} else
+			break;
+	} while (1);
 	return le16_to_cpu(ret);
 }
 
@@ -143,13 +147,19 @@ static int bq20z75_write_word_data(struct i2c_client *client, u8 address,
 {
 	s32 ret;
 
+	int iters = 0 ;
+	do {
 	ret = i2c_smbus_write_word_data(client, address, le16_to_cpu(value));
-	if (ret < 0) {
-		dev_err(&client->dev,
-			"%s: i2c write to address 0x%x failed\n",
-			__func__, address);
-		return ret;
-	}
+		if (ret < 0) {
+			dev_err(&client->dev,
+				"%s: i2c write to address 0x%x failed: %d\n",
+				__func__, address, ret);
+			if (iters++)
+				return ret;
+		} else
+			break;
+	} while (1);
+
 	return 0;
 }
 
