@@ -395,6 +395,12 @@ static struct pad_desc mx53common_pads[] = {
 
 
 static struct pad_desc mx53evk_pads[] = {
+	/* CSPI2 */
+	MX53_PAD_EIM_CS1_CSPI2_MOSI,
+	MX53_PAD_EIM_OE_CSPI2_MISO,
+	MX53_PAD_EIM_LBA_CSPI2_CS2,
+	MX53_PAD_EIM_CS0_CSPI2_SCLK,
+
 	/* USB OTG USB_OC */
 	MX53_PAD_EIM_A24__GPIO_5_4,
 
@@ -448,7 +454,7 @@ static struct pad_desc mx53evk_pads[] = {
 	IOMUX_PAD(0x4B8, 0x16C, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_A20__GPIO_2_18,
 	IOMUX_PAD(0x4B4, 0x168, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_A21__GPIO_2_17,
 	IOMUX_PAD(0x4B0, 0x164, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_A22__GPIO_2_16,
-	IOMUX_PAD(0x4CC, 0x180, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_CS0__GPIO_2_23,
+//	IOMUX_PAD(0x4CC, 0x180, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_CS0__GPIO_2_23,
 	IOMUX_PAD(0x458, 0x110, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_A25__GPIO_5_2,
 	IOMUX_PAD(0x6C0, 0x330, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_GPIO_5__GPIO_1_5 (?? GP1_9 ??)
 	IOMUX_PAD(0x478, 0x130, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_D22__GPIO_3_22,
@@ -698,6 +704,11 @@ static struct mxc_spi_master mxcspi1_data = {
 	.spi_version = 23,
 	.chipselect_active = mx53_evk_gpio_spi_chipselect_active,
 	.chipselect_inactive = mx53_evk_gpio_spi_chipselect_inactive,
+};
+
+static struct mxc_spi_master mxcspi2_data = {
+	.maxchipselect = 4,
+	.spi_version = 23,
 };
 
 #define PRINT_SDA
@@ -989,6 +1000,14 @@ static struct spi_board_info mxc_dataflash_device[] __initdata = {
 	 .bus_num = 1,
 	 .chip_select = 1,
 	 .platform_data = &mxc_spi_flash_data[0],},
+};
+
+static struct spi_board_info spidev[] __initdata = {
+	{
+	 .modalias = "spidev",
+	 .max_speed_hz = 1000000,	/* max spi clock (SCK) speed in HZ */
+	 .bus_num = 2,
+	 .chip_select = 1}
 };
 
 static int sdhc_write_protect(struct device *dev)
@@ -1583,6 +1602,8 @@ static void __init mxc_board_init(struct i2c_board_info *bi0, int bi0_size,
 	mxc_register_device(&mxc_dma_device, NULL);
 	mxc_register_device(&mxc_wdt_device, NULL);
 	mxc_register_device(&mxcspi1_device, &mxcspi1_data);
+	mxc_register_device(&mxcspi2_device, &mxcspi2_data);
+
 	mxc_register_device(&mxci2c_devices[0], &mxci2c0_data);
 	mxc_register_device(&mxci2c_devices[1], &mxci2c1_data);
 	mxc_register_device(&mxci2c_devices[2], i2c2_data);
@@ -1629,6 +1650,8 @@ static void __init mxc_board_init(struct i2c_board_info *bi0, int bi0_size,
 
 	spi_register_board_info(mxc_dataflash_device,
 				ARRAY_SIZE(mxc_dataflash_device));
+	spi_register_board_info(spidev,
+				ARRAY_SIZE(spidev));
 	if (bi0)
 		i2c_register_board_info(0, bi0, bi0_size);
 	if (bi1)
