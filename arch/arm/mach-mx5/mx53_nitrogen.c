@@ -1697,6 +1697,10 @@ static struct i2c_board_info mxc_i2c1_board_info[] __initdata = {
 	 .addr = 0x19,
 	 .platform_data  = &i2c_generic_data,
 	},
+	{
+	 .type = "bq20z75",
+	 .addr = 0x0b,
+	},
 #endif
 };
 
