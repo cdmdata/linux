@@ -680,7 +680,7 @@ static struct fec_platform_data fec_data = {
 static void mx53_evk_gpio_spi_chipselect_active(int cspi_mode, int status,
 					     int chipselect)
 {
-	if ((cspi_mode == 1) && (chipselect = 2)) {
+	if ((cspi_mode == 1) && (chipselect == 2)) {
 		gpio_set_value(N53_SS1, 0);		/* low active */
 	}
 }
@@ -688,7 +688,7 @@ static void mx53_evk_gpio_spi_chipselect_active(int cspi_mode, int status,
 static void mx53_evk_gpio_spi_chipselect_inactive(int cspi_mode, int status,
 					       int chipselect)
 {
-	if ((cspi_mode == 1) && (chipselect = 2)) {
+	if ((cspi_mode == 1) && (chipselect == 2)) {
 		gpio_set_value(N53_SS1, 1);		/* low active */
 	}
 }
