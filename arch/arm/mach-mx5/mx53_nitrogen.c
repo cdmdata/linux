@@ -1749,8 +1749,8 @@ MACHINE_START(NITROGEN_A_IMX53, "Boundary Devices Nitrogen_A MX53 Board")
 	.fixup = fixup_mxc_board,
 	.map_io = mx5_map_io,
 	.init_irq = mx5_init_irq,
-	.init_machine = mxc_board_init_nitrogen_a,
 	.timer = &mxc_timer,
+	.init_machine = mxc_board_init_nitrogen_a,
 MACHINE_END
 #endif
 
@@ -1782,8 +1782,8 @@ MACHINE_START(NITROGEN_IMX53, "Boundary Devices Nitrogen MX53 Board")
 	.fixup = fixup_mxc_board,
 	.map_io = mx5_map_io,
 	.init_irq = mx5_init_irq,
-	.init_machine = mxc_board_init_nitrogen,
 	.timer = &mxc_timer,
+	.init_machine = mxc_board_init_nitrogen,
 MACHINE_END
 #endif
 
@@ -1847,8 +1847,8 @@ MACHINE_START(NITROGEN_V2_IMX53, "Boundary Devices Nitrogen MX53 rev. 2 Board (D
 	.fixup = fixup_mxc_board,
 	.map_io = mx5_map_io,
 	.init_irq = mx5_init_irq,
-	.init_machine = mxc_board_init_nitrogen_v2,
 	.timer = &mxc_timer,
+	.init_machine = mxc_board_init_nitrogen_v2,
 MACHINE_END
 #endif
 
@@ -1910,7 +1910,7 @@ MACHINE_START(NITROGEN_V1_IMX53, "Boundary Devices Nitrogen MX53 rev. 1 Board")
 	.fixup = fixup_mxc_board,
 	.map_io = mx5_map_io,
 	.init_irq = mx5_init_irq,
-	.init_machine = mxc_board_init_nitrogen_v1,
 	.timer = &mxc_timer,
+	.init_machine = mxc_board_init_nitrogen_v1,
 MACHINE_END
 #endif
