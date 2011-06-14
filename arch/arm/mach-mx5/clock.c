@@ -4777,6 +4777,8 @@ int __init mx51_clocks_init(unsigned long ckil, unsigned long osc, unsigned long
 	return 0;
 }
 
+extern int earlyprintk_active;
+
 int __init mx53_clocks_init(unsigned long ckil, unsigned long osc, unsigned long ckih1, unsigned long ckih2)
 {
 	__iomem void *base;
@@ -4812,7 +4814,19 @@ int __init mx53_clocks_init(unsigned long ckil, unsigned long osc, unsigned long
 			      3 << MXC_CCM_CCGRx_CG14_OFFSET, MXC_CCM_CCGR0);
 	}
 
-	__raw_writel(0, MXC_CCM_CCGR1);
+#ifdef CONFIG_EARLY_PRINTK
+	if (earlyprintk_active) {
+		/*
+		 * leave UART1 & 2 on for serial console
+		 * index 3 & 4 is UART1, 5 & 6 UART2
+		 */
+		reg = __raw_readl(MXC_CCM_CCGR1);
+		reg &= 0xff<<(3*2);
+		__raw_writel(reg, MXC_CCM_CCGR1);
+	} else
+#endif
+		__raw_writel(0, MXC_CCM_CCGR1);
+
 	__raw_writel(0, MXC_CCM_CCGR2);
 	__raw_writel(0, MXC_CCM_CCGR3);
 	__raw_writel(1 << MXC_CCM_CCGRx_CG8_OFFSET, MXC_CCM_CCGR4);
