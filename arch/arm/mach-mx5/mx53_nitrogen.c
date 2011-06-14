@@ -649,7 +649,7 @@ static struct platform_pwm_backlight_data mxc_backlight_data1 = {
 	.pwm_id = 1,
 	.max_brightness = 255,
 	.dft_brightness = CONFIG_DEFAULT_PWM0_BACKLIGHT,
-	.pwm_period_ns = 50000,
+	.pwm_period_ns = 1000000000/32768,	/* 30517 */
 };
 #endif
 
@@ -659,7 +659,7 @@ static struct platform_pwm_backlight_data mxc_backlight_data2 = {
 	.pwm_id = 0,
 	.max_brightness = 255,
 	.dft_brightness = CONFIG_DEFAULT_PWM1_BACKLIGHT,
-	.pwm_period_ns = 50000,
+	.pwm_period_ns = 1000000000/32768,	/* 30517 */
 };
 #endif
 
