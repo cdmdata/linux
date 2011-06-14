@@ -109,6 +109,8 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "sdhc1-cd",		.gpio = MAKE_GP(3, 13),		.flags = GPIOF_DIR_IN},
 #define EVK_SD1_WP				MAKE_GP(3, 14)
 	{.label = "sdhc1-wp",		.gpio = MAKE_GP(3, 14),		.flags = GPIOF_DIR_IN},
+#define N53_SC16IS7XX_INT			MAKE_GP(3, 20)
+	{.label = "sc16is7xx-int",	.gpio = MAKE_GP(3, 20),		.flags = GPIOF_DIR_IN},		/* EIM_D20 */
 #define N53_I2C_0_SCL				MAKE_GP(3, 21)
 	{.label = "i2c-0-scl",		.gpio = MAKE_GP(3, 21),		.flags = GPIOF_DIR_IN},
 #define N53_I2C_0_SDA				MAKE_GP(3, 28)
@@ -197,7 +199,7 @@ static struct pad_desc mx53common_pads[] = {
 	MX53_PAD_EIM_D18__CSPI1_MOSI,
 	MX53_PAD_EIM_D19__GPIO_3_19,
 
-	MX53_PAD_EIM_D20__SER_DISP0_CS,
+	MX53_PAD_EIM_D20__GPIO_3_20,	/* SC16IS7XX i2c serial interrupt */
 
 	MX53_PAD_EIM_D23__DI0_D0_CS,
 
@@ -961,6 +963,10 @@ static struct plat_i2c_tfp410_data i2c_tfp410_data = {
 	.gp_i2c_sel = N53_TFP410_I2CMODE
 };
 
+static struct plat_i2c_generic_data i2c_sc16is7xx_data = {
+	.irq = IOMUX_TO_IRQ_V3(N53_SC16IS7XX_INT),
+	.gp = N53_SC16IS7XX_INT,
+};
 
 static struct mtd_partition mxc_dataflash_partitions[] = {
 	{
@@ -1704,6 +1710,11 @@ static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
 	{
 	 .type = "sgtl5000-i2c",
 	 .addr = 0x0a,
+	},
+	{
+	 .type = "sc16is7xx-uart",
+	 .addr = 0x49,
+	 .platform_data  = &i2c_sc16is7xx_data,
 	},
 };
 
