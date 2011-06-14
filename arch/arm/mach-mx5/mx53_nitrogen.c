@@ -99,6 +99,8 @@ struct gpio nitrogen53_gpios[] __initdata = {
 #define N53_I2C_2_SCL				MAKE_GP(1, 3)
 	{.label = "i2c-2-scl",		.gpio = MAKE_GP(1, 3),		.flags = GPIOF_DIR_IN},
 
+	{.label = "wl1271_btwakeup",	.gpio = MAKE_GP(2, 22),		.flags = GPIOF_DIR_IN},		/* EIM_A16 */
+	{.label = "wl1271_int",		.gpio = MAKE_GP(2, 24),		.flags = GPIOF_DIR_IN},		/* EIM_CS1 */
 #define N53_I2C_1_SCL				MAKE_GP(2, 30)
 	{.label = "i2c-1-scl",		.gpio = MAKE_GP(2, 30),		.flags = GPIOF_DIR_IN},
 #define EVK_SD3_CD				MAKE_GP(3, 11)
@@ -136,6 +138,8 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	// make sure gp2[29] is high, i2c_sel for tfp410
 #define N53_TFP410_I2CMODE			MAKE_GP(2, 29)
 	{.label = "tfp410_i2cmode",	.gpio = MAKE_GP(2, 29),		.flags = GPIOF_INIT_HIGH},	/* EIM_EB1 */
+//	{.label = "wl1271_wl_en",	.gpio = MAKE_GP(3, 0),		.flags = 0},			/* EIM_DA0, high active */
+	{.label = "wl1271_bt_en",	.gpio = MAKE_GP(3, 1),		.flags = 0},			/* EIM_DA1, high active */
 #define N53_I2C_CONNECTOR_BUFFER_ENABLE		MAKE_GP(3, 10)
 	{.label = "I2C conn. buf en",	.gpio = MAKE_GP(3, 10),		.flags = 0},			/* EIM_DA10 */
 #define N53_SS1					MAKE_GP(3, 19)
@@ -253,6 +257,8 @@ static struct pad_desc mx53common_pads[] = {
 	MX53_PAD_GPIO_10__GPIO_4_0,
 
 
+	MX53_PAD_EIM_DA0__GPIO_3_0,	/* wl1271 wl_en */
+	MX53_PAD_EIM_DA1__GPIO_3_1,	/* wl1271 bt_en */
 	MX53_PAD_EIM_DA10__GPIO_3_10,	/* I2C Connector Buffer enable */
 	MX53_PAD_GPIO_17__GPIO_7_12,	/* I2C Connector interrupt */
 	/* CAN1 -- NERR */
@@ -461,6 +467,7 @@ static struct pad_desc mx53evk_pads[] = {
 	IOMUX_PAD(0x484, 0x13C, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_D24__GPIO_3_24,
 #endif
 	IOMUX_PAD(0x4C8, 0x17C, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_A16__GPIO_2_22,
+	MX53_PAD_EIM_CS1__GPIO_2_24,	/* WL1271_irq */
 };
 
 static struct pad_desc mx53_nand_pads[] = {
