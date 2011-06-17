@@ -38,6 +38,7 @@
 #include <linux/mtd/map.h>
 #endif
 #include <linux/mtd/partitions.h>
+#include <linux/mfd/sc16is7xx-reg.h>
 #include <linux/regulator/consumer.h>
 #include <linux/pmic_external.h>
 #include <linux/pmic_status.h>
@@ -981,9 +982,15 @@ static struct plat_i2c_tfp410_data i2c_tfp410_data = {
 	.gp_i2c_sel = N53_TFP410_I2CMODE
 };
 
-static struct plat_i2c_generic_data i2c_sc16is7xx_data = {
+struct sc16is7xx_gpio_platform_data i2c_sc16is7xx_gpio_data = {
+	.gpio_base = -1,
+	.irq_base = MXC_BOARD_IRQ_START,
+};
+
+static struct sc16is7xx_platform_data i2c_sc16is7xx_data = {
 	.irq = IOMUX_TO_IRQ_V3(N53_SC16IS7XX_INT),
 	.gp = N53_SC16IS7XX_INT,
+	.gpio_data = &i2c_sc16is7xx_gpio_data,
 };
 
 static struct mtd_partition mxc_dataflash_partitions[] = {
