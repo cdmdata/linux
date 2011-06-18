@@ -139,7 +139,7 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	// make sure gp2[29] is high, i2c_sel for tfp410
 #define N53_TFP410_I2CMODE			MAKE_GP(2, 29)
 	{.label = "tfp410_i2cmode",	.gpio = MAKE_GP(2, 29),		.flags = GPIOF_INIT_HIGH},	/* EIM_EB1 */
-//	{.label = "wl1271_wl_en",	.gpio = MAKE_GP(3, 0),		.flags = 0},			/* EIM_DA0, high active */
+	{.label = "wl1271_wl_en",	.gpio = MAKE_GP(3, 0),		.flags = 0},			/* EIM_DA0, high active */
 	{.label = "wl1271_bt_en",	.gpio = MAKE_GP(3, 1),		.flags = 0},			/* EIM_DA1, high active */
 #define N53_I2C_CONNECTOR_BUFFER_ENABLE		MAKE_GP(3, 10)
 	{.label = "I2C conn. buf en",	.gpio = MAKE_GP(3, 10),		.flags = 0},			/* EIM_DA10 */
