@@ -96,6 +96,7 @@ void arch_reset(char mode, const char *cmd)
 	case 'h':
 	default:
 		do_hw_reset();
+		cpu_reset(0); /* belt and suspenders */
 		break;
 	}
 }
