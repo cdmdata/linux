@@ -117,7 +117,7 @@ struct gpio nitrogen53_gpios[] __initdata = {
 #define N53_I2C_0_SCL				MAKE_GP(3, 21)
 	{.label = "i2c-0-scl",		.gpio = MAKE_GP(3, 21),		.flags = GPIOF_DIR_IN},
 #define N53_I2C_0_SDA				MAKE_GP(3, 28)
-	{.label = "i2c-0-sda",		.gpio = MAKE_GP(3, 38),		.flags = GPIOF_DIR_IN},
+	{.label = "i2c-0-sda",		.gpio = MAKE_GP(3, 28),		.flags = GPIOF_DIR_IN},
 //The gpio_keys.c file will request these, they are here for documentation only
 //	{.label = "Menu key",		.gpio = MAKE_GP(3, 25),		.flags = GPIOF_DIR_IN},
 //	{.label = "Back key",		.gpio = MAKE_GP(3, 26),		.flags = GPIOF_DIR_IN},
@@ -1778,7 +1778,6 @@ struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 //	{.label = "led2",		.gpio = MAKE_GP(4, 4),		.flags = 0},
 	{.label = "mic_mux",		.gpio = MAKE_GP(6, 16),		.flags = 0},
 	{.label = "power_down_req",	.gpio = POWER_DOWN,		.flags = GPIOF_INIT_HIGH},
-	{.label = "gpio_spare",		.gpio = MAKE_GP(3,0),		.flags = GPIOF_DIR_IN},
 };
 
 static void __init mxc_board_init_nitrogen_a(void)
