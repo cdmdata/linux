@@ -81,7 +81,7 @@ static void accel_poll(struct input_polled_dev *idev)
 							val |= retval << 8 ;
 							input_report_abs(idev->input, ABS_X+i, val);
 							captured = 1 ;
-							printk (KERN_ERR "%c:%04x\n", 'X'+i, val);
+//							printk (KERN_ERR "%c:%04x\n", 'X'+i, val);
 							continue;
 						}
 					}
