@@ -100,8 +100,8 @@ static void accel_poll(struct input_polled_dev *idev)
 
 /*-----------------------------------------------------------------------*/
 /* device probe and removal */
-#define MIN_VALUE -32768
-#define MAX_VALUE 32767
+#define MIN_VALUE -2048
+#define MAX_VALUE 2047
 
 static int
 lsm303_accel_probe(struct i2c_client *client, const struct i2c_device_id *id)
