@@ -82,16 +82,17 @@ static void compass_poll(struct input_polled_dev *idev)
 		if (retval & 1) { /* conversion ready */
 			char regs[6];
 			int i ;
+			int err = 0;
 			for (i=0; i <sizeof(regs);i++) {
 				int retval = read_reg(compass->client,OUT_X_M+i);
 				if (0 <= retval) {
 					regs[i] = (char)retval ;
 				} else {
 					printk (KERN_ERR "%s: error %d reading byte %u\n", __func__, retval, i);
-					break;
+					err += 1<<i ;
 				}
 			}
-			if (sizeof(regs) == i) {
+			if (!err) {
 				s16 readings[3];
 				for (i = 0 ; i < ARRAY_SIZE(readings); i++) {
 					readings[i] = regs[i*2+1]+(regs[i*2]<<8);
@@ -109,8 +110,11 @@ static void compass_poll(struct input_polled_dev *idev)
 					readings[0],readings[1],readings[2]);
 #endif
 			}
+		} else {
+			printk (KERN_ERR "%s: not ready: %d\n", __func__, retval );
 		}
-	}
+	} else
+		printk (KERN_ERR "%s: no compass\n", __func__ );
 }
 
 /*-----------------------------------------------------------------------*/
