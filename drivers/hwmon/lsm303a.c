@@ -25,7 +25,8 @@ struct lsm303_accelerometer {
 	struct input_polled_dev	*idev;
 };
 
-#define DRVNAME			"lsm303a"
+#define DRVNAME		"lsm303a"
+#define DRVDESC		DRVNAME ": Accelerometer"
 
 #define CTRL_REG1_A		0x20
 #define CTRL_REG2_A		0x21
@@ -119,7 +120,7 @@ lsm303_accel_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		accel->idev->poll_interval_max = 2000;
 		input_dev = accel->idev->input;
 
-		input_dev->name       = DRVNAME;
+		input_dev->name       = DRVDESC;
 		input_dev->id.bustype = BUS_HOST;
 		input_dev->id.vendor  = 0;
 		input_dev->dev.parent = &client->dev;
