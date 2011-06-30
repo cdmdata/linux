@@ -137,6 +137,10 @@ lsm303_accel_probe(struct i2c_client *client, const struct i2c_device_id *id)
 				printk (KERN_INFO "%s: LSM303DLH accelerometer driver loaded\n", __func__ );
 #if 2 == CONFIG_SENSORS_LSM303_ACCELEROMETER_RANGE
 				/* factory default */
+				retval = i2c_smbus_write_byte_data(client,CTRL_REG4_A,0); /* 2G full-scale */
+				if (0 != retval)
+					printk (KERN_ERR "%s: error %d setting full-scale range to 8G\n",
+						__func__, retval);
 #elif 4 == CONFIG_SENSORS_LSM303_ACCELEROMETER_RANGE
 				retval = i2c_smbus_write_byte_data(client,CTRL_REG4_A,0x10); /* 8G full-scale */
 				if (0 != retval)
