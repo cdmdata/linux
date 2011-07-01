@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.3
-# Tue Jun 28 18:22:25 2011
+# Fri Jul  1 16:00:59 2011
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -1716,7 +1716,7 @@ CONFIG_RTC_INTF_ALARM=y
 # Platform RTC drivers
 #
 # CONFIG_RTC_DRV_CMOS is not set
-# CONFIG_RTC_DRV_DA9052 is not set
+CONFIG_RTC_DRV_DA9052=y
 # CONFIG_RTC_DRV_DS1286 is not set
 # CONFIG_RTC_DRV_DS1511 is not set
 # CONFIG_RTC_DRV_DS1553 is not set
