@@ -1568,25 +1568,6 @@ static void __init mx53_evk_io_init(void)
 
 static void nitrogen_power_off(void)
 {
-#if defined(CONFIG_PMIC_DA9052_MODULE) || defined(CONFIG_PMIC_DA9052)
-	struct i2c_adapter *adap = i2c_get_adapter(0);
-
-	if (adap) {
-		union i2c_smbus_data data;
-                int ret ;
-		/* make sure panel is turned off first */
-		data.byte = 0x77;
-		ret = i2c_smbus_xfer(adap, 0x48,0,
-				     I2C_SMBUS_WRITE,28,
-				     I2C_SMBUS_BYTE_DATA,&data);
-		printk (KERN_ERR "%s: xfer %d:%02x:0x%02x\n", __func__, ret, 28, data.byte );
-		data.byte = 0x7a;
-		ret = i2c_smbus_xfer(adap, 0x48,0,
-				     I2C_SMBUS_WRITE,15,
-				     I2C_SMBUS_BYTE_DATA,&data);
-		printk (KERN_ERR "%s: xfer %d:%02x:0x%02x\n", __func__, ret, 15, data.byte );
-	}
-#endif
 #if defined(CONFIG_MACH_NITROGEN_A_IMX53)
 #define POWER_DOWN	MAKE_GP(3,23)
 	gpio_set_value(POWER_DOWN, 0);
