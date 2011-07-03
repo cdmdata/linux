@@ -277,7 +277,7 @@ static void  bq20z75_unit_adjustment(struct i2c_client *client,
 		/* bq20z75 provides battery tempreture in 0.1°K
 		 * so convert it to 0.1°C */
 		val->intval -= TEMP_KELVIN_TO_CELCIUS;
-		val->intval *= 10;
+//		val->intval *= 10;
 		break;
 
 	case POWER_SUPPLY_PROP_TIME_TO_EMPTY_AVG:
