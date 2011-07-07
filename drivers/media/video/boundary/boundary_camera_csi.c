@@ -313,13 +313,15 @@ static void stop_streaming(struct camera_data_t *data)
 
 	DEBUGMSG ("%s\n", __func__ );
 	rv = v4l2_subdev_call(data->subdev, video, s_stream, 0);
-        ipu_disable_channel(CSI_MEM,0);
+	ipu_disable_csi(csi);
+	ipu_disable_channel(CSI_MEM,0);
+	ipu_uninit_channel(CSI_MEM);
+	ipu_csi_enable_mclk(csi,false,false);
         ipu_clear_buffer_ready(CSI_MEM,IPU_OUTPUT_BUFFER, 0);
         ipu_clear_buffer_ready(CSI_MEM,IPU_OUTPUT_BUFFER, 1);
 	ipu_update_channel_buffer(CSI_MEM, IPU_OUTPUT_BUFFER, 0, -1);
 	ipu_update_channel_buffer(CSI_MEM, IPU_OUTPUT_BUFFER, 1, -1);
 	data->buf_queued[0] = data->buf_queued[1] = 0 ;
-        ipu_disable_csi(csi);
         ipu_free_irq(IPU_IRQ_CSI0_OUT_EOF, data);
         ipu_free_irq(IDMAC_NFACK_0, data);
 	for (i=0 ; i < ARRAY_SIZE(other_irqs); i++) {
