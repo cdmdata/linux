@@ -819,7 +819,7 @@ static struct imxi2c_platform_data mxci2c2_data = {
 };
 
 static struct mxc_dvfs_platform_data dvfs_core_data = {
-	.reg_id = "SW1",
+	.reg_id = "DA9052_BUCK_CORE",
 	.clk1_id = "cpu_clk",
 	.clk2_id = "gpc_dvfs_clk",
 	.gpc_cntr_offset = MXC_GPC_CNTR_OFFSET,
@@ -844,8 +844,8 @@ static struct mxc_dvfs_platform_data dvfs_core_data = {
 };
 
 static struct mxc_bus_freq_platform_data bus_freq_data = {
-	.gp_reg_id = "SW1",
-	.lp_reg_id = "SW2",
+	.gp_reg_id = "DA9052_BUCK_CORE",
+	.lp_reg_id = "DA9052_BUCK_PRO",
 };
 
 static struct tve_platform_data tve_data = {
