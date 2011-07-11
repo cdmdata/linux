@@ -182,7 +182,7 @@ void arch_idle(void)
 			gpc_dvfs_clk = clk_get(NULL, "gpc_dvfs_clk");
 		/* gpc clock is needed for SRPG */
 		clk_enable(gpc_dvfs_clk);
-		mxc_cpu_lp_set(arch_idle_mode);
+		mxc_cpu_lp_set(machine_is_nitrogen_a_imx53() ? WAIT_CLOCKED : arch_idle_mode);
 
 		if (cpu_is_mx50() && (clk_get_usecount(ddr_clk) == 0)) {
 			memcpy(wait_in_iram_base, mx50_wait, SZ_4K);
