@@ -474,7 +474,9 @@ static struct pad_desc mx53evk_pads[] = {
 	IOMUX_PAD(0x484, 0x13C, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_D24__GPIO_3_24,
 #endif
 	IOMUX_PAD(0x4C8, 0x17C, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_A16__GPIO_2_22,
+#if defined(CONFIG_WL12XX_SDIO)
 	MX53_PAD_EIM_CS1__GPIO_2_24,	/* WL1271_irq */
+#endif
 };
 
 static struct pad_desc mx53_nand_pads[] = {
