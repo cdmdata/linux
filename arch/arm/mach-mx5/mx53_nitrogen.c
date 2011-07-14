@@ -149,7 +149,7 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "I2C conn. buf en",	.gpio = MAKE_GP(3, 10),		.flags = 0},			/* EIM_DA10 */
 #define N53_SS1					MAKE_GP(3, 19)
 	{.label = "ecspi_ss1",		.gpio = MAKE_GP(3, 19),		.flags = GPIOF_INIT_HIGH},	/* low active */
-	{.label = "Shutdown output",	.gpio = MAKE_GP(3, 31),		.flags = 0},
+//	{.label = "Shutdown output",	.gpio = MAKE_GP(3, 31),		.flags = 0},
 	{.label = "cam-reset",		.gpio = MAKE_GP(4, 0),		.flags = GPIOF_INIT_HIGH},
 #define N53_AMP_ENABLE				MAKE_GP(4, 7)	/* KEY_ROW0 */
 	{.label = "speaker_amp",	.gpio = MAKE_GP(4, 7),		.flags = 0},
@@ -160,11 +160,6 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "eMMC reset",		.gpio = MAKE_GP(5, 2),		.flags = GPIOF_INIT_HIGH},	/* EIM_A25 */
 #define N53_CAMERA_STANDBY			MAKE_GP(5, 20)
 	{.label = "Camera standby",	.gpio = MAKE_GP(5, 20),		.flags = 0},
-#define MX53_TVIN_RESET				MAKE_GP(5, 25)
-	{.label = "tvin-reset",		.gpio = MAKE_GP(5, 25),		.flags = 0},
-#define MX53_TVIN_PWR				MAKE_GP(5, 23)
-	{.label = "tvin-pwr",		.gpio = MAKE_GP(5, 23),		.flags = 0},
-	{.label = "can2-en1",		.gpio = MAKE_GP(5, 24),		.flags = 0},
 #define N53_OTG_VBUS				MAKE_GP(6, 6)
 	{.label = "otg-vbus",		.gpio = MAKE_GP(6, 6),		.flags = 0},	/* disable VBUS */
 #define EVK_USBH1_VBUS				MAKE_GP(7, 8)
@@ -197,10 +192,11 @@ static int num_cpu_wp = 3;
 static iomux_v3_cfg_t mx53common_pads[] = {
 	MX53_PAD_EIM_WAIT__GPIO_5_0,
 
-	MX53_PAD_EIM_OE__DI1_PIN7,
-	MX53_PAD_EIM_RW__DI1_PIN8,
+	MX53_PAD_EIM_OE__DI1_PIN7,	/* VGA HSync */
+	MX53_PAD_EIM_RW__DI1_PIN8,	/* VGA VSync */
 
 	MX53_PAD_EIM_A25__GPIO_5_2,
+	MX53_PAD_NANDF_CS3__GPIO_6_16,
 
 	MX53_PAD_EIM_D16__CSPI1_SCLK,
 	MX53_PAD_EIM_D17__CSPI1_MISO,
@@ -227,11 +223,6 @@ static iomux_v3_cfg_t mx53common_pads[] = {
 	MX53_PAD_EIM_D30__UART3_CTS,
 	MX53_PAD_EIM_D31__UART3_RTS,
 #endif
-
-	MX53_PAD_ATA_DA_1__GPIO_7_7,
-	MX53_PAD_ATA_DATA4__GPIO_2_4,
-	MX53_PAD_ATA_DATA5__GPIO_2_5,
-	MX53_PAD_ATA_DATA6__GPIO_2_6,
 
 	MX53_PAD_ATA_DIOW__UART1_TXD,
 	MX53_PAD_ATA_DMACK__UART1_RXD,
@@ -260,33 +251,19 @@ static iomux_v3_cfg_t mx53common_pads[] = {
 	MX53_PAD_GPIO_0__SSI_EXT1_CLK,
 #endif
 
-	MX53_PAD_CSI0_D7__GPIO_5_25,
-
+	MX53_PAD_GPIO_4__GPIO_1_4,
 	MX53_PAD_GPIO_8__GPIO_1_8,
 
-	MX53_PAD_GPIO_10__GPIO_4_0,
 
 
 	MX53_PAD_EIM_DA0__GPIO_3_0,	/* wl1271 wl_en */
 	MX53_PAD_EIM_DA1__GPIO_3_1,	/* wl1271 bt_en */
 	MX53_PAD_EIM_DA10__GPIO_3_10,	/* I2C Connector Buffer enable */
 	MX53_PAD_GPIO_17__GPIO_7_12,	/* I2C Connector interrupt */
-	/* CAN1 -- NERR */
-	MX53_PAD_GPIO_5__GPIO_1_5,
 
 	MX53_PAD_KEY_ROW4__GPIO_4_15,
 	MX53_PAD_EIM_EB1__GPIO_2_29,
 
-	/* CAN2 -- EN */
-	MX53_PAD_CSI0_D6__GPIO_5_24,
-	/* CAN2 -- STBY */
-	MX53_PAD_GPIO_14__GPIO_4_4,
-	/* CAN2 -- NERR */
-	MX53_PAD_CSI0_D4__GPIO_5_22,
-
-	MX53_PAD_GPIO_11__GPIO_4_1,
-	MX53_PAD_GPIO_12__GPIO_4_2,
-	MX53_PAD_GPIO_13__GPIO_4_3,
 
 	/* DI0 display clock */
 	MX53_PAD_DI0_DISP_CLK__DI0_DISP_CLK,
@@ -355,8 +332,6 @@ static iomux_v3_cfg_t mx53common_pads[] = {
 	MX53_PAD_GPIO_2__GPIO_1_2,	/* CAMERA_POWERDOWN */
 	MX53_PAD_GPIO_7__GPIO_1_7,	/* CAMERA_STROBE */
 	MX53_PAD_KEY_COL4__GPIO_4_14,	/* CAMERA_RESET */
-	/* Camera low power */
-	MX53_PAD_CSI0_D5__GPIO_5_23,
 
 	/* esdhc1 */
 	MX53_PAD_SD1_CMD__SD1_CMD,
@@ -410,15 +385,16 @@ static iomux_v3_cfg_t mx53common_pads[] = {
 	/* I2C1 */
 	MX53_PAD_EIM_D21__I2C1_SCL,	/* GPIO3[21] */
 	MX53_PAD_EIM_D28__I2C1_SDA,	/* GPIO3[28] */
-};
 
-
-static iomux_v3_cfg_t mx53evk_pads[] = {
-	/* CSPI2 */
+	/* ECSPI2, Nitrogen53A only */
+#if defined(CONFIG_WL12XX_SDIO) || defined(CONFIG_WL12XX_SDIO_MODULE)
+	MX53_PAD_EIM_CS1__GPIO2_24,	/* WL1271_irq */
+#else
 	MX53_PAD_EIM_CS1_CSPI2_MOSI,
 	MX53_PAD_EIM_OE_CSPI2_MISO,
 	MX53_PAD_EIM_LBA_CSPI2_CS2,
 	MX53_PAD_EIM_CS0_CSPI2_SCLK,
+#endif
 
 	/* USB OTG USB_OC */
 	MX53_PAD_EIM_A24__GPIO_5_4,
@@ -430,9 +406,6 @@ static iomux_v3_cfg_t mx53evk_pads[] = {
 	/* DI0_PIN1 */
 	MX53_PAD_EIM_D22__DISPB0_SER_DIN,
 #endif
-
-	/* DVI DET */
-	MX53_PAD_EIM_D31__GPIO_3_31,
 
 	/* GPIO spare on Nitrogen53A */
 	MX53_PAD_EIM_DA6__GPIO_3_6,
@@ -459,11 +432,6 @@ static iomux_v3_cfg_t mx53evk_pads[] = {
 	/* USB HOST USB_RST */
 	MX53_PAD_CSI0_DATA_EN__GPIO_5_20,
 
-	/* USB HOST CARD_ON */
-	MX53_PAD_EIM_DA15__GPIO_3_15,
-
-	/* USB HOST CARD_RST */
-	MX53_PAD_ATA_DATA7__GPIO_2_7,
 
 	IOMUX_PAD(0x4C4, 0x178, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_A17__GPIO_2_21,
 	/* GPIO keys */
@@ -483,16 +451,6 @@ static iomux_v3_cfg_t mx53evk_pads[] = {
 	IOMUX_PAD(0x484, 0x13C, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_D24__GPIO_3_24,
 #endif
 	IOMUX_PAD(0x4C8, 0x17C, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_A16__GPIO_2_22,
-};
-
-static iomux_v3_cfg_t mx53_nand_pads[] = {
-	MX53_PAD_NANDF_CLE__GPIO_6_7
-,	MX53_PAD_NANDF_ALE__GPIO_6_8
-,	MX53_PAD_NANDF_WP_B__GPIO_6_9
-,	MX53_PAD_NANDF_RB0__GPIO_6_10
-,	MX53_PAD_NANDF_CS0__GPIO_6_11
-,	MX53_PAD_NANDF_CS1__GPIO_6_14
-,	MX53_PAD_NANDF_CS3__GPIO_6_16
 };
 
 /* working point(wp): 0 - 800MHz; 1 - 166.25MHz; */
@@ -1688,10 +1646,6 @@ static void __init mx53_evk_io_init(void)
 	}
 	mxc_iomux_v3_setup_multiple_pads(mx53common_pads,
 			ARRAY_SIZE(mx53common_pads));
-	mxc_iomux_v3_setup_multiple_pads(mx53evk_pads,
-			ARRAY_SIZE(mx53evk_pads));
-	mxc_iomux_v3_setup_multiple_pads(mx53_nand_pads,
-			ARRAY_SIZE(mx53_nand_pads));
 	pr_info("MX53 Nitrogen board \n");
 
 #if defined(CONFIG_DUMB_BATTERY) || defined (CONFIG_DUMB_BATTERY_MODULE)
@@ -1715,7 +1669,6 @@ static void __init mx53_evk_io_init(void)
 	msleep(5);
 	gpio_set_value(N53_USB_HUB_RESET, 1);		/* release USB Hub reset */
 	gpio_set_value(N53_PHY_RESET, 1);		/* release ICS1893 Ethernet PHY reset */
-	gpio_set_value(MX53_TVIN_RESET, 1);		/* release */
 #if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
 	init_camera();
 #endif
