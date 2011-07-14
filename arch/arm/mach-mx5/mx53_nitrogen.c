@@ -194,7 +194,7 @@ extern struct cpu_wp *(*get_cpu_wp)(int *wp);
 extern void (*set_num_cpu_wp)(int num);
 static int num_cpu_wp = 3;
 
-static struct pad_desc mx53common_pads[] = {
+static iomux_v3_cfg_t mx53common_pads[] = {
 	MX53_PAD_EIM_WAIT__GPIO_5_0,
 
 	MX53_PAD_EIM_OE__DI1_PIN7,
@@ -413,7 +413,7 @@ static struct pad_desc mx53common_pads[] = {
 };
 
 
-static struct pad_desc mx53evk_pads[] = {
+static iomux_v3_cfg_t mx53evk_pads[] = {
 	/* CSPI2 */
 	MX53_PAD_EIM_CS1_CSPI2_MOSI,
 	MX53_PAD_EIM_OE_CSPI2_MISO,
@@ -485,7 +485,7 @@ static struct pad_desc mx53evk_pads[] = {
 	IOMUX_PAD(0x4C8, 0x17C, 1, 0x0, 0, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP), // MX53_PAD_EIM_A16__GPIO_2_22,
 };
 
-static struct pad_desc mx53_nand_pads[] = {
+static iomux_v3_cfg_t mx53_nand_pads[] = {
 	MX53_PAD_NANDF_CLE__GPIO_6_7
 ,	MX53_PAD_NANDF_ALE__GPIO_6_8
 ,	MX53_PAD_NANDF_WP_B__GPIO_6_9
@@ -735,16 +735,16 @@ static struct mxc_spi_master mxcspi2_data = {
 #define PD_SDA_I2C	2
 #define PD_SDA_GP	3
 /* Generate a pulse on the i2c clock pin. */
-static void i2c_clock_toggle(unsigned gp_clk, unsigned gp_dat, const struct pad_desc *pd)
+static void i2c_clock_toggle(unsigned gp_clk, unsigned gp_dat, const iomux_v3_cfg_t *pd)
 {
 	unsigned i;
 	printk(KERN_INFO "%s, gp_clk=0x%x, gp_dat=0x%x\n", __FUNCTION__, gp_clk, gp_dat);
 	gpio_direction_input(gp_clk);
-	mxc_iomux_v3_setup_pad(&pd[PD_CLK_GP]);
+	mxc_iomux_v3_setup_pad(pd[PD_CLK_GP]);
 
 #ifdef PRINT_SDA
 	gpio_direction_input(gp_dat);
-	mxc_iomux_v3_setup_pad(&pd[PD_SDA_GP]);
+	mxc_iomux_v3_setup_pad(pd[PD_SDA_GP]);
 	printk(KERN_INFO "%s dat = %i\n", __FUNCTION__, gpio_get_value(gp_dat));
 #endif
 	/* Send high and low on the SCL line */
@@ -758,15 +758,15 @@ static void i2c_clock_toggle(unsigned gp_clk, unsigned gp_dat, const struct pad_
 		udelay(20);
 	}
 
-        mxc_iomux_v3_setup_pad(&pd[PD_CLK_I2C]);
+        mxc_iomux_v3_setup_pad(pd[PD_CLK_I2C]);
 #ifdef PRINT_SDA
-	mxc_iomux_v3_setup_pad(&pd[PD_SDA_I2C]);
+	mxc_iomux_v3_setup_pad(pd[PD_SDA_I2C]);
 #endif
 }
 
 static void i2c_clock_toggle0(void)
 {
-	const struct pad_desc pd[] = {
+	const iomux_v3_cfg_t pd[] = {
 		MX53_PAD_EIM_D21__I2C1_SCL, MX53_PAD_EIM_D21__GPIO_3_21,
 		MX53_PAD_EIM_D28__I2C1_SDA, MX53_PAD_EIM_D28__GPIO_3_28,
 	};
@@ -778,7 +778,7 @@ static void i2c_clock_toggle0(void)
 
 static void i2c_clock_toggle1(void)
 {
-	const struct pad_desc pd[] = {
+	const iomux_v3_cfg_t pd[] = {
 		MX53_PAD_EIM_EB2__I2C2_SCL, MX53_PAD_EIM_EB2__GPIO_2_30_I2C,
 		MX53_PAD_KEY_ROW3__I2C2_SDA, MX53_PAD_KEY_ROW3__GPIO_4_13_I2C,
 	};
@@ -791,7 +791,7 @@ static void i2c_clock_toggle1(void)
 
 static void i2c_clock_toggle2_current(void)
 {
-	const struct pad_desc pd[] = {
+	const iomux_v3_cfg_t pd[] = {
 		MX53_PAD_GPIO_3__I2C3_SCL, MX53_PAD_GPIO_3__GPIO_1_3_I2C,
 		MX53_PAD_GPIO_16__I2C3_SDA, MX53_PAD_GPIO_16__GPIO_7_11_I2C,
 	};
@@ -801,7 +801,7 @@ static void i2c_clock_toggle2_current(void)
 #if defined(CONFIG_MACH_NITROGEN_V1_IMX53)||defined(CONFIG_MACH_NITROGEN_V2_IMX53)
 static void i2c_clock_toggle2_previous(void)
 {
-	const struct pad_desc pd[] = {
+	const iomux_v3_cfg_t pd[] = {
 		MX53_PAD_GPIO_3__I2C3_SCL, MX53_PAD_GPIO_3__GPIO_1_3_I2C,
 		MX53_PAD_GPIO_6__I2C3_SDA, MX53_PAD_GPIO_6__GPIO_1_6_I2C,
 	};
@@ -2028,7 +2028,7 @@ static struct i2c_board_info mxc_i2c2_board_info_v2[] __initdata = {
 	},
 };
 
-static struct pad_desc nitrogen53_pads_specific_v2[] __initdata = {
+static iomux_v3_cfg_t nitrogen53_pads_specific_v2[] __initdata = {
 	MX53_PAD_GPIO_6__I2C3_SDA,	/* GPIO1[6] */
 	MX53_PAD_GPIO_16__GPIO_7_11,
 };
@@ -2092,7 +2092,7 @@ static struct i2c_board_info mxc_i2c2_board_info_v1[] __initdata = {
 	},
 };
 
-static struct pad_desc nitrogen53_pads_specific_v1[] __initdata = {
+static iomux_v3_cfg_t nitrogen53_pads_specific_v1[] __initdata = {
 	MX53_PAD_GPIO_6__I2C3_SDA,	/* GPIO1[6] */
 	MX53_PAD_GPIO_16__GPIO_7_11,
 };

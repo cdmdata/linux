@@ -155,13 +155,13 @@ void mx51_reboot_setup(void)
 {
 	/* workaround for ENGcm09397 - Fix SPI NOR reset issue*/
 	/* de-select SS0 of instance: eCSPI1 */
-	struct pad_desc cspi1_ss0_gpio = MX51_PAD_CSPI1_SS0__GPIO_4_24;
-	struct pad_desc cspi1_ss1_gpio = MX51_PAD_CSPI1_SS1__GPIO_4_25;
+	iomux_v3_cfg_t cspi1_ss0_gpio = MX51_PAD_CSPI1_SS0__GPIO_4_24;
+	iomux_v3_cfg_t cspi1_ss1_gpio = MX51_PAD_CSPI1_SS1__GPIO_4_25;
 
 	gpio_set_value(GP_CSP1_SS0, 0);	/* SS0 high active */
 	gpio_set_value(GP_CSP1_SS1, 1); /* SS1 low active */
-	mxc_iomux_v3_setup_pad(&cspi1_ss0_gpio);
-	mxc_iomux_v3_setup_pad(&cspi1_ss1_gpio);
+	mxc_iomux_v3_setup_pad(cspi1_ss0_gpio);
+	mxc_iomux_v3_setup_pad(cspi1_ss1_gpio);
 }
 
 
@@ -170,7 +170,7 @@ extern struct cpu_wp *(*get_cpu_wp)(int *wp);
 extern void (*set_num_cpu_wp)(int num);
 static int num_cpu_wp = 3;
 
-static struct pad_desc mx51nitrogen_pads[] __initdata = {
+static iomux_v3_cfg_t mx51nitrogen_pads[] __initdata = {
 	/* UART1 */
 	MX51_PAD_UART1_RXD__UART1_RXD,
 	MX51_PAD_UART1_TXD__UART1_TXD,
@@ -441,16 +441,16 @@ static void mx51_nitrogen_gpio_spi_chipselect_active(int cspi_mode, int status,
 		switch (chipselect) {
 		case 0x1:
 			{
-			struct pad_desc cspi1_ss0 = MX51_PAD_CSPI1_SS0__CSPI1_SS0;
+			iomux_v3_cfg_t cspi1_ss0 = MX51_PAD_CSPI1_SS0__CSPI1_SS0;
 
-			mxc_iomux_v3_setup_pad(&cspi1_ss0);
+			mxc_iomux_v3_setup_pad(cspi1_ss0);
 			break;
 			}
 		case 0x2:
 			{
-			struct pad_desc cspi1_ss0_gpio = MX51_PAD_CSPI1_SS0__GPIO_4_24;
+			iomux_v3_cfg_t cspi1_ss0_gpio = MX51_PAD_CSPI1_SS0__GPIO_4_24;
 
-			mxc_iomux_v3_setup_pad(&cspi1_ss0_gpio);
+			mxc_iomux_v3_setup_pad(cspi1_ss0_gpio);
 			gpio_set_value(GP_CSP1_SS0, 1 & (~status));
 			break;
 			}
@@ -548,10 +548,10 @@ static struct platform_device i2c_devices[] = {
 	},
 };
 
-static struct pad_desc hs_i2c_clk_pad_gp = MX51_PAD_I2C1_CLK__GPIO_4_16 ;
-static struct pad_desc hs_i2c_dat_pad_gp = MX51_PAD_I2C1_DAT__GPIO_4_17 ;
-static struct pad_desc hs_i2c_clk_pad_clk = MX51_PAD_I2C1_CLK__HSI2C_CLK ;
-static struct pad_desc hs_i2c_dat_pad_dat = MX51_PAD_I2C1_DAT__HSI2C_DAT ;
+static iomux_v3_cfg_t hs_i2c_clk_pad_gp = MX51_PAD_I2C1_CLK__GPIO_4_16 ;
+static iomux_v3_cfg_t hs_i2c_dat_pad_gp = MX51_PAD_I2C1_DAT__GPIO_4_17 ;
+static iomux_v3_cfg_t hs_i2c_clk_pad_clk = MX51_PAD_I2C1_CLK__HSI2C_CLK ;
+static iomux_v3_cfg_t hs_i2c_dat_pad_dat = MX51_PAD_I2C1_DAT__HSI2C_DAT ;
 
 #define PRINT_SDA
 /* Generate a pulse on the i2c clock pin. */
@@ -562,11 +562,11 @@ static void hs_i2c_clock_toggle(void)
 	unsigned gp_dat = MAKE_GP(4, 17);
 	printk(KERN_INFO "%s\n", __FUNCTION__);
 	gpio_direction_input(gp_clk);
-	mxc_iomux_v3_setup_pad(&hs_i2c_clk_pad_gp);
+	mxc_iomux_v3_setup_pad(hs_i2c_clk_pad_gp);
 
 #ifdef PRINT_SDA
 	gpio_direction_input(gp_dat);
-	mxc_iomux_v3_setup_pad(&hs_i2c_dat_pad_gp);
+	mxc_iomux_v3_setup_pad(hs_i2c_dat_pad_gp);
 	printk(KERN_INFO "%s dat = %i\n", __FUNCTION__, gpio_get_value(gp_dat));
 #endif
 	/* Send high and low on the SCL line */
@@ -580,9 +580,9 @@ static void hs_i2c_clock_toggle(void)
 		udelay(20);
 	}
 
-        mxc_iomux_v3_setup_pad(&hs_i2c_clk_pad_clk);
+        mxc_iomux_v3_setup_pad(hs_i2c_clk_pad_clk);
 #ifdef PRINT_SDA
-	mxc_iomux_v3_setup_pad(&hs_i2c_dat_pad_dat);
+	mxc_iomux_v3_setup_pad(hs_i2c_dat_pad_dat);
 #endif
 }
 
@@ -1409,8 +1409,8 @@ static void __init mx51_nitrogen_io_init(void)
 	mxc_iomux_v3_setup_multiple_pads(mx51nitrogen_pads,
 			ARRAY_SIZE(mx51nitrogen_pads));
 	if (i2c_generic_data.gp == MAKE_GP(1, 22)) {
-		struct pad_desc pd = MX51_PAD_UART3_RXD__GPIO_1_22;
-		mxc_iomux_v3_setup_pad(&pd);
+		iomux_v3_cfg_t pd = MX51_PAD_UART3_RXD__GPIO_1_22;
+		mxc_iomux_v3_setup_pad(pd);
 	}
 
 	/* release usbh1 hub reset */
@@ -1426,8 +1426,8 @@ static void __init mx51_nitrogen_io_init(void)
 
 	if (enable_w1) {
 		/* OneWire */
-		struct pad_desc onewire = MX51_PAD_OWIRE_LINE__OWIRE_LINE;
-		mxc_iomux_v3_setup_pad(&onewire);
+		iomux_v3_cfg_t onewire = MX51_PAD_OWIRE_LINE__OWIRE_LINE;
+		mxc_iomux_v3_setup_pad(onewire);
 	}
 #if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
 	init_camera();
