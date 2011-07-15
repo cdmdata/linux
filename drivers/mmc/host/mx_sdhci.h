@@ -230,6 +230,7 @@ struct sdhci_chip;
 
 struct sdhci_host {
 	struct sdhci_chip *chip;
+	struct regulator  *vmmc;	/* Power regulator */
 	struct mmc_host *mmc;	/* MMC structure */
 
 #ifdef CONFIG_LEDS_CLASS

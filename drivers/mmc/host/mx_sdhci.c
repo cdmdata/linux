@@ -29,6 +29,7 @@
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
 #include <linux/scatterlist.h>
+#include <linux/regulator/consumer.h>
 
 #include <linux/leds.h>
 
@@ -1767,6 +1768,8 @@ static int sdhci_suspend(struct platform_device *pdev, pm_message_t state)
 		if (!chip->hosts[i])
 			continue;
 		free_irq(chip->hosts[i]->irq, chip->hosts[i]);
+		if (chip->hosts[i]->vmmc)
+			ret = regulator_disable(chip->hosts[i]->vmmc);
 	}
 
 	return 0;
@@ -1786,6 +1789,11 @@ static int sdhci_resume(struct platform_device *pdev)
 	for (i = 0; i < chip->num_slots; i++) {
 		if (!chip->hosts[i])
 			continue;
+		if (chip->hosts[i]->vmmc) {
+			ret = regulator_enable(chip->hosts[i]->vmmc);
+			if (ret)
+				return ret;
+		}
 		ret = request_irq(chip->hosts[i]->irq, sdhci_irq,
 				  IRQF_SHARED,
 				  mmc_hostname(chip->hosts[i]->mmc),
@@ -2071,6 +2079,14 @@ static int __devinit sdhci_probe_slot(struct platform_device
 	if (ret)
 		goto out5;
 
+	host->vmmc = regulator_get(mmc_dev(mmc), "vmmc");
+	if (IS_ERR(host->vmmc)) {
+		printk(KERN_INFO "%s: no vmmc regulator found\n", mmc_hostname(mmc));
+		host->vmmc = NULL;
+	} else {
+		regulator_enable(host->vmmc);
+	}
+
 	sdhci_init(host);
 
 	if (host->flags & SDHCI_USE_EXTERNAL_DMA) {
@@ -2173,6 +2189,11 @@ static void sdhci_remove_slot(struct platform_device *pdev, int slot)
 	clk_disable(host->clk);
 	host->plat_data->clk_flg = 0;
 	clk_put(host->clk);
+
+	if (host->vmmc) {
+		regulator_disable(host->vmmc);
+		regulator_put(host->vmmc);
+	}
 	mmc_free_host(mmc);
 	gpio_sdhc_inactive(pdev->id);
 }
