@@ -1943,6 +1943,9 @@ static void __init mxc_board_init_nitrogen(void)
 			ARRAY_SIZE(nitrogen53_gpios_specific))) {
 		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
 	}
+	gpio_free(N53_WL1271_WL_EN);
+	gpio_free(N53_WL1271_BT_EN);
+
 	mxc_iomux_v3_setup_multiple_pads(nitrogen53_pads_specific,
 			ARRAY_SIZE(nitrogen53_pads_specific));
 	mxc_board_init(NULL, 0,
