@@ -59,7 +59,7 @@
 #include <linux/spi/spi.h>
 #include <linux/types.h>
 #include <linux/usb/android_composite.h>
-//#include <linux/wl12xx.h>
+#include <linux/wl12xx.h>
 #include <linux/android_pmem.h>
 
 #include <mach/common.h>
@@ -101,6 +101,9 @@ extern int __init mx53_nitrogen_init_da9052(unsigned irq);
 /* newer boards use GP7:11 for I2C3 SDA pin, older use GP1:6 */
 #define N53_I2C_2_SDA_CURRENT MAKE_GP(7, 11)
 #define N53_I2C_2_SDA_PREVIOUS MAKE_GP(1, 6)
+#define N53_WL1271_INT			MAKE_GP(2, 24)
+#define N53_WL1271_WL_EN		MAKE_GP(3, 0)
+#define N53_WL1271_BT_EN		MAKE_GP(3, 1)
 
 struct gpio nitrogen53_gpios[] __initdata = {
 #ifdef REV0
@@ -1631,6 +1634,43 @@ static void nitrogen_power_off(void)
 	}
 }
 
+#ifdef CONFIG_WL12XX_PLATFORM_DATA
+static struct regulator_consumer_supply nitrogen53_vmmc2_supply =
+	REGULATOR_SUPPLY("vmmc", "mxsdhci.2");
+
+/* VMMC2 for driving the WL12xx module */
+static struct regulator_init_data nitrogen53_vmmc2 = {
+	.constraints = {
+		.valid_ops_mask	= REGULATOR_CHANGE_STATUS,
+	},
+	.num_consumer_supplies	= 1,
+	.consumer_supplies = &nitrogen53_vmmc2_supply,
+};
+
+static struct fixed_voltage_config nitrogen53_vwlan = {
+	.supply_name		= "vwl1271",
+	.microvolts		= 1800000, /* 1.80V */
+	.gpio			= N53_WL1271_WL_EN,
+	.startup_delay		= 70000, /* 70ms */
+	.enable_high		= 1,
+	.enabled_at_boot	= 0,
+	.init_data		= &nitrogen53_vmmc2,
+};
+
+static struct platform_device nitrogen53_wlan_regulator = {
+	.name		= "reg-fixed-voltage",
+	.id		= 1,
+	.dev = {
+		.platform_data	= &nitrogen53_vwlan,
+	},
+};
+
+struct wl12xx_platform_data nitrogen53_wlan_data __initdata = {
+	.irq = gpio_to_irq(N53_WL1271_INT),
+	.board_ref_clock = WL12XX_REFCLOCK_38, /* 38.4 MHz */
+};
+#endif
+
 /*!
  * Board specific initialization.
  */
@@ -1733,6 +1773,13 @@ static void __init mxc_board_init(struct i2c_board_info *bi0, int bi0_size,
 	mxc_register_device(&usb_mass_storage_device, &mass_storage_data);
 	mxc_register_device(&usb_rndis_device, &rndis_data);
 	mxc_register_device(&android_usb_device, &android_usb_data);
+
+#ifdef CONFIG_WL12XX_PLATFORM_DATA
+	/* WL12xx WLAN Init */
+	if (wl12xx_set_platform_data(&nitrogen53_wlan_data))
+		pr_err("error setting wl12xx data\n");
+	platform_device_register(&nitrogen53_wlan_regulator);
+#endif
 }
 
 static void __init mx53_evk_timer_init(void)
