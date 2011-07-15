@@ -185,90 +185,162 @@ extern void (*set_num_cpu_wp)(int num);
 static int num_cpu_wp = 3;
 
 static iomux_v3_cfg_t mx53common_pads[] = {
-	MX53_PAD_EIM_WAIT__GPIO_5_0,
+	/* AUD3, J8 - PCM */
+	MX53_PAD_CSI0_D4__AUD3_TXC,
+	MX53_PAD_CSI0_D5__AUD3_TXD,
+	MX53_PAD_CSI0_D6__AUD3_TXFS,
+	MX53_PAD_CSI0_D7__AUD3_RXD,
 
-	MX53_PAD_EIM_OE__DI1_PIN7,	/* VGA HSync */
-	MX53_PAD_EIM_RW__DI1_PIN8,	/* VGA VSync */
-
-	MX53_PAD_EIM_A25__GPIO_5_2,
-	MX53_PAD_NANDF_CS3__GPIO_6_16,
-
-	MX53_PAD_EIM_D16__CSPI1_SCLK,
-	MX53_PAD_EIM_D17__CSPI1_MISO,
-	MX53_PAD_EIM_D18__CSPI1_MOSI,
-	MX53_PAD_EIM_D19__GPIO_3_19,
-
-	MX53_PAD_EIM_D20__GPIO_3_20,	/* SC16IS7XX i2c serial interrupt */
-
-	MX53_PAD_EIM_D23__DI0_D0_CS,
-
-	MX53_PAD_EIM_D24__GPIO_3_24,
-	
-	NEW_PAD_CTRL(MX53_PAD_EIM_D25__GPIO_3_25, BUTTON_PAD_CTRL) | MUX_SION_MASK,
-	NEW_PAD_CTRL(MX53_PAD_EIM_D26__GPIO_3_26, BUTTON_PAD_CTRL) | MUX_SION_MASK,
-	NEW_PAD_CTRL(MX53_PAD_EIM_D27__GPIO_3_27, BUTTON_PAD_CTRL) | MUX_SION_MASK,
-	NEW_PAD_CTRL(MX53_PAD_EIM_D29__GPIO_3_29, BUTTON_PAD_CTRL) | MUX_SION_MASK,
-	NEW_PAD_CTRL(MX53_PAD_GPIO_4__GPIO_1_4, BUTTON_PAD_CTRL) | MUX_SION_MASK,
-
-#ifndef CONFIG_MACH_NITROGEN_A_IMX53
-	MX53_PAD_EIM_D30__DI0_PIN11,
-	/* DVI DET */
-	MX53_PAD_EIM_D31__GPIO_3_31,
-#else
-	MX53_PAD_EIM_D30__UART3_CTS,
-	MX53_PAD_EIM_D31__UART3_RTS,
-#endif
-
-	MX53_PAD_ATA_DIOW__UART1_TXD,
-	MX53_PAD_ATA_DMACK__UART1_RXD,
-
-	MX53_PAD_ATA_BUFFER_EN__UART2_RXD,
-	MX53_PAD_ATA_DMARQ__UART2_TXD,
-	MX53_PAD_ATA_DIOR__UART2_RTS,
-	MX53_PAD_ATA_INTRQ__UART2_CTS,
-
-	MX53_PAD_ATA_CS_0__UART3_TXD,
-	MX53_PAD_ATA_CS_1__UART3_RXD,
-
-	/* AUD4 */
+	/* AUD4, sgtl5000 */
 	MX53_PAD_SD2_CLK__GPIO_1_10,	/* temp AUD4_RXFS */
 	MX53_PAD_SD2_CMD__GPIO_1_11,	/* temp AUD4_RXC */
 	MX53_PAD_SD2_DATA0__AUD4_RXD,
-
 	MX53_PAD_SD2_DATA1__AUD4_TXFS,
 	MX53_PAD_SD2_DATA3__AUD4_TXC,
 	MX53_PAD_SD2_DATA2__AUD4_TXD,
-	MX53_PAD_KEY_ROW0__GPIO_4_7,	/* N53_AMP_ENABLE, Speaker Amp Enable */
+
+	/* ECSPI1 */
+	MX53_PAD_EIM_D16__CSPI1_SCLK,
+	MX53_PAD_EIM_D17__CSPI1_MISO,
+	MX53_PAD_EIM_D18__CSPI1_MOSI,
+	MX53_PAD_EIM_D19__GPIO_3_19,	/* SS1 */
+
 #ifdef REV0
 	MX53_PAD_GPIO_0__GPIO_1_0,
 #else
-	/* audio and CSI clock out */
+	/* SGTL5000 clock sys_mclk */
 	MX53_PAD_GPIO_0__SSI_EXT1_CLK,
 #endif
 
-	MX53_PAD_GPIO_8__GPIO_1_8,
+	/* esdhc1 */
+	MX53_PAD_SD1_CMD__SD1_CMD,
+	MX53_PAD_SD1_CLK__SD1_CLK,
+	MX53_PAD_SD1_DATA0__SD1_DATA0,
+	MX53_PAD_SD1_DATA1__SD1_DATA1,
+	MX53_PAD_SD1_DATA2__SD1_DATA2,
+	MX53_PAD_SD1_DATA3__SD1_DATA3,
+	MX53_PAD_EIM_DA13__GPIO_3_13,	/* SDHC1 SD_CD */
+	MX53_PAD_EIM_DA14__GPIO_3_14,	/* SDHC1 SD_WP */
 
+	/* esdhc3 */
+	MX53_PAD_ATA_DATA8__SD3_DAT0,
+	MX53_PAD_ATA_DATA9__SD3_DAT1,
+	MX53_PAD_ATA_DATA10__SD3_DAT2,
+	MX53_PAD_ATA_DATA11__SD3_DAT3,
+	MX53_PAD_ATA_DATA0__SD3_DAT4,
+	MX53_PAD_ATA_DATA1__SD3_DAT5,
+	MX53_PAD_ATA_DATA2__SD3_DAT6,
+	MX53_PAD_ATA_DATA3__SD3_DAT7,
+	MX53_PAD_ATA_RESET_B__SD3_CMD,
+	MX53_PAD_ATA_IORDY__SD3_CLK,
+	MX53_PAD_EIM_DA11__GPIO_3_11,	/* SDHC3 SD_CD */
+	MX53_PAD_EIM_DA12__GPIO_3_12,	/* SDHC3 SD_WP */
 
+	/* FEC pins */
+	MX53_PAD_GPIO_18__GPIO_7_13,	/* low active reset pin*/
+	MX53_PAD_FEC_MDIO__FEC_MDIO,
+	MX53_PAD_FEC_REF_CLK__FEC_REF_CLK,
+	MX53_PAD_FEC_RX_ER__FEC_RX_ER,
+	MX53_PAD_FEC_CRS_DV__FEC_CRS_DV,
+	MX53_PAD_FEC_RXD1__FEC_RXD1,
+	MX53_PAD_FEC_RXD0__FEC_RXD0,
+	MX53_PAD_KEY_COL2__FEC_RXD2,	/* Nitrogen53 */
+	MX53_PAD_KEY_COL0__FEC_RXD3,	/* Nitrogen53 */
+	MX53_PAD_FEC_TX_EN__FEC_TX_EN,
+	MX53_PAD_FEC_TXD1__FEC_TXD1,
+	MX53_PAD_FEC_TXD0__FEC_TXD0,
+	MX53_PAD_KEY_ROW2__FEC_TXD2,	/* Nitrogen53 */
+	MX53_PAD_GPIO_19__FEC_TXD3,	/* Nitrogen53 */
+	/* FEC TX_ER - unused output from mx53 */
+	MX53_PAD_KEY_ROW1__FEC_COL,	/* Nitrogen53 */
+	MX53_PAD_KEY_COL3__FEC_CRS,	/* Nitrogen53 */
+	MX53_PAD_KEY_COL1__FEC_RX_CLK,	/* Nitrogen53 */
+	MX53_PAD_FEC_MDC__FEC_MDC,
 
+	/* GPIO1 */
+	NEW_PAD_CTRL(MX53_PAD_GPIO_4__GPIO_1_4, BUTTON_PAD_CTRL) | MUX_SION_MASK,	/* ??Menu */
+	NEW_PAD_CTRL(MX53_PAD_GPIO_5__GPIO_1_5, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
+	MX53_PAD_GPIO_8__GPIO_1_8,	/* J23 - rgb gp */
+
+	/* GPIO2 */
+	NEW_PAD_CTRL(MX53_PAD_EIM_A22__GPIO_2_16, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
+	NEW_PAD_CTRL(MX53_PAD_EIM_A21__GPIO_2_17, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
+	NEW_PAD_CTRL(MX53_PAD_EIM_A20__GPIO_2_18, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
+	NEW_PAD_CTRL(MX53_PAD_EIM_A19__GPIO_2_19, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
+	NEW_PAD_CTRL(MX53_PAD_EIM_A18__GPIO_2_20, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
+	NEW_PAD_CTRL(MX53_PAD_EIM_A17__GPIO_2_21, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
+	NEW_PAD_CTRL(MX53_PAD_EIM_A16__GPIO_2_22, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* wl1271 btwakeup, Camera power down(nitrogenA) */
+	MX53_PAD_EIM_EB1__GPIO_2_29,									/* tpf410_i2cmode */
+
+	/* GPIO3 */
 	MX53_PAD_EIM_DA0__GPIO_3_0,	/* wl1271 wl_en */
 	MX53_PAD_EIM_DA1__GPIO_3_1,	/* wl1271 bt_en */
+	MX53_PAD_EIM_DA6__GPIO_3_6,	/* GPIO spare on Nitrogen53A */
 	MX53_PAD_EIM_DA10__GPIO_3_10,	/* I2C Connector Buffer enable */
+	/* Keyboard, NitrogenA - SC16IS7XX i2c serial interrupt */
+	NEW_PAD_CTRL(MX53_PAD_EIM_D20__GPIO_3_20, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
+	NEW_PAD_CTRL(MX53_PAD_EIM_D22__GPIO_3_22, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
+	NEW_PAD_CTRL(MX53_PAD_EIM_D26__GPIO_3_26, BUTTON_PAD_CTRL) | MUX_SION_MASK,	/* Back key */
+	NEW_PAD_CTRL(MX53_PAD_EIM_D27__GPIO_3_27, BUTTON_PAD_CTRL) | MUX_SION_MASK,	/* Search Key */
+	NEW_PAD_CTRL(MX53_PAD_EIM_D29__GPIO_3_29, BUTTON_PAD_CTRL) | MUX_SION_MASK,	/* Home Key */
+
+	/* GPIO4 */
+	MX53_PAD_KEY_ROW0__GPIO_4_7,	/* N53_AMP_ENABLE, Speaker Amp Enable */
+	MX53_PAD_KEY_ROW4__GPIO_4_15,	/* tfp410int */
+
+	/* GPIO5 */
+	MX53_PAD_EIM_WAIT__GPIO_5_0,	/* USB HUB reset */
+	NEW_PAD_CTRL(MX53_PAD_EIM_A25__GPIO_5_2, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* NitrogenA - eMMC reset */
+	MX53_PAD_EIM_A24__GPIO_5_4,	/* USB OTG USB_OC */
+
+	/* GPIO6 */
+	MX53_PAD_EIM_A23__GPIO_6_6,	/* USB OTG USB_PWR */
+	MX53_PAD_NANDF_CS3__GPIO_6_16,	/* NitrogenA mic mux */
+
+	/* GPIO7 */
+	MX53_PAD_ATA_DA_2__GPIO_7_8,	/* USB HOST USB_PWR */
 	MX53_PAD_GPIO_17__GPIO_7_12,	/* I2C Connector interrupt */
 
-	MX53_PAD_KEY_ROW4__GPIO_4_15,
-	MX53_PAD_EIM_EB1__GPIO_2_29,
+	/* I2C1 */
+	MX53_PAD_EIM_D21__I2C1_SCL,	/* GPIO3[21] */
+	MX53_PAD_EIM_D28__I2C1_SDA,	/* GPIO3[28] */
+
+	/* I2C2 */
+	MX53_PAD_EIM_EB2__I2C2_SCL,	/* GPIO2[30] */
+	MX53_PAD_KEY_ROW3__I2C2_SDA,	/* GPIO4[13] */
+
+	/* I2C3 */
+	MX53_PAD_GPIO_3__I2C3_SCL,	/* GPIO1[3] */
+	/* sda is board dependent */
 
 
-	/* DI0 display clock */
-	MX53_PAD_DI0_DISP_CLK__DI0_DISP_CLK,
+	/* IPU - Camera */
+//	MX53_PAD_CSI0_D8__CSI0_D8,	/* ov5640 doesn't use D8-D11 */
+//	MX53_PAD_CSI0_D9__CSI0_D9,
+//	MX53_PAD_CSI0_D10__CSI0_D10,
+//	MX53_PAD_CSI0_D11__CSI0_D11,
+	MX53_PAD_CSI0_D12__CSI0_D12,
+	MX53_PAD_CSI0_D13__CSI0_D13,
+	MX53_PAD_CSI0_D14__CSI0_D14,
+	MX53_PAD_CSI0_D15__CSI0_D15,
+	MX53_PAD_CSI0_D16__CSI0_D16,
+	MX53_PAD_CSI0_D17__CSI0_D17,
+	MX53_PAD_CSI0_D18__CSI0_D18,
+	MX53_PAD_CSI0_D19__CSI0_D19,
+	MX53_PAD_CSI0_VSYNC__CSI0_VSYNC,
+	MX53_PAD_CSI0_MCLK__CSI0_HSYNC,
+	MX53_PAD_CSI0_PIXCLK__CSI0_PIXCLK,
+	MX53_PAD_NANDF_CS2__CSI0_MCLK,
+	MX53_PAD_GPIO_2__GPIO_1_2,	/* CAMERA_POWERDOWN (nitrogen53) */
+	MX53_PAD_GPIO_7__GPIO_1_7,	/* CAMERA_STROBE */
+	MX53_PAD_KEY_COL4__GPIO_4_14,	/* CAMERA_RESET */
+	MX53_PAD_CSI0_DATA_EN__GPIO_5_20, /* Camera Standby */
 
-	/* DI0 data enable */
-	MX53_PAD_DI0_PIN15__DI0_PIN15,
-	/* DI0 HSYNC */
-	MX53_PAD_DI0_PIN2__DI0_PIN2,
-	/* DI0 VSYNC */
-	MX53_PAD_DI0_PIN3__DI0_PIN3,
-
+	/* IPU - Display */
+	MX53_PAD_DI0_DISP_CLK__DI0_DISP_CLK,	/* DI0 display clock */
+	MX53_PAD_DI0_PIN15__DI0_PIN15,		/* DI0 data enable */
+	MX53_PAD_DI0_PIN2__DI0_PIN2,		/* DI0 HSYNC */
+	MX53_PAD_DI0_PIN3__DI0_PIN3,		/* DI0 VSYNC */
 	MX53_PAD_DISP0_DAT0__DISP0_DAT0,
 	MX53_PAD_DISP0_DAT1__DISP0_DAT1,
 	MX53_PAD_DISP0_DAT2__DISP0_DAT2,
@@ -293,157 +365,37 @@ static iomux_v3_cfg_t mx53common_pads[] = {
 	MX53_PAD_DISP0_DAT21__DISP0_DAT21,
 	MX53_PAD_DISP0_DAT22__DISP0_DAT22,
 	MX53_PAD_DISP0_DAT23__DISP0_DAT23,
+	MX53_PAD_EIM_RW__DI1_PIN8,	/* VGA VSync */
 
+	/* LDB - LVDS0 */
 	MX53_PAD_LVDS0_TX3_P__LVDS0_TX3,
 	MX53_PAD_LVDS0_CLK_P__LVDS0_CLK,
 	MX53_PAD_LVDS0_TX2_P__LVDS0_TX2,
 	MX53_PAD_LVDS0_TX1_P__LVDS0_TX1,
 	MX53_PAD_LVDS0_TX0_P__LVDS0_TX0,
 
+	/* LDB - LVDS1 */
 	MX53_PAD_LVDS1_TX3_P__LVDS1_TX3,
 	MX53_PAD_LVDS1_CLK_P__LVDS1_CLK,
 	MX53_PAD_LVDS1_TX2_P__LVDS1_TX2,
 	MX53_PAD_LVDS1_TX1_P__LVDS1_TX1,
 	MX53_PAD_LVDS1_TX0_P__LVDS1_TX0,
 
-//	MX53_PAD_CSI0_D8__CSI0_D8,	/* ov5640 doesn't use D8-D11 */
-//	MX53_PAD_CSI0_D9__CSI0_D9,
-//	MX53_PAD_CSI0_D10__CSI0_D10,
-//	MX53_PAD_CSI0_D11__CSI0_D11,
-	MX53_PAD_CSI0_D12__CSI0_D12,
-	MX53_PAD_CSI0_D13__CSI0_D13,
-	MX53_PAD_CSI0_D14__CSI0_D14,
-	MX53_PAD_CSI0_D15__CSI0_D15,
-	MX53_PAD_CSI0_D16__CSI0_D16,
-	MX53_PAD_CSI0_D17__CSI0_D17,
-	MX53_PAD_CSI0_D18__CSI0_D18,
-	MX53_PAD_CSI0_D19__CSI0_D19,
-
-	MX53_PAD_CSI0_VSYNC__CSI0_VSYNC,
-	MX53_PAD_CSI0_MCLK__CSI0_HSYNC,
-	MX53_PAD_CSI0_PIXCLK__CSI0_PIXCLK,
-	MX53_PAD_NANDF_CS2__CSI0_MCLK,
-	MX53_PAD_GPIO_2__GPIO_1_2,	/* CAMERA_POWERDOWN */
-	MX53_PAD_GPIO_7__GPIO_1_7,	/* CAMERA_STROBE */
-	MX53_PAD_KEY_COL4__GPIO_4_14,	/* CAMERA_RESET */
-
-	/* esdhc1 */
-	MX53_PAD_SD1_CMD__SD1_CMD,
-	MX53_PAD_SD1_CLK__SD1_CLK,
-	MX53_PAD_SD1_DATA0__SD1_DATA0,
-	MX53_PAD_SD1_DATA1__SD1_DATA1,
-	MX53_PAD_SD1_DATA2__SD1_DATA2,
-	MX53_PAD_SD1_DATA3__SD1_DATA3,
-
-	/* esdhc3 */
-	MX53_PAD_ATA_DATA8__SD3_DAT0,
-	MX53_PAD_ATA_DATA9__SD3_DAT1,
-	MX53_PAD_ATA_DATA10__SD3_DAT2,
-	MX53_PAD_ATA_DATA11__SD3_DAT3,
-	MX53_PAD_ATA_DATA0__SD3_DAT4,
-	MX53_PAD_ATA_DATA1__SD3_DAT5,
-	MX53_PAD_ATA_DATA2__SD3_DAT6,
-	MX53_PAD_ATA_DATA3__SD3_DAT7,
-	MX53_PAD_ATA_RESET_B__SD3_CMD,
-	MX53_PAD_ATA_IORDY__SD3_CLK,
-
-	/* FEC pins */
-	MX53_PAD_GPIO_18__GPIO_7_13,	/* low active reset pin*/
-	MX53_PAD_FEC_MDIO__FEC_MDIO,
-	MX53_PAD_FEC_REF_CLK__FEC_REF_CLK,
-	MX53_PAD_FEC_RX_ER__FEC_RX_ER,
-	MX53_PAD_FEC_CRS_DV__FEC_CRS_DV,
-	MX53_PAD_FEC_RXD1__FEC_RXD1,
-	MX53_PAD_FEC_RXD0__FEC_RXD0,
-	MX53_PAD_KEY_COL2__FEC_RXD2,	/* Nitrogen53 */
-	MX53_PAD_KEY_COL0__FEC_RXD3,	/* Nitrogen53 */
-	MX53_PAD_FEC_TX_EN__FEC_TX_EN,
-	MX53_PAD_FEC_TXD1__FEC_TXD1,
-	MX53_PAD_FEC_TXD0__FEC_TXD0,
-	MX53_PAD_KEY_ROW2__FEC_TXD2,	/* Nitrogen53 */
-	MX53_PAD_GPIO_19__FEC_TXD3,	/* Nitrogen53 */
-	/* FEC TX_ER - unused output from mx53 */
-	MX53_PAD_KEY_ROW1__FEC_COL,	/* Nitrogen53 */
-	MX53_PAD_KEY_COL3__FEC_CRS,	/* Nitrogen53 */
-	MX53_PAD_KEY_COL1__FEC_RX_CLK,	/* Nitrogen53 */
-	MX53_PAD_FEC_MDC__FEC_MDC,
-
-	/* I2C3 */
-	MX53_PAD_GPIO_3__I2C3_SCL,	/* GPIO1[3] */
-	/* sda is board dependent */
-
-	/* I2C2 */
-	MX53_PAD_EIM_EB2__I2C2_SCL,	/* GPIO2[30] */
-	MX53_PAD_KEY_ROW3__I2C2_SDA,	/* GPIO4[13] */
-
-	/* I2C1 */
-	MX53_PAD_EIM_D21__I2C1_SCL,	/* GPIO3[21] */
-	MX53_PAD_EIM_D28__I2C1_SDA,	/* GPIO3[28] */
-
-	/* ECSPI2, Nitrogen53A only */
-#if defined(CONFIG_WL12XX_SDIO) || defined(CONFIG_WL12XX_SDIO_MODULE)
-	MX53_PAD_EIM_CS1__GPIO2_24,	/* WL1271_irq */
-#else
-	MX53_PAD_EIM_CS1_CSPI2_MOSI,
-	MX53_PAD_EIM_OE_CSPI2_MISO,
-	MX53_PAD_EIM_LBA_CSPI2_CS2,
-	MX53_PAD_EIM_CS0_CSPI2_SCLK,
-#endif
-
-	/* USB OTG USB_OC */
-	MX53_PAD_EIM_A24__GPIO_5_4,
-
-	/* USB OTG USB_PWR */
-	MX53_PAD_EIM_A23__GPIO_6_6,
-
-#ifndef CONFIG_KEYBOARD_GPIO
-	/* DI0_PIN1 */
-	MX53_PAD_EIM_D22__DISPB0_SER_DIN,
-#endif
-
-	/* GPIO spare on Nitrogen53A */
-	MX53_PAD_EIM_DA6__GPIO_3_6,
-
-	/* SDHC1 SD_CD */
-	MX53_PAD_EIM_DA13__GPIO_3_13,
-
-	/* SDHC1 SD_WP */
-	MX53_PAD_EIM_DA14__GPIO_3_14,
-
-	/* SDHC3 SD_CD */
-	MX53_PAD_EIM_DA11__GPIO_3_11,
-
-	/* SDHC3 SD_WP */
-	MX53_PAD_EIM_DA12__GPIO_3_12,
-
-	/* PWM backlight */
+	/* PWM1 backlight */
 	MX53_PAD_GPIO_9__PWMO,		/* pwm1 */
+
+	/* PWM2 backlight */
 	MX53_PAD_GPIO_1__PWMO,		/* pwm2 */
 
-	/* USB HOST USB_PWR */
-	MX53_PAD_ATA_DA_2__GPIO_7_8,
+	/* UART1 */
+	MX53_PAD_ATA_DIOW__UART1_TXD,
+	MX53_PAD_ATA_DMACK__UART1_RXD,
 
-	/* USB HOST USB_RST */
-	MX53_PAD_CSI0_DATA_EN__GPIO_5_20,
-
-
-	NEW_PAD_CTRL(MX53_PAD_EIM_A17__GPIO_2_21, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
-	/* GPIO keys */
-#ifdef CONFIG_KEYBOARD_GPIO
-	NEW_PAD_CTRL(MX53_PAD_EIM_A18__GPIO_2_20, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
-	NEW_PAD_CTRL(MX53_PAD_EIM_A19__GPIO_2_19, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
-	NEW_PAD_CTRL(MX53_PAD_EIM_A20__GPIO_2_18, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
-	NEW_PAD_CTRL(MX53_PAD_EIM_A21__GPIO_2_17, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
-	NEW_PAD_CTRL(MX53_PAD_EIM_A22__GPIO_2_16, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
-//	NEW_PAD_CTRL(MX53_PAD_EIM_CS0__GPIO_2_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
-	NEW_PAD_CTRL(MX53_PAD_EIM_A25__GPIO_5_2, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
-	NEW_PAD_CTRL(MX53_PAD_GPIO_5__GPIO_1_5, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
-	NEW_PAD_CTRL(MX53_PAD_EIM_D22__GPIO_3_22, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
-	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
-	NEW_PAD_CTRL(MX53_PAD_EIM_D20__GPIO_3_20, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
-	NEW_PAD_CTRL(MX53_PAD_EIM_D24__GPIO_3_24, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
-#endif
-	NEW_PAD_CTRL(MX53_PAD_EIM_A16__GPIO_2_22, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
+	/* UART2 */
+	MX53_PAD_ATA_DMARQ__UART2_TXD,
+	MX53_PAD_ATA_BUFFER_EN__UART2_RXD,
+	MX53_PAD_ATA_INTRQ__UART2_CTS,
+	MX53_PAD_ATA_DIOR__UART2_RTS,
 };
 
 /* working point(wp): 0 - 800MHz; 1 - 166.25MHz; */
@@ -919,7 +871,7 @@ struct plat_i2c_generic_data {
 };
 
 static struct plat_i2c_generic_data i2c_generic_data = {
-	.irq = IOMUX_TO_IRQ_V3(N53_I2C_CONNECTOR_INT),
+	.irq = gpio_to_irq(N53_I2C_CONNECTOR_INT),
 	.gp = N53_I2C_CONNECTOR_INT,
 };
 
@@ -930,7 +882,7 @@ struct plat_i2c_tfp410_data {
 };
 
 static struct plat_i2c_tfp410_data i2c_tfp410_data = {
-	.irq = IOMUX_TO_IRQ_V3(N53_TFP410_INT), .gp = N53_TFP410_INT,
+	.irq = gpio_to_irq(N53_TFP410_INT), .gp = N53_TFP410_INT,
 	.gp_i2c_sel = N53_TFP410_I2CMODE
 };
 
@@ -940,7 +892,7 @@ struct sc16is7xx_gpio_platform_data i2c_sc16is7xx_gpio_data = {
 };
 
 static struct sc16is7xx_platform_data i2c_sc16is7xx_data = {
-	.irq = IOMUX_TO_IRQ_V3(N53_SC16IS7XX_INT),
+	.irq = gpio_to_irq(N53_SC16IS7XX_INT),
 	.gp = N53_SC16IS7XX_INT,
 	.gpio_data = &i2c_sc16is7xx_gpio_data,
 };
@@ -1695,10 +1647,10 @@ static void __init mxc_board_init(struct i2c_board_info *bi0, int bi0_size,
 	clk_put(mxc_spdif_data.spdif_core_clk);
 
 	/* SD card detect irqs */
-	mxcsdhc3_device.resource[2].start = IOMUX_TO_IRQ_V3(N53_SD3_CD);
-	mxcsdhc3_device.resource[2].end = IOMUX_TO_IRQ_V3(N53_SD3_CD);
-	mxcsdhc1_device.resource[2].start = IOMUX_TO_IRQ_V3(N53_SD1_CD);
-	mxcsdhc1_device.resource[2].end = IOMUX_TO_IRQ_V3(N53_SD1_CD);
+	mxcsdhc3_device.resource[2].start = gpio_to_irq(N53_SD3_CD);
+	mxcsdhc3_device.resource[2].end = gpio_to_irq(N53_SD3_CD);
+	mxcsdhc1_device.resource[2].start = gpio_to_irq(N53_SD1_CD);
+	mxcsdhc1_device.resource[2].end = gpio_to_irq(N53_SD1_CD);
 
 	mxc_cpu_common_init();
 	mx53_evk_io_init();
@@ -1851,10 +1803,6 @@ static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
 /*****************************************************************************/
 
 #ifdef CONFIG_MACH_NITROGEN_A_IMX53
-static struct pad_desc nitrogen53_pads_specific_a[] __initdata = {
-	MX53_PAD_GPIO_16__I2C3_SDA,	/* gpio7[11] */
-};
-
 struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "pmic-int",		.gpio = MAKE_GP(2, 21),		.flags = GPIOF_DIR_IN},
 	{.label = "Camera power down",	.gpio = MAKE_GP(2, 22),		.flags = GPIOF_INIT_HIGH},
@@ -1863,9 +1811,31 @@ struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "power_down_req",	.gpio = POWER_DOWN,		.flags = GPIOF_INIT_HIGH},
 };
 
+static iomux_v3_cfg_t nitrogen53_pads_specific_a[] __initdata = {
+	/* ECSPI2, Nitrogen53A only */
+	MX53_PAD_EIM_CS1_CSPI2_MOSI,	/* Nitrogen uses as WL1271_irq */
+	MX53_PAD_EIM_OE_CSPI2_MISO,	/* Nitrogen uses as VGA Hsync */
+	MX53_PAD_EIM_LBA_CSPI2_CS2,
+	MX53_PAD_EIM_CS0_CSPI2_SCLK,
+
+	MX53_PAD_GPIO_16__I2C3_SDA,	/* gpio7[11] */
+
+	/* Nitrogen uses the following pin for UART3, CTS, TXD, RXD */
+	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
+
+	NEW_PAD_CTRL(MX53_PAD_EIM_D24__GPIO_3_24, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
+	NEW_PAD_CTRL(MX53_PAD_EIM_D25__GPIO_3_25, BUTTON_PAD_CTRL) | MUX_SION_MASK,	/* Menu key */
+
+	/* UART3 */
+	MX53_PAD_ATA_CS_0__UART3_TXD,
+	MX53_PAD_ATA_CS_1__UART3_RXD,
+	MX53_PAD_EIM_D30__UART3_CTS,
+	MX53_PAD_EIM_D31__UART3_RTS,
+};
+
 static void __init mxc_board_init_nitrogen_a(void)
 {
-	unsigned da9052_irq = IOMUX_TO_IRQ_V3(MAKE_GP(2, 21));	/* pad EIM_A17 */
+	unsigned da9052_irq = gpio_to_irq(MAKE_GP(2, 21));	/* pad EIM_A17 */
 	camera_data.power_down = MAKE_GP(2, 22);
 	if (gpio_request_array(nitrogen53_gpios_specific_a,
 			ARRAY_SIZE(nitrogen53_gpios_specific_a))) {
@@ -1892,14 +1862,6 @@ MACHINE_END
 /*****************************************************************************/
 
 #ifdef CONFIG_MACH_NITROGEN_IMX53
-static struct pad_desc nitrogen53_pads_specific[] __initdata = {
-	MX53_PAD_GPIO_16__I2C3_SDA,	/* gpio7[11] */
-#if defined(CONFIG_WL12XX_SDIO)
-	MX53_PAD_EIM_CS1__GPIO_2_24,	/* WL1271_irq */
-#endif
-};
-
-
 struct gpio nitrogen53_gpios_specific[] __initdata = {
 	{.label = "Camera power down",	.gpio = MAKE_GP(1, 2),		.flags = GPIOF_INIT_HIGH},
 	{.label = "pmic-int",		.gpio = MAKE_GP(2, 21),		.flags = GPIOF_DIR_IN},
@@ -1912,9 +1874,24 @@ struct gpio nitrogen53_gpios_specific[] __initdata = {
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 };
 
+static iomux_v3_cfg_t nitrogen53_pads_specific[] __initdata = {
+	MX53_PAD_EIM_CS1__GPIO_2_24,	/* WL1271_irq, NitrogenA uses as ECSPI2 MOSI */
+	MX53_PAD_EIM_OE__DI1_PIN7,	/* VGA HSync, NitrogenA uses as ECSPI2 MISO */
+	MX53_PAD_EIM_CS0__GPIO_2_23,	/* Keyboard, NitrogenA uses as ECSPI2 SCLK */
+
+	MX53_PAD_GPIO_16__I2C3_SDA,	/* gpio7[11] */
+	MX53_PAD_EIM_D30__GPIO_3_30,	/* On/Off key */
+
+	/* UART3 */
+	MX53_PAD_EIM_D24__UART3_TXD,
+	MX53_PAD_EIM_D25__UART3_RXD,
+	MX53_PAD_EIM_D23__UART3_CTS,
+	MX53_PAD_EIM_D31__UART3_RTS,
+};
+
 static void __init mxc_board_init_nitrogen(void)
 {
-	unsigned da9052_irq = IOMUX_TO_IRQ_V3(MAKE_GP(2, 21));	/* pad EIM_A17 */
+	unsigned da9052_irq = gpio_to_irq(MAKE_GP(2, 21));	/* pad EIM_A17 */
 	if (gpio_request_array(nitrogen53_gpios_specific,
 			ARRAY_SIZE(nitrogen53_gpios_specific))) {
 		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
@@ -1980,7 +1957,7 @@ struct gpio nitrogen53_gpios_specific_v2[] __initdata = {
 
 static void __init mxc_board_init_nitrogen_v2(void)
 {
-	unsigned da9052_irq = IOMUX_TO_IRQ_V3(MAKE_GP(7, 11));	/* pad GPIO_16 */
+	unsigned da9052_irq = gpio_to_irq(MAKE_GP(7, 11));	/* pad GPIO_16 */
 	if (gpio_request_array(nitrogen53_gpios_specific_v2,
 			ARRAY_SIZE(nitrogen53_gpios_specific_v2))) {
 		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
@@ -2044,7 +2021,7 @@ struct gpio nitrogen53_gpios_specific_v1[] __initdata = {
 
 static void __init mxc_board_init_nitrogen_v1(void)
 {
-	unsigned da9052_irq = IOMUX_TO_IRQ_V3(MAKE_GP(7, 11));	/* pad GPIO_16 */
+	unsigned da9052_irq = gpio_to_irq(MAKE_GP(7, 11));	/* pad GPIO_16 */
 	if (gpio_request_array(nitrogen53_gpios_specific_v1,
 			ARRAY_SIZE(nitrogen53_gpios_specific_v1))) {
 		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
