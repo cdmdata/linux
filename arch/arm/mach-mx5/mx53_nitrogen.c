@@ -66,6 +66,10 @@
 #include <linux/ldb.h>
 #include <linux/android_pmem.h>
 #include <linux/usb/android_composite.h>
+#include <linux/spi/ltc1960.h>
+#if defined(CONFIG_DUMB_BATTERY) || defined (CONFIG_DUMB_BATTERY_MODULE)
+#include <linux/dumb_battery.h>
+#endif
 
 //#define REV0		//this board should no longer exist
 
@@ -1024,10 +1028,38 @@ static struct spi_board_info mxc_dataflash_device[] __initdata = {
 	 .platform_data = &mxc_spi_flash_data[0],},
 };
 
+#if defined(CONFIG_LTC1960) || defined(CONFIG_LTC1960_MODULE)
+static struct ltc1960_battery_info_t removable_battery = {
+	.name = "bq20z75"
+,	.charge_uv = 12800000
+,	.charge_ua = 2000000
+,	.trickle_seconds = 5*60
+};
+
+static struct ltc1960_battery_info_t permanent_battery = {
+	.name = "dumb"
+,	.charge_uv = 12600000
+,	.charge_ua = 1500000
+,	.trickle_seconds = 60
+};
+
+static struct ltc1960_platform_data_t ltc1960_pdata = {
+	.batteries = {
+		&permanent_battery
+	,	&removable_battery }
+};
+#endif
+
 static struct spi_board_info spidev[] __initdata = {
 	{
+#if defined(CONFIG_LTC1960) || defined(CONFIG_LTC1960_MODULE)
+	.modalias = "ltc1960",
+	.platform_data = &ltc1960_pdata,
+	 .max_speed_hz = 100000,	/* max spi clock (SCK) speed in HZ */
+#else
 	 .modalias = "spidev",
 	 .max_speed_hz = 1000000,	/* max spi clock (SCK) speed in HZ */
+#endif
 	 .bus_num = 2,
 	 .chip_select = 1}
 };
@@ -1529,6 +1561,22 @@ static void init_camera(void)
 }
 #endif
 
+#if defined(CONFIG_DUMB_BATTERY) || defined (CONFIG_DUMB_BATTERY_MODULE)
+static struct dumb_battery_platform_t dumb_plat = {
+	.init_level = 30
+,	.charge_sec = 60*60
+,	.discharge_sec = 120*60
+};
+
+static struct platform_device dumb_battery_device = {
+	.name   = "dumb_battery",
+	.id     = -1,
+	.dev    = {
+		.platform_data  = &dumb_plat
+	},
+};
+#endif
+
 static void __init mx53_evk_io_init(void)
 {
 	/* MX53 Nitrogen board */
@@ -1543,6 +1591,9 @@ static void __init mx53_evk_io_init(void)
 			ARRAY_SIZE(mx53_nand_pads));
 	pr_info("MX53 Nitrogen board \n");
 
+#if defined(CONFIG_DUMB_BATTERY) || defined (CONFIG_DUMB_BATTERY_MODULE)
+	platform_device_register(&dumb_battery_device);
+#endif
 
 #ifdef CONFIG_KEYBOARD_GPIO
 	platform_device_register(&gpio_keys_device);

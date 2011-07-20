@@ -185,4 +185,20 @@ config BATTERY_DS2438
 	select W1_SLAVE_DS2438
 	help
 	  Say Y here to enable support for batteries with ds2438 chip.
+
+config LTC1960
+	tristate "Linear Technologies LTC1960"
+	depends on SPI
+	help
+	  Say Y to include support for the Linear Technologies LTC1960
+	  driver. Note that your platform will need to define what
+	  batteries are connected to each of the battery input ports.
+
+config DUMB_BATTERY
+	tristate "Dumb Battery"
+	help
+	  Say Y to include support for bare batteries defined by the platform.
+	  This driver supports charging at a specified voltage for a specified
+	  duration.
+
 endif # POWER_SUPPLY
