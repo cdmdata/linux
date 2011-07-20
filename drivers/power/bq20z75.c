@@ -286,8 +286,11 @@ static void  bq20z75_unit_adjustment(struct i2c_client *client,
 		break;
 
 	default:
+		break;
+#if 0
 		dev_dbg(&client->dev,
 			"%s: no need for unit conversion %d\n", __func__, psp);
+#endif
 	}
 }
 
@@ -399,9 +402,10 @@ static int bq20z75_get_property(struct power_supply *psy,
 	/* Convert units to match requirements for power supply class */
 	bq20z75_unit_adjustment(client, psp, val);
 
+#if 0
 	dev_dbg(&client->dev,
 		"%s: property = %d, value = %d\n", __func__, psp, val->intval);
-
+#endif
 	return 0;
 }
 
@@ -416,7 +420,7 @@ static int bq20z75_probe(struct i2c_client *client,
 		return -ENOMEM;
 
 	bq20z75_device->client = client;
-	bq20z75_device->power_supply.name = "battery";
+	bq20z75_device->power_supply.name = "bq20z75";
 	bq20z75_device->power_supply.type = POWER_SUPPLY_TYPE_BATTERY;
 	bq20z75_device->power_supply.properties = bq20z75_properties;
 	bq20z75_device->power_supply.num_properties =
