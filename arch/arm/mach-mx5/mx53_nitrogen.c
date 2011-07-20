@@ -104,8 +104,15 @@ struct gpio nitrogen53_gpios[] __initdata = {
 #define N53_I2C_2_SCL				MAKE_GP(1, 3)
 	{.label = "i2c-2-scl",		.gpio = MAKE_GP(1, 3),		.flags = GPIOF_DIR_IN},
 
+#if defined(CONFIG_WL12XX_SDIO)
+#if defined(CONFIG_MACH_NITROGEN_A_IMX53) && \
+	(defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE))
+	#error TiWi and Nitrogen53a camera are incompatible
+#endif
 	{.label = "wl1271_btwakeup",	.gpio = MAKE_GP(2, 22),		.flags = GPIOF_DIR_IN},		/* EIM_A16 */
 	{.label = "wl1271_int",		.gpio = MAKE_GP(2, 24),		.flags = GPIOF_DIR_IN},		/* EIM_CS1 */
+#endif
+
 #define N53_I2C_1_SCL				MAKE_GP(2, 30)
 	{.label = "i2c-1-scl",		.gpio = MAKE_GP(2, 30),		.flags = GPIOF_DIR_IN},
 #define EVK_SD3_CD				MAKE_GP(3, 11)
@@ -136,8 +143,13 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "i2c_int",		.gpio = MAKE_GP(7, 12),		.flags = GPIOF_DIR_IN},
 
 /* Outputs */
+#ifndef CONFIG_MACH_NITROGEN_A_IMX53
 #define CAMERA_POWERDOWN			MAKE_GP(1, 2)
 	{.label = "Camera power down",	.gpio = MAKE_GP(1, 2),		.flags = GPIOF_INIT_HIGH},
+#else
+#define CAMERA_POWERDOWN			MAKE_GP(2, 22)
+	{.label = "Camera power down",	.gpio = MAKE_GP(2, 22),		.flags = GPIOF_INIT_HIGH},
+#endif
 #define CAMERA_STROBE				MAKE_GP(1, 7)
 	{.label = "Camera strobe",	.gpio = MAKE_GP(1, 7),		.flags = 0},
 	// make sure gp2[29] is high, i2c_sel for tfp410
