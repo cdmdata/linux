@@ -545,13 +545,13 @@ static struct fb_videomode video_modes[] = {
 	 0,},
 };
 
-struct cpu_wp *mx53_evk_get_cpu_wp(int *wp)
+struct cpu_wp *mx53_nitrogen_get_cpu_wp(int *wp)
 {
 	*wp = num_cpu_wp;
 	return cpu_wp_auto;
 }
 
-void mx53_evk_set_num_cpu_wp(int num)
+void mx53_nitrogen_set_num_cpu_wp(int num)
 {
 	num_cpu_wp = num;
 	return;
@@ -597,7 +597,7 @@ static struct fec_platform_data fec_data = {
 };
 
 /* workaround for ecspi chipselect pin may not keep correct level when idle */
-static void mx53_evk_gpio_spi_chipselect_active(int cspi_mode, int status,
+static void mx53_nitrogen_gpio_spi_chipselect_active(int cspi_mode, int status,
 					     int chipselect)
 {
 	if ((cspi_mode == 1) && (chipselect == 2)) {
@@ -606,7 +606,7 @@ static void mx53_evk_gpio_spi_chipselect_active(int cspi_mode, int status,
 	}
 }
 
-static void mx53_evk_gpio_spi_chipselect_inactive(int cspi_mode, int status,
+static void mx53_nitrogen_gpio_spi_chipselect_inactive(int cspi_mode, int status,
 					       int chipselect)
 {
 	if ((cspi_mode == 1) && (chipselect == 2)) {
@@ -618,8 +618,8 @@ static void mx53_evk_gpio_spi_chipselect_inactive(int cspi_mode, int status,
 static struct mxc_spi_master mxcspi1_data = {
 	.maxchipselect = 4,
 	.spi_version = 23,
-	.chipselect_active = mx53_evk_gpio_spi_chipselect_active,
-	.chipselect_inactive = mx53_evk_gpio_spi_chipselect_inactive,
+	.chipselect_active = mx53_nitrogen_gpio_spi_chipselect_active,
+	.chipselect_inactive = mx53_nitrogen_gpio_spi_chipselect_inactive,
 };
 
 static struct mxc_spi_master mxcspi2_data = {
@@ -826,9 +826,6 @@ static struct mxc_fb_platform_data fb_data[] = {
 extern int primary_di;
 static int __init mxc_init_fb(void)
 {
-//	if (!machine_is_mx53_evk())
-//		return 0;
-
 	if (primary_di) {
 		printk(KERN_INFO "DI1 is primary\n");
 		/* DI1 -> DP-BG channel: */
@@ -1371,8 +1368,8 @@ static void __init fixup_mxc_board(struct machine_desc *desc, struct tag *tags,
 #endif
 
 	mxc_set_cpu_type(MXC_CPU_MX53);
-	get_cpu_wp = mx53_evk_get_cpu_wp;
-	set_num_cpu_wp = mx53_evk_set_num_cpu_wp;
+	get_cpu_wp = mx53_nitrogen_get_cpu_wp;
+	set_num_cpu_wp = mx53_nitrogen_set_num_cpu_wp;
 
 	for_each_tag(t, tags) {
 		if (t->hdr.tag == ATAG_CMDLINE) {
@@ -1506,7 +1503,7 @@ static struct platform_device gpio_output_pdev = {
 };
 #endif
 
-static void __init mx53_evk_io_init(void)
+static void __init mx53_nitrogen_io_init(void)
 {
 	/* MX53 Nitrogen board */
 	if (gpio_request_array(nitrogen53_gpios, ARRAY_SIZE(nitrogen53_gpios))) {
@@ -1620,7 +1617,7 @@ static void __init mxc_board_init(struct i2c_board_info *bi0, int bi0_size,
 	mxcsdhc1_device.resource[2].end = gpio_to_irq(N53_SD1_CD);
 
 	mxc_cpu_common_init();
-	mx53_evk_io_init();
+	mx53_nitrogen_io_init();
 
 	mxc_register_device(&mxc_dma_device, NULL);
 	mxc_register_device(&mxc_wdt_device, NULL);
@@ -1708,13 +1705,13 @@ static void __init mxc_board_init(struct i2c_board_info *bi0, int bi0_size,
 #endif
 }
 
-static void __init mx53_evk_timer_init(void)
+static void __init mx53_nitrogen_timer_init(void)
 {
 	mx53_clocks_init(32768, 24000000, 22579200, 24576000);
 }
 
 static struct sys_timer mxc_timer = {
-	.init	= mx53_evk_timer_init,
+	.init	= mx53_nitrogen_timer_init,
 };
 
 /*****************************************************************************/
