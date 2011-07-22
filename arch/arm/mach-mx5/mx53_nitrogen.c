@@ -55,6 +55,7 @@
 #include <linux/regulator/fixed.h>
 #include <linux/regulator/machine.h>
 #include <linux/sched.h>
+#include <linux/spi/flash.h>
 #include <linux/spi/ltc1960.h>
 #include <linux/spi/spi.h>
 #include <linux/types.h>
@@ -73,7 +74,6 @@
 
 #include <asm/irq.h>
 #include <asm/mach/arch.h>
-#include <asm/mach/flash.h>
 #include <asm/mach/keypad.h>
 #include <asm/mach/time.h>
 #include <asm/mach-types.h>
@@ -611,6 +611,7 @@ static void mx53_evk_gpio_spi_chipselect_active(int cspi_mode, int status,
 					     int chipselect)
 {
 	if ((cspi_mode == 1) && (chipselect == 2)) {
+//		pr_info("spi cs active\n");
 		gpio_set_value(N53_SS1, 0);		/* low active */
 	}
 }
@@ -620,6 +621,7 @@ static void mx53_evk_gpio_spi_chipselect_inactive(int cspi_mode, int status,
 {
 	if ((cspi_mode == 1) && (chipselect == 2)) {
 		gpio_set_value(N53_SS1, 1);		/* low active */
+//		pr_info("spi cs inactive\n");
 	}
 }
 
@@ -969,7 +971,8 @@ static struct spi_board_info spidev[] __initdata = {
 	 .max_speed_hz = 1000000,	/* max spi clock (SCK) speed in HZ */
 #endif
 	 .bus_num = 2,
-	 .chip_select = 1}
+	 .chip_select = 1
+	}
 };
 
 static int sdhc_write_protect(struct device *dev)
@@ -1223,71 +1226,6 @@ static struct platform_device gpio_keys_device = {
 };
 #endif
 
-/* NAND Flash Partitions */
-#ifdef CONFIG_MTD_PARTITIONS
-static struct mtd_partition nand_flash_partitions[] = {
-/* MX53 ROM require the boot FCB/DBBT support which need
- * more space to store such info on NAND boot partition.
- * 16M should cover all kind of NAND boot support on MX53.
- */
-	{
-	 .name = "bootloader",
-	 .offset = 0,
-	 .size = 16 * 1024 * 1024},
-	{
-	 .name = "nand.kernel",
-	 .offset = MTDPART_OFS_APPEND,
-	 .size = 5 * 1024 * 1024},
-	{
-	 .name = "nand.rootfs",
-	 .offset = MTDPART_OFS_APPEND,
-	 .size = 256 * 1024 * 1024},
-	{
-	 .name = "nand.userfs1",
-	 .offset = MTDPART_OFS_APPEND,
-	 .size = 256 * 1024 * 1024},
-	{
-	 .name = "nand.userfs2",
-	 .offset = MTDPART_OFS_APPEND,
-	 .size = MTDPART_SIZ_FULL},
-};
-#endif
-
-static int nand_init(void)
-{
-	u32 i, reg;
-	void __iomem *base;
-
-	#define M4IF_GENP_WEIM_MM_MASK          0x00000001
-	#define WEIM_GCR2_MUX16_BYP_GRANT_MASK  0x00001000
-
-	base = ioremap(MX53_BASE_ADDR(M4IF_BASE_ADDR), SZ_4K);
-	reg = __raw_readl(base + 0xc);
-	reg &= ~M4IF_GENP_WEIM_MM_MASK;
-	__raw_writel(reg, base + 0xc);
-
-	iounmap(base);
-
-	base = ioremap(MX53_BASE_ADDR(WEIM_BASE_ADDR), SZ_4K);
-	for (i = 0x4; i < 0x94; i += 0x18) {
-		reg = __raw_readl((u32)base + i);
-		reg &= ~WEIM_GCR2_MUX16_BYP_GRANT_MASK;
-		__raw_writel(reg, (u32)base + i);
-	}
-
-	iounmap(base);
-
-	return 0;
-}
-
-static struct flash_platform_data mxc_nand_data = {
-#ifdef CONFIG_MTD_PARTITIONS
-	.parts = nand_flash_partitions,
-	.nr_parts = ARRAY_SIZE(nand_flash_partitions),
-#endif
-	.width = 1,
-	.init = nand_init,
-};
 
 static struct mxc_spdif_platform_data mxc_spdif_data = {
 	.spdif_tx = 1,
@@ -1765,7 +1703,6 @@ static void __init mxc_board_init(struct i2c_board_info *bi0, int bi0_size,
 	mx5_usb_dr_init();
 	mx5_set_host1_vbus_func(mx53_gpio_host1_driver_vbus);
 	mx5_usbh1_init();
-	mxc_register_device(&mxc_nandv2_mtd_device, &mxc_nand_data);
 	mxc_register_device(&mxc_v4l2_device, NULL);
 	mxc_register_device(&mxc_v4l2out_device, NULL);
 	mxc_register_device(&mxc_android_pmem_device, &android_pmem_data);
@@ -1852,10 +1789,14 @@ static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
 #ifdef CONFIG_MACH_NITROGEN_A_IMX53
 struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "pmic-int",		.gpio = MAKE_GP(2, 21),		.flags = GPIOF_DIR_IN},
-	{.label = "Camera power down",	.gpio = MAKE_GP(2, 22),		.flags = GPIOF_INIT_HIGH},
+	{.label = "Camera power down",	.gpio = MAKE_GP(2, 22),		.flags = GPIOF_INIT_HIGH},	/* EIM_A16 */
+//	{.label = "led0",		.gpio = MAKE_GP(4, 2),		.flags = 0},
+	{.label = "led1",		.gpio = MAKE_GP(4, 3),		.flags = 0},
+//	{.label = "led2",		.gpio = MAKE_GP(4, 4),		.flags = 0},
 	{.label = "mic_mux",		.gpio = MAKE_GP(6, 16),		.flags = 0},
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 	{.label = "power_down_req",	.gpio = POWER_DOWN,		.flags = GPIOF_INIT_HIGH},
+	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 };
 
 static iomux_v3_cfg_t nitrogen53_pads_specific_a[] __initdata = {
