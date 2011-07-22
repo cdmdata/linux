@@ -583,7 +583,7 @@ static long boundary_camera_ioctl
 		DEBUGMSG ("VIDIOC_DQBUF\n");
 		if (list_empty(&cam->done_queue) && (file->f_flags & O_NONBLOCK)) {
 			retval = -EAGAIN;
-                        pr_err("not ready\n");
+                        DEBUGMSG ("not ready\n");
 			break;
 		}
 
