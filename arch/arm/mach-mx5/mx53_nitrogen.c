@@ -165,8 +165,6 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "Camera standby",	.gpio = MAKE_GP(5, 20),		.flags = 0},
 #define N53_OTG_VBUS				MAKE_GP(6, 6)
 	{.label = "otg-vbus",		.gpio = MAKE_GP(6, 6),		.flags = 0},	/* disable VBUS */
-#define EVK_USBH1_VBUS				MAKE_GP(7, 8)
-	{.label = "usbh1-vbus",		.gpio = MAKE_GP(7, 8),		.flags = 0},
 #define N53_PHY_RESET				MAKE_GP(7, 13)
 	{.label = "ICS1893 reset",	.gpio = MAKE_GP(7, 13),		.flags = 0},	/* ICS1893 Ethernet PHY reset */
 #if defined(CONFIG_SERIAL_IMX_RS485)
@@ -175,14 +173,7 @@ struct gpio nitrogen53_gpios[] __initdata = {
 };
 
 #define BUTTON_PAD_CTRL	(PAD_CTL_HYS | PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_22K_UP | PAD_CTL_DSE_HIGH)
-
-/*!
- * @file mach-mx53/mx53_evk.c
- *
- * @brief This file contains the board specific initialization routines.
- *
- * @ingroup MSL_MX53
- */
+	
 extern struct cpu_wp *(*get_cpu_wp)(int *wp);
 extern void (*set_num_cpu_wp)(int num);
 static int num_cpu_wp = 3;
@@ -301,7 +292,6 @@ static iomux_v3_cfg_t mx53common_pads[] = {
 	MX53_PAD_NANDF_CS3__GPIO_6_16,	/* NitrogenA mic mux */
 
 	/* GPIO7 */
-	MX53_PAD_ATA_DA_2__GPIO_7_8,	/* USB HOST USB_PWR */
 	MX53_PAD_GPIO_17__GPIO_7_12,	/* I2C Connector interrupt */
 
 	/* I2C1 */
@@ -809,7 +799,6 @@ static void mx53_gpio_usbotg_driver_vbus(bool on)
 
 static void mx53_gpio_host1_driver_vbus(bool on)
 {
-	gpio_set_value(EVK_USBH1_VBUS, on ? 1 : 0);
 	pr_info("%s: on=%d\n", __func__, on);
 }
 
