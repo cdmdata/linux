@@ -1043,8 +1043,8 @@ static struct spi_board_info mxc_dataflash_device[] __initdata = {
 #if defined(CONFIG_LTC1960) || defined(CONFIG_LTC1960_MODULE)
 static struct ltc1960_battery_info_t removable_battery = {
 	.name = "bq20z75"
-,	.charge_uv = 12800000
-,	.charge_ua = 2000000
+,	.charge_uv = 12600000
+,	.charge_ua = 2500000
 ,	.trickle_seconds = 5*60
 };
 
