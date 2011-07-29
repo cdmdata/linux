@@ -430,6 +430,14 @@ static int da9052_add_subdevice(struct da9052 *da9052, const char *name)
 	return da9052_add_subdevice_pdata(da9052, name, NULL, 0);
 }
 
+static struct da9052 *__da9052_global = 0 ;
+
+struct da9052 *get_da9052(void) {
+	return __da9052_global ;
+}
+
+EXPORT_SYMBOL(get_da9052);
+
 static int add_da9052_devices(struct da9052 *da9052)
 {
 	s32 ret = 0;
@@ -497,6 +505,8 @@ static int add_da9052_devices(struct da9052 *da9052)
 				&bat_data, sizeof(bat_data));
 	if (ret)
 		return ret;
+
+        __da9052_global = da9052 ;
 
 	return ret;
 }

@@ -1589,6 +1589,16 @@ static struct platform_device dumb_battery_device = {
 };
 #endif
 
+#if defined (CONFIG_DA905X_CHARDEV) || defined (CONFIG_DA905X_CHARDEV_MODULE)
+static struct platform_device da905x_chardev_dev = {
+	.name   = "da905x_chardev",
+	.id     = -1,
+	.dev    = {
+		.platform_data  = 0
+	},
+};
+#endif
+
 static void __init mx53_evk_io_init(void)
 {
 	/* MX53 Nitrogen board */
@@ -1605,6 +1615,10 @@ static void __init mx53_evk_io_init(void)
 
 #if defined(CONFIG_DUMB_BATTERY) || defined (CONFIG_DUMB_BATTERY_MODULE)
 	platform_device_register(&dumb_battery_device);
+#endif
+
+#if defined (CONFIG_DA905X_CHARDEV) || defined (CONFIG_DA905X_CHARDEV_MODULE)
+	platform_device_register(&da905x_chardev_dev);
 #endif
 
 #ifdef CONFIG_KEYBOARD_GPIO

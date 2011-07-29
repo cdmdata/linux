@@ -1216,5 +1216,13 @@ config MX51_GPIO
 	help
 	  GPIO driver for i.MX51. Returns transitions on specified pin.
 
+config DA905X_CHARDEV
+	tristate "DA905x character device"
+	depends on PMIC_DA9052
+	default n
+	help
+	  Defines a character device for a DA905x PMIC, allowing userspace
+	  to read and write registers.
+
 endmenu
 
