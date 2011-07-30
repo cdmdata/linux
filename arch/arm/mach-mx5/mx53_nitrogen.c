@@ -1604,6 +1604,12 @@ static struct platform_device da905x_chardev_dev = {
 };
 #endif
 
+#if defined(CONFIG_GPIO_OUTPUT) || defined (CONFIG_GPIO_OUTPUT_MODULE)
+static struct platform_device gpio_output_pdev = {
+       .name = "gpio_output",
+};
+#endif
+
 static void __init mx53_evk_io_init(void)
 {
 	/* MX53 Nitrogen board */
@@ -1624,6 +1630,10 @@ static void __init mx53_evk_io_init(void)
 
 #if defined (CONFIG_DA905X_CHARDEV) || defined (CONFIG_DA905X_CHARDEV_MODULE)
 	platform_device_register(&da905x_chardev_dev);
+#endif
+
+#if defined(CONFIG_GPIO_OUTPUT) || defined (CONFIG_GPIO_OUTPUT_MODULE)
+       platform_device_register(&gpio_output_pdev);
 #endif
 
 #ifdef CONFIG_KEYBOARD_GPIO
