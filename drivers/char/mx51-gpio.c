@@ -212,7 +212,7 @@ static int __init gpio_init_module (void)
 	if (gpio_major==0)
 		gpio_major = result; //dynamic assignment
 
-	printk (KERN_INFO "MX51 GPIO driver. Boundary Devices\n");
+	printk (KERN_INFO "MX5x GPIO driver. Boundary Devices\n");
 	return 0 ;
 }
 
@@ -222,7 +222,7 @@ static void gpio_cleanup_module (void)
 	unregister_chrdev(gpio_major,driverName);
 }
 
-__setup("pxagpio=", gpio_setup);
+__setup("mx5xgpio=", gpio_setup);
 module_init(gpio_init_module);
 module_exit(gpio_cleanup_module);
 
