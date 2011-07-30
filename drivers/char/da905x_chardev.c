@@ -50,11 +50,16 @@ struct da9052_chardev_priv {
 };
 
 static dev_t devnum;
+static struct class *da90_class = 0;
 
 extern struct da9052 *get_da9052(void);
 
 static char const name[] = {
 	"da905x_chardev"
+};
+
+static char const shortname[] = {
+	"da905x"
 };
 
 static int da905x_chardev_open(struct inode *inode, struct file *file)
@@ -145,7 +150,9 @@ static int da905x_chardev_probe(struct platform_device *pdev)
 	priv->cdev.owner = THIS_MODULE ;
 	// Register cdev
 	if (0 == (result = cdev_add(&priv->cdev, MKDEV(da905x_chardev_major, 0), 1) )) {
-		printk (KERN_ERR "%s: registered %s, devnum %x\n", __func__, name, MKDEV(da905x_chardev_major, 0) );
+		dev_t devnum = MKDEV(da905x_chardev_major, 0);
+		device_create(da90_class, NULL, devnum, NULL, shortname);
+		printk (KERN_ERR "%s: registered %s, devnum %x\n", __func__, name, devnum );
 	} else {
 		printk (KERN_ERR "%s: couldn't add device: err %d\n", name, result);
 		kobject_put(&priv->cdev.kobj);
@@ -155,11 +162,18 @@ static int da905x_chardev_probe(struct platform_device *pdev)
 	return result;
 }
 
+static int da905x_chardev_remove(struct platform_device *pdev)
+{
+	device_destroy(da90_class, MKDEV(da905x_chardev_major, 0));
+	return 0 ;
+}
+
 static struct platform_driver da905x_chardev_driver = {
 	.driver = {
 		.name = name,
 		},
 	.probe = da905x_chardev_probe,
+	.remove = da905x_chardev_remove,
 };
 
 int da905x_chardev_init(void)
@@ -167,7 +181,11 @@ int da905x_chardev_init(void)
 	int result;
 
 	devnum = 0 ;
-	if (da905x_chardev_major) {
+	da90_class = class_create(THIS_MODULE, name);
+	if (IS_ERR(da90_class)) {
+		printk(KERN_ERR "Error creating %s class.\n", name);
+		result = PTR_ERR(da90_class);
+	} else if (da905x_chardev_major) {
 		devnum = MKDEV(da905x_chardev_major, da905x_chardev_minor);
 		result = register_chrdev_region(devnum, 1, name);
 	} else {
@@ -200,6 +218,7 @@ void da905x_chardev_exit(void)
 {
 	platform_driver_unregister(&da905x_chardev_driver);
 	unregister_chrdev_region(devnum, 1);
+        class_destroy(da90_class);
 }
 
 module_init(da905x_chardev_init);
