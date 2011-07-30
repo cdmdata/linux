@@ -191,11 +191,12 @@ struct gpio nitrogen53_gpios[] __initdata = {
 };
 
 #define BUTTON_PAD_CTRL	(PAD_CTL_HYS | PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_22K_UP | PAD_CTL_DSE_HIGH)
-#define BUTTON_EIM_D25__GPIO_3_25		IOMUX_PAD(0x488, 0x140, 1, 0x0, 0, BUTTON_PAD_CTRL)
-#define BUTTON_EIM_D26__GPIO_3_26		IOMUX_PAD(0x48C, 0x144, 1, 0x0, 0, BUTTON_PAD_CTRL)
-#define BUTTON_EIM_D27__GPIO_3_27		IOMUX_PAD(0x490, 0x148, 1, 0x0, 0, BUTTON_PAD_CTRL)
-#define BUTTON_EIM_D29__GPIO_3_29		IOMUX_PAD(0x498, 0x150, 1, 0x0, 0, BUTTON_PAD_CTRL)
-	
+#define BUTTON_EIM_D25__GPIO_3_25		IOMUX_PAD(0x488, 0x140, 1|IOMUX_CONFIG_SION, 0x0, 0, BUTTON_PAD_CTRL)
+#define BUTTON_EIM_D26__GPIO_3_26		IOMUX_PAD(0x48C, 0x144, 1|IOMUX_CONFIG_SION, 0x0, 0, BUTTON_PAD_CTRL)
+#define BUTTON_EIM_D27__GPIO_3_27		IOMUX_PAD(0x490, 0x148, 1|IOMUX_CONFIG_SION, 0x0, 0, BUTTON_PAD_CTRL)
+#define BUTTON_EIM_D29__GPIO_3_29		IOMUX_PAD(0x498, 0x150, 1|IOMUX_CONFIG_SION, 0x0, 0, BUTTON_PAD_CTRL)
+#define BUTTON_GPIO_4__GPIO_1_4			IOMUX_PAD(0x6BC, 0x32C, 1|IOMUX_CONFIG_SION, 0x0, 0, BUTTON_PAD_CTRL)
+
 /*!
  * @file mach-mx53/mx53_evk.c
  *
@@ -230,6 +231,7 @@ static struct pad_desc mx53common_pads[] = {
 	BUTTON_EIM_D26__GPIO_3_26,
 	BUTTON_EIM_D27__GPIO_3_27,
 	BUTTON_EIM_D29__GPIO_3_29,
+        BUTTON_GPIO_4__GPIO_1_4,
 
 	MX53_PAD_EIM_D30__DI0_PIN11,
 	MX53_PAD_EIM_D31__DI0_PIN12,
@@ -268,7 +270,6 @@ static struct pad_desc mx53common_pads[] = {
 
 	MX53_PAD_CSI0_D7__GPIO_5_25,
 
-	MX53_PAD_GPIO_4__GPIO_1_4,
 	MX53_PAD_GPIO_8__GPIO_1_8,
 
 	MX53_PAD_GPIO_10__GPIO_4_0,
@@ -1206,7 +1207,11 @@ static struct gpio_keys_button gpio_keys[] = {
 	},
 	{
 		.type	= EV_KEY,
+#ifdef CONFIG_MACH_NITROGEN_A_IMX53
 		.gpio	= MAKE_GP(3,25),
+#else
+		.gpio	= MAKE_GP(1,4),
+#endif
 		.code	= KEY_MENU,		/* 139 (0x88) */
 		.desc	= "Menu Button",
 		.wakeup	= 1,
