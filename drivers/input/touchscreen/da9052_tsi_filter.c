@@ -142,7 +142,7 @@ void da9052_tsi_process_reg_data(struct da9052_ts_priv *priv)
 		}
 
 #if (ENABLE_TSI_DEBOUNCE)
-		if (debounce_over == FALSE) {
+		if (priv->debounce_over == FALSE) {
 			ret =
 			da9052_tsi_calc_debounce_data(priv, &tmp_raw_data);
 			if (ret != SUCCESS)
@@ -364,7 +364,8 @@ s32 da9052_tsi_raw_proc_thread(void *ptr)
 }
 
 #if (ENABLE_TSI_DEBOUNCE)
-static s32 da9052_tsi_calc_debounce_data(struct da9052_tsi_data *raw_data)
+static s32 da9052_tsi_calc_debounce_data(struct da9052_ts_priv *priv,
+					struct da9052_tsi_data *raw_data)
 {
 #if (TSI_DEBOUNCE_DATA_CNT)
 	u8 cnt;
