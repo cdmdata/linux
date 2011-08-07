@@ -1376,7 +1376,7 @@ static struct mxc_camera_platform_data camera_data = {
 	.sensor_name = "ov5640",
 };
 
-static void init_camera()
+static void init_camera(void)
 {
 	struct clk *clk ;
 	int i ;
