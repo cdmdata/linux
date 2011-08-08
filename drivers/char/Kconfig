@@ -1215,6 +1215,14 @@ config GPIO_INPUT
 	help
 	  Input driver for GPIOs. Returns transitions on specified pin.
 
+config GPIO_INPUT_DEFAULT
+	depends on GPIO_INPUT
+	string "Generic GPIO input driver default specification"
+	default ""
+	help
+	  Enter the compile-time default specification here to avoid
+	  the need to supply one on the kernel command-line
+
 config DA905X_CHARDEV
 	tristate "DA905x character device"
 	depends on PMIC_DA9052
