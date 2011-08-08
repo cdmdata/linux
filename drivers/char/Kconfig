@@ -1209,12 +1209,11 @@ config MX51_GPIO_TRIG
 	help
 	  Triggered GPIO driver. Allows sampling of multiple pins on transitions of one.
 
-config MX51_GPIO
-	tristate "MX51 GPIO driver"
-	depends on ARCH_MX5
+config GPIO_INPUT
+	tristate "GPIO input driver"
 	default n
 	help
-	  GPIO driver for i.MX51. Returns transitions on specified pin.
+	  Input driver for GPIOs. Returns transitions on specified pin.
 
 config DA905X_CHARDEV
 	tristate "DA905x character device"

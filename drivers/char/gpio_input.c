@@ -33,7 +33,7 @@
 static int gpio_major = GPIO_MAJOR ;
 
 static char const driverName[] = {
-	"gpio"
+	"gpio_input"
 };
 
 struct gpio_data {
@@ -192,17 +192,9 @@ static const struct file_operations gpio_fops = {
 	.poll		= gpio_poll,
 };
 
-#ifndef MODULE
-static int __init gpio_setup (char *str)
-{
-	return 1;
-}
-#endif
-
 static int __init gpio_init_module (void)
 {
 	int result ;
-        struct proc_dir_entry *pde ;
 
 	result = register_chrdev(gpio_major,driverName,&gpio_fops);
 	if (result<0) {
@@ -212,7 +204,7 @@ static int __init gpio_init_module (void)
 	if (gpio_major==0)
 		gpio_major = result; //dynamic assignment
 
-	printk (KERN_INFO "MX5x GPIO driver. Boundary Devices\n");
+	printk (KERN_INFO "GPIO input driver. Boundary Devices\n");
 	return 0 ;
 }
 
@@ -222,7 +214,6 @@ static void gpio_cleanup_module (void)
 	unregister_chrdev(gpio_major,driverName);
 }
 
-__setup("mx5xgpio=", gpio_setup);
 module_init(gpio_init_module);
 module_exit(gpio_cleanup_module);
 
