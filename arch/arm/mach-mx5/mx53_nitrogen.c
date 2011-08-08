@@ -155,16 +155,16 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	// make sure gp2[29] is high, i2c_sel for tfp410
 #define N53_TFP410_I2CMODE			MAKE_GP(2, 29)
 	{.label = "tfp410_i2cmode",	.gpio = MAKE_GP(2, 29),		.flags = GPIOF_INIT_HIGH},	/* EIM_EB1 */
+#if defined (CONFIG_WL12XX_SDIO) || defined (CONFIG_WL12XX_SDIO_MODULE)
 	{.label = "wl1271_wl_en",	.gpio = MAKE_GP(3, 0),		.flags = 0},			/* EIM_DA0, high active */
 	{.label = "wl1271_bt_en",	.gpio = MAKE_GP(3, 1),		.flags = 0},			/* EIM_DA1, high active */
+#endif
 #define N53_I2C_CONNECTOR_BUFFER_ENABLE		MAKE_GP(3, 10)
 	{.label = "I2C conn. buf en",	.gpio = MAKE_GP(3, 10),		.flags = 0},			/* EIM_DA10 */
 #define N53_SS1					MAKE_GP(3, 19)
 	{.label = "ecspi_ss1",		.gpio = MAKE_GP(3, 19),		.flags = GPIOF_INIT_HIGH},	/* low active */
 	{.label = "Shutdown output",	.gpio = MAKE_GP(3, 31),		.flags = 0},
 	{.label = "cam-reset",		.gpio = MAKE_GP(4, 0),		.flags = GPIOF_INIT_HIGH},
-	{.label = "fesai-reset",	.gpio = MAKE_GP(4, 2),		.flags = 0},
-	{.label = "can2-en2",		.gpio = MAKE_GP(4, 4),		.flags = 0},
 #define N53_AMP_ENABLE				MAKE_GP(4, 7)	/* KEY_ROW0 */
 	{.label = "speaker_amp",	.gpio = MAKE_GP(4, 7),		.flags = 0},
 #define CAMERA_RESET				MAKE_GP(4, 14)
@@ -1848,9 +1848,6 @@ static struct pad_desc nitrogen53_pads_specific[] __initdata = {
 struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 	{.label = "pmic-int",		.gpio = MAKE_GP(2, 21),		.flags = GPIOF_DIR_IN},
-//	{.label = "led0",		.gpio = MAKE_GP(4, 2),		.flags = 0},
-	{.label = "led1",		.gpio = MAKE_GP(4, 3),		.flags = 0},
-//	{.label = "led2",		.gpio = MAKE_GP(4, 4),		.flags = 0},
 	{.label = "mic_mux",		.gpio = MAKE_GP(6, 16),		.flags = 0},
 	{.label = "power_down_req",	.gpio = POWER_DOWN,		.flags = GPIOF_INIT_HIGH},
 };
