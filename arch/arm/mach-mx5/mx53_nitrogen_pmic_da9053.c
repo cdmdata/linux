@@ -84,6 +84,13 @@ static struct regulator_consumer_supply ldo9_consumers[] = {
 		.supply = "VDD_A",
 		.dev_name = "1-003c",
 	},
+#if 1
+	{
+		/* Touch screen */
+		.supply = "VDD_A",
+		.dev_name = "da9052_tsi",
+	},
+#endif
 };
 
 /* currently the .state_mem.uV here takes no effects for DA9053
@@ -442,8 +449,6 @@ static struct da9052_tsi_platform_data da9052_tsi = {
 #else
 	.tsi_supply_voltage = 2500,
 #endif
-	 /* This is the DA9052 LDO number used for powering the TSI */
-	.tsi_ref_source = 9,
 	.max_tsi_delay = TSI_DELAY_4SLOTS,
 	.max_tsi_skip_slot = TSI_SKIP_330SLOTS,
 };

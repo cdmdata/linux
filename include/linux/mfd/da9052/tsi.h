@@ -194,8 +194,6 @@ struct da9052_tsi_conf {
 	union da9052_tsi_man_cont_reg	man_cont;
 	u8 				tsi_adc_sample_intervel:1;
 	enum TSI_STATE 			state;
-	u8 				ldo9_en:1;
-	u8 				ldo9_conf:1;
 };
 
 
@@ -216,6 +214,7 @@ struct da9052_tsi_reg_fifo {
 
 struct da9052_tsi_info {
 	struct  da9052_tsi_conf  tsi_conf;
+	struct regulator	*ts_regulator;
 	struct input_dev	*input_devs[NUM_INPUT_DEVS];
 	struct calib_cfg_t	*tsi_calib;
 	u32 			tsi_data_poll_interval;
@@ -224,6 +223,7 @@ struct da9052_tsi_info {
 	u8			pen_dwn_event;
 	u8			pd_reg_status;	
 	u8			datardy_reg_status;
+	u8 			ts_reg_en:1;
 }; 
  
 struct da9052_tsi {

@@ -24,6 +24,7 @@
 #include <linux/mfd/da9052/tsi.h>
 #include <linux/mfd/da9052/gpio.h>
 #include <linux/mfd/da9052/adc.h>
+#include <linux/regulator/consumer.h>
 
 #define TSI_XN	1		//pin 1
 #define TSI_YP	2
@@ -232,58 +233,9 @@ static ssize_t da9052_tsi_config_power_supply(struct da9052_ts_priv *priv,
 }
 #else
 
-static inline  u8 validate_ldo9_mV(u16 value)
-{
-	if ((value < DA9052_LDO9_VOLT_LOWER) ||
-			(value > DA9052_LDO9_VOLT_UPPER))
-		return FAILURE;
-	return (((value - DA9052_LDO9_VOLT_LOWER) % DA9052_LDO9_VOLT_STEP > 0) ? -1 : 0);
-}
-
-static inline  u8 ldo9_mV_to_reg(u16 value)
-{
-	return ((value - DA9052_LDO9_VOLT_LOWER)/DA9052_LDO9_VOLT_STEP);
-}
-
-s32 da9052_pm_configure_ldo(struct da9052_ts_priv *priv,
-				struct da9052_ldo_config ldo_config)
-{
-	u8 ldo_volt;
-	s8 ldo_pd_bit = -1;
-	s32 ret = 0;
-	unsigned sum;
-
-	pr_debug("%s: entry\n", __func__);
-	if (validate_ldo9_mV(ldo_config.ldo_volt))
-		return INVALID_LDO9_VOLT_VALUE;
-
-	ldo_volt = ldo9_mV_to_reg(ldo_config.ldo_volt);
-
-	sum = ldo_volt | (ldo_config.ldo_conf ? DA9052_LDO9_LDO9CONF : 0);
-	ret =  priv->da9052->register_modify(priv->da9052, DA9052_LDO9_REG,
-			~DA9052_LDO9_LDO9EN, sum);
-	if ((!ret) && (-1 != ldo_pd_bit)) {
-		/* Never executes */
-		ret =  priv->da9052->register_modify(priv->da9052, DA9052_PULLDOWN_REG,
-				ldo_pd_bit, ldo_config.ldo_pd ? ldo_pd_bit : 0);
-
-	}
-	return ret;
-}
-
-
-s32 da9052_pm_set_ldo(struct da9052_ts_priv *priv, u8 ldo_num, u8 flag)
-{
-	pr_debug("%s: entry\n", __func__);
-
-	return priv->da9052->register_modify(priv->da9052, DA9052_LDO9_REG,
-			DA9052_LDO9_LDO9EN, (flag) ? DA9052_LDO9_LDO9EN : 0);
-}
-
 static ssize_t da9052_tsi_config_power_supply(struct da9052_ts_priv *priv,
 						u8 state)
 {
-	struct da9052_ldo_config ldo_config;
 	struct da9052_tsi_info *ts = &priv->tsi_info;
 
 	if (state != ENABLE && state != DISABLE) {
@@ -291,21 +243,31 @@ static ssize_t da9052_tsi_config_power_supply(struct da9052_ts_priv *priv,
 		return -EINVAL;
 	}
 
-	ldo_config.ldo_volt = priv->tsi_pdata->tsi_supply_voltage;
-	ldo_config.ldo_num =  priv->tsi_pdata->tsi_ref_source;
-	ldo_config.ldo_conf = RESET;
-
-	if (da9052_pm_configure_ldo(priv, ldo_config))
-		return -EINVAL;
-
-	if (da9052_pm_set_ldo(priv, priv->tsi_pdata->tsi_ref_source, state))
-		return -EINVAL;
-
-	if (state == ENABLE)
-		ts->tsi_conf.ldo9_en = SET;
-	else
-		ts->tsi_conf.ldo9_en = RESET;
-
+	if (!IS_ERR(ts->ts_regulator)) {
+		if (state == ENABLE) {
+			if (!ts->ts_reg_en) {
+				if (!regulator_enable(ts->ts_regulator)) {
+					ts->ts_reg_en = 1;
+					pr_debug("%s: enabled regulator\n", __func__);
+				} else {
+					pr_err("%s: error enabling regulator\n", __func__);
+					regulator_put(ts->ts_regulator);
+					ts->ts_regulator = NULL;
+				}
+			}
+		} else {
+			if (ts->ts_reg_en) {
+				ts->ts_reg_en = 0;
+				if (!regulator_disable(ts->ts_regulator)) {
+					pr_debug("%s: disabled regulator\n", __func__);
+				} else {
+					pr_err("%s: error disabling regulator\n", __func__);
+					regulator_put(ts->ts_regulator);
+					ts->ts_regulator = NULL;
+				}
+			}
+		}
+	}
 	return 0;
 }
 #endif
@@ -842,8 +804,6 @@ static void da9052_tsi_penup_event(struct da9052_ts_priv *priv)
 	if (da9052_tsi_config_power_supply(priv, ENABLE))
 		goto exit;
 
-	ts->tsi_conf.ldo9_en = RESET;
-
 	if (priv->da9052->event_enable(priv->da9052, priv->pd_nb.eve_type))
 		goto exit;
 
@@ -1074,12 +1034,20 @@ fail:
 	return -EINVAL;
 }
 
-static ssize_t __devinit da9052_tsi_init_drv(struct da9052_ts_priv *priv)
+static ssize_t __devinit da9052_tsi_init_drv(struct da9052_ts_priv *priv, struct device *dev)
 {
 	u8 cnt = 0;
 	ssize_t ret = 0;
 	struct da9052_tsi_info  *ts = &priv->tsi_info;
 
+	ts->ts_regulator = regulator_get(dev, "VDD_A");
+	if (IS_ERR(ts->ts_regulator)) {
+		dev_err(dev, "%s: error getting regulator VDD_A\n", __func__);
+	} else {
+		unsigned voltage = priv->tsi_pdata->tsi_supply_voltage;
+		pr_info("%s: setting regulator VDD_A voltage to %u\n", __func__, voltage);
+		regulator_set_voltage(ts->ts_regulator, voltage, voltage);
+	}
 	if ((DA9052_GPIO_PIN_3 != DA9052_GPIO_CONFIG_TSI) ||
 		(DA9052_GPIO_PIN_4 != DA9052_GPIO_CONFIG_TSI) ||
 		(DA9052_GPIO_PIN_5 != DA9052_GPIO_CONFIG_TSI) ||
@@ -1168,7 +1136,7 @@ static s32 __devinit da9052_tsi_probe(struct platform_device *pdev)
 	priv->pd_nb.eve_type = PEN_DOWN_EVE;
 #endif
 	priv->pd_nb.call_back = &da9052_tsi_pen_down_handler;
-	if (da9052_tsi_init_drv(priv))
+	if (da9052_tsi_init_drv(priv, &pdev->dev))
 			return -EFAULT;
 
 
@@ -1182,6 +1150,15 @@ static int __devexit da9052_tsi_remove(struct platform_device *pdev)
 	struct da9052_ts_priv *priv = platform_get_drvdata(pdev);
 	struct da9052_tsi_info *ts = &priv->tsi_info;
 	s32 ret = 0, i = 0;
+
+	if (!IS_ERR(ts->ts_regulator)) {
+		if (ts->ts_reg_en) {
+			ts->ts_reg_en = 0;
+			regulator_disable(ts->ts_regulator);
+		}
+		regulator_put(ts->ts_regulator);
+		ts->ts_regulator = NULL;
+	}
 
 	ret = da9052_tsi_config_state(priv, TSI_IDLE);
 	if (!ret)

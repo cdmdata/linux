@@ -113,7 +113,6 @@ struct da9052_tsi_platform_data {
 	u16	tsi_skip_bit_shift;
 	u16	num_gpio_tsi_register;
 	u16	tsi_supply_voltage;
-	u16	tsi_ref_source;
 	u16	max_tsi_delay;
 	u16	max_tsi_skip_slot;
 };
