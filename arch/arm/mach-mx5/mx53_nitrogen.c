@@ -1042,12 +1042,14 @@ static struct spi_board_info mxc_dataflash_device[] __initdata = {
 };
 
 #if defined(CONFIG_LTC1960) || defined(CONFIG_LTC1960_MODULE)
+#if defined (CONFIG_BATTERY_BQ20Z75) || defined (CONFIG_BATTERY_BQ20Z75)
 static struct ltc1960_battery_info_t removable_battery = {
 	.name = "bq20z75"
 ,	.charge_uv = 12600000
 ,	.charge_ua = 2500000
 ,	.trickle_seconds = 5*60
 };
+#endif
 
 static struct ltc1960_battery_info_t permanent_battery = {
 	.name = "dumb"
@@ -1058,8 +1060,11 @@ static struct ltc1960_battery_info_t permanent_battery = {
 
 static struct ltc1960_platform_data_t ltc1960_pdata = {
 	.batteries = {
-		&permanent_battery
-	,	&removable_battery }
+		&permanent_battery,
+#if defined (CONFIG_BATTERY_BQ20Z75) || defined (CONFIG_BATTERY_BQ20Z75)
+		&removable_battery,
+#endif
+	}
 };
 #endif
 
