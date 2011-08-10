@@ -78,6 +78,7 @@ struct mxcfb_info {
 
 	unsigned vsync_count;
 	wait_queue_head_t vsync_complete;
+	atomic_t usage ;
 };
 
 struct mxcfb_alloc_list {
@@ -1317,11 +1318,20 @@ static int mxcfb_mmap(struct fb_info *fbi, struct vm_area_struct *vma)
 	return 0;
 }
 
+static int mxcfb_open(struct fb_info *info, int user)
+{
+	struct mxcfb_info *mxc_fbi = (struct mxcfb_info *)info->par;
+	atomic_inc(&mxc_fbi->usage);
+	return 0 ;
+}
+
 static int mxcfb_release(struct fb_info *info, int user)
 {
 	struct mxcfb_info *mxc_fbi = (struct mxcfb_info *)info->par;
-	if (mxc_fbi->overlay)
-		mxcfb_blank(FB_BLANK_POWERDOWN,info);
+	if (atomic_dec_and_test(&mxc_fbi->usage)) {
+		if (mxc_fbi->overlay)
+			mxcfb_blank(FB_BLANK_POWERDOWN,info);
+	}
 	return 0 ;
 }
 
@@ -1332,6 +1342,7 @@ static int mxcfb_release(struct fb_info *info, int user)
  */
 static struct fb_ops mxcfb_ops = {
 	.owner = THIS_MODULE,
+	.fb_open = mxcfb_open,
 	.fb_release = mxcfb_release,
 	.fb_set_par = mxcfb_set_par,
 	.fb_check_var = mxcfb_check_var,
