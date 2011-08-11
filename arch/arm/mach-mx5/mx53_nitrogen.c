@@ -1012,7 +1012,8 @@ static struct sc16is7xx_platform_data i2c_sc16is7xx_data = {
 	.gpio_data = &i2c_sc16is7xx_gpio_data,
 };
 
-static struct mtd_partition mxc_dataflash_partitions[] = {
+#if defined(CONFIG_MTD)
+static struct mtd_partition mxc_spi_nor_partitions[] = {
 	{
 	 .name = "bootloader",
 	 .offset = 0,
@@ -1023,23 +1024,24 @@ static struct mtd_partition mxc_dataflash_partitions[] = {
 	 .size = MTDPART_SIZ_FULL,},
 };
 
-static struct flash_platform_data mxc_spi_flash_data[] = {
-	{
-	 .name = "mxc_dataflash",
-	 .parts = mxc_dataflash_partitions,
-	 .nr_parts = ARRAY_SIZE(mxc_dataflash_partitions),
-	 .type = "at45db321d",}
+static struct flash_platform_data mxc_spi_flash_data = {
+	.name = "m25p80",
+	.parts = mxc_spi_nor_partitions,
+	.nr_parts = ARRAY_SIZE(mxc_spi_nor_partitions),
+	.type = "sst25vf016b",
 };
 
 
-static struct spi_board_info mxc_dataflash_device[] __initdata = {
+static struct spi_board_info mxc_spi_nor_device[] __initdata = {
 	{
-	 .modalias = "mxc_dataflash",
+	 .modalias = "m25p80",
 	 .max_speed_hz = 25000000,	/* max spi clock (SCK) speed in HZ */
 	 .bus_num = 1,
 	 .chip_select = 1,
-	 .platform_data = &mxc_spi_flash_data[0],},
+	 .platform_data = &mxc_spi_flash_data,
+	},
 };
+#endif
 
 #if defined(CONFIG_LTC1960) || defined(CONFIG_LTC1960_MODULE)
 #if defined (CONFIG_BATTERY_BQ20Z75) || defined (CONFIG_BATTERY_BQ20Z75)
@@ -1748,8 +1750,10 @@ static void __init mxc_board_init(struct i2c_board_info *bi0, int bi0_size,
 	mxc_register_device(&mxc_fec_device, &fec_data);
 	mxc_register_device(&mxc_ptp_device, NULL);
 
-	spi_register_board_info(mxc_dataflash_device,
-				ARRAY_SIZE(mxc_dataflash_device));
+#if defined(CONFIG_MTD)
+	spi_register_board_info(mxc_spi_nor_device,
+				ARRAY_SIZE(mxc_spi_nor_device));
+#endif
 	spi_register_board_info(spidev,
 				ARRAY_SIZE(spidev));
 	if (bi0)
