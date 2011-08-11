@@ -519,7 +519,7 @@ static unsigned update_battery_state (struct lt1960_data_t *data)
 					if (0 == (rv=b->get_property(b,required_properties[i],&pval))) {
 						values[i]=pval.intval ;
 					} else {
-						printk (KERN_ERR "%s: error %d reading property %d from battery %d\n", __func__, rv, i, bat);
+						printk (KERN_DEBUG "%s: error %d reading property %d from battery %d\n", __func__, rv, i, bat);
 						break;
 					}
 				}

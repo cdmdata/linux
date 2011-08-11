@@ -131,7 +131,7 @@ static int bq20z75_read_word_data(struct i2c_client *client, u8 address)
 	do {
 		ret = i2c_smbus_read_word_data(client, address);
 		if (ret < 0) {
-			dev_err(&client->dev,
+			dev_dbg(&client->dev,
 				"%s: i2c read at address 0x%x failed: %d\n",
 				__func__, address, ret);
 			if (iters++)
