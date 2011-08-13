@@ -66,6 +66,7 @@
 #include <mach/common.h>
 #include <mach/hardware.h>
 #include <mach/i2c.h>
+#include <mach/imx-uart.h>
 #include <mach/iomux-mx53.h>
 #include <mach/memory.h>
 #include <mach/mmc.h>
@@ -1836,6 +1837,10 @@ MACHINE_END
 /*****************************************************************************/
 
 #ifdef CONFIG_MACH_NITROGEN_IMX53
+extern struct platform_device mxc_uart_device3;
+static struct imxuart_platform_data uart_pdata = {
+	.flags = IMXUART_HAVE_RTSCTS,
+};
 struct gpio nitrogen53_gpios_specific[] __initdata = {
 	{.label = "Camera power down",	.gpio = MAKE_GP(1, 2),		.flags = GPIOF_INIT_HIGH},
 	{.label = "pmic-int",		.gpio = MAKE_GP(2, 21),		.flags = GPIOF_DIR_IN},
@@ -1866,6 +1871,7 @@ static iomux_v3_cfg_t nitrogen53_pads_specific[] __initdata = {
 static void __init mxc_board_init_nitrogen(void)
 {
 	unsigned da9052_irq = gpio_to_irq(MAKE_GP(2, 21));	/* pad EIM_A17 */
+	mxc_uart_device3.dev.platform_data = &uart_pdata;
 	if (gpio_request_array(nitrogen53_gpios_specific,
 			ARRAY_SIZE(nitrogen53_gpios_specific))) {
 		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
