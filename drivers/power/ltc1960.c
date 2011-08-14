@@ -410,7 +410,9 @@ printk (KERN_ERR "%s: set charge state to %x\n", __func__, run_state & CHARGE_MA
 			volts = data->pdata->batteries[0]->charge_uv ;
 			amps = data->pdata->batteries[0]->charge_ua ;
                         trickle_sec = data->pdata->batteries[0]->trickle_seconds ;
-		} else if (CHARGE_SECOND_MASK&run_state) {
+		} else if ((CHARGE_SECOND_MASK&run_state)
+			   &&
+			   data->pdata->batteries[1]) {
 			data->charge_cmd |= CHARGE_BAT1 ;
 			volts = data->pdata->batteries[1]->charge_uv ;
 			amps = data->pdata->batteries[1]->charge_ua ;
