@@ -6,8 +6,8 @@
 
 #include <mach/hardware.h>
 #include <mach/mfp-pxa27x.h>
-#include <mach/pxa-regs.h>
 #include <mach/pxa2xx_spi.h>
+#include <mach/gpio.h>
 #include <linux/proc_fs.h>
 #include <linux/spi/fram_spi.h>
 
