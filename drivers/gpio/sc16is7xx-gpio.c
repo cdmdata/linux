@@ -145,7 +145,7 @@ static int sc16is7xx_irq_set_type(unsigned int irq, unsigned int type)
 	unsigned gp = irq - sg->irq_base;
 	unsigned mask = 1 << gp;
 
-	if (!(type & IRQ_TYPE_EDGE_BOTH)) {
+	if (type && (type != IRQ_TYPE_EDGE_BOTH)) {
 		dev_err(sg->dev, "irq %d: unsupported type %d\n", irq, type);
 		return -EINVAL;
 	}
