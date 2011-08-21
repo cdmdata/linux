@@ -15,7 +15,7 @@
 
 #define __REG(x)       ((volatile unsigned long *)x)
 
-static volatile unsigned long *UART = FFUART;
+static volatile unsigned long *UART = STUART;
 
 static inline void putc(char c)
 {
