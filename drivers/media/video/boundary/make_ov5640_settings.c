@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <zlib.h>
+#include <sys/stat.h>
 
 #define MAX_REGS 1024
 #define MIN_REGNUM 0x3000
@@ -171,12 +172,10 @@ static int parse_register(char const *line,struct ov5640_reg_value *reg)
 	return 0 ;
 }
 
-struct ov5640_setting *process_file (char const *dname, char const *fname) {
+struct ov5640_setting *process_file (char const *path) {
 	struct ov5640_setting *rval = 0 ;
-	char path[256];
 	FILE *fIn ;
 	
-	snprintf(path,sizeof(path),"%s/%s",dname,fname);
 	if (0 != (fIn = fopen(path,"rt"))) {
 		int have_desc = 0 ;
 		char buf[256];
@@ -223,7 +222,18 @@ struct ov5640_setting *process_file (char const *dname, char const *fname) {
 	return rval ;
 }
 
+static int is_file(char const *path)
+{
+	struct stat st ;
+	if (0 == stat(path,&st)) {
+		return S_ISREG(st.st_mode);
+	}
+	else
+		return 0 ;
+}
+
 int main (int argc, char const **argv) {
+	char path[FILENAME_MAX];
 	int retval = -1 ;
 	DIR *dir ;
 	if (3 > argc) {
@@ -239,15 +249,24 @@ int main (int argc, char const **argv) {
 			int file_count = 0 ;
 			int num_valid = 0 ;
                         struct dirent *dent ;
+			char *pathend ;
+			strcpy(path,argv[1]);
+
+			pathend= path+strlen(path);
+			if ('/' != pathend[-1])
+				*pathend++ = '/' ;
+
 			while (0 != (dent=readdir(dir))) {
-				if (DT_REG == dent->d_type)
+				strcpy(pathend,dent->d_name);
+				if (is_file(path))
                                         ++file_count ;
 			}
 			rewinddir(dir);
                         settings = (struct ov5640_setting **)malloc(file_count*sizeof(settings[0]));
 			while (0 != (dent=readdir(dir))) {
-				if (DT_REG == dent->d_type) {
-					if (0 != (settings[num_valid] = process_file (argv[1],dent->d_name)))
+				strcpy(pathend,dent->d_name);
+				if (is_file(path)) {
+					if (0 != (settings[num_valid] = process_file (path)))
 						num_valid++ ;
 				}
 			}
