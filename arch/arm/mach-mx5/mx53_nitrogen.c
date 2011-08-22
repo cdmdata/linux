@@ -1253,7 +1253,7 @@ static struct gpio_keys_button gpio_keys[] = {
 #ifdef CONFIG_GPIO_SC16IS7XX_IRQ
 	{
 		.type	= EV_KEY,
-		.gpio	= 248,
+		.gpio	= 255,			/* J2 Pin 1 */
 		.code	= KEY_CAMERA,
 		.desc	= "Camera Button",
 		.wakeup	= 1,
@@ -1262,7 +1262,7 @@ static struct gpio_keys_button gpio_keys[] = {
 	},
 	{
 		.type	= EV_KEY,
-		.gpio	= 249,
+		.gpio	= 252,			/* J4 Pin 4 */
 		.code	= KEY_PHONE,
 		.desc	= "Phone Button",
 		.wakeup	= 1,
@@ -1271,7 +1271,7 @@ static struct gpio_keys_button gpio_keys[] = {
 	},
 	{
 		.type	= EV_KEY,
-		.gpio	= 250,
+		.gpio	= 253,			/* J2 Pin 3 */
 		.code	= KEY_VOLUMEUP,
 		.desc	= "Volume+ Button",
 		.wakeup	= 1,
@@ -1280,16 +1280,16 @@ static struct gpio_keys_button gpio_keys[] = {
 	},
 	{
 		.type	= EV_KEY,
-		.gpio	= 251,
+		.gpio	= 248,			/* J2 Pin 4 */
 		.code	= KEY_VOLUMEDOWN,
-		.desc	= "Volume+ Button",
+		.desc	= "Volume- Button",
 		.wakeup	= 1,
 		.active_low = 0,
 		.debounce_interval = 30,
 	},
 	{
 		.type	= EV_KEY,
-		.gpio	= 252,
+		.gpio	= 251,			/* J4 Pin 3 */
 		.code	= KEY_DOCUMENTS,
 		.desc	= "Documents Button",
 		.wakeup	= 1,
@@ -1298,7 +1298,7 @@ static struct gpio_keys_button gpio_keys[] = {
 	},
 	{
 		.type	= EV_KEY,
-		.gpio	= 253,
+		.gpio	= 249,			/* J4 Pin 1 */
 		.code	= KEY_F1,
 		.desc	= "Torch LED Button",
 		.wakeup	= 1,
@@ -1307,7 +1307,7 @@ static struct gpio_keys_button gpio_keys[] = {
 	},
 	{
 		.type	= EV_KEY,
-		.gpio	= 254,
+		.gpio	= 250,			/* J4 Pin 2 */
 		.code	= KEY_F2,
 		.desc	= "Splice Monitor Button",
 		.wakeup	= 1,
@@ -1316,7 +1316,7 @@ static struct gpio_keys_button gpio_keys[] = {
 	},
 	{
 		.type	= EV_KEY,
-		.gpio	= 255,
+		.gpio	= 254,			/* J2 Pin 2 */
 		.code	= KEY_F3,
 		.desc	= "Belt Survey Button",
 		.wakeup	= 1,
