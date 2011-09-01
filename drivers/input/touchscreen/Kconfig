@@ -571,6 +571,18 @@ config TOUCHSCREEN_IRTOUCH_IMX
 	select SERIO
 	help
 	  Say Y here if you have an IR Touch serial touchscreen connected to
+	  your system and it's a first revision screen
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called penmount.
+
+config TOUCHSCREEN_IRTOUCH_SERIAL
+	tristate "IR Touch serial touchscreen for generic serial port"
+	select SERIO
+	help
+	  Say Y here if you have an IR Touch serial touchscreen connected to
 	  your system.
 
 	  If unsure, say N.
