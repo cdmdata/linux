@@ -200,4 +200,11 @@ config DEFAULT_PWM1_BACKLIGHT
 	Specify initial value for PWM1
 	Specify initial value for /sys/class/backlight/pwm-backlight.1/brightness
 
+config LL_DEBUG_UART
+	int "Default LL_DEBUG UART (0-2)"
+	range 0 2
+	default 0
+	default 1 if MACH_NITROGEN_IMX53
+	default 2 if MACH_NITROGEN_A_IMX53
+
 endif
