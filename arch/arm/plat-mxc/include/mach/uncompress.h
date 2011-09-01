@@ -124,11 +124,11 @@ static __inline__ void __arch_decomp_setup(unsigned long arch_id)
 	case MACH_TYPE_NITROGEN_EJ_IMX51:
 	case MACH_TYPE_NITROGEN_IMX53:
 #if (0 == CONFIG_LL_DEBUG_UART)
-		uart_base = MX53_UART0_BASE_ADDR;
-#elif (1 == CONFIG_LL_DEBUG_UART)
 		uart_base = MX53_UART1_BASE_ADDR;
-#elif (2 == CONFIG_LL_DEBUG_UART)
+#elif (1 == CONFIG_LL_DEBUG_UART)
 		uart_base = MX53_UART2_BASE_ADDR;
+#elif (2 == CONFIG_LL_DEBUG_UART)
+		uart_base = MX53_UART3_BASE_ADDR;
 #else
 #error no LL_DEBUG_UART defined
 #endif
