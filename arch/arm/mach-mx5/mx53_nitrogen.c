@@ -1097,7 +1097,7 @@ static struct gpio_keys_button gpio_keys[] = {
 #else
 		.gpio	= MAKE_GP(1,4),
 #endif
-		.code	= KEY_MENU,		/* 139 (0x88) */
+		.code	= KEY_MENU,		/* 139 (0x8B) */
 		.desc	= "Menu Button",
 		.wakeup	= 1,
 		.active_low = 1,
