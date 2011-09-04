@@ -1129,7 +1129,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_CAMERA,
 		.desc	= "Camera Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 	{
@@ -1138,7 +1138,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_PHONE,
 		.desc	= "Phone Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 	{
@@ -1147,7 +1147,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_VOLUMEUP,
 		.desc	= "Volume+ Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 	{
@@ -1156,7 +1156,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_VOLUMEDOWN,
 		.desc	= "Volume- Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 	{
@@ -1165,7 +1165,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_DOCUMENTS,
 		.desc	= "Documents Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 	{
@@ -1174,7 +1174,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_F1,
 		.desc	= "Torch LED Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 	{
@@ -1183,7 +1183,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_F2,
 		.desc	= "Splice Monitor Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 	{
@@ -1192,7 +1192,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_F3,
 		.desc	= "Belt Survey Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 #endif
