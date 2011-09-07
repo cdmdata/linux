@@ -311,6 +311,8 @@ struct state_data {
 #define TYPE_VDD_IO1	0
 #define TYPE_VDD_IO2	1
 
+#define TYPE_VDD_CHOICE TYPE_VDD_IO2
+
 #define MODE_LOW	0
 #define MODE_HIGH	1
 #define MODE_NODEBOUNCE	0
@@ -378,10 +380,10 @@ struct state_data sd[] = {
 	/* ST_CUR_IDLE, YN low, XP high */
 	MGP_even(PIN_GPI, TYPE_VDD_IO1, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
 	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_LOW) |		/* GP2 used as XP */
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP3 YN */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_LOW) |		/* GP4 YP */
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP5 XN */
+	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP2 used as XP */
+	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
+	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP4 YP */
+	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP5 XN */
 	MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
 	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
 	(1 << 1) | (1 << 2) | (2 << 3),	/* tsi_cont_a */
@@ -391,10 +393,10 @@ struct state_data sd[] = {
 	/* ST_CUR_X, XN,YP: low, XP,YN high */
 	MGP_even(PIN_GPI, TYPE_VDD_IO1, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
 	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_HIGH) |		/* GP2 used as XP */
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_HIGH),		/* GP3 YN */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_LOW) |		/* GP4 YP */
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP5 XN */
+	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_HIGH) |		/* GP2 used as XP */
+	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_HIGH),		/* GP3 YN */
+	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP4 YP */
+	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP5 XN */
 	MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
 	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
 	(1 << 2) | (2 << 3),	/* tsi_cont_a */
@@ -404,10 +406,10 @@ struct state_data sd[] = {
 	/* ST_CUR_Y, XN,YN: low, XP,YP: high */
 	MGP_even(PIN_GPI, TYPE_VDD_IO1, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
 	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_HIGH) |		/* GP2 used as XP */
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP3 YN */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_HIGH) |		/* GP4 YP */
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP5 XN */
+	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_HIGH) |		/* GP2 used as XP */
+	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
+	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_HIGH) |		/* GP4 YP */
+	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP5 XN */
 	MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
 	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
 	(1 << 2) | (2 << 3),	/* tsi_cont_a */
@@ -417,10 +419,10 @@ struct state_data sd[] = {
 	/* ST_CUR_Z */
 	MGP_even(PIN_GPI, TYPE_VDD_IO1, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
 	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_LOW) |		/* GP2 used as XP */
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP3 YN */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_LOW) |		/* GP4 YP */
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP5 XN */
+	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP2 used as XP */
+	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
+	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP4 YP */
+	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP5 XN */
 	MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
 	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
 	(1 << 2) | (2 << 3),	/* tsi_cont_a */
