@@ -4861,11 +4861,11 @@ int __init mx53_clocks_init(unsigned long ckil, unsigned long osc, unsigned long
 #ifdef CONFIG_EARLY_PRINTK
 	if (earlyprintk_active) {
 		/*
-		 * leave UART1 & 2 on for serial console
-		 * index 3 & 4 is UART1, 5 & 6 UART2
+		 * leave UART1, 2, and 3 on for serial console
+		 * index 3 & 4 is UART1, 5 & 6 UART2, 7 & 8 UART3
 		 */
 		reg = __raw_readl(MXC_CCM_CCGR1);
-		reg &= 0xff<<(3*2);
+		reg &= 0xfff<<(3*2);
 		__raw_writel(reg, MXC_CCM_CCGR1);
 	} else
 #endif

@@ -180,6 +180,8 @@ static struct regulator_init_data da9052_regulators_init[] = {
 			.valid_ops_mask	= REGULATOR_CHANGE_VOLTAGE |
 				REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE,
 			.valid_modes_mask = REGULATOR_MODE_NORMAL,
+			.always_on = 1,
+			.boot_on = 1,
 			.state_mem = {
 				.uV = mV_to_uV(3300),
 				.mode = REGULATOR_MODE_NORMAL,

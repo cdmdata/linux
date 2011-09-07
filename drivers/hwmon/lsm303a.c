@@ -164,10 +164,6 @@ lsm303_accel_probe(struct i2c_client *client, const struct i2c_device_id *id)
 			input_free_polled_device(accel->idev);
 			accel->idev = NULL;
 		}
-		if (0 != retval) {
-                        input_unregister_polled_device(accel->idev);
-			accel->idev = 0;
-		}
 	}
 	else {
 		printk (KERN_ERR "%s: error allocating polldev\n", __func__ );

@@ -1093,11 +1093,11 @@ static struct gpio_keys_button gpio_keys[] = {
 	{
 		.type	= EV_KEY,
 #ifdef CONFIG_MACH_NITROGEN_A_IMX53
-		.gpio	= MAKE_GP(3,25),
+		.gpio	= MAKE_GP(3,31),
 #else
 		.gpio	= MAKE_GP(1,4),
 #endif
-		.code	= KEY_MENU,		/* 139 (0x88) */
+		.code	= KEY_MENU,		/* 139 (0x8B) */
 		.desc	= "Menu Button",
 		.wakeup	= 1,
 		.active_low = 1,
@@ -1129,7 +1129,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_CAMERA,
 		.desc	= "Camera Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 	{
@@ -1138,7 +1138,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_PHONE,
 		.desc	= "Phone Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 	{
@@ -1147,7 +1147,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_VOLUMEUP,
 		.desc	= "Volume+ Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 	{
@@ -1156,7 +1156,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_VOLUMEDOWN,
 		.desc	= "Volume- Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 	{
@@ -1165,7 +1165,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_DOCUMENTS,
 		.desc	= "Documents Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 	{
@@ -1174,7 +1174,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_F1,
 		.desc	= "Torch LED Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 	{
@@ -1183,7 +1183,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_F2,
 		.desc	= "Splice Monitor Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 	{
@@ -1192,7 +1192,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.code	= KEY_F3,
 		.desc	= "Belt Survey Button",
 		.wakeup	= 1,
-		.active_low = 0,
+		.active_low = 1,
 		.debounce_interval = 30,
 	},
 #endif
@@ -1783,7 +1783,6 @@ struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "mic_mux",		.gpio = MAKE_GP(6, 16),		.flags = 0},
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 	{.label = "power_down_req",	.gpio = POWER_DOWN,		.flags = GPIOF_INIT_HIGH},
-	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 };
 
 static iomux_v3_cfg_t nitrogen53_pads_specific_a[] __initdata = {
@@ -1798,20 +1797,28 @@ static iomux_v3_cfg_t nitrogen53_pads_specific_a[] __initdata = {
 	/* Nitrogen uses the following pin for UART3, CTS, TXD, RXD */
 	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
 
-	NEW_PAD_CTRL(MX53_PAD_EIM_D24__GPIO_3_24, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
-	NEW_PAD_CTRL(MX53_PAD_EIM_D25__GPIO_3_25, BUTTON_PAD_CTRL) | MUX_SION_MASK,	/* Menu key */
-
-	/* UART3 */
+#if defined(CONFIG_MACH_NITROGEN_A_IMX53) && (2==CONFIG_LL_DEBUG_UART)
+	MX53_PAD_EIM_D24__UART3_TXD,
+	MX53_PAD_EIM_D25__UART3_RXD,
+#else
 	MX53_PAD_ATA_CS_0__UART3_TXD,
 	MX53_PAD_ATA_CS_1__UART3_RXD,
+	NEW_PAD_CTRL(MX53_PAD_EIM_D24__GPIO_3_24, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
+	NEW_PAD_CTRL(MX53_PAD_EIM_D25__GPIO_3_25, BUTTON_PAD_CTRL) | MUX_SION_MASK,	/* Menu key */
+#endif
+
 	MX53_PAD_EIM_D30__UART3_CTS,
-	MX53_PAD_EIM_D31__UART3_RTS,
+	NEW_PAD_CTRL(MX53_PAD_EIM_D31__GPIO_3_31, BUTTON_PAD_CTRL) | MUX_SION_MASK,	/* ??Menu */
 };
 
 static void __init mxc_board_init_nitrogen_a(void)
 {
 	unsigned da9052_irq = gpio_to_irq(MAKE_GP(2, 21));	/* pad EIM_A17 */
+
+#if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
 	camera_data.power_down = MAKE_GP(2, 22);
+#endif
+
 	if (gpio_request_array(nitrogen53_gpios_specific_a,
 			ARRAY_SIZE(nitrogen53_gpios_specific_a))) {
 		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
