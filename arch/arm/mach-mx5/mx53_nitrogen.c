@@ -1092,7 +1092,7 @@ static struct gpio_keys_button gpio_keys[] = {
 	},
 	{
 		.type	= EV_KEY,
-#ifdef CONFIG_MACH_NITROGEN_A_IMX53
+#if defined(CONFIG_MACH_NITROGEN_A_IMX53) && (2==CONFIG_LL_DEBUG_UART)
 		.gpio	= MAKE_GP(3,31),
 #else
 		.gpio	= MAKE_GP(1,4),
@@ -1112,7 +1112,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.active_low = 1,
 		.debounce_interval = 30,
 	},
-#ifdef CONFIG_MACH_NITROGEN_A_IMX53
+#if defined(CONFIG_MACH_NITROGEN_A_IMX53) && (2==CONFIG_LL_DEBUG_UART)
 	{
 		.type	= EV_KEY,
 		.gpio	= MAKE_GP(3,22),
@@ -1808,7 +1808,11 @@ static iomux_v3_cfg_t nitrogen53_pads_specific_a[] __initdata = {
 #endif
 
 	MX53_PAD_EIM_D30__UART3_CTS,
-	NEW_PAD_CTRL(MX53_PAD_EIM_D31__GPIO_3_31, BUTTON_PAD_CTRL) | MUX_SION_MASK,	/* ??Menu */
+#if (2==CONFIG_LL_DEBUG_UART)
+	NEW_PAD_CTRL(MX53_PAD_EIM_D31__GPIO_3_31, BUTTON_PAD_CTRL) | MUX_SION_MASK,     /* ??Menu */
+#else 
+	MX53_PAD_EIM_D31__UART3_RTS,
+#endif 
 };
 
 static void __init mxc_board_init_nitrogen_a(void)
