@@ -289,14 +289,6 @@ void insert_tsi_point(struct da9052_tsi *tsi, u16 x, u16 y, u16 z, u16 pressed)
 
 #define MGP_even(pin,type,mode) ((pin) | ((type) << 2) | (mode) << 3)
 #define MGP_odd(pin,type,mode) (MGP_even(pin,type,mode) << 4)
-struct state_data {
-	u8 gp01;
-	u8 gp23;
-	u8 gp45;
-	u8 gp67;
-	u8 tsi_cont_a;
-	u8 tsi_cont_b;
-};
 
 #define PIN_ADC		0
 #define PIN_TSIREF	0
@@ -320,163 +312,263 @@ struct state_data {
 #define MODE_NOLDO_EN	1
 
 #if (CONFIG_FIVE_SENSE == TSI_ADC)
-struct state_data sd[] = {
-{
-	/* ST_CUR_IDLE */
-	MGP_even(PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH) |		/* GP0 shorted to GP2*/
-	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
-	MGP_even(PIN_GPI, TYPE_VDD_IO1, MODE_NOLDO_EN) |	/* GP2 pen down detect mode*/
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP3 YN */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_LOW) |		/* GP4 YP */
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP5 XN */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP */
-	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
-	(1 << 2) | (2 << 3),	/* tsi_cont_a */
-	0,			/* tsi_cont_b */
-},
-{
-	/* ST_CUR_X */
-	MGP_even(PIN_GPI, TYPE_VDD_IO1, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
-	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
-	MGP_even(PIN_ADC, TYPE_VDD_IO1, MODE_NODEBOUNCE) |	/* GP2 sense */
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_HIGH),		/* GP3 YN */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_LOW) |		/* GP4 YP */
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP5 XN */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_HIGH) |		/* GP6 XP */
-	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
-	(1 << 2) | (2 << 3),	/* tsi_cont_a */
-	0,			/* tsi_cont_b */
-},
-{
-	/* ST_CUR_Y */
-	MGP_even(PIN_GPI, TYPE_VDD_IO1, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
-	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
-	MGP_even(PIN_ADC, TYPE_VDD_IO1, MODE_NODEBOUNCE) |	/* GP2 sense */
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP3 YN */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_HIGH) |		/* GP4 YP */
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP5 XN */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_HIGH) |		/* GP6 XP */
-	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
-	(1 << 2) | (2 << 3),	/* tsi_cont_a */
-	0,			/* tsi_cont_b */
-},
-{
-	/* ST_CUR_Z */
-	MGP_even(PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH) |		/* GP0 shorted to GP2*/
-	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
-	MGP_even(PIN_ADC, TYPE_VDD_IO1, MODE_NODEBOUNCE) |	/* GP2 sense */
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP3 YN */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_LOW) |		/* GP4 YP */
-	MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP5 XN */
-	MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP */
-	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
-	(1 << 2) | (2 << 3),	/* tsi_cont_a */
-	0,			/* tsi_cont_b */
-},
+/* ST_CUR_IDLE, YN low, XP high */
+const struct da9052_ssc_msg sd_cur_idle[] = {
+	{
+		.addr = DA9052_GPIO0001_REG,
+		.data = MGP_even(PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH) |		/* GP0 shorted to GP2*/
+			MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
+	}, {
+		.addr = DA9052_GPIO0203_REG,
+		.data = MGP_even(PIN_GPI, TYPE_VDD_IO1, MODE_NOLDO_EN) |	/* GP2 pen down detect mode*/
+			MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP3 YN */
+	}, {
+		.addr = DA9052_GPIO0405_REG,
+		.data = MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_LOW) |		/* GP4 YP */
+			MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP5 XN */
+	}, {
+		.addr = DA9052_GPIO0607_REG,
+		.data = MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP */
+			MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
+	}
+};
+
+/* ST_CUR_X */
+const struct da9052_ssc_msg sd_cur_x[] = {
+	{
+		.addr = DA9052_GPIO0001_REG,
+		.data = MGP_even(PIN_GPI, TYPE_VDD_IO1, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
+			MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
+	}, {
+		.addr = DA9052_GPIO0203_REG,
+		.data = MGP_even(PIN_ADC, TYPE_VDD_IO1, MODE_NODEBOUNCE) |	/* GP2 sense */
+			MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_HIGH),		/* GP3 YN */
+	}, {
+		.addr = DA9052_GPIO0405_REG,
+		.data = MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_LOW) |		/* GP4 YP */
+			MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP5 XN */
+	}, {
+		.addr = DA9052_GPIO0607_REG,
+		.data = MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_HIGH) |		/* GP6 XP */
+			MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
+	}, {
+		.addr = DA9052_ADCCONT_REG,
+		.data = 0,
+	}, {
+		.addr = DA9052_ADCMAN_REG,	//gp6: XP, gp7: LDO9 touch screen reference voltage
+		.data = 0x16,			//manual conversion
+	}
+};
+
+/* ST_CUR_Y */
+const struct da9052_ssc_msg sd_cur_y[] = {
+	{
+		.addr = DA9052_GPIO0001_REG,
+		.data = MGP_even(PIN_GPI, TYPE_VDD_IO1, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
+			MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
+	}, {
+		.addr = DA9052_GPIO0203_REG,
+		.data = MGP_even(PIN_ADC, TYPE_VDD_IO1, MODE_NODEBOUNCE) |	/* GP2 sense */
+			MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP3 YN */
+	}, {
+		.addr = DA9052_GPIO0405_REG,
+		.data = MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_HIGH) |		/* GP4 YP */
+			MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP5 XN */
+	}, {
+		.addr = DA9052_GPIO0607_REG,
+		.data = MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_HIGH) |		/* GP6 XP */
+			MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
+	}, {
+		.addr = DA9052_ADCCONT_REG,
+		.data = 0,
+	}, {
+		.addr = DA9052_ADCMAN_REG,	//gp6: XP, gp7: LDO9 touch screen reference voltage
+		.data = 0x16,			//manual conversion
+	}
+};
+
+/* ST_CUR_Z */
+const struct da9052_ssc_msg sd_cur_z[] = {
+	{
+		.addr = DA9052_GPIO0001_REG,
+		.data = MGP_even(PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH) |		/* GP0 shorted to GP2*/
+			MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
+	}, {
+		.addr = DA9052_GPIO0203_REG,
+		.data = MGP_even(PIN_ADC, TYPE_VDD_IO1, MODE_NODEBOUNCE) |	/* GP2 sense */
+			MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP3 YN */
+	}, {
+		.addr = DA9052_GPIO0405_REG,
+		.data = MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_LOW) |		/* GP4 YP */
+			MGP_odd (PIN_GPO, TYPE_VDD_IO1, MODE_LOW),		/* GP5 XN */
+	}, {
+		.addr = DA9052_GPIO0607_REG,
+		.data = MGP_even(PIN_GPO, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP */
+			MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
+	}, {
+		.addr = DA9052_ADCCONT_REG,
+		.data = 0,
+	}, {
+		.addr = DA9052_ADCMAN_REG,	//gp6: XP, gp7: LDO9 touch screen reference voltage
+		.data = 0x16,			//manual conversion
+	}
 };
 #else
 #define TSIB_CLOSE_YP		(1 << 2)
 #define TSIB_CLOSE_YM		(1 << 3)
 #define TSIB_MANUAL		(1 << 6)
 #define TSIB_ADCREF_SELECT	(1 << 7)	//always use Y+/Y- for reference
+
 #define TSIB_MEASURE_XY		TSIB_CLOSE_YP | TSIB_CLOSE_YM | TSIB_MANUAL | TSIB_ADCREF_SELECT
 #define TSIB_MEASURE_Z				TSIB_CLOSE_YM | TSIB_MANUAL
 
-struct state_data sd[] = {
-{
-	/* ST_CUR_IDLE, YN low, XP high */
-	MGP_even(PIN_GPI, TYPE_VDD_IO2, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
-	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
-	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP2 used as XP */
-	MGP_odd (PIN_YN, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
-	MGP_even(PIN_YP, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP4 YP */
-	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP5 XN */
-	MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
-	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
-	(1 << 1) | (1 << 2) | (2 << 3),	/* tsi_cont_a */
-	TSIB_CLOSE_YM,		/* tsi_cont_b */
-},
-{
-	/*
-	 * ST_CUR_X, XN,YP: low, XP,YN high
-	 * yp(1)    xp(0)
-	 * xn(1)    yn(0)
-	 */
-	MGP_even(PIN_GPI, TYPE_VDD_IO2, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
-	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
-	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP2 used as XP */
-	MGP_odd (PIN_YN, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
-	MGP_even(PIN_YP, TYPE_VDD_CHOICE, MODE_HIGH) |		/* GP4 YP */
-	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_HIGH),		/* GP5 XN */
-	MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
-	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
-	(1 << 2) | (2 << 3),	/* tsi_cont_a */
-	TSIB_MEASURE_XY,		/* tsi_cont_b */
-},
-{
-	/*
-	 * ST_CUR_Y, XN,YN: low, XP,YP: high
-	 * yp(1)    xp(1)
-	 * xn(0)    yn(0)
-	 */
-	MGP_even(PIN_GPI, TYPE_VDD_IO2, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
-	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
-	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_HIGH) |		/* GP2 used as XP */
-	MGP_odd (PIN_YN, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
-	MGP_even(PIN_YP, TYPE_VDD_CHOICE, MODE_HIGH) |		/* GP4 YP */
-	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP5 XN */
-	MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
-	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
-	(1 << 2) | (2 << 3),	/* tsi_cont_a */
-	TSIB_MEASURE_XY,		/* tsi_cont_b */
-},
-{
-	/* ST_CUR_Z */
-	MGP_even(PIN_GPI, TYPE_VDD_IO2, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
-	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
-	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP2 used as XP */
-	MGP_odd (PIN_YN, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
-	MGP_even(PIN_YP, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP4 YP */
-	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP5 XN */
-	MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
-	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
-	(1 << 1) | (1 << 2) | (2 << 3),	/* tsi_cont_a */
-	TSIB_MEASURE_Z,		/* tsi_cont_b */
-},
+/* ST_CUR_IDLE, YN low, XP high */
+const struct da9052_ssc_msg sd_cur_idle[] = {
+	{
+		.addr = DA9052_GPIO0001_REG,
+		.data = MGP_even(PIN_GPI, TYPE_VDD_IO2, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
+			MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
+	}, {
+		.addr = DA9052_GPIO0203_REG,
+		.data = MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP2 used as XP */
+			MGP_odd (PIN_YN, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
+	}, {
+		.addr = DA9052_GPIO0405_REG,
+		.data = MGP_even(PIN_YP, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP4 YP */
+			MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP5 XN */
+	}, {
+		.addr = DA9052_GPIO0607_REG,
+		.data = MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
+			MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
+	}, {
+		.addr = DA9052_TSICONTA_REG,
+		.data = (1 << 1) | (1 << 2) | (2 << 3),
+	}
+};
+
+/*
+ * ST_CUR_X, XN,YP: low, XP,YN high
+ * yp(1)    xp(0)
+ * xn(1)    yn(0)
+ */
+const struct da9052_ssc_msg sd_cur_x[] = {
+	{
+#if 0
+		.addr = DA9052_GPIO0001_REG,
+		.data = MGP_even(PIN_GPI, TYPE_VDD_IO2, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
+			MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
+	}, {
+		.addr = DA9052_GPIO0203_REG,
+		.data = MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP2 used as XP */
+			MGP_odd (PIN_YN, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
+	}, {
+#endif
+		.addr = DA9052_GPIO0405_REG,
+		.data = MGP_even(PIN_YP, TYPE_VDD_CHOICE, MODE_HIGH) |		/* GP4 YP */
+			MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_HIGH),		/* GP5 XN */
+	}, {
+#if 0
+		.addr = DA9052_GPIO0607_REG,
+		.data = MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
+			MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
+	}, {
+#endif
+		.addr = DA9052_TSICONTA_REG,
+		.data = (1 << 2) | (2 << 3),
+	}, {
+		.addr = DA9052_TSICONTB_REG,
+		.data = TSIB_MEASURE_XY,
+	}
+};
+
+/*
+ * ST_CUR_Y, XN,YN: low, XP,YP: high
+ * yp(1)    xp(1)
+ * xn(0)    yn(0)
+ */
+const struct da9052_ssc_msg sd_cur_y[] = {
+	{
+#if 0
+		.addr = DA9052_GPIO0001_REG,
+		.data = MGP_even(PIN_GPI, TYPE_VDD_IO2, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
+			MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
+	}, {
+#endif
+		.addr = DA9052_GPIO0203_REG,
+		.data = MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_HIGH) |		/* GP2 used as XP */
+			MGP_odd (PIN_YN, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
+	}, {
+		.addr = DA9052_GPIO0405_REG,
+		.data = MGP_even(PIN_YP, TYPE_VDD_CHOICE, MODE_HIGH) |		/* GP4 YP */
+			MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP5 XN */
+	}, {
+#if 0
+		.addr = DA9052_GPIO0607_REG,
+		.data = MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
+			MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
+	}, {
+		.addr = DA9052_TSICONTA_REG,
+		.data = (1 << 2) | (2 << 3),
+	}, {
+#endif
+		.addr = DA9052_TSICONTB_REG,
+		.data = TSIB_MEASURE_XY,
+	}
+};
+
+/* ST_CUR_Z */
+const struct da9052_ssc_msg sd_cur_z[] = {
+	{
+#if 0
+		.addr = DA9052_GPIO0001_REG,
+		.data = MGP_even(PIN_GPI, TYPE_VDD_IO2, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
+			MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
+	}, {
+#endif
+		.addr = DA9052_GPIO0203_REG,
+		.data = MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP2 used as XP */
+			MGP_odd (PIN_YN, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
+	}, {
+#if 0
+		.addr = DA9052_GPIO0405_REG,
+		.data = MGP_even(PIN_YP, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP4 YP */
+			MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP5 XN */
+	}, {
+		.addr = DA9052_GPIO0607_REG,
+		.data = MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
+			MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
+	}, {
+#endif
+		.addr = DA9052_TSICONTA_REG,
+		.data = (1 << 1) | (1 << 2) | (2 << 3),
+	}, {
+		.addr = DA9052_TSICONTB_REG,
+		.data = TSIB_MEASURE_Z,
+	}
 };
 #endif
+
+struct da9052_state_msg
+{
+	int	cnt;
+	const struct da9052_ssc_msg *msg;
+};
+
+const struct da9052_state_msg sd[] = {
+	{ARRAY_SIZE(sd_cur_idle), sd_cur_idle},
+	{ARRAY_SIZE(sd_cur_x), sd_cur_x},
+	{ARRAY_SIZE(sd_cur_y), sd_cur_y},
+	{ARRAY_SIZE(sd_cur_z), sd_cur_z},
+};
 
 void da9052_config_5w_measure(struct da9052_ts_priv *priv, unsigned state)
 {
 	int ret;
-	int cnt;
-	struct da9052_ssc_msg tsi_data[6];
 	priv->tsi_reg.cur_state = state;
 //	pr_debug("%s: entry %d\n", __func__, state);
 
-	tsi_data[0].addr = DA9052_GPIO0001_REG;	//gp2: adcin6(sense), gp3:YN
-	tsi_data[0].data = sd[state].gp01;
-	tsi_data[1].addr = DA9052_GPIO0203_REG;	//gp2: adcin6(sense), gp3:YN
-	tsi_data[1].data = sd[state].gp23;
-	tsi_data[2].addr = DA9052_GPIO0405_REG;	//gp4: YP, gp5: XN
-	tsi_data[2].data = sd[state].gp45;
-	tsi_data[3].addr = DA9052_GPIO0607_REG;	//gp6: XP, gp7: LDO9 touch screen reference voltage
-	tsi_data[3].data = sd[state].gp67;
-#if (CONFIG_FIVE_SENSE == TSI_ADC)
-	tsi_data[4].addr = DA9052_ADCCONT_REG;
-	tsi_data[4].data = 0;
-	tsi_data[5].addr = DA9052_ADCMAN_REG;	//gp6: XP, gp7: LDO9 touch screen reference voltage
-	tsi_data[5].data = 0x16;	//manual conversion
-	cnt = (state == ST_CUR_IDLE) ? 4 : 6;
-#else
-	tsi_data[4].addr = DA9052_TSICONTA_REG;
-	tsi_data[4].data = sd[state].tsi_cont_a;
-	tsi_data[5].addr = DA9052_TSICONTB_REG;	//gp6: XP, gp7: LDO9 touch screen reference voltage
-	tsi_data[5].data = sd[state].tsi_cont_b;	//manual conversion
-	cnt = (state == ST_CUR_IDLE) ? 5 : 6;
-#endif
 	da9052_lock(priv->da9052);
-	ret = priv->da9052->write_many(priv->da9052, tsi_data, cnt);
+	ret = priv->da9052->write_many(priv->da9052, (struct  da9052_ssc_msg *)sd[state].msg, sd[state].cnt);
 	da9052_unlock(priv->da9052);
 	if (ret) {
 		pr_debug("%s: Error in reading TSI data\n", __func__);
