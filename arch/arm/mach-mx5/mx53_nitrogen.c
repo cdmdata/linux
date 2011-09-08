@@ -1092,11 +1092,7 @@ static struct gpio_keys_button gpio_keys[] = {
 	},
 	{
 		.type	= EV_KEY,
-#if defined(CONFIG_MACH_NITROGEN_A_IMX53) && (2==CONFIG_LL_DEBUG_UART)
-		.gpio	= MAKE_GP(3,31),
-#else
-		.gpio	= MAKE_GP(1,4),
-#endif
+		.gpio	= MAKE_GP(1,4),		/* menu key, new Nitrogen53 A rev will fix up */
 		.code	= KEY_MENU,		/* 139 (0x8B) */
 		.desc	= "Menu Button",
 		.wakeup	= 1,
@@ -1112,7 +1108,7 @@ static struct gpio_keys_button gpio_keys[] = {
 		.active_low = 1,
 		.debounce_interval = 30,
 	},
-#if defined(CONFIG_MACH_NITROGEN_A_IMX53) && (2==CONFIG_LL_DEBUG_UART)
+	/* Below this point only applies to new rev of nitrogen53A */
 	{
 		.type	= EV_KEY,
 		.gpio	= MAKE_GP(3,22),
@@ -1195,7 +1191,6 @@ static struct gpio_keys_button gpio_keys[] = {
 		.active_low = 1,
 		.debounce_interval = 30,
 	},
-#endif
 #endif
 };
 
@@ -1785,7 +1780,7 @@ struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "power_down_req",	.gpio = POWER_DOWN,		.flags = GPIOF_INIT_HIGH},
 };
 
-static iomux_v3_cfg_t nitrogen53_pads_specific_a[] __initdata = {
+static iomux_v3_cfg_t nitrogen53_pads_specific_a_rev2[] __initdata = {
 	/* ECSPI2, Nitrogen53A only */
 	MX53_PAD_EIM_CS1_CSPI2_MOSI,	/* Nitrogen uses as WL1271_irq */
 	MX53_PAD_EIM_OE_CSPI2_MISO,	/* Nitrogen uses as VGA Hsync */
@@ -1797,22 +1792,32 @@ static iomux_v3_cfg_t nitrogen53_pads_specific_a[] __initdata = {
 	/* Nitrogen uses the following pin for UART3, CTS, TXD, RXD */
 	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
 
-#if defined(CONFIG_MACH_NITROGEN_A_IMX53) && (2==CONFIG_LL_DEBUG_UART)
 	MX53_PAD_EIM_D24__UART3_TXD,
 	MX53_PAD_EIM_D25__UART3_RXD,
-#else
+
+	MX53_PAD_EIM_D30__UART3_CTS,
+	NEW_PAD_CTRL(MX53_PAD_EIM_D31__GPIO_3_31, BUTTON_PAD_CTRL) | MUX_SION_MASK,     /* ??Menu */
+};
+
+static iomux_v3_cfg_t nitrogen53_pads_specific_a_rev1[] __initdata = {
+	/* ECSPI2, Nitrogen53A only */
+	MX53_PAD_EIM_CS1_CSPI2_MOSI,	/* Nitrogen uses as WL1271_irq */
+	MX53_PAD_EIM_OE_CSPI2_MISO,	/* Nitrogen uses as VGA Hsync */
+	MX53_PAD_EIM_LBA_CSPI2_CS2,
+	MX53_PAD_EIM_CS0_CSPI2_SCLK,
+
+	MX53_PAD_GPIO_16__I2C3_SDA,	/* gpio7[11] */
+
+	/* Nitrogen uses the following pin for UART3, CTS, TXD, RXD */
+	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
+
 	MX53_PAD_ATA_CS_0__UART3_TXD,
 	MX53_PAD_ATA_CS_1__UART3_RXD,
 	NEW_PAD_CTRL(MX53_PAD_EIM_D24__GPIO_3_24, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
 	NEW_PAD_CTRL(MX53_PAD_EIM_D25__GPIO_3_25, BUTTON_PAD_CTRL) | MUX_SION_MASK,	/* Menu key */
-#endif
 
 	MX53_PAD_EIM_D30__UART3_CTS,
-#if (2==CONFIG_LL_DEBUG_UART)
-	NEW_PAD_CTRL(MX53_PAD_EIM_D31__GPIO_3_31, BUTTON_PAD_CTRL) | MUX_SION_MASK,     /* ??Menu */
-#else 
 	MX53_PAD_EIM_D31__UART3_RTS,
-#endif 
 };
 
 static void __init mxc_board_init_nitrogen_a(void)
@@ -1827,8 +1832,18 @@ static void __init mxc_board_init_nitrogen_a(void)
 			ARRAY_SIZE(nitrogen53_gpios_specific_a))) {
 		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
 	}
-	mxc_iomux_v3_setup_multiple_pads(nitrogen53_pads_specific_a,
-			ARRAY_SIZE(nitrogen53_pads_specific_a));
+	if (board_is_rev(0x100)) {
+#ifdef CONFIG_KEYBOARD_GPIO
+		gpio_keys_platform_data.nbuttons = 4;	/* old rev */
+//		gpio_keys[2].gpio = MAKE_GP(1,4);	/* old rev - menu key, default*/
+#endif
+		mxc_iomux_v3_setup_multiple_pads(nitrogen53_pads_specific_a_rev1,
+				ARRAY_SIZE(nitrogen53_pads_specific_a_rev1));
+	} else {
+		mxc_iomux_v3_setup_multiple_pads(nitrogen53_pads_specific_a_rev2,
+				ARRAY_SIZE(nitrogen53_pads_specific_a_rev2));
+		gpio_keys[2].gpio = MAKE_GP(3,31);	/* new rev - menu key */
+	}
 	mxc_board_init(NULL, 0,
 		mxc_i2c1_board_info, ARRAY_SIZE(mxc_i2c1_board_info),
 		mxc_i2c2_board_info, ARRAY_SIZE(mxc_i2c2_board_info),
@@ -1883,6 +1898,9 @@ static void __init mxc_board_init_nitrogen(void)
 {
 	unsigned da9052_irq = gpio_to_irq(MAKE_GP(2, 21));	/* pad EIM_A17 */
 	mxc_uart_device3.dev.platform_data = &uart_pdata;
+#ifdef CONFIG_KEYBOARD_GPIO
+	gpio_keys_platform_data.nbuttons = 4;
+#endif
 	if (gpio_request_array(nitrogen53_gpios_specific,
 			ARRAY_SIZE(nitrogen53_gpios_specific))) {
 		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
@@ -1952,6 +1970,9 @@ struct gpio nitrogen53_gpios_specific_v2[] __initdata = {
 static void __init mxc_board_init_nitrogen_v2(void)
 {
 	unsigned da9052_irq = gpio_to_irq(MAKE_GP(7, 11));	/* pad GPIO_16 */
+#ifdef CONFIG_KEYBOARD_GPIO
+	gpio_keys_platform_data.nbuttons = 4;
+#endif
 	if (gpio_request_array(nitrogen53_gpios_specific_v2,
 			ARRAY_SIZE(nitrogen53_gpios_specific_v2))) {
 		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
@@ -2016,6 +2037,9 @@ struct gpio nitrogen53_gpios_specific_v1[] __initdata = {
 static void __init mxc_board_init_nitrogen_v1(void)
 {
 	unsigned da9052_irq = gpio_to_irq(MAKE_GP(7, 11));	/* pad GPIO_16 */
+#ifdef CONFIG_KEYBOARD_GPIO
+	gpio_keys_platform_data.nbuttons = 4;
+#endif
 	if (gpio_request_array(nitrogen53_gpios_specific_v1,
 			ARRAY_SIZE(nitrogen53_gpios_specific_v1))) {
 		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
