@@ -575,6 +575,7 @@ void da9052_config_5w_measure(struct da9052_ts_priv *priv, unsigned state)
 	}
 }
 
+#ifdef CONFIG_FIVE_WIRE
 static void da9052_tsi_5w_data_ready_handler(struct da9052_eh_nb *eh_data, u32 event)
 {
 	struct da9052_tsi_reg *pdata;
@@ -648,7 +649,7 @@ static void da9052_tsi_5w_data_ready_handler(struct da9052_eh_nb *eh_data, u32 e
 		break;
 	}
 }
-
+#else
 static void da9052_tsi_data_ready_handler(struct da9052_eh_nb *eh_data, u32 event)
 {
 	struct da9052_ssc_msg tsi_data[4];
@@ -691,6 +692,7 @@ static void da9052_tsi_data_ready_handler(struct da9052_eh_nb *eh_data, u32 even
 	pr_debug("%s: x=%x, y=%x, z=%x, pressed=%d\n",
 		__func__, x, y, z, pressed);
 }
+#endif
 
 static void da9052_tsi_reg_datardy_event(struct da9052_ts_priv *priv)
 {
