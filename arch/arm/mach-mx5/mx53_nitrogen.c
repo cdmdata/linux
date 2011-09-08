@@ -707,7 +707,7 @@ static struct imxi2c_platform_data mxci2c2_previous_data = {
 #endif
 
 static struct imxi2c_platform_data mxci2c0_data = {
-	.bitrate = 100000,
+	.bitrate = 400000,
 	.i2c_clock_toggle = i2c_clock_toggle0,
 };
 static struct imxi2c_platform_data mxci2c1_data = {
