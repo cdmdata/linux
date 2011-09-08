@@ -37,6 +37,7 @@
 #include <linux/ipu.h>
 #include <linux/irq.h>
 #include <linux/ldb.h>
+#include <linux/mfd/da9052/da9052.h>
 #include <linux/mfd/sc16is7xx-reg.h>
 #if defined(CONFIG_MTD)
 #include <linux/mtd/map.h>
@@ -1820,6 +1821,8 @@ static iomux_v3_cfg_t nitrogen53_pads_specific_a_rev1[] __initdata = {
 	MX53_PAD_EIM_D31__UART3_RTS,
 };
 
+extern struct da9052_tsi_platform_data da9052_tsi;
+
 static void __init mxc_board_init_nitrogen_a(void)
 {
 	unsigned da9052_irq = gpio_to_irq(MAKE_GP(2, 21));	/* pad EIM_A17 */
@@ -1843,6 +1846,7 @@ static void __init mxc_board_init_nitrogen_a(void)
 		mxc_iomux_v3_setup_multiple_pads(nitrogen53_pads_specific_a_rev2,
 				ARRAY_SIZE(nitrogen53_pads_specific_a_rev2));
 		gpio_keys[2].gpio = MAKE_GP(3,31);	/* new rev - menu key */
+		da9052_tsi.config_index = DA9052_5_WIRE_XYSXY;
 	}
 	mxc_board_init(NULL, 0,
 		mxc_i2c1_board_info, ARRAY_SIZE(mxc_i2c1_board_info),

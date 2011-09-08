@@ -441,16 +441,17 @@ static struct regulator_init_data da9052_regulators_init[] = {
 };
 
 
-static struct da9052_tsi_platform_data da9052_tsi = {
+struct da9052_tsi_platform_data da9052_tsi = {
 	.pen_up_interval = 50,
 	.tsi_delay_bit_shift = 6,
 	.tsi_skip_bit_shift = 3,
 	.num_gpio_tsi_register = 3,
 #ifdef CONFIG_FIVE_WIRE
-	.tsi_supply_voltage = 3300,
+	.config_index = DA9052_5_WIRE_YXSXY,	/* Nitrogen53a rev 2 needs DA9052_5_WIRE_XYSXY, will fix up */
 #else
-	.tsi_supply_voltage = 2500,
+	.config_index = DA9052_4_WIRE,
 #endif
+	.tsi_supply_voltage = 2800,
 	.max_tsi_delay = TSI_DELAY_4SLOTS,
 	.max_tsi_skip_slot = TSI_SKIP_330SLOTS,
 };

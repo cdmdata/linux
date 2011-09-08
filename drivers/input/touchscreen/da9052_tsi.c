@@ -678,7 +678,9 @@ const struct da9052_state_msg* sd_config[] = {
 void da9052_config_5w_measure(struct da9052_ts_priv *priv, unsigned state)
 {
 	int ret;
-	const struct da9052_state_msg* cfg = sd_config[1];
+	unsigned cfg_index = priv->tsi_pdata->config_index;
+	const struct da9052_state_msg* cfg;
+	cfg = sd_config[(cfg_index == DA9052_5_WIRE_XYSXY) ? 1 : 0];
 	priv->tsi_reg.cur_state = state;
 //	pr_debug("%s: entry %d\n", __func__, state);
 
