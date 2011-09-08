@@ -375,58 +375,73 @@ struct state_data sd[] = {
 },
 };
 #else
+#define TSIB_CLOSE_YP		(1 << 2)
+#define TSIB_CLOSE_YM		(1 << 3)
+#define TSIB_MANUAL		(1 << 6)
+#define TSIB_ADCREF_SELECT	(1 << 7)	//always use Y+/Y- for reference
+#define TSIB_MEASURE_XY		TSIB_CLOSE_YP | TSIB_CLOSE_YM | TSIB_MANUAL | TSIB_ADCREF_SELECT
+#define TSIB_MEASURE_Z				TSIB_CLOSE_YM | TSIB_MANUAL
+
 struct state_data sd[] = {
 {
 	/* ST_CUR_IDLE, YN low, XP high */
 	MGP_even(PIN_GPI, TYPE_VDD_IO2, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
 	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
 	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP2 used as XP */
-	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
-	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP4 YP */
+	MGP_odd (PIN_YN, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
+	MGP_even(PIN_YP, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP4 YP */
 	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP5 XN */
 	MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
 	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
 	(1 << 1) | (1 << 2) | (2 << 3),	/* tsi_cont_a */
-	0,		/* tsi_cont_b */
+	TSIB_CLOSE_YM,		/* tsi_cont_b */
 },
 {
-	/* ST_CUR_X, XN,YP: low, XP,YN high */
+	/*
+	 * ST_CUR_X, XN,YP: low, XP,YN high
+	 * yp(1)    xp(0)
+	 * xn(1)    yn(0)
+	 */
+	MGP_even(PIN_GPI, TYPE_VDD_IO2, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
+	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
+	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP2 used as XP */
+	MGP_odd (PIN_YN, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
+	MGP_even(PIN_YP, TYPE_VDD_CHOICE, MODE_HIGH) |		/* GP4 YP */
+	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_HIGH),		/* GP5 XN */
+	MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
+	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
+	(1 << 2) | (2 << 3),	/* tsi_cont_a */
+	TSIB_MEASURE_XY,		/* tsi_cont_b */
+},
+{
+	/*
+	 * ST_CUR_Y, XN,YN: low, XP,YP: high
+	 * yp(1)    xp(1)
+	 * xn(0)    yn(0)
+	 */
 	MGP_even(PIN_GPI, TYPE_VDD_IO2, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
 	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
 	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_HIGH) |		/* GP2 used as XP */
-	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_HIGH),		/* GP3 YN */
-	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP4 YP */
+	MGP_odd (PIN_YN, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
+	MGP_even(PIN_YP, TYPE_VDD_CHOICE, MODE_HIGH) |		/* GP4 YP */
 	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP5 XN */
 	MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
 	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
 	(1 << 2) | (2 << 3),	/* tsi_cont_a */
-	(1 << 6),		/* tsi_cont_b */
-},
-{
-	/* ST_CUR_Y, XN,YN: low, XP,YP: high */
-	MGP_even(PIN_GPI, TYPE_VDD_IO2, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
-	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
-	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_HIGH) |		/* GP2 used as XP */
-	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
-	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_HIGH) |		/* GP4 YP */
-	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP5 XN */
-	MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
-	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
-	(1 << 2) | (2 << 3),	/* tsi_cont_a */
-	(1 << 6),		/* tsi_cont_b */
+	TSIB_MEASURE_XY,		/* tsi_cont_b */
 },
 {
 	/* ST_CUR_Z */
 	MGP_even(PIN_GPI, TYPE_VDD_IO2, MODE_NODEBOUNCE) |	/* GP0 shorted to GP2*/
 	MGP_odd (PIN_GPO_OD, TYPE_VDD_IO1, MODE_HIGH),		/* GP1 unused */
 	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP2 used as XP */
-	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
-	MGP_even(PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP4 YP */
+	MGP_odd (PIN_YN, TYPE_VDD_CHOICE, MODE_LOW),		/* GP3 YN */
+	MGP_even(PIN_YP, TYPE_VDD_CHOICE, MODE_LOW) |		/* GP4 YP */
 	MGP_odd (PIN_GPO, TYPE_VDD_CHOICE, MODE_LOW),		/* GP5 XN */
 	MGP_even(PIN_XP, TYPE_VDD_IO1, MODE_LOW) |		/* GP6 XP used as sense */
 	MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
 	(1 << 1) | (1 << 2) | (2 << 3),	/* tsi_cont_a */
-	(1 << 6),		/* tsi_cont_b */
+	TSIB_MEASURE_Z,		/* tsi_cont_b */
 },
 };
 #endif
@@ -520,7 +535,7 @@ static void da9052_tsi_5w_data_ready_handler(struct da9052_eh_nb *eh_data, u32 e
 		break;
 	case ST_CUR_Z:
 		pdata->z = sample;
-		if (sample < 0x3d0) {
+		if (sample < 0x200) {
 			da9052_config_5w_measure(priv, ST_CUR_X);
 			pdata->pressed = 1;	/* touch still detected */
 			insert_tsi_point(&priv->tsi_reg, pdata->x, pdata->y,
