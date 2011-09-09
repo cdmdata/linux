@@ -1768,8 +1768,9 @@ static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
 
 
 /*****************************************************************************/
+extern struct da9052_tsi_platform_data da9052_tsi;
 
-#ifdef CONFIG_MACH_NITROGEN_A_IMX53
+#if defined(CONFIG_MACH_NITROGEN_A_IMX53) || defined(CONFIG_MACH_NITROGEN_AP_IMX53)
 struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "pmic-int",		.gpio = MAKE_GP(2, 21),		.flags = GPIOF_DIR_IN},
 	{.label = "Camera power down",	.gpio = MAKE_GP(2, 22),		.flags = GPIOF_INIT_HIGH},	/* EIM_A16 */
@@ -1781,6 +1782,9 @@ struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "power_down_req",	.gpio = POWER_DOWN,		.flags = GPIOF_INIT_HIGH},
 };
 
+#endif
+
+#ifdef CONFIG_MACH_NITROGEN_A_IMX53
 static iomux_v3_cfg_t nitrogen53_pads_specific_a_rev2[] __initdata = {
 	/* ECSPI2, Nitrogen53A only */
 	MX53_PAD_EIM_CS1_CSPI2_MOSI,	/* Nitrogen uses as WL1271_irq */
@@ -1800,6 +1804,41 @@ static iomux_v3_cfg_t nitrogen53_pads_specific_a_rev2[] __initdata = {
 	NEW_PAD_CTRL(MX53_PAD_EIM_D31__GPIO_3_31, BUTTON_PAD_CTRL) | MUX_SION_MASK,     /* ??Menu */
 };
 
+static void __init mxc_board_init_nitrogen_a(void)
+{
+	unsigned da9052_irq = gpio_to_irq(MAKE_GP(2, 21));	/* pad EIM_A17 */
+
+#if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
+	camera_data.power_down = MAKE_GP(2, 22);
+#endif
+
+	if (gpio_request_array(nitrogen53_gpios_specific_a,
+			ARRAY_SIZE(nitrogen53_gpios_specific_a))) {
+		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
+	}
+	mxc_iomux_v3_setup_multiple_pads(nitrogen53_pads_specific_a_rev2,
+			ARRAY_SIZE(nitrogen53_pads_specific_a_rev2));
+#ifdef CONFIG_KEYBOARD_GPIO
+	gpio_keys[2].gpio = MAKE_GP(3,31);	/* new rev - menu key */
+#endif
+	da9052_tsi.config_index = DA9052_5_WIRE_XYSXY;
+
+	mxc_board_init(NULL, 0,
+		mxc_i2c1_board_info, ARRAY_SIZE(mxc_i2c1_board_info),
+		mxc_i2c2_board_info, ARRAY_SIZE(mxc_i2c2_board_info),
+		da9052_irq, &mxci2c2_data);
+}
+
+MACHINE_START(NITROGEN_A_IMX53, "Boundary Devices Nitrogen_A MX53 Board")
+	.fixup = fixup_mxc_board,
+	.map_io = mx5_map_io,
+	.init_irq = mx5_init_irq,
+	.timer = &mxc_timer,
+	.init_machine = mxc_board_init_nitrogen_a,
+MACHINE_END
+#endif
+
+#ifdef CONFIG_MACH_NITROGEN_AP_IMX53
 static iomux_v3_cfg_t nitrogen53_pads_specific_a_rev1[] __initdata = {
 	/* ECSPI2, Nitrogen53A only */
 	MX53_PAD_EIM_CS1_CSPI2_MOSI,	/* Nitrogen uses as WL1271_irq */
@@ -1821,9 +1860,7 @@ static iomux_v3_cfg_t nitrogen53_pads_specific_a_rev1[] __initdata = {
 	MX53_PAD_EIM_D31__UART3_RTS,
 };
 
-extern struct da9052_tsi_platform_data da9052_tsi;
-
-static void __init mxc_board_init_nitrogen_a(void)
+static void __init mxc_board_init_nitrogen_ap(void)
 {
 	unsigned da9052_irq = gpio_to_irq(MAKE_GP(2, 21));	/* pad EIM_A17 */
 
@@ -1835,32 +1872,24 @@ static void __init mxc_board_init_nitrogen_a(void)
 			ARRAY_SIZE(nitrogen53_gpios_specific_a))) {
 		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
 	}
-	if (board_is_rev(0x100)) {
 #ifdef CONFIG_KEYBOARD_GPIO
-		gpio_keys_platform_data.nbuttons = 4;	/* old rev */
-//		gpio_keys[2].gpio = MAKE_GP(1,4);	/* old rev - menu key, default*/
+	gpio_keys_platform_data.nbuttons = 4;	/* old rev */
+//	gpio_keys[2].gpio = MAKE_GP(1,4);	/* old rev - menu key, default*/
 #endif
-		mxc_iomux_v3_setup_multiple_pads(nitrogen53_pads_specific_a_rev1,
-				ARRAY_SIZE(nitrogen53_pads_specific_a_rev1));
-	} else {
-		mxc_iomux_v3_setup_multiple_pads(nitrogen53_pads_specific_a_rev2,
-				ARRAY_SIZE(nitrogen53_pads_specific_a_rev2));
-		gpio_keys[2].gpio = MAKE_GP(3,31);	/* new rev - menu key */
-		da9052_tsi.config_index = DA9052_5_WIRE_XYSXY;
-	}
+	mxc_iomux_v3_setup_multiple_pads(nitrogen53_pads_specific_a_rev1,
+			ARRAY_SIZE(nitrogen53_pads_specific_a_rev1));
 	mxc_board_init(NULL, 0,
 		mxc_i2c1_board_info, ARRAY_SIZE(mxc_i2c1_board_info),
 		mxc_i2c2_board_info, ARRAY_SIZE(mxc_i2c2_board_info),
 		da9052_irq, &mxci2c2_data);
 }
 
-MACHINE_START(NITROGEN_A_IMX53, "Boundary Devices Nitrogen_A MX53 Board")
-	/* Maintainer: Freescale Semiconductor, Inc. */
+MACHINE_START(NITROGEN_AP_IMX53, "Boundary Devices Nitrogen_AP prototype MX53 Board")
 	.fixup = fixup_mxc_board,
 	.map_io = mx5_map_io,
 	.init_irq = mx5_init_irq,
 	.timer = &mxc_timer,
-	.init_machine = mxc_board_init_nitrogen_a,
+	.init_machine = mxc_board_init_nitrogen_ap,
 MACHINE_END
 #endif
 
@@ -1990,7 +2019,6 @@ static void __init mxc_board_init_nitrogen_v2(void)
 }
 
 MACHINE_START(NITROGEN_V2_IMX53, "Boundary Devices Nitrogen MX53 rev. 2 Board (DA9053)")
-	/* Maintainer: Freescale Semiconductor, Inc. */
 	.fixup = fixup_mxc_board,
 	.map_io = mx5_map_io,
 	.init_irq = mx5_init_irq,
@@ -2057,7 +2085,6 @@ static void __init mxc_board_init_nitrogen_v1(void)
 }
 
 MACHINE_START(NITROGEN_V1_IMX53, "Boundary Devices Nitrogen MX53 rev. 1 Board")
-	/* Maintainer: Freescale Semiconductor, Inc. */
 	.fixup = fixup_mxc_board,
 	.map_io = mx5_map_io,
 	.init_irq = mx5_init_irq,

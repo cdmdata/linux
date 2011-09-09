@@ -107,6 +107,10 @@ static __inline__ void __arch_decomp_setup(unsigned long arch_id)
 	case MACH_TYPE_MAGX_ZN5:
 		uart_base = MX3X_UART2_BASE_ADDR;
 		break;
+	case MACH_TYPE_NITROGEN_IMX51:
+	case MACH_TYPE_NITROGEN_VM_IMX51:
+	case MACH_TYPE_NITROGEN_P_IMX51:
+	case MACH_TYPE_NITROGEN_EJ_IMX51:
 	case MACH_TYPE_MX51_BABBAGE:
 		uart_base = MX51_UART1_BASE_ADDR;
 		break;
@@ -118,20 +122,14 @@ static __inline__ void __arch_decomp_setup(unsigned long arch_id)
 	case MACH_TYPE_MX50_RDP:
 		uart_base = MX50_UART1_BASE_ADDR;
 		break;
-	case MACH_TYPE_NITROGEN_IMX51:
-	case MACH_TYPE_NITROGEN_VM_IMX51:
-	case MACH_TYPE_NITROGEN_P_IMX51:
-	case MACH_TYPE_NITROGEN_EJ_IMX51:
 	case MACH_TYPE_NITROGEN_IMX53:
-#if (0 == CONFIG_LL_DEBUG_UART)
-		uart_base = MX53_UART1_BASE_ADDR;
-#elif (1 == CONFIG_LL_DEBUG_UART)
 		uart_base = MX53_UART2_BASE_ADDR;
-#elif (2 == CONFIG_LL_DEBUG_UART)
+		break;
+	case MACH_TYPE_NITROGEN_AP_IMX53:
+		uart_base = MX53_UART1_BASE_ADDR;
+		break;
+	case MACH_TYPE_NITROGEN_A_IMX53:
 		uart_base = MX53_UART3_BASE_ADDR;
-#else
-#error no LL_DEBUG_UART defined
-#endif
 		break;
 	default:
 		break;
