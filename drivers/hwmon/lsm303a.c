@@ -132,7 +132,7 @@ lsm303_accel_probe(struct i2c_client *client, const struct i2c_device_id *id)
 
 		retval = input_register_polled_device(accel->idev);
 		if (0 == retval) {
-			retval = i2c_smbus_write_byte_data(client,CTRL_REG1_A,0x27); /* start sampling */
+			retval = i2c_smbus_write_byte_data(client,CTRL_REG1_A,0x27); /* X/Y/Z enable at 10Hz */
 			if (0 == retval) {
 				printk (KERN_INFO "%s: LSM303DLH accelerometer driver loaded\n", __func__ );
 #if 2 == CONFIG_SENSORS_LSM303_ACCELEROMETER_RANGE
