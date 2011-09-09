@@ -1332,6 +1332,12 @@ static ssize_t __devinit da9052_tsi_init_drv(struct da9052_ts_priv *priv, struct
 	return 0;
 }
 
+static const unsigned char * const cfg_strs[] = {
+		[DA9052_4_WIRE] = "4-wire",
+		[DA9052_5_WIRE_XYSXY] = "XYSXY",
+		[DA9052_5_WIRE_YXSXY] = "YXSXY",
+};
+
 static s32 __devinit da9052_tsi_probe(struct platform_device *pdev)
 {
 
@@ -1368,8 +1374,8 @@ static s32 __devinit da9052_tsi_probe(struct platform_device *pdev)
 			return -EFAULT;
 
 
-	printk(KERN_INFO "TSI Drv Successfully Inserted %s\n",
-					DA9052_TSI_DEVICE_NAME);
+	printk(KERN_INFO "TSI Drv Successfully Inserted %s, %s\n",
+		DA9052_TSI_DEVICE_NAME, cfg_strs[pdata->config_index]);
 	return 0;
 }
 
