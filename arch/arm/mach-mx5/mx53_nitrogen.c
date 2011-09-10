@@ -1742,7 +1742,11 @@ static struct i2c_board_info mxc_i2c1_board_info[] __initdata = {
 	},
 	{
 	 .type = "lsm303a",
+#ifdef CONFIG_MACH_NITROGEN_AP_IMX53
 	 .addr = 0x19,
+#else
+	 .addr = 0x18,
+#endif
 	 .platform_data  = &i2c_generic_data,
 	},
 	{
