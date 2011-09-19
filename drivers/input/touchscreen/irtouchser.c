@@ -1,8 +1,8 @@
-/* 
- * IRTOUCH serial touchscreen driver 
- * 
- * Copyright (c) 2011 Smart Zhu 
- */  
+/*
+ * IRTOUCH serial touchscreen driver
+ *
+ * Copyright (c) 2011 Smart Zhu
+ */
   #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/module.h>
@@ -12,23 +12,23 @@
 #include <linux/hid.h>
 #include <linux/input.h>
 
-#include <linux/errno.h>   
-#include <linux/kernel.h>   
-#include <linux/module.h>   
-#include <linux/slab.h>   
-#include <linux/input.h>   
-#include <linux/serio.h>   
-#include <linux/init.h>   
+#include <linux/errno.h>
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/slab.h>
+#include <linux/input.h>
+#include <linux/serio.h>
+#include <linux/init.h>
 #include <asm/uaccess.h>
 #include <linux/miscdevice.h>
 #include <linux/cdev.h>
 #include <linux/delay.h>
-  
-#define DRIVER_DESC "IRTOUCH serial touchscreen driver" 
+
+#define DRIVER_DESC "IRTOUCH serial touchscreen driver"
 #define TOUCH_DEVICE_NAME	"irtouchser"
 #define IRTOUCH_MAJOR_NUM	555
 #define IRTOUCH_MINOR_NUM 	0
- 
+
 #define SET_COMMAND	0x01
 #define GET_COMMAND	0x02
 
@@ -47,16 +47,16 @@
 #define CTLCODE_CALIB_PARA_Y 0xc2
 #define CTLCODE_CALIB_START 0xc3
 
-#define IRTOUCH_MAX_LENGTH  64  
+#define IRTOUCH_MAX_LENGTH  64
 
 #ifndef SERIO_IRTOUCH
 # define SERIO_IRTOUCH	0x41
 #endif
-  
-MODULE_AUTHOR("Smart Zhu <smart.ju888@gmail.com>");  
-MODULE_DESCRIPTION(DRIVER_DESC);  
-MODULE_LICENSE("GPL");  
-  
+
+MODULE_AUTHOR("Smart Zhu <smart.ju888@gmail.com>");
+MODULE_DESCRIPTION(DRIVER_DESC);
+MODULE_LICENSE("GPL");
+
 #pragma pack(1)
 
 typedef struct	_device_config{
@@ -98,21 +98,21 @@ struct irtouch_pkg{
 	unsigned char	deviceId;
 	struct irtouch_point	points[3];
 	unsigned char	actualCounter;
-	unsigned char	packetId;	
+	unsigned char	packetId;
 };
 
 #pragma pack()
-  
-struct irtouch{  
-	struct input_dev *dev;  
-	struct serio 	*serio;  
-	int id;  
-	int idx;  
-	unsigned char csum;  
-	unsigned char data[IRTOUCH_MAX_LENGTH]; 
+
+struct irtouch{
+	struct input_dev *dev;
+	struct serio 	*serio;
+	int id;
+	int idx;
+	unsigned char csum;
+	unsigned char data[IRTOUCH_MAX_LENGTH];
 	struct irtouch_pkg irpkg;
-	char phys[32];  
-};  
+	char phys[32];
+};
 
 struct device_context{
 	char *irtouchName;
@@ -126,9 +126,9 @@ struct device_context{
 	device_config devConfig;
 };
 
-/* 
- * Definitions & global arrays. 
- */  
+/*
+ * Definitions & global arrays.
+ */
 struct device_context *devContext;
 struct irtouch *irtouch;
 
@@ -156,12 +156,12 @@ static int build_package(unsigned char command_type, unsigned char command, int 
 	{
 		length--;
 	}
-	
+
 	for(i = 0; i < length; i++)
 	{
 		package[5 + i] = data[i];
 	}
-	 
+
 	for(j = 0; j < 5 + length; j++)
 	{
 		tmp = package[j] + tmp;
@@ -180,7 +180,7 @@ static int send_command(struct serio *serio, unsigned char *inData, int length)
 {
 	int i = 0;
 	int ret = -1;
-			
+
 	for(i=0; i<length; i++)
 	{
 		ret = serio_write(serio,inData[i]);
@@ -197,7 +197,7 @@ static void irtouch_delay(void)
 	{
 		if(devContext->receiveStatus || iCount > 50)
 		{
-			devContext->receiveStatus = false;	
+			devContext->receiveStatus = false;
 			return;
 		}
 
@@ -227,7 +227,7 @@ printk(KERN_ALERT "GET  device param.");
 	}
 	irtouch_delay();
 
-	
+
 	memset(inData,0,sizeof(inData));
 	memset(outData,0,sizeof(outData));
 
@@ -284,7 +284,7 @@ printk(KERN_ALERT "GET  device param.");
 	memset(inData,0,sizeof(inData));
 	memset(outData,0,sizeof(outData));
 
-	length = build_package(SET_COMMAND,SET_DEVICE_COMMAND_MODE,0,2,inData,outData);	
+	length = build_package(SET_COMMAND,SET_DEVICE_COMMAND_MODE,0,2,inData,outData);
 	status = send_command(serio,outData,length);
 	if(status == -1)
 	{
@@ -359,7 +359,7 @@ static void set_calib_param(struct serio *serio)
 	memset(inData,0,sizeof(inData));
 	memset(outData,0,sizeof(outData));
 
-	length = build_package(SET_COMMAND,SET_DEVICE_COMMAND_MODE,0,2,inData,outData);	
+	length = build_package(SET_COMMAND,SET_DEVICE_COMMAND_MODE,0,2,inData,outData);
 	status = send_command(serio,outData,length);
 	if(status == -1)
 	{
@@ -367,12 +367,12 @@ static void set_calib_param(struct serio *serio)
 	}
 	irtouch_delay();
 }
-  
-static void irtouch_send_report(struct irtouch* irtouch)  
-{  
+
+static void irtouch_send_report(struct irtouch* irtouch)
+{
 	int x = 0;
 	int y = 0;
-	struct input_dev *dev = irtouch->dev;  
+	struct input_dev *dev = irtouch->dev;
 
 	memcpy(&irtouch->irpkg,&irtouch->data[0],46);
 
@@ -391,10 +391,10 @@ static void irtouch_send_report(struct irtouch* irtouch)
 	}
 
 	//send single-touch data
-	input_report_abs(dev, ABS_X, x);  
-	input_report_abs(dev, ABS_Y, y);  
-	input_report_key(dev, BTN_TOUCH, (irtouch->irpkg.points[0].status == 0x07) ? 1:0); 
-	input_sync(dev);  
+	input_report_abs(dev, ABS_X, x);
+	input_report_abs(dev, ABS_Y, y);
+	input_report_key(dev, BTN_TOUCH, (irtouch->irpkg.points[0].status == 0x07) ? 1:0);
+	input_sync(dev);
 */
 
 	//send dual-touch data
@@ -414,7 +414,7 @@ static void irtouch_send_report(struct irtouch* irtouch)
 				x = devContext->touchPoint.x;
 				y = devContext->touchPoint.y;
 			}
-			
+
 			input_report_abs(dev,ABS_MT_TRACKING_ID,0);
 			input_report_abs(dev,ABS_MT_POSITION_X, x);
 			input_report_abs(dev,ABS_MT_POSITION_Y, y);
@@ -441,7 +441,7 @@ static void irtouch_send_report(struct irtouch* irtouch)
 				x = devContext->touchPoint.x;
 				y = devContext->touchPoint.y;
 			}
-			
+
 			input_report_abs(dev,ABS_MT_TRACKING_ID,1);
 			input_report_abs(dev,ABS_MT_POSITION_X, x);
 			input_report_abs(dev,ABS_MT_POSITION_Y, y);
@@ -470,7 +470,7 @@ static void irtouch_send_report(struct irtouch* irtouch)
 				x = devContext->touchPoint.x;
 				y = devContext->touchPoint.y;
 			}
-			
+
 			input_report_abs(dev,ABS_MT_TRACKING_ID,0);
 			input_report_abs(dev,ABS_MT_POSITION_X, x);
 			input_report_abs(dev,ABS_MT_POSITION_Y, y);
@@ -480,23 +480,23 @@ static void irtouch_send_report(struct irtouch* irtouch)
 		else
 		{
 			input_report_abs(dev,ABS_MT_TOUCH_MAJOR, 0);
-		}	
+		}
 
 		input_mt_sync(dev);
 	}
 	input_sync(dev);
-}  
+}
 
 void irtouch_process_data(struct irtouch *irtouch, unsigned char data)
-{	
-	irtouch->data[irtouch->idx] = data;  
+{
+	irtouch->data[irtouch->idx] = data;
 
 	switch(irtouch->idx){
 		case 0:
 			if(data != 0xaa)
 			{
 				irtouch->idx = 0;
-				return;			
+				return;
 			}
 			break;
 		case 1:
@@ -507,11 +507,11 @@ void irtouch_process_data(struct irtouch *irtouch, unsigned char data)
 			}
 			break;
 	}
-				
+
 	if(irtouch->data[0] == 0xaa)
 	{
 		if(irtouch->idx == (irtouch->data[3] + 4))
-		{	
+		{
 			unsigned char CRC  = 0x55;
 			int j = 0;
 
@@ -521,9 +521,9 @@ void irtouch_process_data(struct irtouch *irtouch, unsigned char data)
 			}
 
 			if(CRC == irtouch->data[irtouch->idx])
-			{	
+			{
 				if(irtouch->data[2] == 0x65) //touch report;
-				{					
+				{
 					irtouch_send_report(irtouch);
 				}
 				else //command report;
@@ -544,24 +544,24 @@ void irtouch_process_data(struct irtouch *irtouch, unsigned char data)
 	else
 	{
 		irtouch->idx = 0;
-		return;		
+		return;
 	}
-	
+
 	irtouch->idx++;
 }
- 
-static irqreturn_t irtouch_interrupt(struct serio *serio, unsigned char data, unsigned int flags)  
-{  
-	struct irtouch* irtouch = serio_get_drvdata(serio);
-		
-	switch(irtouch->id){  
-	case 0: 
-		irtouch_process_data(irtouch, data);  
-		break;
-	}  
 
-	return IRQ_HANDLED;  
-}  
+static irqreturn_t irtouch_interrupt(struct serio *serio, unsigned char data, unsigned int flags)
+{
+	struct irtouch* irtouch = serio_get_drvdata(serio);
+
+	switch(irtouch->id){
+	case 0:
+		irtouch_process_data(irtouch, data);
+		break;
+	}
+
+	return IRQ_HANDLED;
+}
 
 static long ts_ioctl(struct file * filp, unsigned int ctl_code, unsigned long ctl_param)
 {
@@ -571,7 +571,7 @@ static long ts_ioctl(struct file * filp, unsigned int ctl_code, unsigned long ct
 	switch (ctl_code){
 
 		case CTLCODE_CALIB_START:
-			
+
 			ret = copy_from_user(&buf, (unsigned char *)ctl_param, sizeof(unsigned char));
 			if(buf == 0x01)
 			{
@@ -582,7 +582,7 @@ static long ts_ioctl(struct file * filp, unsigned int ctl_code, unsigned long ct
 		case CTLCODE_COORDINATE:
 			ret = copy_to_user((touch_point *)ctl_param, &devContext->touchPoint, sizeof(touch_point));
 			break;
-	
+
 		case CTLCODE_CALIB_PARA_X:
 			devContext->isCalibX = true;
 			ret = copy_from_user(&devContext->calibX, (calib_param *)ctl_param, sizeof(calib_param));
@@ -603,7 +603,7 @@ static long ts_ioctl(struct file * filp, unsigned int ctl_code, unsigned long ct
 
 	return ret;
 }
-  
+
 static struct class *irser_class;
 dev_t dev = 0;
 struct cdev cdev;
@@ -613,12 +613,12 @@ static struct file_operations ts_fops = {
 	unlocked_ioctl:ts_ioctl,
 };
 
-/* 
- * irtouch_disconnect() is the opposite of irtouch_connect() 
- */    
-static void irtouch_disconnect(struct serio *serio)  
-{  
-	struct irtouch* irtouch = serio_get_drvdata(serio);  
+/*
+ * irtouch_disconnect() is the opposite of irtouch_connect()
+ */
+static void irtouch_disconnect(struct serio *serio)
+{
+	struct irtouch* irtouch = serio_get_drvdata(serio);
 
 	cdev_del(&cdev);
 	unregister_chrdev_region(dev,1);
@@ -626,18 +626,18 @@ static void irtouch_disconnect(struct serio *serio)
 	device_destroy(irser_class,MKDEV(IRTOUCH_MAJOR_NUM,0));
 	class_destroy(irser_class);
 
-	input_unregister_device(irtouch->dev);  
-	serio_close(serio);  
-	serio_set_drvdata(serio, NULL);  
-	kfree(irtouch);  
+	input_unregister_device(irtouch->dev);
+	serio_close(serio);
+	serio_set_drvdata(serio, NULL);
+	kfree(irtouch);
 	kfree(devContext);
-}  
-  
-/* 
- * irtouch_connect() is the routine that is called when someone adds a 
- * new serio device that supports Gunze protocol and registers it as 
- * an input device. 
- */  
+}
+
+/*
+ * irtouch_connect() is the routine that is called when someone adds a
+ * new serio device that supports Gunze protocol and registers it as
+ * an input device.
+ */
 static void char_reg_setup_cdev(void)
 {
 	int error, devno = MKDEV(IRTOUCH_MAJOR_NUM,IRTOUCH_MINOR_NUM);
@@ -653,18 +653,18 @@ static void char_reg_setup_cdev(void)
 	}
 }
 
-static int irtouch_connect(struct serio *serio, struct serio_driver *drv)  
-{  
+static int irtouch_connect(struct serio *serio, struct serio_driver *drv)
+{
 	int err;
 	struct input_dev *input_dev;
 
-	if (!(irtouch = kmalloc(sizeof(struct irtouch), GFP_KERNEL)))  
-	return -ENOMEM;  
+	if (!(irtouch = kmalloc(sizeof(struct irtouch), GFP_KERNEL)))
+	return -ENOMEM;
 
-	if (!(devContext = kmalloc(sizeof(struct device_context), GFP_KERNEL)))  
-	return -ENOMEM; 
+	if (!(devContext = kmalloc(sizeof(struct device_context), GFP_KERNEL)))
+	return -ENOMEM;
 
-	memset(irtouch, 0, sizeof(struct irtouch)); 
+	memset(irtouch, 0, sizeof(struct irtouch));
 	memset(devContext,0,sizeof(struct device_context));
 
 	devContext->irtouchName = "IRTOUCH Serial TouchScreen";
@@ -687,7 +687,7 @@ static int irtouch_connect(struct serio *serio, struct serio_driver *drv)
 		printk(KERN_ALERT "class create failed.\n");
 		return PTR_ERR(irser_class);
 	}
-	
+
 	device_create(irser_class,NULL,MKDEV(IRTOUCH_MAJOR_NUM,0),NULL,TOUCH_DEVICE_NAME);
 
 
@@ -698,8 +698,8 @@ static int irtouch_connect(struct serio *serio, struct serio_driver *drv)
 		goto fail1;
 	}
 
-	irtouch->id = serio->id.id;  
-	irtouch->serio = serio;  
+	irtouch->id = serio->id.id;
+	irtouch->serio = serio;
 	irtouch->dev = input_dev;
 
 	irtouch->dev->evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
@@ -708,9 +708,9 @@ static int irtouch_connect(struct serio *serio, struct serio_driver *drv)
 	set_bit(ABS_PRESSURE, irtouch->dev->absbit);
 
 	//single-touch
-/*	input_set_abs_params(irtouch->dev, ABS_X, 0, 4095, 0, 0);  
-	input_set_abs_params(irtouch->dev, ABS_Y, 0, 4095, 0, 0);  
-	input_set_abs_params(irtouch->dev, ABS_PRESSURE, 0, 255, 0, 0);  
+/*	input_set_abs_params(irtouch->dev, ABS_X, 0, 4095, 0, 0);
+	input_set_abs_params(irtouch->dev, ABS_Y, 0, 4095, 0, 0);
+	input_set_abs_params(irtouch->dev, ABS_PRESSURE, 0, 255, 0, 0);
 */
 	//dual-touch
 	input_set_abs_params(irtouch->dev, ABS_MT_POSITION_X, 0, 4095, 0, 0);
@@ -719,88 +719,88 @@ static int irtouch_connect(struct serio *serio, struct serio_driver *drv)
 	input_set_abs_params(irtouch->dev, ABS_MT_TOUCH_MINOR, 0, 4095, 0, 0);
 	input_set_abs_params(irtouch->dev, ABS_MT_TRACKING_ID, 0, 10, 0, 0);
 
-	sprintf(irtouch->phys, "%s/input0", serio->phys);  
+	sprintf(irtouch->phys, "%s/input0", serio->phys);
 
-	irtouch->dev->name = devContext->irtouchName;  
-	irtouch->dev->phys = irtouch->phys;  
-	irtouch->dev->id.bustype = BUS_RS232;  
-	irtouch->dev->id.vendor = 0x6615;//SERIO_UNKNOWN;  
-	irtouch->dev->id.product = irtouch->id;  
-	irtouch->dev->id.version = 0x0100;  
+	irtouch->dev->name = devContext->irtouchName;
+	irtouch->dev->phys = irtouch->phys;
+	irtouch->dev->id.bustype = BUS_RS232;
+	irtouch->dev->id.vendor = 0x6615;//SERIO_UNKNOWN;
+	irtouch->dev->id.product = irtouch->id;
+	irtouch->dev->id.version = 0x0100;
 
-	serio_set_drvdata(serio, irtouch);  
+	serio_set_drvdata(serio, irtouch);
 
-	err = serio_open(serio, drv);  
-	if (err) {  
-		serio_set_drvdata(serio, NULL);  
-		kfree(irtouch); 
-		kfree(devContext); 
-		return err;  
-	}  
+	err = serio_open(serio, drv);
+	if (err) {
+		serio_set_drvdata(serio, NULL);
+		kfree(irtouch);
+		kfree(devContext);
+		return err;
+	}
 
 	get_device_param(serio);
 
-	err = input_register_device(irtouch->dev);  
+	err = input_register_device(irtouch->dev);
 	if(err)
 	{
 		goto fail1;
 	}
 
-	printk(KERN_INFO "input: %s on %s\n", devContext->irtouchName, serio->phys);  
-	
-	return 0;  
+	printk(KERN_INFO "input: %s on %s\n", devContext->irtouchName, serio->phys);
+
+	return 0;
 
 fail1:	input_free_device(input_dev);
 	kfree(irtouch);
 	kfree(devContext);
 	return err;
-}  
-  
-/* 
- * The serio driver structure. 
- */  
-  
-static struct serio_device_id irtouch_serio_ids[] = {  
-	{  
-		.type   = SERIO_RS232,  
-		.proto  = SERIO_ANY,  
-		.id = SERIO_ANY,  
-		.extra  = SERIO_ANY,  
-	},  
-	{ 0 }  
-};  
-  
-MODULE_DEVICE_TABLE(serio, irtouch_serio_ids);  
-  
-static struct serio_driver irtouch_drv = {  
-	.driver     = {  
-		.name   = "irtouchser",  
-	},  
-	.description    = DRIVER_DESC,  
-	.id_table   = irtouch_serio_ids,  
-	.interrupt  = irtouch_interrupt,  
-	.connect    = irtouch_connect,  
-	.disconnect = irtouch_disconnect,  
-};  
-  
-/* 
- * The functions for inserting/removing us as a module. 
- */  
-static int __init irtouch_init(void)  
-{  
+}
+
+/*
+ * The serio driver structure.
+ */
+
+static struct serio_device_id irtouch_serio_ids[] = {
+	{
+		.type   = SERIO_RS232,
+		.proto  = SERIO_ANY,
+		.id = SERIO_ANY,
+		.extra  = SERIO_ANY,
+	},
+	{ 0 }
+};
+
+MODULE_DEVICE_TABLE(serio, irtouch_serio_ids);
+
+static struct serio_driver irtouch_drv = {
+	.driver     = {
+		.name   = "irtouchser",
+	},
+	.description    = DRIVER_DESC,
+	.id_table   = irtouch_serio_ids,
+	.interrupt  = irtouch_interrupt,
+	.connect    = irtouch_connect,
+	.disconnect = irtouch_disconnect,
+};
+
+/*
+ * The functions for inserting/removing us as a module.
+ */
+static int __init irtouch_init(void)
+{
 	int ret = 0;
 
-	ret = serio_register_driver(&irtouch_drv);  
+	ret = serio_register_driver(&irtouch_drv);
 
-	return 0;  
-}  
-  
-static void __exit irtouch_exit(void)  
-{  
-	serio_unregister_driver(&irtouch_drv);  
-}  
-  
-module_init(irtouch_init);  
-module_exit(irtouch_exit); 
+	return 0;
+}
+
+static void __exit irtouch_exit(void)
+{
+	serio_unregister_driver(&irtouch_drv);
+}
+
+module_init(irtouch_init);
+module_exit(irtouch_exit);
 
 
