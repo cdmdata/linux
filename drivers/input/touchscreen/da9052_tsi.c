@@ -414,6 +414,13 @@ const struct da9052_ssc_msg sd_cur_z[] = {
 	}
 };
 #else
+
+#define TSIA_PEN_DET_EN		(1 << 1)
+#define TSIA_XP_MODE		(1 << 2)
+#define TSIA_SKIP		(2 << 3)	//skip 5 slots
+#define TSIA_DELAY		(3 << 6)	//settle delay of 4 slots
+#define TSIA_DEFAULT		(TSIA_XP_MODE | TSIA_SKIP | TSIA_DELAY)
+
 #define TSIB_CLOSE_XP		(1 << 0)
 #define TSIB_CLOSE_XM		(1 << 1)
 #define TSIB_CLOSE_YP		(1 << 2)
@@ -444,7 +451,7 @@ const struct da9052_ssc_msg sd_cur_idle[] = {
 			MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
 	}, {
 		.addr = DA9052_TSICONTA_REG,
-		.data = (1 << 1) | (1 << 2) | (2 << 3) | (2 >> 6),
+		.data = TSIA_PEN_DET_EN | TSIA_DEFAULT,
 	}
 };
 
@@ -472,7 +479,7 @@ const struct da9052_ssc_msg sd_cur_x[] = {
 	}, {
 #endif
 		.addr = DA9052_TSICONTA_REG,
-		.data = (1 << 2) | (2 << 3) | (2 >> 6),
+		.data = TSIA_DEFAULT,
 	}, {
 		.addr = DA9052_TSICONTB_REG,
 		.data = TSIB_MEASURE_XY,
@@ -500,7 +507,7 @@ const struct da9052_ssc_msg sd_cur_y[] = {
 			MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
 	}, {
 		.addr = DA9052_TSICONTA_REG,
-		.data = (1 << 2) | (2 << 3) | (2 >> 6),
+		.data = TSIA_DEFAULT,
 	}, {
 #endif
 		.addr = DA9052_TSICONTB_REG,
@@ -526,7 +533,7 @@ const struct da9052_ssc_msg sd_cur_z[] = {
 	}, {
 #endif
 		.addr = DA9052_TSICONTA_REG,
-		.data = (1 << 1) | (1 << 2) | (2 << 3) | (2 >> 6),
+		.data = TSIA_PEN_DET_EN | TSIA_DEFAULT,
 	}, {
 		.addr = DA9052_TSICONTB_REG,
 		.data = TSIB_MEASURE_Z,
@@ -577,7 +584,7 @@ const struct da9052_ssc_msg nsd_cur_idle[] = {
 			MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
 	}, {
 		.addr = DA9052_TSICONTA_REG,
-		.data = (1 << 1) | (1 << 2) | (2 << 3) | (2 >> 6),
+		.data = TSIA_PEN_DET_EN | TSIA_DEFAULT,
 	}
 };
 
@@ -603,7 +610,7 @@ const struct da9052_ssc_msg nsd_cur_x[] = {
 	}, {
 #endif
 		.addr = DA9052_TSICONTA_REG,
-		.data = (1 << 2) | (2 << 3) | (2 >> 6),
+		.data = TSIA_DEFAULT,
 	}, {
 		.addr = DA9052_TSICONTB_REG,
 		.data = N_TSIB_MEASURE_XY,
@@ -631,7 +638,7 @@ const struct da9052_ssc_msg nsd_cur_y[] = {
 			MGP_odd (PIN_TSIREF, TYPE_VDD_IO1, MODE_LOW),		/* GP7 vref */
 	}, {
 		.addr = DA9052_TSICONTA_REG,
-		.data = (1 << 2) | (2 << 3) | (2 >> 6),
+		.data = TSIA_DEFAULT,
 	}, {
 #endif
 		.addr = DA9052_TSICONTB_REG,
@@ -657,7 +664,7 @@ const struct da9052_ssc_msg nsd_cur_z[] = {
 	}, {
 #endif
 		.addr = DA9052_TSICONTA_REG,
-		.data = (1 << 1) | (1 << 2) | (2 << 3) | (2 >> 6),
+		.data = TSIA_PEN_DET_EN | TSIA_DEFAULT,
 	}, {
 		.addr = DA9052_TSICONTB_REG,
 		.data = N_TSIB_MEASURE_Z,
