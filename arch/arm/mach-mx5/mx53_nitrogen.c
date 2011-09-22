@@ -185,7 +185,7 @@ static iomux_v3_cfg_t mx53common_pads[] = {
 	MX53_PAD_CSI0_D4__AUD3_TXC,
 	MX53_PAD_CSI0_D5__AUD3_TXD,
 	MX53_PAD_CSI0_D6__AUD3_TXFS,
-	MX53_PAD_CSI0_D7__AUD3_RXD,
+//	MX53_PAD_CSI0_D7__AUD3_RXD,
 
 	/* AUD4, sgtl5000 */
 	MX53_PAD_SD2_CLK__GPIO_1_10,	/* temp AUD4_RXFS */
@@ -264,8 +264,8 @@ static iomux_v3_cfg_t mx53common_pads[] = {
 	NEW_PAD_CTRL(MX53_PAD_EIM_A20__GPIO_2_18, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
 	NEW_PAD_CTRL(MX53_PAD_EIM_A19__GPIO_2_19, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
 	NEW_PAD_CTRL(MX53_PAD_EIM_A18__GPIO_2_20, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
-	NEW_PAD_CTRL(MX53_PAD_EIM_A17__GPIO_2_21, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
-	NEW_PAD_CTRL(MX53_PAD_EIM_A16__GPIO_2_22, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* wl1271 btwakeup, Camera power down(nitrogenA) */
+	NEW_PAD_CTRL(MX53_PAD_EIM_A17__GPIO_2_21, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Pmic IRQ */
+	NEW_PAD_CTRL(MX53_PAD_EIM_A16__GPIO_2_22, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Camera power down(nitrogenA) */
 	MX53_PAD_EIM_EB1__GPIO_2_29,									/* tpf410_i2cmode */
 
 	/* GPIO3 */
@@ -1908,18 +1908,21 @@ struct gpio nitrogen53_gpios_specific[] __initdata = {
 	{.label = "Camera power down",	.gpio = MAKE_GP(1, 2),		.flags = GPIOF_INIT_HIGH},
 	{.label = "pmic-int",		.gpio = MAKE_GP(2, 21),		.flags = GPIOF_DIR_IN},
 #if defined(CONFIG_WL12XX_SDIO)
-	{.label = "wl1271_btwakeup",	.gpio = MAKE_GP(2, 22),		.flags = GPIOF_DIR_IN},		/* EIM_A16 */
+	{.label = "wl1271_btfunct5",	.gpio = MAKE_GP(1, 6),		.flags = GPIOF_DIR_IN},		/* GPIO_1_6 - (HOST_WU) */
 	{.label = "wl1271_int",		.gpio = MAKE_GP(2, 24),		.flags = GPIOF_DIR_IN},		/* EIM_CS1 */
 	{.label = "wl1271_wl_en",	.gpio = MAKE_GP(3, 0),		.flags = 0},			/* EIM_DA0, high active */
 	{.label = "wl1271_bt_en",	.gpio = MAKE_GP(3, 1),		.flags = 0},			/* EIM_DA1, high active */
+	{.label = "wl1271_btfunct2",	.gpio = MAKE_GP(5, 25),		.flags = 0},			/* CSIO0_D7, (BT_WU) */
 #endif
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 };
 
 static iomux_v3_cfg_t nitrogen53_pads_specific[] __initdata = {
+	MX53_PAD_GPIO_6__GPIO_1_6,	/* BT_FUNCT5 */
 	MX53_PAD_EIM_CS1__GPIO_2_24,	/* WL1271_irq, NitrogenA uses as ECSPI2 MOSI */
 	MX53_PAD_EIM_OE__DI1_PIN7,	/* VGA HSync, NitrogenA uses as ECSPI2 MISO */
 	MX53_PAD_EIM_CS0__GPIO_2_23,	/* Keyboard, NitrogenA uses as ECSPI2 SCLK */
+	MX53_PAD_CSI0_D7__GPIO_5_25,	/* BT_FUNCT2 */
 
 	MX53_PAD_GPIO_16__I2C3_SDA,	/* gpio7[11] */
 	MX53_PAD_EIM_D30__GPIO_3_30,	/* On/Off key */
