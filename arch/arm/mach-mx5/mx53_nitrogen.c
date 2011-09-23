@@ -152,7 +152,6 @@ struct gpio nitrogen53_gpios[] __initdata = {
 #define N53_SS1					MAKE_GP(3, 19)
 	{.label = "ecspi_ss1",		.gpio = MAKE_GP(3, 19),		.flags = GPIOF_INIT_HIGH},	/* low active */
 //	{.label = "Shutdown output",	.gpio = MAKE_GP(3, 31),		.flags = 0},
-	{.label = "cam-reset",		.gpio = MAKE_GP(4, 0),		.flags = GPIOF_INIT_HIGH},
 #define N53_AMP_ENABLE				MAKE_GP(4, 7)	/* KEY_ROW0 */
 	{.label = "speaker_amp",	.gpio = MAKE_GP(4, 7),		.flags = 0},
 #define CAMERA_RESET				MAKE_GP(4, 14)
@@ -1664,8 +1663,24 @@ static struct sys_timer mxc_timer = {
 
 /*****************************************************************************/
 	/* Stuff common to MX53_NITROGEN and MX53_NITROGEN_A */
-#if defined(CONFIG_MACH_NITROGEN_IMX53) || defined(CONFIG_MACH_NITROGEN_A_IMX53)
+#if defined(CONFIG_MACH_NITROGEN_IMX53) || defined(CONFIG_MACH_NITROGEN_A_IMX53) || defined(CONFIG_MACH_NITROGEN_AP_IMX53)
 static struct i2c_board_info mxc_i2c1_board_info[] __initdata = {
+#if defined(CONFIG_MACH_NITROGEN_A_IMX53) || defined(CONFIG_MACH_NITROGEN_AP_IMX53)
+	{
+	 .type = "lsm303a",
+	 .addr = 0x18,			//Nitrogen_AP will override this, so keep 1st in array
+	 .platform_data  = &i2c_generic_data,
+	},
+	{
+	 .type = "lsm303c",
+	 .addr = 0x1e,
+	 .platform_data  = &i2c_generic_data,
+	},
+	{
+	 .type = "bq20z75",
+	 .addr = 0x0b,
+	},
+#endif
 #if defined (CONFIG_TOUCHSCREEN_I2C) || defined (CONFIG_TOUCHSCREEN_I2C_MODULE)
 	{
 	 .type = "Pic16F616-ts",
@@ -1685,26 +1700,6 @@ static struct i2c_board_info mxc_i2c1_board_info[] __initdata = {
 	 .addr = 0x38,
 	 .platform_data  = &i2c_tfp410_data,
 	},
-#if defined(CONFIG_MACH_NITROGEN_A_IMX53)
-	{
-	 .type = "lsm303c",
-	 .addr = 0x1e,
-	 .platform_data  = &i2c_generic_data,
-	},
-	{
-	 .type = "lsm303a",
-#ifdef CONFIG_MACH_NITROGEN_AP_IMX53
-	 .addr = 0x19,
-#else
-	 .addr = 0x18,
-#endif
-	 .platform_data  = &i2c_generic_data,
-	},
-	{
-	 .type = "bq20z75",
-	 .addr = 0x0b,
-	},
-#endif
 };
 
 static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
@@ -1736,11 +1731,10 @@ struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 	{.label = "power_down_req",	.gpio = POWER_DOWN,		.flags = GPIOF_INIT_HIGH},
 };
-
 #endif
 
 #ifdef CONFIG_MACH_NITROGEN_A_IMX53
-static iomux_v3_cfg_t nitrogen53_pads_specific_a_rev2[] __initdata = {
+static iomux_v3_cfg_t nitrogen53_pads_specific_a[] __initdata = {
 	/* ECSPI2, Nitrogen53A only */
 	MX53_PAD_EIM_CS1_CSPI2_MOSI,	/* Nitrogen uses as WL1271_irq */
 	MX53_PAD_EIM_OE_CSPI2_MISO,	/* Nitrogen uses as VGA Hsync */
@@ -1771,8 +1765,8 @@ static void __init mxc_board_init_nitrogen_a(void)
 			ARRAY_SIZE(nitrogen53_gpios_specific_a))) {
 		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
 	}
-	mxc_iomux_v3_setup_multiple_pads(nitrogen53_pads_specific_a_rev2,
-			ARRAY_SIZE(nitrogen53_pads_specific_a_rev2));
+	mxc_iomux_v3_setup_multiple_pads(nitrogen53_pads_specific_a,
+			ARRAY_SIZE(nitrogen53_pads_specific_a));
 #ifdef CONFIG_KEYBOARD_GPIO
 	gpio_keys[2].gpio = MAKE_GP(3,31);	/* new rev - menu key */
 #endif
@@ -1793,8 +1787,10 @@ MACHINE_START(NITROGEN_A_IMX53, "Boundary Devices Nitrogen_A MX53 Board")
 MACHINE_END
 #endif
 
+/*****************************************************************************/
+
 #ifdef CONFIG_MACH_NITROGEN_AP_IMX53
-static iomux_v3_cfg_t nitrogen53_pads_specific_a_rev1[] __initdata = {
+static iomux_v3_cfg_t nitrogen53_pads_specific_ap[] __initdata = {
 	/* ECSPI2, Nitrogen53A only */
 	MX53_PAD_EIM_CS1_CSPI2_MOSI,	/* Nitrogen uses as WL1271_irq */
 	MX53_PAD_EIM_OE_CSPI2_MISO,	/* Nitrogen uses as VGA Hsync */
@@ -1819,6 +1815,7 @@ static void __init mxc_board_init_nitrogen_ap(void)
 {
 	unsigned da9052_irq = gpio_to_irq(MAKE_GP(2, 21));	/* pad EIM_A17 */
 
+	mxc_i2c1_board_info[0].addr = 0x19;		/* "lsm303a" has different address on AP */
 #if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
 	camera_data.power_down = MAKE_GP(2, 22);
 #endif
@@ -1831,8 +1828,8 @@ static void __init mxc_board_init_nitrogen_ap(void)
 	gpio_keys_platform_data.nbuttons = 4;	/* old rev */
 //	gpio_keys[2].gpio = MAKE_GP(1,4);	/* old rev - menu key, default*/
 #endif
-	mxc_iomux_v3_setup_multiple_pads(nitrogen53_pads_specific_a_rev1,
-			ARRAY_SIZE(nitrogen53_pads_specific_a_rev1));
+	mxc_iomux_v3_setup_multiple_pads(nitrogen53_pads_specific_ap,
+			ARRAY_SIZE(nitrogen53_pads_specific_ap));
 	mxc_board_init(NULL, 0,
 		mxc_i2c1_board_info, ARRAY_SIZE(mxc_i2c1_board_info),
 		mxc_i2c2_board_info, ARRAY_SIZE(mxc_i2c2_board_info),
@@ -1946,7 +1943,6 @@ static void __init mxc_board_init_nitrogen(void)
 			ARRAY_SIZE(nitrogen53_gpios_specific))) {
 		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
 	}
-
 	mxc_iomux_v3_setup_multiple_pads(nitrogen53_pads_specific,
 			ARRAY_SIZE(nitrogen53_pads_specific));
 	mxc_board_init(NULL, 0,
@@ -1971,7 +1967,6 @@ static void __init mxc_board_init_nitrogen(void)
 }
 
 MACHINE_START(NITROGEN_IMX53, "Boundary Devices Nitrogen MX53 Board")
-	/* Maintainer: Freescale Semiconductor, Inc. */
 	.fixup = fixup_mxc_board,
 	.map_io = mx5_map_io,
 	.init_irq = mx5_init_irq,
