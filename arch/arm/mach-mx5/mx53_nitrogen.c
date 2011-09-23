@@ -103,9 +103,6 @@ extern int __init mx53_nitrogen_init_da9052(unsigned irq);
 /* newer boards use GP7:11 for I2C3 SDA pin, older use GP1:6 */
 #define N53_I2C_2_SDA_CURRENT MAKE_GP(7, 11)
 #define N53_I2C_2_SDA_PREVIOUS MAKE_GP(1, 6)
-#define N53_WL1271_INT			MAKE_GP(2, 24)
-#define N53_WL1271_WL_EN		MAKE_GP(3, 0)
-#define N53_WL1271_BT_EN		MAKE_GP(3, 1)
 
 struct gpio nitrogen53_gpios[] __initdata = {
 #ifdef REV0
@@ -975,16 +972,14 @@ static int sdhc_write_protect(struct device *dev)
 	return rc;
 }
 
-static unsigned int sdhc_get_card_det_status(struct device *dev)
+static unsigned int sdhc_get_card_det_status1(struct device *dev)
 {
-	int ret;
-	if (to_platform_device(dev)->id == 0) {
-		ret = gpio_get_value(N53_SD1_CD);
-	} else {		/* config the det pin for SDHC3 */
-		ret = gpio_get_value(N53_SD3_CD);
-	}
+	return gpio_get_value(N53_SD1_CD);
+}
 
-	return ret;
+static unsigned int sdhc_get_card_det_status3(struct device *dev)
+{
+	return gpio_get_value(N53_SD3_CD);
 }
 
 static struct mxc_mmc_platform_data mmc1_data = {
@@ -994,7 +989,7 @@ static struct mxc_mmc_platform_data mmc1_data = {
 	.min_clk = 400000,
 	.max_clk = 50000000,
 	.card_inserted_state = 0,
-	.status = sdhc_get_card_det_status,
+	.status = sdhc_get_card_det_status1,
 	.wp_status = sdhc_write_protect,
 	.clock_mmc = "esdhc_clk",
 	.power_mmc = NULL,
@@ -1008,7 +1003,7 @@ static struct mxc_mmc_platform_data mmc3_data = {
 	.min_clk = 400000,
 	.max_clk = 50000000,
 	.card_inserted_state = 0,
-	.status = sdhc_get_card_det_status,
+	.status = sdhc_get_card_det_status3,
 	.wp_status = sdhc_write_protect,
 	.clock_mmc = "esdhc_clk",
 };
@@ -1555,43 +1550,6 @@ static void nitrogen_power_off(void)
 	}
 }
 
-#ifdef CONFIG_WL12XX_PLATFORM_DATA
-static struct regulator_consumer_supply nitrogen53_vmmc2_supply =
-	REGULATOR_SUPPLY("vmmc", "mxsdhci.2");
-
-/* VMMC2 for driving the WL12xx module */
-static struct regulator_init_data nitrogen53_vmmc2 = {
-	.constraints = {
-		.valid_ops_mask	= REGULATOR_CHANGE_STATUS,
-	},
-	.num_consumer_supplies	= 1,
-	.consumer_supplies = &nitrogen53_vmmc2_supply,
-};
-
-static struct fixed_voltage_config nitrogen53_vwlan = {
-	.supply_name		= "vwl1271",
-	.microvolts		= 1800000, /* 1.80V */
-	.gpio			= N53_WL1271_WL_EN,
-	.startup_delay		= 70000, /* 70ms */
-	.enable_high		= 1,
-	.enabled_at_boot	= 0,
-	.init_data		= &nitrogen53_vmmc2,
-};
-
-static struct platform_device nitrogen53_wlan_regulator = {
-	.name		= "reg-fixed-voltage",
-	.id		= 1,
-	.dev = {
-		.platform_data	= &nitrogen53_vwlan,
-	},
-};
-
-struct wl12xx_platform_data nitrogen53_wlan_data __initdata = {
-	.irq = gpio_to_irq(N53_WL1271_INT),
-	.board_ref_clock = WL12XX_REFCLOCK_38, /* 38.4 MHz */
-};
-#endif
-
 /*!
  * Board specific initialization.
  */
@@ -1693,13 +1651,6 @@ static void __init mxc_board_init(struct i2c_board_info *bi0, int bi0_size,
 	mxc_register_device(&usb_mass_storage_device, &mass_storage_data);
 	mxc_register_device(&usb_rndis_device, &rndis_data);
 	mxc_register_device(&android_usb_device, &android_usb_data);
-
-#ifdef CONFIG_WL12XX_PLATFORM_DATA
-	/* WL12xx WLAN Init */
-	if (wl12xx_set_platform_data(&nitrogen53_wlan_data))
-		pr_err("error setting wl12xx data\n");
-	platform_device_register(&nitrogen53_wlan_regulator);
-#endif
 }
 
 static void __init mx53_nitrogen_timer_init(void)
@@ -1904,13 +1855,17 @@ extern struct platform_device mxc_uart_device3;
 static struct imxuart_platform_data uart_pdata = {
 	.flags = IMXUART_HAVE_RTSCTS,
 };
+
 struct gpio nitrogen53_gpios_specific[] __initdata = {
 	{.label = "Camera power down",	.gpio = MAKE_GP(1, 2),		.flags = GPIOF_INIT_HIGH},
 	{.label = "pmic-int",		.gpio = MAKE_GP(2, 21),		.flags = GPIOF_DIR_IN},
-#if defined(CONFIG_WL12XX_SDIO)
+#ifdef CONFIG_WL12XX_PLATFORM_DATA
 	{.label = "wl1271_btfunct5",	.gpio = MAKE_GP(1, 6),		.flags = GPIOF_DIR_IN},		/* GPIO_1_6 - (HOST_WU) */
+#define N53_WL1271_INT				MAKE_GP(2, 24)
 	{.label = "wl1271_int",		.gpio = MAKE_GP(2, 24),		.flags = GPIOF_DIR_IN},		/* EIM_CS1 */
+#define N53_WL1271_WL_EN			MAKE_GP(3, 0)
 	{.label = "wl1271_wl_en",	.gpio = MAKE_GP(3, 0),		.flags = 0},			/* EIM_DA0, high active */
+#define N53_WL1271_BT_EN			MAKE_GP(3, 1)
 	{.label = "wl1271_bt_en",	.gpio = MAKE_GP(3, 1),		.flags = 0},			/* EIM_DA1, high active */
 	{.label = "wl1271_btfunct2",	.gpio = MAKE_GP(5, 25),		.flags = 0},			/* CSIO0_D7, (BT_WU) */
 #endif
@@ -1934,10 +1889,56 @@ static iomux_v3_cfg_t nitrogen53_pads_specific[] __initdata = {
 	MX53_PAD_EIM_D31__UART3_RTS,
 };
 
+#ifdef CONFIG_WL12XX_PLATFORM_DATA
+static struct regulator_consumer_supply nitrogen53_vmmc2_supply =
+	REGULATOR_SUPPLY("vmmc", "mxsdhci.2");
+
+/* VMMC2 for driving the WL12xx module */
+static struct regulator_init_data nitrogen53_vmmc2 = {
+	.constraints = {
+		.valid_ops_mask	= REGULATOR_CHANGE_STATUS,
+	},
+	.num_consumer_supplies	= 1,
+	.consumer_supplies = &nitrogen53_vmmc2_supply,
+};
+
+static struct fixed_voltage_config nitrogen53_vwlan = {
+	.supply_name		= "vwl1271",
+	.microvolts		= 1800000, /* 1.80V */
+	.gpio			= N53_WL1271_WL_EN,
+	.startup_delay		= 70000, /* 70ms */
+	.enable_high		= 1,
+	.enabled_at_boot	= 0,
+	.init_data		= &nitrogen53_vmmc2,
+};
+
+static struct platform_device nitrogen53_wlan_regulator = {
+	.name		= "reg-fixed-voltage",
+	.id		= 1,
+	.dev = {
+		.platform_data	= &nitrogen53_vwlan,
+	},
+};
+
+struct wl12xx_platform_data nitrogen53_wlan_data __initdata = {
+	.irq = gpio_to_irq(N53_WL1271_INT),
+	.board_ref_clock = WL12XX_REFCLOCK_38, /* 38.4 MHz */
+};
+
+static unsigned int sdhc_present(struct device *dev)
+{
+	return 0;
+}
+#endif
+
 static void __init mxc_board_init_nitrogen(void)
 {
 	unsigned da9052_irq = gpio_to_irq(MAKE_GP(2, 21));	/* pad EIM_A17 */
 	mxc_uart_device3.dev.platform_data = &uart_pdata;
+#ifdef CONFIG_WL12XX_PLATFORM_DATA
+	mmc3_data.status = sdhc_present;
+#endif
+
 #ifdef CONFIG_KEYBOARD_GPIO
 	gpio_keys_platform_data.nbuttons = 4;
 #endif
@@ -1945,8 +1946,6 @@ static void __init mxc_board_init_nitrogen(void)
 			ARRAY_SIZE(nitrogen53_gpios_specific))) {
 		printk (KERN_ERR "%s gpio_request_array failed\n", __func__ );
 	}
-	gpio_free(N53_WL1271_WL_EN);
-	gpio_free(N53_WL1271_BT_EN);
 
 	mxc_iomux_v3_setup_multiple_pads(nitrogen53_pads_specific,
 			ARRAY_SIZE(nitrogen53_pads_specific));
@@ -1954,6 +1953,21 @@ static void __init mxc_board_init_nitrogen(void)
 		mxc_i2c1_board_info, ARRAY_SIZE(mxc_i2c1_board_info),
 		mxc_i2c2_board_info, ARRAY_SIZE(mxc_i2c2_board_info),
 		da9052_irq, &mxci2c2_data);
+#ifdef CONFIG_WL12XX_PLATFORM_DATA
+	/* WL12xx WLAN Init */
+	if (wl12xx_set_platform_data(&nitrogen53_wlan_data))
+		pr_err("error setting wl12xx data\n");
+	platform_device_register(&nitrogen53_wlan_regulator);
+
+	gpio_set_value(N53_WL1271_WL_EN, 1);		/* momentarily enable */
+	gpio_set_value(N53_WL1271_BT_EN, 1);
+	msleep(2);
+	gpio_set_value(N53_WL1271_WL_EN, 0);
+	gpio_set_value(N53_WL1271_BT_EN, 0);
+	gpio_free(N53_WL1271_WL_EN);
+	gpio_free(N53_WL1271_BT_EN);
+	msleep(1);
+#endif
 }
 
 MACHINE_START(NITROGEN_IMX53, "Boundary Devices Nitrogen MX53 Board")
