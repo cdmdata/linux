@@ -1547,7 +1547,7 @@ static void __init mx53_nitrogen_io_init(void)
 
 static void nitrogen_power_off(void)
 {
-#if defined(CONFIG_MACH_NITROGEN_A_IMX53)
+#if defined(CONFIG_MACH_NITROGEN_A_IMX53) || defined(CONFIG_MACH_NITROGEN_AP_IMX53)
 #define POWER_DOWN	MAKE_GP(3,23)
 	gpio_set_value(POWER_DOWN, 0);
 #endif
@@ -1713,7 +1713,7 @@ static struct sys_timer mxc_timer = {
 
 /*****************************************************************************/
 	/* Stuff common to MX53_NITROGEN and MX53_NITROGEN_A */
-#if defined(CONFIG_MACH_NITROGEN_IMX53) || defined(CONFIG_MACH_NITROGEN_A_IMX53)
+#if defined(CONFIG_MACH_NITROGEN_IMX53) || defined(CONFIG_MACH_NITROGEN_A_IMX53)|| defined(CONFIG_MACH_NITROGEN_AP_IMX53)
 static struct i2c_board_info mxc_i2c1_board_info[] __initdata = {
 #if defined (CONFIG_TOUCHSCREEN_I2C) || defined (CONFIG_TOUCHSCREEN_I2C_MODULE)
 	{
