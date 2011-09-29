@@ -563,7 +563,7 @@ static struct mxc_w1_config mxc_w1_data = {
 /* GPIO_1 lcd backlight(pwm2) */
 static struct platform_pwm_backlight_data mxc_backlight_data1 = {
 	.pwm_id = 1,
-	.max_brightness = 255,
+	.max_brightness = 256,
 	.dft_brightness = CONFIG_DEFAULT_PWM0_BACKLIGHT,
 	.pwm_period_ns = 1000000000/32768,	/* 30517 */
 };
@@ -573,7 +573,7 @@ static struct platform_pwm_backlight_data mxc_backlight_data1 = {
 /* GPIO_9 backlight (pwm1) */
 static struct platform_pwm_backlight_data mxc_backlight_data2 = {
 	.pwm_id = 0,
-	.max_brightness = 255,
+	.max_brightness = 256,
 	.dft_brightness = CONFIG_DEFAULT_PWM1_BACKLIGHT,
 	.pwm_period_ns = 1000000000/32768,	/* 30517 */
 };
@@ -1541,8 +1541,8 @@ static void __init mx53_nitrogen_io_init(void)
 
 static void nitrogen_power_off(void)
 {
-#if defined(CONFIG_MACH_NITROGEN_A_IMX53)
-#define POWER_DOWN	MAKE_GP(3,23)
+#if defined(CONFIG_MACH_NITROGEN_A_IMX53) || defined(CONFIG_MACH_NITROGEN_AP_IMX53)
+#define POWER_DOWN	MAKE_GP(3, 23)
 	gpio_set_value(POWER_DOWN, 0);
 #endif
 	while (1) {
@@ -1744,7 +1744,7 @@ static iomux_v3_cfg_t nitrogen53_pads_specific_a[] __initdata = {
 	MX53_PAD_GPIO_16__I2C3_SDA,	/* gpio7[11] */
 
 	/* Nitrogen uses the following pin for UART3, CTS, TXD, RXD */
-	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
+	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* board power down gpio */
 
 	MX53_PAD_EIM_D24__UART3_TXD,
 	MX53_PAD_EIM_D25__UART3_RXD,
@@ -1800,7 +1800,7 @@ static iomux_v3_cfg_t nitrogen53_pads_specific_ap[] __initdata = {
 	MX53_PAD_GPIO_16__I2C3_SDA,	/* gpio7[11] */
 
 	/* Nitrogen uses the following pin for UART3, CTS, TXD, RXD */
-	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
+	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* board power down gpio */
 
 	MX53_PAD_ATA_CS_0__UART3_TXD,
 	MX53_PAD_ATA_CS_1__UART3_RXD,
@@ -1953,7 +1953,13 @@ static void __init mxc_board_init_nitrogen(void)
 	/* WL12xx WLAN Init */
 	if (wl12xx_set_platform_data(&nitrogen53_wlan_data))
 		pr_err("error setting wl12xx data\n");
+#if 1
 	platform_device_register(&nitrogen53_wlan_regulator);
+#else
+	gpio_direction_output(N53_WL1271_INT, 0);		/* WL1271_irq */
+	mxc_iomux_v3_setup_pad(MX53_PAD_ATA_IORDY__GPIO_7_5);			/* SD3_CLK */
+	gpio_direction_output(MAKE_GP(7, 5), 0);
+#endif
 
 	gpio_set_value(N53_WL1271_WL_EN, 1);		/* momentarily enable */
 	gpio_set_value(N53_WL1271_BT_EN, 1);
