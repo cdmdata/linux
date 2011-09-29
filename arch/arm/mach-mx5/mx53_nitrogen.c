@@ -560,6 +560,12 @@ static struct mxc_w1_config mxc_w1_data = {
 };
 
 #if defined(CONFIG_MXC_PWM) && defined(CONFIG_BACKLIGHT_PWM)
+static struct mxc_pwm_platform_data mxc_pwm1_platform_data = {
+	.pwmo_invert = 0,
+	.clk_select = PWM_CLK_HIGHPERF,
+};
+
+
 /* GPIO_1 lcd backlight(pwm2) */
 static struct platform_pwm_backlight_data mxc_backlight_data1 = {
 	.pwm_id = 1,
@@ -1604,7 +1610,7 @@ static void __init mxc_board_init(struct i2c_board_info *bi0, int bi0_size,
 	*/
 
 	mxc_register_device(&mxc_iim_device, &iim_data);
-	mxc_register_device(&mxc_pwm1_device, NULL);
+	mxc_register_device(&mxc_pwm1_device, &mxc_pwm1_platform_data);
 	mxc_register_device(&mxc_pwm2_device, NULL);
 #if defined(CONFIG_MXC_PWM) && defined(CONFIG_BACKLIGHT_PWM)
 	mxc_register_device(&mxc_pwm1_backlight_device,	&mxc_backlight_data1);
