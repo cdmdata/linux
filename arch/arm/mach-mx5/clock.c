@@ -135,6 +135,35 @@ static void __calc_pre_post_dividers(u32 div, u32 *pre, u32 *post)
 	}
 }
 
+static void __calc_pre_post_dividers88(u32 div, u32 *pre, u32 *post)
+{
+	u32 min_pre, temp_pre, old_err, err;
+
+	if (div >= 64) {
+		*pre = 8;
+		*post = 8;
+	} else if (div > 8) {
+		min_pre = (div - 1) / 8 + 1;
+		old_err = 8;
+		for (temp_pre = 8; temp_pre >= min_pre; temp_pre--) {
+			err = div % temp_pre;
+			if (err == 0) {
+				*pre = temp_pre;
+				break;
+			}
+			err = temp_pre - err;
+			if (err < old_err) {
+				old_err = err;
+				*pre = temp_pre;
+			}
+		}
+		*post = (div + *pre - 1) / *pre;
+	} else {
+		*pre = div;
+		*post = 1;
+	}
+}
+
 static int _clk_enable(struct clk *clk)
 {
 	u32 reg;
@@ -2077,6 +2106,45 @@ static unsigned long _clk_uart_get_rate(struct clk *clk)
 	return clk_get_rate(clk->parent)/(prediv * podf) ;
 }
 
+static unsigned long _clk_uart_round_rate(struct clk *clk,
+						unsigned long rate)
+{
+	u32 div;
+	u32 pre, post;
+	u32 parent_rate = clk_get_rate(clk->parent);
+
+	div = (parent_rate + rate/2) / rate;
+	if (div > 64)
+		div = 64;
+	else if (div == 0)
+		div++;
+
+	__calc_pre_post_dividers88(div, &pre, &post);
+	return parent_rate / (pre * post);
+}
+
+static int _clk_uart_set_rate(struct clk *clk, unsigned long rate)
+{
+	u32 reg, div;
+	u32 pre, post;
+	u32 parent_rate = clk_get_rate(clk->parent);
+
+	div = parent_rate / rate;
+	if (div == 0)
+		div++;
+	__calc_pre_post_dividers88(div, &pre, &post);
+	if ((parent_rate / (pre * post)) != rate)
+			return -EINVAL;
+
+	reg = __raw_readl(MXC_CCM_CSCDR1) &
+		~(MXC_CCM_CSCDR1_UART_CLK_PRED_MASK |
+		MXC_CCM_CSCDR1_UART_CLK_PODF_MASK);
+	reg |= (post - 1) << MXC_CCM_CSCDR1_UART_CLK_PODF_OFFSET;
+	reg |= (pre - 1) << MXC_CCM_CSCDR1_UART_CLK_PRED_OFFSET;
+	__raw_writel(reg, MXC_CCM_CSCDR1);
+	return 0;
+}
+
 static int _clk_uart_set_parent(struct clk *clk, struct clk *parent)
 {
 	u32 reg, mux;
@@ -2093,6 +2161,8 @@ static int _clk_uart_set_parent(struct clk *clk, struct clk *parent)
 static struct clk uart_main_clk = {
 	.parent = &pll2_sw_clk,
 	.get_rate = _clk_uart_get_rate,
+	.round_rate = _clk_uart_round_rate,
+	.set_rate = _clk_uart_set_rate,
 	.set_parent = _clk_uart_set_parent,
 	.flags = RATE_PROPAGATES,
 };
@@ -2260,7 +2330,8 @@ static struct clk pwm1_clk[] = {
 	 .parent = &ipg_clk,
 	 .enable_reg = MXC_CCM_CCGR2,
 	 .enable_shift = MXC_CCM_CCGRx_CG5_OFFSET,
-	 .enable = _clk_enable_inrun, /*Active only when ARM is running. */
+//	 .enable = _clk_enable_inrun, /*Active only when ARM is running. */
+	 .enable = _clk_enable,
 	 .disable = _clk_disable,
 	 },
 	{
@@ -2284,7 +2355,8 @@ static struct clk pwm2_clk[] = {
 	 .parent = &ipg_clk,
 	 .enable_reg = MXC_CCM_CCGR2,
 	 .enable_shift = MXC_CCM_CCGRx_CG7_OFFSET,
-	 .enable = _clk_enable_inrun, /*Active only when ARM is running. */
+//	 .enable = _clk_enable_inrun, /*Active only when ARM is running. */
+	 .enable = _clk_enable,
 	 .disable = _clk_disable,
 	 },
 	{
@@ -4373,6 +4445,8 @@ static struct clk_lookup lookups[] = {
 	_REGISTER_CLOCK("imx-i2c.1", NULL, i2c_clk[1]),
 	_REGISTER_CLOCK("mxc_pwm.0", NULL, pwm1_clk[0]),
 	_REGISTER_CLOCK("mxc_pwm.1", NULL, pwm2_clk[0]),
+	_REGISTER_CLOCK("mxc_pwm.0", "high_perf", pwm1_clk[1]),
+	_REGISTER_CLOCK("mxc_pwm.1", "high_perf", pwm2_clk[1]),
 	_REGISTER_CLOCK(NULL, "cspi_main_clk", cspi_main_clk),
 	_REGISTER_CLOCK("mxc_spi.0", NULL, cspi1_clk[0]),
 	_REGISTER_CLOCK("mxc_spi.1", NULL, cspi2_clk[0]),
@@ -5082,6 +5156,7 @@ int __init mx53_clocks_init(unsigned long ckil, unsigned long osc, unsigned long
 	clk_set_parent(&arm_axi_clk, &axi_b_clk);
 	clk_set_parent(&ipu_clk[0], &axi_b_clk);
 	clk_set_parent(&uart_main_clk, &pll3_sw_clk);
+	clk_set_rate(&uart_main_clk, 54000000);
 	clk_set_parent(&gpu3d_clk, &axi_b_clk);
 	clk_set_parent(&gpu2d_clk, &axi_b_clk);
 
