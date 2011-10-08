@@ -316,7 +316,6 @@ static void stop_streaming(struct camera_data_t *data)
 	ipu_disable_csi(csi);
 	ipu_disable_channel(CSI_MEM,0);
 	ipu_uninit_channel(CSI_MEM);
-	ipu_csi_enable_mclk(csi,false,false);
         ipu_clear_buffer_ready(CSI_MEM,IPU_OUTPUT_BUFFER, 0);
         ipu_clear_buffer_ready(CSI_MEM,IPU_OUTPUT_BUFFER, 1);
 	ipu_update_channel_buffer(CSI_MEM, IPU_OUTPUT_BUFFER, 0, -1);
