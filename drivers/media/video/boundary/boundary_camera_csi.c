@@ -63,8 +63,6 @@ struct camera_data_t {
 	int			use_count ;
 	int			streaming ;
 	int			num_frames ;
-	unsigned		last_sof ;
-	unsigned		queued ;
 	struct camera_frame_t  *buf_queued[2];
 	struct list_head 	capture_queue;
 	struct list_head 	done_queue;
@@ -126,7 +124,7 @@ static int allocate_frames(struct camera_data_t *data, unsigned count, unsigned 
 	camera_phys = get_camera_phys(total_size);
 	if (0 == camera_phys)
 		return -ENOBUFS ;
-	camera_virt = ioremap(camera_phys,total_size);
+	camera_virt = ioremap_wc(camera_phys,total_size);
 	if (0 == camera_virt) {
 		camera_phys = 0 ;
 		return -ENOBUFS ;
@@ -174,30 +172,7 @@ static int boundary_camera_open(struct file *file)
 	return 0 ;
 }
 
-static int prevjifs = 0;
-
-static void display_int_stuff(struct camera_data_t *cam,char const *caller,int irq) {
-	int elapsed = jiffies - prevjifs ;
-	int readymask = ipu_buffers_ready(CSI_MEM, IPU_OUTPUT_BUFFER);
-	int curbuf = ipu_get_cur_buffer_idx(CSI_MEM, IPU_OUTPUT_BUFFER);
-	DEBUGMSG ("%s.%d: %d: %08x.%x, cur %d, queued %x\n", caller, irq, elapsed, ipu_proc_status(),readymask, curbuf, cam->queued );
-	prevjifs += elapsed ;
-}
-
 #define IDMAC_NFACK_0	(2*32+0)		// IDMAC_NFACK_0
-
-static unsigned const other_irqs[] = {	
-	4*32+0,		// DMAC_NFB4EOF_ERR_0
-	8*32+30,	// CSI0_PUPE
-	8*32+31,	// CSI1_PUPE
-	9*32+0,		// SMFC0_FRM_LOST
-	9*32+1,		// SMFC1_FRM_LOST
-	9*32+2,		// SMFC2_FRM_LOST
-	9*32+3,		// SMFC3_FRM_LOST
-//	10*32+0,	// IDMAC_EOBND_0
-//      12*32+0,	// IDMAC_TH_0
-};
-
 
 static void feed_frames(struct camera_data_t *cam)
 {
@@ -221,11 +196,10 @@ static void feed_frames(struct camera_data_t *cam)
 				DEBUGMSG ("%s: queue buffer %u\n", __func__, i );
 				list_del(cam->capture_queue.next);
 				err = ipu_update_channel_buffer(CSI_MEM, IPU_OUTPUT_BUFFER, i, frame->buffer.m.offset);
-				ipu_select_buffer(CSI_MEM, IPU_OUTPUT_BUFFER, i);
-				cam->queued |= (1<<i);
-				cam->buf_queued[i] = frame ;
 				if (err != 0)
-					DEBUGMSG ("%s: err %d buffer %d/0x%x\n", __func__, err, i,frame->buffer.m.offset);
+					printk (KERN_ERR "%s: err %d buffer %d/0x%x\n", __func__, err, i,frame->buffer.m.offset);
+				ipu_select_buffer(CSI_MEM, IPU_OUTPUT_BUFFER, i);
+				cam->buf_queued[i] = frame ;
 			}
 			else
 				break;
@@ -234,22 +208,23 @@ static void feed_frames(struct camera_data_t *cam)
 		}
 	}
 	spin_unlock_irqrestore(&cam->lock,flags);
-	display_int_stuff(cam,__func__,-1);
 }
 
 static void deliver_frame(struct camera_data_t *cam,unsigned buf)
 {
+	int was_ready = ipu_check_buffer_busy(CSI_MEM,IPU_OUTPUT_BUFFER,buf);
+	struct camera_frame_t *frame = cam->buf_queued[buf];
 	BUG_ON(buf >= ARRAY_SIZE(cam->buf_queued));
-	if (cam->buf_queued[buf]) {
-		struct camera_frame_t *frame = cam->buf_queued[buf];
-                cam->buf_queued[buf] = 0 ;
-		frame->buffer.flags |= V4L2_BUF_FLAG_DONE ;
-		frame->buffer.flags &= ~V4L2_BUF_FLAG_QUEUED ;
-                list_add_tail(&frame->queue,&cam->done_queue);
-		wake_up_all(&cam->wait);
-		DEBUGMSG ("%s: woke up all\n", __func__ );
-	} else {
-		printk(KERN_ERR "%s: buf %d not queued\n", __func__, buf );
+	BUG_ON(!cam->buf_queued[buf]);
+	cam->buf_queued[buf] = 0 ;
+	frame->buffer.flags |= V4L2_BUF_FLAG_DONE ;
+	frame->buffer.flags &= ~V4L2_BUF_FLAG_QUEUED ;
+        do_gettimeofday(&frame->buffer.timestamp);
+	list_add_tail(&frame->queue,&cam->done_queue);
+	wake_up_all(&cam->wait);
+	DEBUGMSG ("%s: woke up all\n", __func__ );
+	if (was_ready) {
+		printk (KERN_ERR "%s: returning buffer marked as ready\n", __func__ );	
 	}
 }
 
@@ -264,50 +239,55 @@ static void deliver_frame(struct camera_data_t *cam,unsigned buf)
  *		and one frame is still queued
  *
  */
-static irqreturn_t csi_callback(int irq, void *dev_id)
+static irqreturn_t eof_callback(int irq, void *dev_id)
 {
-        struct camera_data_t *cam = (struct camera_data_t *)dev_id ;
-	int bufsready = ipu_buffers_ready(CSI_MEM, IPU_OUTPUT_BUFFER);
-	int completed = cam->queued & ~bufsready ;
-        display_int_stuff(cam,__func__,irq);
-	DEBUGMSG ("deliver %x\n", completed );
-	if (completed && (2 >= completed)) {
-		unsigned which = completed >> 1 ;
-		unsigned long flags ;
-		cam->queued &= ~completed ;
-		spin_lock_irqsave(&cam->lock,flags);
-		deliver_frame(cam,which);
-		spin_unlock_irqrestore(&cam->lock,flags);
-		DEBUGMSG ("%d:return to app\n",which);
-		feed_frames(cam);
-	} // exactly one completed
-	else if (completed) {
-		printk(KERN_ERR "%s:multiple returned\n",__func__);
-		ipu_select_buffer(CSI_MEM, IPU_OUTPUT_BUFFER,0);
-		ipu_select_buffer(CSI_MEM, IPU_OUTPUT_BUFFER,1);
-	}
 	return IRQ_HANDLED;
 }
 		
+/*!
+ * Camera frame start callback. 
+ * 
+ * This seems to be a more reliable place to return frames than the eof
+ * callback.
+ *
+ * Return a frame IFF:
+ *
+ *	the frame we're not starting is flagged as !ready (meaning that the
+ *	IPU filled it)
+ *
+ *	we have another item in the queue.
+ *
+ */
 static irqreturn_t sof_callback(int irq, void *dev_id)
 {
         struct camera_data_t *cam = (struct camera_data_t *)dev_id ;
-        cam->last_sof = ipu_get_cur_buffer_idx(CSI_MEM, IPU_OUTPUT_BUFFER);
-        display_int_stuff(cam,__func__,irq);
+	int curbuf = ipu_get_cur_buffer_idx(CSI_MEM, IPU_OUTPUT_BUFFER);
+	int prevbuf = curbuf^1 ;
+	unsigned curmask = 1<<curbuf ;
+	unsigned prevmask = curmask^3 ;
+        int bufsready = ipu_buffers_ready(CSI_MEM, IPU_OUTPUT_BUFFER);
+	if ((0 == (bufsready & prevmask)) 
+	    &&
+	    !list_empty(&cam->capture_queue)){
+		int err ;
+		unsigned long flags ;
+		struct camera_frame_t *frame ;
+		spin_lock_irqsave(&cam->lock,flags);
+		deliver_frame(cam,prevbuf);
+		frame = list_entry(cam->capture_queue.next, struct camera_frame_t, queue);
+		list_del(cam->capture_queue.next);
+		err = ipu_update_channel_buffer(CSI_MEM, IPU_OUTPUT_BUFFER, prevbuf, frame->buffer.m.offset);
+		if (err != 0)
+			printk (KERN_ERR "%s: err %d buffer %d/0x%x\n", __func__, err, prevbuf,frame->buffer.m.offset);
+		ipu_select_buffer(CSI_MEM, IPU_OUTPUT_BUFFER, prevbuf);
+		cam->buf_queued[prevbuf] = frame ;
+		spin_unlock_irqrestore(&cam->lock,flags);
+	}
 	return IRQ_HANDLED;
-}
-
-static irqreturn_t other_irq_callback(int irq, void *dev_id)
-{
-        struct camera_data_t *cam = (struct camera_data_t *)dev_id ;
-        display_int_stuff(cam,__func__,irq);
-        cam->last_sof = 44 ; // don't return this one
-	return IRQ_HANDLED ;
 }
 
 static void stop_streaming(struct camera_data_t *data)
 {
-	int i ;
 	int rv ;
 	unsigned csi = 0 ; /* TODO: fix csi */
 
@@ -323,9 +303,6 @@ static void stop_streaming(struct camera_data_t *data)
 	data->buf_queued[0] = data->buf_queued[1] = 0 ;
         ipu_free_irq(IPU_IRQ_CSI0_OUT_EOF, data);
         ipu_free_irq(IDMAC_NFACK_0, data);
-	for (i=0 ; i < ARRAY_SIZE(other_irqs); i++) {
-		ipu_free_irq(other_irqs[i],data);
-	}
 	/* should we return these to the app here? */
 	INIT_LIST_HEAD(&data->capture_queue);
 	INIT_LIST_HEAD(&data->done_queue);
@@ -559,8 +536,6 @@ static long boundary_camera_ioctl
 			DEBUGMSG ("done adding to queue\n");
 
 			spin_unlock_irqrestore(&cam->lock,flags);
-			if(cam->streaming)
-				feed_frames(cam);
 			retval = 0 ;
 		} else if (ourbuf->flags & V4L2_BUF_FLAG_QUEUED) {
 			pr_err("buffer already queued\n");
@@ -627,7 +602,6 @@ static long boundary_camera_ioctl
 	}
 
 	case VIDIOC_STREAMON: {
-		int i ;
 		struct ov5640_setting setting;
 
 		printk (KERN_ERR "   case VIDIOC_STREAMON\n");
@@ -643,14 +617,13 @@ static long boundary_camera_ioctl
 			break;
 		}
 		printk (KERN_ERR "%s: sizeof(struct v4l2_if_type_bt656) == %u\n", __func__, sizeof(struct v4l2_if_type_bt656));
-		cam->last_sof = 44 ;
 		retval = enable_camera(&setting,cam->platform_data->csi);
 		if (0 != retval) {
 			pr_err("Error %d enabling camera\n", retval );
 			break;
 		} 
 		
-		retval = ipu_request_irq(IPU_IRQ_CSI0_OUT_EOF, csi_callback, 0, "camera", cam);
+		retval = ipu_request_irq(IPU_IRQ_CSI0_OUT_EOF, eof_callback, 0, "camera", cam);
 		if (0 != retval) {
 			pr_err("Error %d setting IRQ handler\n", retval );
 			break;
@@ -662,22 +635,14 @@ static long boundary_camera_ioctl
 			break;
 		}
 		
-		for (i=0 ; i < ARRAY_SIZE(other_irqs); i++) {
-			retval |= ipu_request_irq(other_irqs[i],other_irq_callback, 0, "camera", cam);
-		}
-		if (0 != retval) {
-			pr_err("Error %d setting IRQ handler\n", retval );
-			break;
-		}
-
                 retval = v4l2_subdev_call(cam->subdev, video, s_stream, 1);
 		if (0 != retval) {
 			pr_err("Error %d setting power to camera\n", retval );
 			break;
 		}
 
-		cam->streaming = 1 ;
 		feed_frames(cam);
+		cam->streaming = 1 ;
 		ipu_enable_csi(cam->platform_data->csi);
 
 		break;
@@ -820,8 +785,6 @@ static int boundary_camera_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	unsigned long size;
 
-	printk(KERN_ERR "%s: 0x%lx: 0x%lx..0x%lx\n", __func__, vma->vm_pgoff, vma->vm_start, vma->vm_end );
-
 	size = vma->vm_end - vma->vm_start;
 	vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot); /* See ENGR00132971 */ 
 
@@ -908,7 +871,6 @@ static int boundary_camera_driver_probe(struct platform_device *pdev)
                 init_waitqueue_head(&cam->wait);
 		spin_lock_init(&cam->lock);
 		cam->platform_data = plat_data ;
-                cam->last_sof = 44 ;
 	} else {
 		printk (KERN_ERR "%s: Error allocating camera %d\n", __func__, plat_data->csi );
 		return -ENOMEM ;
