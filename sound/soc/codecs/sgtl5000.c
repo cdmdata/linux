@@ -336,24 +336,28 @@ static int dac_get_volsw(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static unsigned volume_register(int lvol,int rvol)
+{
+        unsigned reg ;
+
+	lvol = lvol < 0 ? 0 : lvol;
+	lvol = lvol > VOLMAX ? VOLMAX : lvol;
+	lvol = FULLVOLUME - lvol;
+	rvol = rvol < 0 ? 0 : rvol;
+	rvol = rvol > VOLMAX ? VOLMAX : rvol;
+	rvol = FULLVOLUME - rvol;
+
+	reg = (lvol << SGTL5000_DAC_VOL_LEFT_SHIFT) |
+	    (rvol << SGTL5000_DAC_VOL_RIGHT_SHIFT);
+	return reg ;
+}
+
 static int dac_put_volsw(struct snd_kcontrol *kcontrol,
 			 struct snd_ctl_elem_value *ucontrol)
 {
 	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
-	int reg, l, r;
-	l = ucontrol->value.integer.value[0];
-	r = ucontrol->value.integer.value[1];
-
-	l = l < 0 ? 0 : l;
-	l = l > VOLMAX ? VOLMAX : l;
-	l = FULLVOLUME - l;
-	r = r < 0 ? 0 : r;
-	r = r > VOLMAX ? VOLMAX : r;
-	r = FULLVOLUME - r;
-
-	reg = (l << SGTL5000_DAC_VOL_LEFT_SHIFT) |
-	    (r << SGTL5000_DAC_VOL_RIGHT_SHIFT);
-
+	unsigned reg = volume_register(ucontrol->value.integer.value[0],
+                                       ucontrol->value.integer.value[1]);
 	sgtl5000_write(codec, SGTL5000_CHIP_DAC_VOL, reg);
 	return 0;
 }
@@ -1153,6 +1157,7 @@ static int sgtl5000_probe(struct platform_device *pdev)
 	sgtl5000_add_widgets(codec);
 
 	sgtl5000_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
+	sgtl5000_write(codec, SGTL5000_CHIP_DAC_VOL, volume_register(VOLMAX,VOLMAX));
 
 	return 0;
 }
