@@ -58,6 +58,11 @@ static int sgtl5000_set_bias_level(struct snd_soc_codec *codec,
 #define SGTL5000_MAX_CACHED_REG SGTL5000_CHIP_SHORT_CTRL
 static u16 sgtl5000_regs[(SGTL5000_MAX_CACHED_REG >> 1) + 1];
 
+/* full range is [0xfc..0x3c] (0xfc is loudest) */
+#define VOLMAX CONFIG_SND_SOC_SGTL5000_MAX_VOLUME
+#define FULLVOLUME 0xFC
+#define LOWVOLUME 0x3C
+
 /*
  * Schedule clock to be turned off or turn clock on.
  */
@@ -305,7 +310,7 @@ static int dac_info_volsw(struct snd_kcontrol *kcontrol,
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
 	uinfo->count = 2;
 	uinfo->value.integer.min = 0;
-	uinfo->value.integer.max = 0xfc - 0x3c;
+	uinfo->value.integer.max = VOLMAX ;
 	return 0;
 }
 
@@ -318,12 +323,12 @@ static int dac_get_volsw(struct snd_kcontrol *kcontrol,
 	reg = sgtl5000_read(codec, SGTL5000_CHIP_DAC_VOL);
 	l = (reg & SGTL5000_DAC_VOL_LEFT_MASK) >> SGTL5000_DAC_VOL_LEFT_SHIFT;
 	r = (reg & SGTL5000_DAC_VOL_RIGHT_MASK) >> SGTL5000_DAC_VOL_RIGHT_SHIFT;
-	l = l < 0x3c ? 0x3c : l;
-	l = l > 0xfc ? 0xfc : l;
-	r = r < 0x3c ? 0x3c : r;
-	r = r > 0xfc ? 0xfc : r;
-	l = 0xfc - l;
-	r = 0xfc - r;
+	l = l < LOWVOLUME ? LOWVOLUME : l;
+	l = l > FULLVOLUME ? FULLVOLUME : l;
+	r = r < LOWVOLUME ? LOWVOLUME : r;
+	r = r > FULLVOLUME ? FULLVOLUME : r;
+	l = FULLVOLUME - l;
+	r = FULLVOLUME - r;
 
 	ucontrol->value.integer.value[0] = l;
 	ucontrol->value.integer.value[1] = r;
@@ -336,16 +341,15 @@ static int dac_put_volsw(struct snd_kcontrol *kcontrol,
 {
 	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
 	int reg, l, r;
-
 	l = ucontrol->value.integer.value[0];
 	r = ucontrol->value.integer.value[1];
 
 	l = l < 0 ? 0 : l;
-	l = l > 0xfc - 0x3c ? 0xfc - 0x3c : l;
-	l = 0xfc - l;
+	l = l > VOLMAX ? VOLMAX : l;
+	l = FULLVOLUME - l;
 	r = r < 0 ? 0 : r;
-	r = r > 0xfc - 0x3c ? 0xfc - 0x3c : r;
-	r = 0xfc - r;
+	r = r > VOLMAX ? VOLMAX : r;
+	r = FULLVOLUME - r;
 
 	reg = (l << SGTL5000_DAC_VOL_LEFT_SHIFT) |
 	    (r << SGTL5000_DAC_VOL_RIGHT_SHIFT);
