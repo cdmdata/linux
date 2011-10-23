@@ -1275,7 +1275,7 @@ static __devinit int sgtl5000_i2c_probe(struct i2c_client *client,
 		if (((val & SGTL5000_PARTID_MASK) >> SGTL5000_PARTID_SHIFT)
 				== SGTL5000_PARTID_PART_ID)
 			break;
-		pr_err("Device with ID register %x is not a SGTL5000\n", val);
+		dev_err(&client->dev, "Device with ID register %x is not a SGTL5000\n", val);
 		if (++retry == 5) {
 			ret = -ENODEV;
 			goto err_codec_reg;
