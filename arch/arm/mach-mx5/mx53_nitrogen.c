@@ -996,7 +996,6 @@ static struct mxc_mmc_platform_data mmc1_data = {
 	.card_inserted_state = 0,
 	.status = sdhc_get_card_det_status1,
 	.wp_status = sdhc_write_protect,
-	.clock_mmc = "esdhc_clk",
 	.power_mmc = NULL,
 };
 
@@ -1010,7 +1009,6 @@ static struct mxc_mmc_platform_data mmc3_data = {
 	.card_inserted_state = 0,
 	.status = sdhc_get_card_det_status3,
 	.wp_status = sdhc_write_protect,
-	.clock_mmc = "esdhc_clk",
 };
 
 static int mxc_sgtl5000_amp_enable(int enable)
@@ -1757,6 +1755,36 @@ static iomux_v3_cfg_t nitrogen53_pads_specific_a[] __initdata = {
 
 	MX53_PAD_EIM_D30__UART3_CTS,
 	NEW_PAD_CTRL(MX53_PAD_EIM_D31__GPIO_3_31, BUTTON_PAD_CTRL) | MUX_SION_MASK,     /* ??Menu */
+
+	/* esdhc4 */
+	MX53_PAD_ATA_DA_1__SD4_CMD,
+	MX53_PAD_ATA_DA_2__SD4_CLK,
+	MX53_PAD_ATA_DATA12__SD4_DAT0,
+	MX53_PAD_ATA_DATA13__SD4_DAT1,
+	MX53_PAD_ATA_DATA14__SD4_DAT2,
+	MX53_PAD_ATA_DATA15__SD4_DAT3,
+};
+
+static unsigned int sdhc_get_card_det_status4(struct device *dev)
+{
+	printk(KERN_ERR "%s\n", __func__ );
+	return 0;
+}
+
+static int sdhc_write_protect4(struct device *dev)
+{
+	printk(KERN_ERR "%s\n", __func__ );
+	return 0;
+}
+
+static struct mxc_mmc_platform_data mmc4_data = {
+	.ocr_mask = MMC_VDD_27_28 | MMC_VDD_28_29 | MMC_VDD_29_30 | MMC_VDD_31_32,
+	.caps = MMC_CAP_4_BIT_DATA | MMC_CAP_DATA_DDR,
+	.min_clk = 400000,
+	.max_clk = 50000000,
+	.card_inserted_state = 1,
+	.status = sdhc_get_card_det_status4,
+	.wp_status = sdhc_write_protect4,
 };
 
 static void __init mxc_board_init_nitrogen_a(void)
@@ -1782,6 +1810,7 @@ static void __init mxc_board_init_nitrogen_a(void)
 		mxc_i2c1_board_info, ARRAY_SIZE(mxc_i2c1_board_info),
 		mxc_i2c2_board_info, ARRAY_SIZE(mxc_i2c2_board_info),
 		da9052_irq, &mxci2c2_data);
+	mxc_register_device(&mxcsdhc4_device, &mmc4_data);
 }
 
 MACHINE_START(NITROGEN_A_IMX53, "Boundary Devices Nitrogen_A MX53 Board")
