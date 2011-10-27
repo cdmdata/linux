@@ -1720,6 +1720,7 @@ static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
 #endif
 /*****************************************************************************/
 
+extern struct imxuart_platform_data mxc_ports[];
 
 /*****************************************************************************/
 extern struct da9052_tsi_platform_data da9052_tsi;
@@ -1790,6 +1791,7 @@ static struct mxc_mmc_platform_data mmc4_data = {
 static void __init mxc_board_init_nitrogen_a(void)
 {
 	unsigned da9052_irq = gpio_to_irq(MAKE_GP(2, 21));	/* pad EIM_A17 */
+	mxc_ports[1].flags |= IMXUART_HAVE_RTSCTS;
 
 #if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
 	camera_data.power_down = MAKE_GP(2, 22);
@@ -1883,10 +1885,6 @@ MACHINE_END
 /*****************************************************************************/
 
 #ifdef CONFIG_MACH_NITROGEN_IMX53
-extern struct platform_device mxc_uart_device3;
-static struct imxuart_platform_data uart_pdata = {
-	.flags = IMXUART_HAVE_RTSCTS,
-};
 
 struct gpio nitrogen53_gpios_specific[] __initdata = {
 	{.label = "Camera power down",	.gpio = MAKE_GP(1, 2),		.flags = GPIOF_INIT_HIGH},
@@ -1966,7 +1964,7 @@ static unsigned int sdhc_present(struct device *dev)
 static void __init mxc_board_init_nitrogen(void)
 {
 	unsigned da9052_irq = gpio_to_irq(MAKE_GP(2, 21));	/* pad EIM_A17 */
-	mxc_uart_device3.dev.platform_data = &uart_pdata;
+	mxc_ports[2].flags |= IMXUART_HAVE_RTSCTS;
 #ifdef CONFIG_WL12XX_PLATFORM_DATA
 	mmc3_data.status = sdhc_present;
 #endif
