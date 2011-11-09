@@ -27,6 +27,7 @@
 #include <mlme_osdep.h>
 #include <rtl871x_byteorder.h>
 
+#include <rtl871x_debug.h>
 
 /*
 Caller and the cmd_thread can protect cmd_q by spin_lock.
