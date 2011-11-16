@@ -593,7 +593,7 @@ static int r871xs_drv_init(struct sdio_func *func, const struct sdio_device_id *
 		} else {
 			printk(KERN_ERR "%s: AutoLoad Fail reported from CR9346(0x%02x)!!\n", __func__, tmpU1b);
 			AutoloadFail = _TRUE;
-			goto error;
+//			goto error;
 		}
 
 		if (AutoloadFail == _FALSE)
