@@ -48,6 +48,7 @@
 #include <linux/rational.h>
 #include <linux/slab.h>
 
+
 #ifdef CONFIG_SERIAL_IMX_RS485
 
 #include <linux/gpio.h>
@@ -68,6 +69,7 @@ inline void set_transmit_active(int active){}
 #endif
 
 #include <asm/io.h>
+#include <asm/ioctls.h>
 #include <asm/irq.h>
 #include <mach/hardware.h>
 #include <mach/imx-uart.h>
@@ -213,6 +215,11 @@ struct imx_port {
 	unsigned int		irda_inv_tx:1;
 	unsigned short		trcv_delay; /* transceiver delay */
 	struct clk		*clk;
+#define MP_FORCE_TX_PAR_ERR	1	/* UART force TX parity error active */
+#define MP_MARK			2	/* UART should be in MARK mode */
+	unsigned char		more_parity;
+	unsigned char		mark_space_mode;
+	unsigned char		force_1_tx_parity_err;
 };
 
 #ifdef CONFIG_IRDA
@@ -318,6 +325,10 @@ static void imx_stop_tx(struct uart_port *port)
 
 	temp = readl(sport->port.membase + UCR1);
 	writel(temp & ~UCR1_TXMPTYEN, sport->port.membase + UCR1);
+	if (sport->mark_space_mode) {
+		temp = readl(sport->port.membase + UCR4) & ~UCR4_TCEN;
+		writel(temp, sport->port.membase + UCR4);
+	}
 }
 
 /*
@@ -385,6 +396,45 @@ static void dbg_char(unsigned char c, int irq, char dbg_type)
 }
 #endif
 
+static inline int tx_char(struct imx_port *sport, unsigned ch)
+{
+	unsigned ch_parity = sport->force_1_tx_parity_err ^ sport->more_parity;
+	if (sport->mark_space_mode) {
+		ch_parity ^= ch;
+		ch_parity ^= ch_parity >> 4;
+		ch_parity ^= ch_parity >> 2;
+		ch_parity ^= ch_parity >> 1;
+	}
+	if (ch_parity & 1) {
+		/* we need to change UTS_FRCPERR force tx parity status */
+		unsigned reg = readl(sport->port.membase + USR2);
+		if (reg & USR2_TXDC) {
+			reg = readl(sport->port.membase + UTS);
+			sport->more_parity ^= MP_FORCE_TX_PAR_ERR;
+			if (sport->more_parity & MP_FORCE_TX_PAR_ERR)
+				reg |= UTS_FRCPERR;
+			else
+				reg &= ~UTS_FRCPERR;
+			writel(reg, sport->port.membase + UTS);
+		} else {
+			/*
+			 * must wait until tx complete to change force
+			 * parity error status
+			 */
+			reg = readl(sport->port.membase + UCR4);
+			if (!(reg & UCR4_TCEN)) {
+				reg |= UCR4_TCEN;
+				writel(reg, sport->port.membase + UCR4);
+			}
+			return -EBUSY;
+		}
+	}
+	sport->force_1_tx_parity_err = 0;
+	writel(ch, sport->port.membase + URTX0);
+	dbg_char((unsigned char)ch, sport->port.irq, DBG_TYPE_TX);
+	return 0;
+}
+
 static inline void imx_transmit_buffer(struct imx_port *sport)
 {
 	struct circ_buf *xmit = &sport->port.state->xmit;
@@ -393,8 +443,8 @@ static inline void imx_transmit_buffer(struct imx_port *sport)
 			!(readl(sport->port.membase + UTS) & UTS_TXFULL)) {
 		/* send xmit->buf[xmit->tail]
 		 * out the port here */
-		writel(xmit->buf[xmit->tail], sport->port.membase + URTX0);
-		dbg_char((unsigned char)xmit->buf[xmit->tail], sport->port.irq, DBG_TYPE_TX);
+		if (tx_char(sport, xmit->buf[xmit->tail]))
+			break;
 		xmit->tail = (xmit->tail + 1) & (UART_XMIT_SIZE - 1);
 		sport->port.icount.tx++;
 	}
@@ -474,8 +524,8 @@ static irqreturn_t imx_txint(int irq, void *dev_id)
 	if (sport->port.x_char)
 	{
 		/* Send next char */
-		writel(sport->port.x_char, sport->port.membase + URTX0);
-		dbg_char(sport->port.x_char, sport->port.irq, DBG_TYPE_TX);
+		if (!tx_char(sport, sport->port.x_char))
+			sport->port.x_char = 0;
 		goto out;
 	}
 
@@ -508,6 +558,16 @@ static irqreturn_t imx_rxint(int irq, void *dev_id)
 		sport->port.icount.rx++;
 
 		rx = readl(sport->port.membase + URXD0);
+		if (sport->mark_space_mode) {
+			unsigned ch_parity;
+			ch_parity = rx ^ (sport->more_parity & MP_MARK);
+			ch_parity ^= ch_parity >> 4;
+			ch_parity ^= ch_parity >> 2;
+			ch_parity ^= ch_parity >> 1;
+			ch_parity &= 1;
+			/* URXD_PRERR is bit 10 */
+			rx ^= (ch_parity << 10);
+		}
 
 		temp = readl(sport->port.membase + USR2);
 		if (temp & USR2_BRCD) {
@@ -920,9 +980,15 @@ imx_set_termios(struct uart_port *port, struct ktermios *termios,
 
 	if (termios->c_cflag & CSTOPB)
 		ucr2 |= UCR2_STPB;
+	sport->mark_space_mode = 0;
+	sport->more_parity = 0;
 	if (termios->c_cflag & PARENB) {
 		ucr2 |= UCR2_PREN;
-		if (termios->c_cflag & PARODD)
+		if (termios->c_cflag & CMSPAR) {
+			sport->mark_space_mode = 1;
+			if (termios->c_cflag & PARODD)
+				sport->more_parity = MP_MARK;
+		} else if (termios->c_cflag & PARODD)
 			ucr2 |= UCR2_PROE;
 	}
 
@@ -1112,6 +1178,22 @@ imx_verify_port(struct uart_port *port, struct serial_struct *ser)
 	return ret;
 }
 
+static int imx_ioctl(struct uart_port *port, unsigned int cmd,
+		unsigned long arg)
+{
+	struct imx_port *sport = (struct imx_port *)port;
+	switch (cmd) {
+	case TIOC_FORCE_TX_PARITY_ERROR:
+		while ( !(readl(sport->port.membase + USR2) & USR2_TXDC))
+			msleep(1);
+		sport->force_1_tx_parity_err = MP_FORCE_TX_PAR_ERR;
+		break;
+	default:
+		return -ENOIOCTLCMD;
+	}
+	return 0;
+}
+
 static struct uart_ops imx_pops = {
 	.tx_empty	= imx_tx_empty,
 	.set_mctrl	= imx_set_mctrl,
@@ -1129,6 +1211,7 @@ static struct uart_ops imx_pops = {
 	.request_port	= imx_request_port,
 	.config_port	= imx_config_port,
 	.verify_port	= imx_verify_port,
+	.ioctl		= imx_ioctl,
 };
 
 static struct imx_port *imx_ports[UART_NR];
@@ -1141,7 +1224,8 @@ static void imx_console_putchar(struct uart_port *port, int ch)
 	while (readl(sport->port.membase + UTS) & UTS_TXFULL)
 		barrier();
 
-	writel(ch, sport->port.membase + URTX0);
+	while (tx_char(sport, ch))
+		;
 }
 
 /*

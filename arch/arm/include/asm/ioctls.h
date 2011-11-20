@@ -55,6 +55,7 @@
 
 #define TIOCGRS485      0x542E
 #define TIOCSRS485      0x542F
+#define TIOC_FORCE_TX_PARITY_ERROR		0x5436
 
 #define FIONCLEX	0x5450  /* these numbers need to be adjusted. */
 #define FIOCLEX		0x5451
