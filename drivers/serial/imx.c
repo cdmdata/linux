@@ -1000,7 +1000,7 @@ imx_set_termios(struct uart_port *port, struct ktermios *termios,
 
 	spin_lock_irqsave(&sport->port.lock, flags);
 
-	sport->port.read_status_mask = 0;
+	sport->port.read_status_mask = 0xff;
 	if (termios->c_iflag & INPCK)
 		sport->port.read_status_mask |= (URXD_FRMERR | URXD_PRERR);
 	if (termios->c_iflag & (BRKINT | PARMRK))
