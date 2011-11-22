@@ -1914,8 +1914,8 @@ static iomux_v3_cfg_t nitrogen53_pads_specific[] __initdata = {
 	MX53_PAD_EIM_D30__GPIO_3_30,	/* On/Off key */
 
 	/* UART3 */
-	MX53_PAD_EIM_D24__UART3_TXD,
-	MX53_PAD_EIM_D25__UART3_RXD,
+	MX53_PAD_ATA_CS_0__UART3_TXD,
+	MX53_PAD_ATA_CS_1__UART3_RXD,
 	MX53_PAD_EIM_D23__UART3_CTS,
 	MX53_PAD_EIM_D31__UART3_RTS,
 };
