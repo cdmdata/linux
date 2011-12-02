@@ -1275,17 +1275,21 @@ void do_rs485_setup(struct imx_port *sport, struct serial_rs485 *rs)
 	}
 	sport->transmitter_enable_high_active = 0;
 	sport->half_duplex = 0;
+	sport->transmitter_on = 0;
 	if (gpio_is_valid(new_gp)) {
-		unsigned long flags = GPIOF_OUT_INIT_HIGH;
+		unsigned long val = 1;
 		if (rs->flags & SER_RS485_TX_CTL_HIGH_ACTIVE)
 			sport->transmitter_enable_high_active = 1;
 		if (rs->flags & SER_RS485_HALF_DUPLEX)
 			sport->half_duplex = 1;
-		if (new_gp == old_gp)
-			return;
 		if (sport->transmitter_enable_high_active)
-			flags = GPIOF_OUT_INIT_LOW;
-		if (!gpio_request_one(new_gp, flags, "RS485 tx enable")) {
+			val = 0;
+		if (new_gp == old_gp) {
+			gpio_set_value(new_gp, val);
+			return;
+		}
+		if (!gpio_request_one(new_gp, val ?  GPIOF_OUT_INIT_HIGH
+				:  GPIOF_OUT_INIT_LOW, "RS485 tx enable")) {
 			sport->transmitter_enable_gp = new_gp;
 			pr_info("Grabbed gp %d\n", new_gp);
 		} else {
@@ -1598,12 +1602,23 @@ static int serial_imx_probe(struct platform_device *pdev)
 		}
 	}
 
-
 	ret = uart_add_one_port(&imx_reg, &sport->port);
 	if (ret)
 		goto deinit;
 	platform_set_drvdata(pdev, &sport->port);
 
+#ifdef CONFIG_N_9BIT
+	pr_info("%s: id=%d\n", __func__, pdev->id);
+	if (pdev->id == 2) {
+		struct serial_rs485 rs;
+		memset(&rs, 0, sizeof(rs));
+		rs.flags = SER_RS485_ENABLED | SER_RS485_TX_CTL_GP |
+				SER_RS485_TX_CTL_HIGH_ACTIVE | SER_RS485_HALF_DUPLEX;
+#define MAKE_GP(port, bit) ((port - 1) * 32 + bit)
+		rs.transmitter_enable_gp = MAKE_GP(3, 30);
+		do_rs485_setup(sport, &rs);
+	}
+#endif
 	set_transmit_state(sport, RS485_OFF);
 
 	return 0;
