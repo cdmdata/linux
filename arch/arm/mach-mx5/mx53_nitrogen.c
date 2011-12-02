@@ -85,6 +85,8 @@
 #include "devices.h"
 #include "usb.h"
 
+#define TEST_RS485
+
 //#define REV0		//this board should no longer exist
 
 /*
@@ -133,7 +135,9 @@ struct gpio nitrogen53_gpios[] __initdata = {
 //	{.label = "Back key",		.gpio = MAKE_GP(3, 26),		.flags = GPIOF_DIR_IN},
 //	{.label = "Search key",		.gpio = MAKE_GP(3, 27),		.flags = GPIOF_DIR_IN},
 //	{.label = "Home key",		.gpio = MAKE_GP(3, 29),		.flags = GPIOF_DIR_IN},
+#ifndef TEST_RS485
 	{.label = "On/Off key",		.gpio = MAKE_GP(3, 30),		.flags = GPIOF_DIR_IN},
+#endif
 #define N53_I2C_1_SDA				MAKE_GP(4, 13)
 	{.label = "i2c-1-sda",		.gpio = MAKE_GP(4, 13),		.flags = GPIOF_DIR_IN},
 #define N53_TFP410_INT				MAKE_GP(4, 15)
@@ -165,9 +169,6 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "otg-vbus",		.gpio = MAKE_GP(6, 6),		.flags = 0},	/* disable VBUS */
 #define N53_PHY_RESET				MAKE_GP(7, 13)
 	{.label = "ICS1893 reset",	.gpio = MAKE_GP(7, 13),		.flags = 0},	/* ICS1893 Ethernet PHY reset */
-#if defined(CONFIG_SERIAL_IMX_RS485)
-	{.label = "RS485 transmit enable",.gpio = CONFIG_SERIAL_IMX_RS485_GPIO,	.flags = 0},
-#endif
 };
 
 #define BUTTON_PAD_CTRL	(PAD_CTL_HYS | PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_22K_UP | PAD_CTL_DSE_HIGH)
@@ -1538,10 +1539,6 @@ static void __init mx53_nitrogen_io_init(void)
 	gpio_set_value(N53_I2C_CONNECTOR_BUFFER_ENABLE,1);
 #endif
 	gpio_export(N53_I2C_CONNECTOR_BUFFER_ENABLE, 0);
-
-#if defined(CONFIG_SERIAL_IMX_RS485)
-	gpio_set_value(CONFIG_SERIAL_IMX_RS485_GPIO,CONFIG_SERIAL_IMX_RS485_GPIO_ACTIVE_HIGH^1);
-#endif
 }
 
 static void nitrogen_power_off(void)
