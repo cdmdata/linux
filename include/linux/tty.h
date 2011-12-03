@@ -262,6 +262,7 @@ struct tty_struct {
 	/* Protects ldisc changes: Lock tty not pty */
 	struct mutex ldisc_mutex;
 	struct tty_ldisc *ldisc;
+	int ldisc_default;
 
 	struct mutex termios_mutex;
 	spinlock_t ctrl_lock;

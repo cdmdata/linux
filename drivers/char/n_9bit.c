@@ -12,6 +12,7 @@
  * http://www.opensource.org/licenses/gpl-license.html
  * http://www.gnu.org/copyleft/gpl.html
  */
+//#define DEBUG
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
@@ -20,7 +21,6 @@
 #include <linux/fcntl.h>
 #include <linux/interrupt.h>
 #include <linux/ptrace.h>
-#define DEBUG
 #undef VERSION
 #define VERSION(major,minor,patch) (((((major)<<8)+(minor))<<8)+(patch))
 
@@ -315,7 +315,7 @@ static struct n_9bit *n_9bit_alloc(struct tty_struct *tty)
 	memset(n_9bit, 0, sizeof(*n_9bit));
 	memset(&n_9bit->rx_map, 0xff, sizeof(n_9bit->rx_map));
 	/* 3 millisecond gap denotes end of message */
-	n_9bit->rx_timeout_msec = 3;
+	n_9bit->rx_timeout_msec = 30;
 	n_9bit_buf_list_init(&n_9bit->rx_free_buf_list);
 	n_9bit_buf_list_init(&n_9bit->tx_free_buf_list);
 	n_9bit_buf_list_init(&n_9bit->rx_buf_list);
@@ -367,7 +367,7 @@ static int n_9bit_tty_open(struct tty_struct *tty)
 {
 	struct n_9bit *n_9bit = (struct n_9bit *)tty->disc_data;
 
-	pr_debug("%s: called(device=%s)\n", __func__, tty->name);
+	pr_debug("%s: called(device=%s) termios=%p\n", __func__, tty->name, tty->termios);
 		
 	/* There should not be an existing table for this slot. */
 	if (n_9bit) {
@@ -387,8 +387,21 @@ static int n_9bit_tty_open(struct tty_struct *tty)
 	set_bit(TTY_NO_WRITE_SPLIT,&tty->flags);
 #endif
 	
-	/* flush receive data from driver */
-	tty_driver_flush_buffer(tty);
+	mutex_lock(&tty->termios_mutex);
+	tty->termios->c_cflag = B115200 | CLOCAL | CREAD | PARENB | CMSPAR | CS8;
+	tty->termios->c_ispeed = 115200;
+	tty->termios->c_ospeed = 115200;
+	/* set raw mode for input */
+	tty->termios->c_lflag &= ~(ICANON | ECHO | ISIG);
+	/* no software flow control */
+	tty->termios->c_iflag &= ~(IXON | IXOFF | IXANY| INLCR | ICRNL |
+		IUCLC | IGNPAR);
+	/* want receive parity error status */
+	tty->termios->c_iflag |= (INPCK | PARMRK);
+	/* raw output */
+	tty->termios->c_oflag &= ~OPOST;
+	mutex_unlock(&tty->termios_mutex);
+
 	pr_debug("%s: success\n", __func__);
 	return 0;
 }
