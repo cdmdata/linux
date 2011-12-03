@@ -22,7 +22,7 @@
 #ifndef __LINUX_MFD_DA9052_TSI_CFG_H
 #define __LINUX_MFD_DA9052_TSI_CFG_H
 
-#define		DA9052_TSI_DEBUG	1
+#define		DA9052_TSI_DEBUG	0
 
 #define AUTO_MODE			0
 #define IDLE				1
