@@ -291,9 +291,11 @@ void set_transmit_state(struct imx_port *sport, int state)
 			if (wait_rxds(sport))
 				return;
 		}
-		xmit = &sport->port.state->xmit;
-		if (!uart_circ_empty(xmit))
-			return;
+		if (sport->tx_enable) {
+			xmit = &sport->port.state->xmit;
+			if (!uart_circ_empty(xmit))
+				return;
+		}
 	}
 	sport->transmitter_on = val;
 	if (!sport->transmitter_enable_high_active)
@@ -723,8 +725,17 @@ static irqreturn_t imx_int(int irq, void *dev_id)
 	if (sts & USR1_RRDY)
 		imx_rxint(irq, dev_id);
 
-	if ((sts & USR1_TRDY) && sport->tx_enable)
-		imx_txint(irq, dev_id);
+	if (sport->tx_enable) {
+		if (sts & USR1_TRDY)
+			imx_txint(irq, dev_id);
+	} else {
+		if (sts & USR1_TRDY) {
+			unsigned reg = readl(sport->port.membase + UCR1);
+			if (reg & UCR1_TXMPTYEN) {
+				writel(reg & ~UCR1_TXMPTYEN, sport->port.membase + UCR1);
+			}
+		}
+	}
 
 	if (sts & USR1_RTSD)
 		imx_rtsint(irq, dev_id);
@@ -798,22 +809,11 @@ static void imx_break_ctl(struct uart_port *port, int break_state)
 static int imx_setup_ufcr(struct imx_port *sport, unsigned int mode)
 {
 	unsigned int val;
-	unsigned int ufcr_rfdiv;
 
-	/* set receiver / transmitter trigger level.
-	 * RFDIV is set such way to satisfy requested uartclk value
-	 */
-	val = TXTL << 10 | RXTL;
-	ufcr_rfdiv = (clk_get_rate(sport->clk) + sport->port.uartclk / 2)
-			/ sport->port.uartclk;
-
-	if(!ufcr_rfdiv)
-		ufcr_rfdiv = 1;
-
-	val |= UFCR_RFDIV_REG(ufcr_rfdiv);
-
+	/* set receiver / transmitter trigger level. */
+	val = readl(sport->port.membase + UFCR) & UFCR_RFDIV;
+	val |= TXTL << 10 | RXTL;
 	writel(val, sport->port.membase + UFCR);
-
 	return 0;
 }
 
@@ -1019,9 +1019,12 @@ imx_set_termios(struct uart_port *port, struct ktermios *termios,
 {
 	struct imx_port *sport = (struct imx_port *)port;
 	unsigned long flags;
-	unsigned int ucr2, old_ucr1, old_txrxen, baud, quot;
+	unsigned new_ucr2, old_ucr2;
+	unsigned new_ufcr, old_ufcr;
+	unsigned old_ubir, old_ubmr;
+	unsigned int baud, quot;
 	unsigned int old_csize = old ? old->c_cflag & CSIZE : CS8;
-	unsigned int div, ufcr;
+	unsigned int div;
 	unsigned long num, denom;
 	uint64_t tdiv64;
 
@@ -1044,32 +1047,31 @@ imx_set_termios(struct uart_port *port, struct ktermios *termios,
 		old_csize = CS8;
 	}
 
+	new_ucr2 = UCR2_SRST | UCR2_IRTS;
 	if ((termios->c_cflag & CSIZE) == CS8)
-		ucr2 = UCR2_WS | UCR2_SRST | UCR2_IRTS;
-	else
-		ucr2 = UCR2_SRST | UCR2_IRTS;
+		new_ucr2 |= UCR2_WS;
 
 	if (termios->c_cflag & CRTSCTS) {
 		if( sport->have_rtscts ) {
-			ucr2 &= ~UCR2_IRTS;
-			ucr2 |= UCR2_CTSC;
+			new_ucr2 &= ~UCR2_IRTS;
+			new_ucr2 |= UCR2_CTSC;
 		} else {
 			termios->c_cflag &= ~CRTSCTS;
 		}
 	}
 
 	if (termios->c_cflag & CSTOPB)
-		ucr2 |= UCR2_STPB;
+		new_ucr2 |= UCR2_STPB;
 	sport->mark_space_mode = 0;
 	sport->mark_parity = 0;
 	if (termios->c_cflag & PARENB) {
-		ucr2 |= UCR2_PREN;
+		new_ucr2 |= UCR2_PREN;
 		if (termios->c_cflag & CMSPAR) {
 			sport->mark_space_mode = 1;
 			if (termios->c_cflag & PARODD)
 				sport->mark_parity = 1;
 		} else if (termios->c_cflag & PARODD)
-			ucr2 |= UCR2_PROE;
+			new_ucr2 |= UCR2_PROE;
 	}
 
 	/*
@@ -1109,22 +1111,6 @@ imx_set_termios(struct uart_port *port, struct ktermios *termios,
 	 */
 	uart_update_timeout(port, termios->c_cflag, baud);
 
-	/*
-	 * disable interrupts and drain transmitter
-	 */
-	old_ucr1 = readl(sport->port.membase + UCR1);
-	writel(old_ucr1 & ~(UCR1_TXMPTYEN | UCR1_RRDYEN | UCR1_RTSDEN),
-			sport->port.membase + UCR1);
-
-	while ( !(readl(sport->port.membase + USR2) & USR2_TXDC))
-		barrier();
-
-	/* then, disable everything */
-	old_txrxen = readl(sport->port.membase + UCR2);
-	writel(old_txrxen & ~( UCR2_TXEN | UCR2_RXEN),
-			sport->port.membase + UCR2);
-	old_txrxen &= (UCR2_TXEN | UCR2_RXEN);
-
 	if (USE_IRDA(sport)) {
 		/*
 		 * use maximum available submodule frequency to
@@ -1152,27 +1138,46 @@ imx_set_termios(struct uart_port *port, struct ktermios *termios,
 	num -= 1;
 	denom -= 1;
 
-	ufcr = readl(sport->port.membase + UFCR);
-	ufcr = (ufcr & (~UFCR_RFDIV)) | UFCR_RFDIV_REG(div);
-	writel(ufcr, sport->port.membase + UFCR);
+	old_ufcr = readl(sport->port.membase + UFCR);
+	new_ufcr = (old_ufcr & (~UFCR_RFDIV)) | UFCR_RFDIV_REG(div);
 
-	writel(num, sport->port.membase + UBIR);
-	writel(denom, sport->port.membase + UBMR);
+	old_ubir = readl(sport->port.membase + UBIR);
+	old_ubmr = readl(sport->port.membase + UBMR);
+	old_ucr2 = readl(sport->port.membase + UCR2) & ~UCR2_CTS;
+	new_ucr2 |= old_ucr2 & (UCR2_TXEN | UCR2_RXEN);
 
-	if (!cpu_is_mx1())
-		writel(sport->port.uartclk / div / 1000,
+	if ((old_ufcr != new_ufcr) || (old_ucr2 != new_ucr2) ||
+			(old_ubir != num) || (old_ubmr != denom)) {
+		int i;
+		/* software reset */
+		writel(readl(sport->port.membase + UCR2) &
+			~(UCR2_TXEN | UCR2_RXEN | UCR2_SRST | UCR2_CTS),
+			sport->port.membase + UCR2);
+		for (i = 0; i < 2000; i++) {
+			unsigned uts = readl(sport->port.membase + UTS);
+			if (!(uts & UTS_SOFTRST))
+				break;
+		}
+		writel(new_ufcr, sport->port.membase + UFCR);
+		writel(num, sport->port.membase + UBIR);
+		writel(denom, sport->port.membase + UBMR);
+
+		if (!cpu_is_mx1())
+			writel(sport->port.uartclk / div / 1000,
 				sport->port.membase + MX2_ONEMS);
 
-	writel(old_ucr1, sport->port.membase + UCR1);
 
-	/* set the parity, stop bits and data size */
-	writel(ucr2 | old_txrxen, sport->port.membase + UCR2);
+		/* set the parity, stop bits and data size */
+		writel(new_ucr2, sport->port.membase + UCR2);
 
-	if (UART_ENABLE_MS(&sport->port, termios->c_cflag))
-		imx_enable_ms(&sport->port);
+		if (UART_ENABLE_MS(&sport->port, termios->c_cflag))
+			imx_enable_ms(&sport->port);
 
+		pr_info("old_ufcr=%x new_ufcr=%x, old_ucr2=%x new_ucr2=%x, old_ubir=%x num=%lx, old_ubmr=%x denom=%lx\n",
+				old_ufcr, new_ufcr, old_ucr2, new_ucr2, old_ubir, num, old_ubmr, denom);
+		pr_info("clk=%i div=%i num=%li denom=%li baud=%i\n", sport->port.uartclk, div, num+1, denom+1, baud);
+	}
 	spin_unlock_irqrestore(&sport->port.lock, flags);
-	pr_debug("clk=%i div=%i num=%li denom=%li baud=%i\n", sport->port.uartclk, div, num+1, denom+1, baud);
 }
 
 static const char *imx_type(struct uart_port *port)
