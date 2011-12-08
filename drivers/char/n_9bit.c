@@ -236,6 +236,7 @@ static void n_9bit_release(struct n_9bit *n_9bit)
 	wake_up_interruptible(&tty->read_wait);
 	wake_up_interruptible(&tty->write_wait);
 
+	del_timer(&n_9bit->rx_eom_timer);
 	/* Release transmit and receive buffers */
 	free_list(&n_9bit->rx_free_buf_list);
 	free_list(&n_9bit->tx_free_buf_list);
@@ -388,9 +389,9 @@ static int n_9bit_tty_open(struct tty_struct *tty)
 #endif
 	
 	mutex_lock(&tty->termios_mutex);
-	tty->termios->c_cflag = B115200 | CLOCAL | CREAD | PARENB | CMSPAR | CS8;
-	tty->termios->c_ispeed = 115200;
-	tty->termios->c_ospeed = 115200;
+	tty->termios->c_cflag = B38400 | CLOCAL | CREAD | PARENB | CMSPAR | CS8;
+	tty->termios->c_ispeed = 38400;
+	tty->termios->c_ospeed = 38400;
 	/* set raw mode for input */
 	tty->termios->c_lflag &= ~(ICANON | ECHO | ISIG);
 	/* no software flow control */
