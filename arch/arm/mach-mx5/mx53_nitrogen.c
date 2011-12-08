@@ -1675,6 +1675,8 @@ extern struct da9052_tsi_platform_data da9052_tsi;
 struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "pmic-int",		.gpio = MAKE_GP(2, 21),		.flags = GPIOF_DIR_IN},
 	{.label = "Camera power down",	.gpio = MAKE_GP(2, 22),		.flags = GPIOF_INIT_HIGH},	/* EIM_A16 */
+#define N53_I2C_PIC16F616_INT			MAKE_GP(3, 6)
+	{.label = "i2c_pic_int",	.gpio = MAKE_GP(3, 6),		.flags = GPIOF_DIR_IN},
 //	{.label = "led0",		.gpio = MAKE_GP(4, 2),		.flags = 0},
 	{.label = "led1",		.gpio = MAKE_GP(4, 3),		.flags = 0},
 //	{.label = "led2",		.gpio = MAKE_GP(4, 4),		.flags = 0},
@@ -1682,6 +1684,13 @@ struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 	{.label = "power_down_req",	.gpio = POWER_DOWN,		.flags = GPIOF_INIT_HIGH},
 };
+
+#if defined (CONFIG_TOUCHSCREEN_I2C) || defined (CONFIG_TOUCHSCREEN_I2C_MODULE)
+static struct plat_i2c_generic_data i2c_pic16f616_data = {
+	.irq = gpio_to_irq(N53_I2C_PIC16F616_INT),
+	.gp = N53_I2C_PIC16F616_INT,
+};
+#endif
 
 static struct i2c_board_info mxc_i2c1_board_info_a[] __initdata = {
 	{
@@ -1702,7 +1711,7 @@ static struct i2c_board_info mxc_i2c1_board_info_a[] __initdata = {
 	{
 	 .type = "Pic16F616-ts",
 	 .addr = 0x22,
-	 .platform_data  = &i2c_generic_data,
+	 .platform_data  = &i2c_pic16f616_data,
 	},
 #endif
 #if defined (CONFIG_TOUCHSCREEN_EP0700M01) || defined (CONFIG_TOUCHSCREEN_EP0700M01_MODULE)
