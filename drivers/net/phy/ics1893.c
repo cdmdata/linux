@@ -23,17 +23,24 @@
 #include <linux/phy.h>
 #include <linux/netdevice.h>
 
+static int ics_config_init(struct phy_device *phydev)
+{
+	return 0;
+}
+
+#define FEATURES (PHY_BASIC_FEATURES)
+
 static struct phy_driver ics1893_driver = {
-	.phy_id 	= 0x00015f45,
+	.phy_id 	= 0x0015f450,
 	.phy_id_mask	= 0xfffffff0,
 	.name 		= "ICS1893",
-	.features	= (PHY_BASIC_FEATURES),
+	.features	= FEATURES,
 	.flags		= 0,
 
 	/* basic functions */
 	.config_aneg	= genphy_config_aneg,
 	.read_status	= genphy_read_status,
-	.config_init	= genphy_config_init,
+	.config_init	= ics_config_init,
 
 	.suspend	= genphy_suspend,
 	.resume		= genphy_resume,
@@ -50,7 +57,7 @@ static int __init ics_init(void)
 	return ret;
 }
 
-static void __exit smsc_exit(void)
+static void __exit ics_exit(void)
 {
 	phy_driver_unregister (&ics1893_driver);
 }
