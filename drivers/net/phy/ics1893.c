@@ -28,7 +28,12 @@ static int ics_config_init(struct phy_device *phydev)
 	return 0;
 }
 
+#ifdef CONFIG_MDIO_ICS1893_FORCE10
+#define FEATURES (PHY_BASIC_FEATURES) & \
+	~(SUPPORTED_100baseT_Half | SUPPORTED_100baseT_Full)
+#else
 #define FEATURES (PHY_BASIC_FEATURES)
+#endif
 
 static struct phy_driver ics1893_driver = {
 	.phy_id 	= 0x0015f450,
