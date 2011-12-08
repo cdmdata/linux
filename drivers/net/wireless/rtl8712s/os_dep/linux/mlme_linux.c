@@ -120,6 +120,12 @@ void dhcp_timeout_handler (void *FunctionContext)
 	_dhcp_timeout_handler(adapter);
 }
 
+void regular_site_survey_handler(void *FunctionContext)
+{
+	PADAPTER padapter = (PADAPTER)FunctionContext;
+	_regular_site_survey_handler(padapter);
+}
+
 void wdg_timeout_handler (void *FunctionContext)
 {
 	_adapter *adapter = (_adapter *)FunctionContext;
@@ -146,6 +152,7 @@ void init_mlme_timer(_adapter *padapter)
 #ifdef CONFIG_PWRCTRL
 	_init_timer(&(pmlmepriv->dhcp_timer), padapter->pnetdev, dhcp_timeout_handler, (u8 *)(pmlmepriv->nic_hdl));
 #endif
+	_init_timer(&pmlmepriv->survey_timer, padapter->pnetdev, regular_site_survey_handler, pmlmepriv->nic_hdl);
 
 	_init_timer(&(pmlmepriv->wdg_timer), padapter->pnetdev, wdg_timeout_handler, (u8 *)(pmlmepriv->nic_hdl));
 

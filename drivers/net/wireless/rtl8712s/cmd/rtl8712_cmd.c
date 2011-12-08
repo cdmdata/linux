@@ -874,62 +874,62 @@ u8 fw_iocmd_write(PADAPTER pAdapter, u32 iocmd, u32 value)
 thread_return cmd_thread(thread_context context)
 {
 	struct cmd_obj *pcmd;
-	unsigned int cmdsz, wr_sz, *pcmdbuf, *prspbuf;
+	u32 cmdsz, wr_sz, *pcmdbuf, *prspbuf;
 	struct tx_desc *pdesc;
-	void (*pcmd_callback)(_adapter *dev, struct cmd_obj	*pcmd);
-       _adapter *padapter = (_adapter *)context;
-	struct	cmd_priv	*pcmdpriv = &(padapter->cmdpriv);
-	
+	void (*pcmd_callback)(_adapter *dev, struct cmd_obj *pcmd);
+	PADAPTER padapter = (PADAPTER)context;
+	struct cmd_priv *pcmdpriv = &padapter->cmdpriv;
+
 _func_enter_;
 
 	thread_enter(padapter);
 
-	RT_TRACE(_module_rtl8712_cmd_c_,_drv_info_,("start r8712 cmd_thread !!!!\n"));
+	RT_TRACE(_module_rtl8712_cmd_c_, _drv_info_, ("+cmd_thread\n"));
 
 	while(1)
 	{
-		if ((_down_sema(&(pcmdpriv->cmd_queue_sema))) == _FAIL)
+		if (_down_sema(&pcmdpriv->cmd_queue_sema) == _FAIL)
 			break;
 
 _next:
-		if ((padapter->bDriverStopped == _TRUE)||(padapter->bSurpriseRemoved== _TRUE))
-		{			
-			RT_TRACE(_module_rtl8712_cmd_c_, _drv_info_, ("cmd_thread:bDriverStopped(%d) OR bSurpriseRemoved(%d)", padapter->bDriverStopped, padapter->bSurpriseRemoved));		
+		if ((padapter->bDriverStopped == _TRUE) ||
+		    (padapter->bSurpriseRemoved == _TRUE))
+		{
+			RT_TRACE(_module_rtl8712_cmd_c_, _drv_info_, ("cmd_thread:bDriverStopped(%d) OR bSurpriseRemoved(%d)", padapter->bDriverStopped, padapter->bSurpriseRemoved));
 			break;
 		}
-		
+
 		if (register_cmd_alive(padapter) != _SUCCESS)
 		{
 			continue;
 		}
 
-		if(!(pcmd = dequeue_cmd(&(pcmdpriv->cmd_queue)))) {
+		pcmd = dequeue_cmd(&pcmdpriv->cmd_queue);
+		if (pcmd == NULL)
+		{
 			unregister_cmd_alive(padapter);
 			continue;
 		}
 
-		pcmdbuf = (unsigned int*)pcmdpriv->cmd_buf;
-		prspbuf = (unsigned int*)pcmdpriv->rsp_buf;
-
-		pdesc = (struct tx_desc *)pcmdbuf;
-
-		_memset(pdesc, 0, TXDESC_SIZE);
-
-		RT_TRACE(_module_rtl8712_cmd_c_,_drv_info_,("after dequeue_cmd\n"));
-
 		pcmd = cmd_hdl_filter(padapter, pcmd);
 	
-		if(pcmd)//if pcmd != NULL, the cmd will be handled by f/w
+		if (pcmd) //if pcmd != NULL, the cmd will be handled by f/w
 		{
 #ifdef CONFIG_USB_HCI
-                        struct dvobj_priv    *pdvobj = (struct dvobj_priv   *)&padapter->dvobjpriv;
-			u8                           blnPending = 0;
+			struct dvobj_priv *pdvobj = (struct dvobj_priv*)&padapter->dvobjpriv;
+			u8 blnPending = 0;
 #endif
 		 	pcmdpriv->cmd_issued_cnt++;
-			cmdsz = _RND8( (pcmd->cmdsz));//_RND8	
+			cmdsz = _RND8(pcmd->cmdsz); // 8 bytes alignment
+			wr_sz = TXDESC_SIZE + 8 + cmdsz;
 
-			wr_sz = TXDESC_SIZE + 8 + cmdsz;		 	
-			pdesc->txdw0 |= cpu_to_le32((wr_sz-TXDESC_SIZE)&0x0000ffff);
+			pcmdbuf = (u32*)pcmdpriv->cmd_buf;
+			_memset(pcmdbuf, 0, wr_sz);
+			prspbuf = (u32*)pcmdpriv->rsp_buf;
+
+			//3 1. command packet header (H2C Command Description)
+			pdesc = (struct tx_desc*)pcmdbuf;
+			pdesc->txdw0 |= cpu_to_le32((8 + cmdsz) & 0xFFFF);
 
 #ifdef CONFIG_USB_HCI
 			if ( pdvobj->ishighspeed )
@@ -959,24 +959,30 @@ _next:
 			pdesc->txdw0 |= cpu_to_le32(OWN | FSG | LSG);			
 			pdesc->txdw1 |= cpu_to_le32((0x13<<QSEL_SHT)&0x00001f00);//QSEL=H2C-Command
 
-			
-			pcmdbuf += (TXDESC_SIZE>>2);		
-			*pcmdbuf = cpu_to_le32((cmdsz&0x0000ffff) | (pcmd->cmdcode << 16) | (pcmdpriv->cmd_seq <<24));
-			
-			pcmdbuf += 2 ;//8 bytes aligment			
+			pcmdbuf += (TXDESC_SIZE >> 2); // jump to cmd header, 32 bytes
+
+			//3 2. command header
+			*pcmdbuf = cpu_to_le32((cmdsz & 0xFFFF) | \
+						((pcmd->cmdcode & 0xFF) << 16) | \
+						((pcmdpriv->cmd_seq & 0x7F) << 24));
+			pcmdbuf += 2; // jump to cmd content, 8 bytes
+
+			//3 3. command content
 			_memcpy((u8*)pcmdbuf, pcmd->parmbuf, pcmd->cmdsz);
 
 
-			while (check_cmd_fifo(padapter,wr_sz)==_FAIL){
+			while (check_cmd_fifo(padapter, wr_sz) == _FAIL)
+			{
 				RT_TRACE(_module_rtl8712_cmd_c_,_drv_info_,("cmd pg is not enough=>sleep 10 ms\n"));
-				if ((padapter->bDriverStopped == _TRUE)||(padapter->bSurpriseRemoved== _TRUE))
-				{			
-					RT_TRACE(_module_rtl8712_cmd_c_, _drv_err_, ("cmd_thread:bDriverStopped(%d) OR bSurpriseRemoved(%d)", padapter->bDriverStopped, padapter->bSurpriseRemoved));		
+				if ((padapter->bDriverStopped == _TRUE) ||
+				    (padapter->bSurpriseRemoved == _TRUE))
+				{
+					RT_TRACE(_module_rtl8712_cmd_c_, _drv_err_, ("cmd_thread:bDriverStopped(%d) OR bSurpriseRemoved(%d)", padapter->bDriverStopped, padapter->bSurpriseRemoved));
 					goto exit;
 				}
 				msleep_os(100);
 			}
-			//write_mem(padapter, RTL8712_DMA_H2CCMD,  pcmd->cmdsz+4, pcmdpriv->cmd_buf);
+
 #ifdef CONFIG_USB_HCI			
 			if ( blnPending )
 			{
@@ -984,7 +990,8 @@ _next:
 			}
 #endif			
 			write_mem(padapter, RTL8712_DMA_H2CCMD, wr_sz, (u8*)pdesc);
-			RT_TRACE(_module_rtl8712_cmd_c_,_drv_err_,("after dump cmd, code=%d\n", pcmd->cmdcode));
+			RT_TRACE(_module_rtl8712_cmd_c_, _drv_info_,
+				 ("cmd_thread: after dump cmd(%d), seq=%d\n", pcmd->cmdcode, pcmdpriv->cmd_seq));
 			
 			pcmdpriv->cmd_seq++;
 
@@ -1016,21 +1023,20 @@ _next:
 			free_cmd_obj(pcmd);
 			pcmd = NULL;
 
-			if(_queue_empty(&(pcmdpriv->cmd_queue))){
+			if (_queue_empty(&pcmdpriv->cmd_queue)) {
 				unregister_cmd_alive(padapter);
 				continue;
-			}
-			else{
-				//DbgPrint("cmd queue is not empty\n");
+			} else {
 				goto _next;
 			}
 		}
 		else
 		{
-			RT_TRACE(_module_rtl8712_cmd_c_,_drv_info_,("\nShall not be empty when dequeue cmd_queuu\n"));
+//			RT_TRACE(_module_rtl8712_cmd_c_, _drv_notice_,
+//				 ("Shall not be empty when dequeue cmd_queuu\n"));
 			goto _next;
-		}	
-		
+		}
+
 		flush_signals_thread();
 	}
 
@@ -1045,23 +1051,17 @@ exit:
 	flush_signals_thread();
 
 	// free all cmd_obj resources
-	do{
-
-		pcmd = dequeue_cmd(&(pcmdpriv->cmd_queue));
-		if(pcmd==NULL)
-			break;
-
+	do {
+		pcmd = dequeue_cmd(&pcmdpriv->cmd_queue);
+		if (pcmd == NULL) break;
 		free_cmd_obj(pcmd);
-		
-	}while(1);
-
+	} while (1);
 
 	_up_sema(&pcmdpriv->terminate_cmdthread_sema);
 
-_func_exit_;	
+_func_exit_;
 
 	thread_exit();
-
 }
 
 void event_handle(_adapter *padapter, uint *peventbuf)

@@ -1147,6 +1147,8 @@ _func_enter_;
 	printk(KERN_DEBUG "+indicate_disconnect\n");
 	}
 
+	_cancel_timer_ex(&pmlmepriv->survey_timer);
+
 #ifdef CONFIG_PWRCTRL
 	if(padapter->pwrctrlpriv.pwr_mode != padapter->registrypriv.power_mgnt){
 		_cancel_timer_ex(&pmlmepriv->dhcp_timer);
@@ -1968,6 +1970,20 @@ _func_enter_;
 _func_exit_;
 }
 
+void survey_timer_event_callback(PADAPTER padapter, u8 *pbuf)
+{
+	struct survey_timer_event *ptimer = (struct survey_timer_event*)pbuf;
+	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
+
+
+	pmlmepriv->survey_interval = ptimer->timeout * 1000;
+
+	if (pmlmepriv->survey_interval == 0)
+		_cancel_timer_ex(&pmlmepriv->survey_timer);
+	else
+		_set_timer(&pmlmepriv->survey_timer, pmlmepriv->survey_interval);
+}
+
 void _sitesurvey_ctrl_handler(_adapter *adapter)
 {
 	struct mlme_priv *pmlmepriv = &adapter->mlmepriv;
@@ -2076,6 +2092,33 @@ _func_enter_;
 	}
 #endif
 _func_exit_;
+}
+
+void _regular_site_survey_handler (PADAPTER padapter)
+{
+	_irqL irqL;
+	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
+
+
+	if ((padapter->bDriverStopped == _TRUE) ||
+	    (padapter->bSurpriseRemoved == _TRUE) ||
+	    (padapter->bup == _FALSE))
+	{
+		pmlmepriv->survey_interval = 0;
+		return;
+	}
+
+	_enter_critical(&pmlmepriv->lock, &irqL);
+	if ((check_fwstate(pmlmepriv, _FW_UNDER_LINKING) == _FALSE) &&
+	    (check_fwstate(pmlmepriv, _FW_UNDER_SURVEY) == _FALSE) &&
+	    (pmlmepriv->sitesurveyctrl.traffic_busy == _FALSE))
+	{
+		sitesurvey_cmd(padapter, NULL);
+	}
+	_exit_critical(&pmlmepriv->lock, &irqL);
+
+	if (pmlmepriv->survey_interval)
+		_set_timer(&pmlmepriv->survey_timer, pmlmepriv->survey_interval);
 }
 
 void _wdg_timeout_handler(_adapter *adapter)
@@ -2960,7 +3003,7 @@ unsigned int restructure_ht_ie(_adapter *padapter, u8 *in_ie, u8 *out_ie, uint i
 							IEEE80211_HT_CAP_MAX_AMSDU | IEEE80211_HT_CAP_DSSSCCK40;
 
 		ht_capie.ampdu_params_info = (IEEE80211_HT_CAP_AMPDU_FACTOR&0x03) |
-										(IEEE80211_HT_CAP_AMPDU_DENSITY&0x00) ;
+						(IEEE80211_HT_CAP_AMPDU_DENSITY&0x00);
 
 		pframe = set_ie(out_ie+out_len, _HT_CAPABILITY_IE_,
 							sizeof(struct ieee80211_ht_cap), (unsigned char*)&ht_capie, pout_len);

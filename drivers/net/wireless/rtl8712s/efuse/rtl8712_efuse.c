@@ -143,7 +143,7 @@ static u8 efuse_one_byte_read(_adapter *padapter, u16 addr, u8 *data)
 
 	if (tmpidx < 100) {
 		*data = read8(padapter, EFUSE_CTRL);
-		RT_TRACE(_module_rtl8712_efuse_c_,_drv_info_,("====Read Efuse addr=0x%x value=0x%x=====\n", addr, *data));
+//		RT_TRACE(_module_rtl8712_efuse_c_,_drv_info_,("====Read Efuse addr=0x%x value=0x%x=====\n", addr, *data));
 		bResult = _TRUE;
 	} else {
 		*data = 0xff;

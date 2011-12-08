@@ -98,7 +98,7 @@ int mp_mode = 0;
 int software_encrypt = 0;
 int software_decrypt = 0;
 
-int wmm_enable = 0;// default is set to disable the wmm.
+int wmm_enable = 1;
 int uapsd_enable = 0;
 int uapsd_max_sp = NO_LIMIT;
 int uapsd_acbk_en = 0;
@@ -114,7 +114,7 @@ int ampdu_enable = 1;//for enable tx_ampdu
 int rf_config = RTL8712_RF_1T2R;  // 1T2R
 int low_power = 0;
 char* initmac = 0;  // temp mac address if users want to use instead of the mac address in Efuse
-int wifi_test = 1;    // if wifi_test = 1, driver had to disable the turbo mode and pass it to firmware private.
+int wifi_test = 0;    // if wifi_test = 1, driver had to disable the turbo mode and pass it to firmware private.
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 module_param(initmac, charp, 0644);
@@ -419,12 +419,15 @@ void stop_drv_timers (_adapter *padapter)
 
 	_cancel_timer_ex(&padapter->mlmepriv.scan_to_timer);
 	RT_TRACE(_module_os_intfs_c_,_drv_info_,("stop_drv_timers:cancel scan_to_timer! \n"));
-	
+
 #ifdef CONFIG_PWRCTRL
 	_cancel_timer_ex(&padapter->mlmepriv.dhcp_timer);
 	RT_TRACE(_module_os_intfs_c_,_drv_err_,("stop_drv_timers:cancel dhcp_timer! \n"));
 #endif
-	
+
+	_cancel_timer_ex(&padapter->mlmepriv.survey_timer);
+	RT_TRACE(_module_os_intfs_c_,_drv_info_,("stop_drv_timers: cancel survey_timer!\n"));
+
 	_cancel_timer_ex(&padapter->mlmepriv.wdg_timer);
 	RT_TRACE(_module_os_intfs_c_,_drv_info_,("stop_drv_timers:cancel wdg_timer! \n"));
 }

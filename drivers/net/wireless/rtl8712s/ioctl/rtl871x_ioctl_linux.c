@@ -199,7 +199,7 @@ uint is_cckratesonly_included(u8 *rate)
 }
 */
 
-static inline char *translate_scan(PADAPTER padapter, struct iw_request_info* info, struct wlan_network *pnetwork,
+static char* translate_scan(PADAPTER padapter, struct iw_request_info* info, struct wlan_network *pnetwork,
 				char *start, char *stop)
 {
 	struct iw_event iwe;

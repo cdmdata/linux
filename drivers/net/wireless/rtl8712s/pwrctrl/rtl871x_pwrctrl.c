@@ -80,8 +80,8 @@ _func_enter_;
 	}
 	pwrpriv->rpwm_retry = 0;
 	pwrpriv->rpwm = val8;
-	
-	RT_TRACE(_module_rtl871x_pwrctrl_c_,_drv_notice_,("set_rpwm: rpwm=0x%02x\n", rpwm));
+
+	RT_TRACE(_module_rtl871x_pwrctrl_c_,_drv_notice_,("set_rpwm: rpwm=0x%02x cpwm=0x%02x\n", rpwm, pwrpriv->cpwm));
 #ifdef CONFIG_SDIO_HCI
 	write8(padapter, SDIO_HRPWM, rpwm);
 #else
@@ -184,33 +184,33 @@ using to update cpwn of drv; and drv willl make a decision to up or down pwr lev
 */
 void cpwm_int_hdl(PADAPTER padapter, struct reportpwrstate_parm *preportpwrstate)
 {
-	struct pwrctrl_priv *pwrpriv = &(padapter->pwrctrlpriv);
-	struct cmd_priv	*pcmdpriv = &(padapter->cmdpriv);
-	struct xmit_priv	*pxmitpriv = &(padapter->xmitpriv);
+	struct pwrctrl_priv *pwrpriv = &padapter->pwrctrlpriv;
+	struct cmd_priv	*pcmdpriv = &padapter->cmdpriv;
+	struct xmit_priv *pxmitpriv = &padapter->xmitpriv;
 
 _func_enter_;
 
-	if(pwrpriv->cpwm_tog == ((preportpwrstate->state)&0x80)){
+	if (pwrpriv->cpwm_tog == (preportpwrstate->state & 0x80)) {
 		RT_TRACE(_module_rtl871x_pwrctrl_c_,_drv_err_,
 			 ("cpwm_int_hdl: cpwm_tog=0x%02x this time cpwm=0x%02x toggle bit didn't change!\n",
 			  pwrpriv->cpwm_tog, preportpwrstate->state));
 		goto exit;
 	}
-	
+
 	_cancel_timer_ex(&padapter->pwrctrlpriv.rpwm_check_timer);
 
 //	_enter_pwrlock(&pwrpriv->lock);
 
-	pwrpriv->cpwm = (preportpwrstate->state)&0xf;
+	pwrpriv->cpwm = preportpwrstate->state & 0xf;
+	if (pwrpriv->cpwm >= PS_STATE_S2) {
+		if (pwrpriv->alives & CMD_ALIVE)
+			_up_sema(&pcmdpriv->cmd_queue_sema);
 
-	if(pwrpriv->cpwm >= PS_STATE_S2){
-		if(pwrpriv->alives & CMD_ALIVE)
-			_up_sema(&(pcmdpriv->cmd_queue_sema));
-
-		if(pwrpriv->alives & XMIT_ALIVE)
-			_up_sema(&(pxmitpriv->xmit_sema));
+		if (pwrpriv->alives & XMIT_ALIVE)
+			_up_sema(&pxmitpriv->xmit_sema);
 	}
-	pwrpriv->cpwm_tog=  (preportpwrstate->state)&0x80;
+
+	pwrpriv->cpwm_tog = preportpwrstate->state & 0x80;
 
 //	_exit_pwrlock(&pwrpriv->lock);
 
@@ -255,7 +255,9 @@ _func_enter_;
 _func_exit_;
 
 }
+
 void cpwm_hdl(PADAPTER padapter);
+
 #ifdef PLATFORM_WINDOWS
 
 void rpwm_check_handler (
@@ -478,6 +480,7 @@ _func_enter_;
 
 	_init_pwrlock(&pwrctrlpriv->lock);
 
+	pwrctrlpriv->rpwm = 0;
 	pwrctrlpriv->cpwm = PS_STATE_S4;
 
 	pwrctrlpriv->pwr_mode = PS_MODE_ACTIVE;
@@ -563,7 +566,7 @@ _func_enter_;
 
 	register_task_alive(pwrctrl, XMIT_ALIVE);
 
-	if ((pwrctrl->cpwm < PS_STATE_S3) && (pwrctrl->rpwm < PS_STATE_S3)) {
+	if (pwrctrl->cpwm < PS_STATE_S3) {
 		RT_TRACE(_module_rtl871x_pwrctrl_c_, _drv_notice_,
 			 ("register_tx_alive: cpwm:0x%02x alives:0x%08x\n",
 			  pwrctrl->cpwm, pwrctrl->alives));
@@ -608,7 +611,7 @@ _func_enter_;
 
 	register_task_alive(pwrctrl, CMD_ALIVE);
 
-	if ((pwrctrl->cpwm < PS_STATE_S2) && (pwrctrl->rpwm < PS_STATE_S2)) {
+	if (pwrctrl->cpwm < PS_STATE_S2) {
 		RT_TRACE(_module_rtl871x_pwrctrl_c_, _drv_notice_,
 			 ("register_cmd_alive: cpwm=0x%02x alives=0x%08x\n",
 			  pwrctrl->cpwm, pwrctrl->alives));
@@ -711,14 +714,13 @@ _func_enter_;
 
 	unregister_task_alive(pwrctrl, XMIT_ALIVE);
 
-	if (pwrctrl->pwr_mode > PS_MODE_ACTIVE) {
-		if ((pwrctrl->alives == 0) && (pwrctrl->cpwm >= PS_STATE_S2) &&
-		    (pwrctrl->rpwm >= PS_STATE_S2)) {
-			RT_TRACE(_module_rtl871x_pwrctrl_c_, _drv_notice_,
-				 ("unregister_tx_alive: cpwm:0x%02x alives:0x%08x\n",
-				  pwrctrl->cpwm, pwrctrl->alives));
-			set_rpwm(padapter, PS_STATE_S0);
-		}
+	if ((pwrctrl->pwr_mode > PS_MODE_ACTIVE) &&
+	    (pwrctrl->alives == 0) && (pwrctrl->cpwm >= PS_STATE_S2))
+	{
+		RT_TRACE(_module_rtl871x_pwrctrl_c_, _drv_notice_,
+			 ("unregister_tx_alive: cpwm:0x%02x alives:0x%08x\n",
+			  pwrctrl->cpwm, pwrctrl->alives));
+		set_rpwm(padapter, PS_STATE_S0);
 	}
 	
 	_exit_pwrlock(&pwrctrl->lock);
@@ -748,15 +750,14 @@ _func_enter_;
 
 	unregister_task_alive(pwrctrl, CMD_ALIVE);
 
-	if (pwrctrl->pwr_mode > PS_MODE_ACTIVE) {
-		if ((check_fwstate(&padapter->mlmepriv, _FW_UNDER_LINKING) == _FALSE) &&
-		    (pwrctrl->alives == 0) && (pwrctrl->cpwm >= PS_STATE_S2) &&
-		    (pwrctrl->rpwm >= PS_STATE_S2)) {
-			RT_TRACE(_module_rtl871x_pwrctrl_c_, _drv_notice_,
-				 ("unregister_cmd_alive: cpwm=0x%02x alives=0x%08x\n",
-				  pwrctrl->cpwm, pwrctrl->alives));
-			set_rpwm(padapter, PS_STATE_S0);
-		}
+	if ((pwrctrl->pwr_mode > PS_MODE_ACTIVE) &&
+	    (check_fwstate(&padapter->mlmepriv, _FW_UNDER_LINKING) == _FALSE) &&
+	    (pwrctrl->alives == 0) && (pwrctrl->cpwm >= PS_STATE_S2))
+	{
+		RT_TRACE(_module_rtl871x_pwrctrl_c_, _drv_notice_,
+			 ("unregister_cmd_alive: cpwm=0x%02x alives=0x%08x\n",
+			  pwrctrl->cpwm, pwrctrl->alives));
+		set_rpwm(padapter, PS_STATE_S0);
 	}
 
 	_exit_pwrlock(&pwrctrl->lock);

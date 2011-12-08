@@ -27,7 +27,6 @@
 #include <mlme_osdep.h>
 #include <rtl871x_byteorder.h>
 
-#include <rtl871x_debug.h>
 
 /*
 Caller and the cmd_thread can protect cmd_q by spin_lock.
@@ -289,14 +288,14 @@ u32 enqueue_cmd(struct cmd_priv *pcmdpriv, struct cmd_obj *obj)
 	int res;
 
 _func_enter_;
-
+#if 0
 	if (pcmdpriv->padapter->eeprompriv.bautoload_fail_flag == _TRUE) {
 		RT_TRACE(_module_rtl871x_cmd_c_, _drv_err_,
 			 ("pcmdpriv->padapter->eeprompriv.bautoload_fail_flag=%x\n",
 			  pcmdpriv->padapter->eeprompriv.bautoload_fail_flag));
 		return _FAIL;
 	}
-
+#endif
 	res = _enqueue_cmd(&pcmdpriv->cmd_queue, obj);
 
 	_up_sema(&pcmdpriv->cmd_queue_sema);
@@ -315,10 +314,10 @@ _func_enter_;
 
 	if (obj == NULL)
 		goto exit;
-
+#if 0
 	if (pcmdpriv->padapter->eeprompriv.bautoload_fail_flag == _TRUE)
 		return _FAIL;
-
+#endif
 	queue = &pcmdpriv->cmd_queue;
 
 	_enter_critical(&queue->lock, &irqL);
@@ -510,19 +509,19 @@ _func_enter_;
 	ph2c = (struct cmd_obj*)_malloc(sizeof(struct cmd_obj));
 	if (ph2c == NULL)
 		return _FAIL;
+	_memset(ph2c, 0, sizeof(struct cmd_obj));
 
 	psurveyPara = (struct sitesurvey_parm*)_malloc(sizeof(struct sitesurvey_parm));
 	if (psurveyPara == NULL) {
-		_mfree((unsigned char*) ph2c, sizeof(struct cmd_obj));
+		_mfree((u8*)ph2c, sizeof(struct cmd_obj));
 		return _FAIL;
 	}
+	_memset(psurveyPara, 0, sizeof(struct sitesurvey_parm));
 
 	init_h2fwcmd_w_parm_no_rsp(ph2c, psurveyPara, GEN_CMD_CODE(_SiteSurvey));
 
 	psurveyPara->bsslimit = cpu_to_le32(48);
 	psurveyPara->passive_mode = cpu_to_le32(pmlmepriv->passive_mode);
-	psurveyPara->ss_ssidlen= cpu_to_le32(0);// pssid->SsidLength;
-	_memset(psurveyPara->ss_ssid, 0, IW_ESSID_MAX_SIZE + 1);
 	if ((pssid != NULL) && (pssid->SsidLength)) {
 		_memcpy(psurveyPara->ss_ssid, pssid->Ssid, pssid->SsidLength);
 		psurveyPara->ss_ssidlen = cpu_to_le32(pssid->SsidLength);
