@@ -97,6 +97,7 @@ enum rtl8712_h2c_cmd
 	GEN_CMD_CODE(_SetChannelPlan), /*60*/
 	GEN_CMD_CODE(_DisconnectCtrlEx), /*61*/
 	GEN_CMD_CODE(_WWlanCtrl), /*62*/
+	GEN_CMD_CODE(_SetPwrParam),	/*63*/
 	MAX_H2CCMD
 };
 
@@ -181,6 +182,7 @@ struct _cmd_callback 	cmd_callback[] =
 	{GEN_CMD_CODE(_SetChannelPlan), NULL}, /*60*/
 	{GEN_CMD_CODE(_DisconnectCtrlEx), NULL}, /*61*/
 	{GEN_CMD_CODE(_WWlanCtrl), NULL}, /*62*/
+	{GEN_CMD_CODE(_SetPwrParam), NULL}, /*63*/
 };
 #endif
 

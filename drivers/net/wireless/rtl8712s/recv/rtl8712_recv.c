@@ -1344,50 +1344,50 @@ void rxcmd_event_hdl(_adapter *padapter, void *prxcmdbuf)
 	drvinfo_sz = drvinfo_sz<<3;
 
 	poffset +=RXDESC_SIZE + drvinfo_sz;
-	do{
-		
+	do
+	{
 		voffset  = *(uint*)poffset;
 		cmd_len = (u16)(le32_to_cpu(voffset)&0xffff);
 		cmd_seq = (u8)((le32_to_cpu(voffset)>>24)&0x7f);
 		eid = (u8)((le32_to_cpu(voffset)>>16)&0xff);
-	
+
 		{
 
-#ifdef CONFIG_RECV_BH		
+#ifdef CONFIG_RECV_BH
 			//
 			//.2 async_event
-			//		
-			pc2h = (struct evt_obj*)_malloc(sizeof(struct evt_obj));		
+			//
+			pc2h = (struct evt_obj*)_malloc(sizeof(struct evt_obj));
 			if(pc2h==NULL){
 				break;
 			}
-						
+
 			_init_listhead(&pc2h->list);
 
 			if(cmd_len<64)
 			{
 				pevtcmd = (u8*)_malloc(64+8);
-			}	
+			}
 			else
-			{				
+			{
 				pevtcmd = (u8*)_malloc(cmd_len+8);
 			}
-			
+
 			if(pevtcmd==NULL)
 			{
 				_mfree((u8 *)pc2h, sizeof(struct evt_obj));
 				break;
 			}
-			
+
 			//_memcpy(pevtcmd, poffset+4, cmd_len);
-			_memcpy(pevtcmd, poffset, cmd_len+8);		
+			_memcpy(pevtcmd, poffset, cmd_len+8);
 
 			pc2h->evtcode = eid;
 			pc2h->evtsz = cmd_len;
 			pc2h->parmbuf  = pevtcmd;
 
 			enqueue_evt(pevtpriv, pc2h);//enqueue evt_obj
-			
+
 #ifdef PLATFORM_LINUX
 
 			//printk("schedule event_tasklet, pc2h=%p, evtsz=%d\n", pc2h, pc2h->evtsz);
@@ -1395,12 +1395,11 @@ void rxcmd_event_hdl(_adapter *padapter, void *prxcmdbuf)
 			tasklet_hi_schedule(&pevtpriv->event_tasklet);
 #endif
 
-#else
+#else /* #ifdef CONFIG_RECV_BH */
 			event_handle(padapter, (uint*)poffset);
-#endif
+#endif /* #ifdef CONFIG_RECV_BH */
 
-			poffset += (cmd_len + 8);//8 bytes aligment
-
+			poffset = (u8*)_RND8((u32)poffset + cmd_len); // 8 bytes aligment
 		}
 
 	}while(le32_to_cpu(voffset)&BIT(31));

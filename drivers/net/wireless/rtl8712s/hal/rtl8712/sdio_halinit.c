@@ -54,7 +54,7 @@ void open_dbg_port(_adapter * padapter){
 		val8=read8(padapter, 0x10250003);
 		RT_TRACE(_module_hal_init_c_,_drv_err_, ("\n 0x10250003 value 0x%x\n",val8));
 		mdelay_os(20);
-	
+
 		val8=read8(padapter, 0x10250000);
 		RT_TRACE(_module_hal_init_c_,_drv_err_, ("\n 0x10250000 value 0x%x\n",val8));
 		val8=val8&0x7F;
@@ -100,7 +100,7 @@ u8 sd_hal_bus_init(_adapter * padapter)
 	//clear driver c2h , rx block number if reinitialize driver.
 	padapter->dvobjpriv.c2hblknum = 0;
 	padapter->dvobjpriv.rxblknum = 0;
-	
+
 #if 0
 //#ifdef CONFIG_DEBUG_RTL871X
 	RT_TRACE(_module_hal_init_c_, _drv_err_, ("sd_hal_bus_init: dump test========\n"));
@@ -141,7 +141,7 @@ u8 sd_hal_bus_init(_adapter * padapter)
 		write8(padapter, 0x10250003, val8);
 
 		write8(padapter, RF_CTRL, 0x0); // 0x1025001f
-	
+
 		val8 = read8(padapter, SYS_FUNC_EN+1);
 		val8 |= BIT(3) | BIT(7); // FEN_DCORE | FEN_MREGEN
 		write8(padapter, SYS_FUNC_EN+1, val8);
@@ -153,28 +153,28 @@ u8 sd_hal_bus_init(_adapter * padapter)
 		goto exit;
 	}
 
-//4 	EFUSE_TEST	
+//4 	EFUSE_TEST
 	RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,("########EFUSE_TEST[step 1 Read value] value32=0x%x\n ",read32(padapter, EFUSE_TEST) ));
 	val32=0;
 	val32 = read32(padapter, EFUSE_TEST)|BIT(18);
-	RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,("######## EFUSE_TEST[step 2 Write] write with value32=0x%x\n ",val32 ));	
+	RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,("######## EFUSE_TEST[step 2 Write] write with value32=0x%x\n ",val32 ));
 	write32(padapter, EFUSE_TEST, val32);
-	RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,("######## EFUSE_TEST[step 3 Read again] value32=0x%x\n ",val32 ));	
+	RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,("######## EFUSE_TEST[step 3 Read again] value32=0x%x\n ",val32 ));
 
-	
+
 	val16 = read16(padapter, AFE_XTAL_CTRL)|BIT(0)|BIT(7);
 	RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,("########init_pwr_clk AFE_XTAL_CTRL[step 2 write ] write with value16=0x%x\n ",val16 ));
 
 	write16(padapter, AFE_XTAL_CTRL, val16);
 	val16=read16(padapter,AFE_XTAL_CTRL);
 	RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,("########init_pwr_clk AFE_XTAL_CTRL[step 3 read again] val = 0x%x\n ",val16));
-	
+
 //4	 AFE_MISC
 	RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,("########init_pwr_clk AFE_MISC [step 1 read value] value8=0x%x\n ", read8(padapter, AFE_MISC)));
 	RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,("########init_pwr_clk AFE_MISC [step 2 write] write with value8=0x%x\n ",(u32)(read8(padapter, AFE_MISC)|BIT(0))));
 	write8(padapter, AFE_MISC,read8(padapter, AFE_MISC)|BIT(0));
 	RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,("########init_pwr_clk AFE_MISC[step 3 read again]  value8=0x%x\n ", read8(padapter, AFE_MISC)));
-	
+
 //4 	SPS0_CTRL [7B]
 RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,("########init_pwr_clk SPS0_CTRL[step 1 read value] val16 = 0x%x\n ",  read16(padapter,SPS0_CTRL) ));
 RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,("########init_pwr_clk SPS0_CTRL[step 2 write] write with val16 = 0x%x\n ",  (u32)(read16(padapter,SPS0_CTRL)|BIT(0)|BIT(12)) ));
@@ -182,7 +182,7 @@ RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,("########init_pwr_clk SPS0_CTRL[s
 	write16(padapter, SPS0_CTRL, read16(padapter, SPS0_CTRL)|BIT(0)|BIT(12));
 	if((read16(padapter,SPS0_CTRL)&0x0ff0) != 0x0490){
 		 write16(padapter, SPS0_CTRL,0x5497);
-		RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,(" write SPS0_CTRL 0x5497\n")); 
+		RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,(" write SPS0_CTRL 0x5497\n"));
 	}
 
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk SPS0_CTRL [step 3 read again ] val16 = 0x%x\n ",  read16(padapter,SPS0_CTRL) ));
@@ -190,7 +190,7 @@ RT_TRACE(_module_hci_hal_init_c_,_drv_notice_,("########init_pwr_clk SPS0_CTRL[s
 
 	udelay_os(1500);
 
-//4	AFE_MISC	
+//4	AFE_MISC
 RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_MISC[step 1 read value] val8 = 0x%x\n ",  read8(padapter,AFE_MISC) ));
 RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_MISC[step 2 write] write with val8 = 0x%x\n ", (u32)(read8(padapter,AFE_MISC)|BIT(1)) ));
 	write8(padapter, AFE_MISC, read8(padapter, AFE_MISC)|BIT(1));
@@ -203,12 +203,12 @@ RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_MISC[step 
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk SPS0_CTRL[step 3 read again]  val8 = 0x%x\n ",  read16(padapter,SPS0_CTRL) ));
 
 	udelay_os(500);
-	
+
 		//-- Enable digital core power
-//4	LDOV12D_CTRL		
+//4	LDOV12D_CTRL
 
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk LDOV12D_CTRL[step 2 write] write with val8 = 0x%x\n ", (u32) (read8(padapter,LDOV12D_CTRL)|BIT(0))));
-	
+
 	write8(padapter, LDOV12D_CTRL, read8(padapter, LDOV12D_CTRL)|BIT(0));
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk LDOV12D_CTRL[step 3 read again] val8 = 0x%x\n ",  read8(padapter,LDOV12D_CTRL) ));
 
@@ -220,12 +220,12 @@ RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_MISC[step 
 	udelay_os(1000);
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk LDOA15_CTRL[step 3 read again] val8 =0x%x\n ",  read8(padapter,LDOA15_CTRL) ));
 
-	
+
 		//-- Switch the power cut
 //4	SYS_ISO_CTRL
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk SYS_ISO_CTRL[step 1 read value] val16 = 0x%x\n ",  read16(padapter,SYS_ISO_CTRL) ));
 
-	val16 = read16(padapter, SYS_ISO_CTRL)|BIT(3);	
+	val16 = read16(padapter, SYS_ISO_CTRL)|BIT(3);
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk SYS_ISO_CTRL[step 2 write] write with  val16 = 0x%x\n ",  val16 ));
 	write16(padapter, SYS_ISO_CTRL, val16);
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk SYS_ISO_CTRL[step 3 read again] val16 = 0x%x\n ",  read16(padapter,SYS_ISO_CTRL) ));
@@ -240,7 +240,7 @@ RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_MISC[step 
 
 //4	SYS_ISO_CTRL
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk SYS_ISO_CTRL[step 1 read value] val16 = 0x%x\n ",  read16(padapter,SYS_ISO_CTRL) ));
-	val16 = read16(padapter, SYS_ISO_CTRL)&0x77FF;	
+	val16 = read16(padapter, SYS_ISO_CTRL)&0x77FF;
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk SYS_ISO_CTRL[step 2 write] write with val16 = 0x%x\n ",  val16 ));
 	write16(padapter, SYS_ISO_CTRL, val16);
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk SYS_ISO_CTRL[step 3 read again] val = 0x%x\n ",  read16(padapter,SYS_ISO_CTRL) ));
@@ -248,13 +248,13 @@ RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_MISC[step 
 //4	AFE_XTAL_CTRL
 	//enable Xtal and AFE BG
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_XTAL_CTRL[step 1 read value] val16 = 0x%x\n ",  read16(padapter,AFE_XTAL_CTRL) ));
-	
+
 	val16 = (read16(padapter, AFE_XTAL_CTRL)&0xFBFF);
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_XTAL_CTRL[step 2 write] write with  val = 0x%x\n ",  val16 ));
 	write16(padapter, AFE_XTAL_CTRL, val16);
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_XTAL_CTRL[step read again] val = 0x%x\n ",  read16(padapter,AFE_XTAL_CTRL) ));
 
-//4	AFE_MISC	
+//4	AFE_MISC
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_MISC val [step 1 read value]  val8= 0x%x\n ",  read8(padapter,AFE_MISC) ));
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_MISC val [step 2 write] write with val8= 0x%x\n ", (u32) (read8(padapter,AFE_MISC)|BIT(3)) ));
 	write8(padapter, AFE_MISC, read8(padapter, AFE_MISC)|BIT(3));
@@ -265,7 +265,7 @@ RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_MISC[step 
 //4	AFE_PLL_CTRL
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_PLL_CTRL[step 1 read value] val32 = 0x%x\n ",  read32(padapter,AFE_PLL_CTRL) ));
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_PLL_CTRL[step 2 write] write with  val32 = 0x%x\n ", (u32)(read32(padapter,AFE_PLL_CTRL)|BIT(0))));
-	
+
 	write32(padapter, AFE_PLL_CTRL, read32(padapter, AFE_PLL_CTRL)|BIT(0));
 	udelay_os(500);
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_PLL_CTRL[step 3 read again] val32 = 0x%x\n ",  read32(padapter,AFE_PLL_CTRL) ));
@@ -276,21 +276,26 @@ RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_MISC[step 
 	//b. SYS_CLK clock select
 
 	//restore required clock path
-	//restore required clock path
-//4	AFE_PLL_CTRL	
+//4	AFE_PLL_CTRL
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_PLL_CTRL[step 1 read value] val32 = 0x%x\n ",  read32(padapter,AFE_PLL_CTRL) ));
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_PLL_CTRL[step 2 write] wirte with val32 = 0x%x\n ", (u32) (read32(padapter,AFE_PLL_CTRL)|BIT(4)|BIT(8)) ));
-	write32(padapter, AFE_PLL_CTRL, read32(padapter, AFE_PLL_CTRL)|BIT(4)|BIT(8));
+	val32 = read32(padapter, AFE_PLL_CTRL) | BIT(4) | BIT(6) | BIT(8);
+	write32(padapter, AFE_PLL_CTRL, val32);
+	udelay_os(100);
+	val32 &= ~BIT(6);
+	write32(padapter, AFE_PLL_CTRL, val32);
+	udelay_os(100);
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_PLL_CTRL [step 3 read again ]val32 = 0x%x\n ",  read32(padapter,AFE_PLL_CTRL) ));
+
 
 //4	SYS_ISO_CTRL
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk SYS_ISO_CTRL[step 1 read value ] val16 = 0x%x\n ",  read16(padapter,SYS_ISO_CTRL) ));
-	val16 = read16(padapter, SYS_ISO_CTRL)&0xFFEE;	
+	val16 = read16(padapter, SYS_ISO_CTRL)&0xFFEE;
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk SYS_ISO_CTRL[step 2 write] write with val16= 0x%x\n ",  val16 ));
 	write16(padapter, SYS_ISO_CTRL, val16);
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk SYS_ISO_CTRL[step 3 read again] val16 = 0x%x\n ",  read16(padapter,SYS_ISO_CTRL) ));
 
-	
+
 
 	{
 
@@ -338,7 +343,7 @@ RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk AFE_MISC[step 
 exit:
 	{
 //	u8			val8;
-	
+
 //	val8  =  read8(padapter, SDIO_TX_CTRL);
 //	write8(padapter, SDIO_TX_CTRL, val8|0xfc);
 
@@ -347,7 +352,7 @@ exit:
 	val8  =  read8(padapter, SYS_CLKR+1);
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk SYS_CLKR+1  val8 = %x\n ",  val8 ));
 
-	
+
 	}
 	write16(padapter,TXPAUSE, 0x0FFF);
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk TXPAUSE val = 0x%x[0x0FFF]\n ",  read16(padapter, TXPAUSE)));
@@ -355,11 +360,11 @@ exit:
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk MACID val = 0x%x[0x5678]\n ",  read16(padapter, MACID)));
 	write16(padapter, CR, (u16)0x3FFF);
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("########init_pwr_clk CR val = 0x%x[0x3FFF]\n ",  read16(padapter, CR)));
-	
+
 	RT_TRACE(_module_hci_hal_init_c_,_drv_err_,("######## sd_hal_bus_init <=== \n "));
 #if 0
-	
-//3 For debuging  
+
+//3 For debuging
 open_dbg_port(padapter);
 
 #endif
@@ -386,7 +391,5 @@ open_dbg_port(padapter);
 
 	return _SUCCESS;
  }
-
-
 
 

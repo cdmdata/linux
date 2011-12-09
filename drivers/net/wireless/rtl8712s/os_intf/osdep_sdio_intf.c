@@ -137,11 +137,11 @@ exit:
 
 void sd_c2h_hdl(PADAPTER padapter)
 {
-	u8 cmd_seq,pkt_num=0,evt_code=0;
-	u16 cmd_tag, evt_len=0;
+	u16 cmd_tag;
 	u16 c2h_blknum=0;
-	u32 cnt,cmdpkt_len=0,cur_pos=0,pkt_len=0;//,ptr;
-	struct evt_priv *pevtpriv=&padapter->evtpriv;
+	u32 cnt, cmdpkt_len = 0, cur_pos = 0, pkt_len = 0;
+	struct evt_priv *pevtpriv = &padapter->evtpriv;
+
 
 	c2h_blknum = padapter->dvobjpriv.c2hblknum;
 	sdio_read_int(padapter, SDIO_C2H_RDYBLK_NUM, 2, &padapter->dvobjpriv.c2hblknum);
@@ -155,66 +155,56 @@ void sd_c2h_hdl(PADAPTER padapter)
 		cnt = padapter->dvobjpriv.c2hblknum - c2h_blknum;
 	if (cnt == 0) goto exit;
 	cnt *= padapter->dvobjpriv.block_transfer_len;
-	RT_TRACE(_module_hci_intfs_c_, _drv_info_, ("sd_c2h_hdl: cnt=%d\n",cnt));
-
-	_memset(pevtpriv->c2h_mem, 0, C2H_MEM_SZ);
-	cur_pos = 0;
-	//4 Read the first part of c2h event 
 	if (cnt > C2H_MEM_SZ) {
 		RT_TRACE(_module_hci_intfs_c_, _drv_emerg_, ("!sd_c2h_hdl: cnt=%d too big\n", cnt));
 		goto exit;
 	}
+	RT_TRACE(_module_hci_intfs_c_, _drv_info_, ("sd_c2h_hdl: cnt=%d\n", cnt));
+
+	//4 Read the first part of c2h event 
+	_memset(pevtpriv->c2h_mem, 0, C2H_MEM_SZ);
 	read_port(padapter, RTL8712_DMA_C2HCMD, cnt, pevtpriv->c2h_mem);
+	cur_pos = 0;
 
 get_next:
 	//4 Check the c2h event tag [must be 0x1ff]
 	cmd_tag = *(u16*)&pevtpriv->c2h_mem[cur_pos+4];
-	cmd_tag = le16_to_cpu(cmd_tag);
-	cmd_tag=cmd_tag &0x01ff;
-	if(cmd_tag !=0x1ff){
-		RT_TRACE(_module_hci_intfs_c_, _drv_err_, ("sd_c2h_hdl: 0x1ff error[0x%x]\n",pevtpriv->c2h_mem[cur_pos+4]));
+	cmd_tag = le16_to_cpu(cmd_tag) & 0x01ff;
+	if (cmd_tag != 0x1ff) {
+		RT_TRACE(_module_hci_intfs_c_, _drv_err_, ("sd_c2h_hdl: 0x1ff error[0x%x]\n", pevtpriv->c2h_mem[cur_pos+4]));
 		goto exit;
 	}
 
 	//4 Check the c2h packet length
-	cmdpkt_len = *(u16*)&pevtpriv->c2h_mem[cur_pos+0];
-	cmdpkt_len = le16_to_cpu(cmdpkt_len);
-	cmdpkt_len=cmdpkt_len&0x3fff;
-	pkt_len=cmdpkt_len+24;  //packet header is 24 bytes
-	RT_TRACE(_module_hci_intfs_c_, _drv_info_, ("sd_c2h_hdl: cmd_sz=%d[0x%x]\n",cmdpkt_len,cmdpkt_len));
-	
-	//4 Check the cmd sequence
-	cmd_seq=pevtpriv->c2h_mem[cur_pos+27];
-	cmd_seq=cmd_seq&0x7f;
-	if (pevtpriv->event_seq != cmd_seq) {
-		RT_TRACE(_module_hci_intfs_c_, _drv_err_, ("sd_c2h_hdl: pevtpriv->event_seq(%d)!=c2hbuf seq(%d)\n",pevtpriv->event_seq,cmd_seq));
-	} else {
-		RT_TRACE(_module_hci_intfs_c_, _drv_info_, ("sd_c2h_hdl: pevtpriv->event_seq(%d)==c2hbuf seq(%d)\n",pevtpriv->event_seq,cmd_seq));
-	}
-	evt_code=pevtpriv->c2h_mem[cur_pos+26];
-	evt_len=*(u16 *)&pevtpriv->c2h_mem[cur_pos+24];
-	RT_TRACE(_module_hci_intfs_c_, _drv_info_, ("sd_c2h_hdl: evt_code=%d evt_len=%d\n", evt_code, evt_len));
+	cmdpkt_len = *(u16*)&pevtpriv->c2h_mem[cur_pos];
+	cmdpkt_len = le16_to_cpu(cmdpkt_len) & 0x3fff;
 
-	rxcmd_event_hdl(padapter,&pevtpriv->c2h_mem[cur_pos]);
-	if((cnt-cur_pos-pkt_len)>512){
-		cur_pos+=_RND512(pkt_len);
-		RT_TRACE(_module_hci_intfs_c_, _drv_info_, ("sd_c2h_hdl: cur_pos=%d\n",cur_pos));
+	pkt_len = cmdpkt_len + RXDESC_SIZE;  // packet header is 24 bytes
+	RT_TRACE(_module_hci_intfs_c_, _drv_info_, ("sd_c2h_hdl: cmd_sz=%d[0x%x]\n", cmdpkt_len, cmdpkt_len));
+
+	rxcmd_event_hdl(padapter, &pevtpriv->c2h_mem[cur_pos]);
+	if ((cnt - cur_pos - pkt_len) > 512) {
+		cur_pos += _RND512(pkt_len);
+		RT_TRACE(_module_hci_intfs_c_, _drv_info_, ("sd_c2h_hdl: cur_pos=%d\n", cur_pos));
 		goto get_next;
 
 	}
-exit:
 
-	return;
-} 
-void cpwm_hdl(PADAPTER padapter){
-	struct reportpwrstate_parm reportpwrstate;
-	sdio_read_int(padapter,SDIO_HCPWM, 1, &reportpwrstate.state);
-#ifdef CONFIG_PWRCTRL
-	cpwm_int_hdl(padapter, &reportpwrstate);
-#endif
+exit:
 	return;
 }
-void sd_int_dpc( PADAPTER	padapter)
+
+void cpwm_hdl(PADAPTER padapter)
+{
+#ifdef CONFIG_PWRCTRL
+	struct reportpwrstate_parm reportpwrstate;
+
+	sdio_read_int(padapter, SDIO_HCPWM, 1, &reportpwrstate.state);
+	cpwm_int_hdl(padapter, &reportpwrstate);
+#endif
+}
+
+void sd_int_dpc(PADAPTER padapter)
 {
 	struct dvobj_priv *sddev=&padapter->dvobjpriv;
 	uint tasks = (sddev->sdio_hisr);
@@ -222,7 +212,7 @@ void sd_int_dpc( PADAPTER	padapter)
 	RT_TRACE(_module_hci_intfs_c_,_drv_notice_,("+sd_int_dpc[0x%x]\n",sddev->sdio_hisr));
 	if(tasks & _C2HCMD)
 	{
-//              RT_TRACE(_module_hci_intfs_c_,_drv_err_,("INT : _C2HCMD "));
+//		RT_TRACE(_module_hci_intfs_c_,_drv_err_,("INT : _C2HCMD "));
 		sddev->sdio_hisr  ^= _C2HCMD;
 		//RT_TRACE(_module_hci_intfs_c_,_drv_err_,("======C2H_CMD========"));
 		sd_c2h_hdl(padapter);

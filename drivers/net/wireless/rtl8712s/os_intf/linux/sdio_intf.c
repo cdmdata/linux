@@ -42,7 +42,6 @@ extern char* initmac;
 
 static const struct sdio_device_id sdio_ids[] = {
 	{ SDIO_DEVICE(0x024c, 0x8712)		},
-	{ SDIO_DEVICE(0x024c, 0x2300)		},
 //	{ SDIO_DEVICE_CLASS(SDIO_CLASS_WLAN)		},
 //	{ /* end: all zeroes */				},
 };
@@ -556,7 +555,7 @@ static int r871xs_drv_init(struct sdio_func *func, const struct sdio_device_id *
 	//step 6.
 	if (init_drv_sw(padapter) == _FAIL) {
 		RT_TRACE(_module_hci_intfs_c_,_drv_err_,("Initialize driver software resource Failed!\n"));
-		goto error;
+		goto deinit;
 	}
 
 	//step 7 read efuse/eeprom data and get mac_addr
@@ -579,7 +578,7 @@ static int r871xs_drv_init(struct sdio_func *func, const struct sdio_device_id *
 		// To check system boot selection.
 		if (tmpU1b & _9356SEL) {
 			eeprom_sel = 1;
-			printk(KERN_INFO "%s: Boot from EEPROM\n", __func__);
+			printk(KERN_ERR "%s: Boot from EEPROM\n", __func__);
 		} else {
 			eeprom_sel = 0;
 //			printk(KERN_INFO "%s: Boot from EFUSE\n", __func__);
@@ -589,44 +588,51 @@ static int r871xs_drv_init(struct sdio_func *func, const struct sdio_device_id *
 		if (tmpU1b & _EEPROM_EN) {
 //			printk(KERN_INFO "%s: Autoload OK\n", __func__);
 			AutoloadFail = _FALSE;
-
 		} else {
 			printk(KERN_ERR "%s: AutoLoad Fail reported from CR9346(0x%02x)!!\n", __func__, tmpU1b);
 			AutoloadFail = _TRUE;
-//			goto error;
 		}
 
-		if (AutoloadFail == _FALSE)
+		_memset(pdata, 0xFF, EEPROM_MAX_SIZE);
+		if (eeprom_sel == 0)
 		{
-			if (eeprom_sel == 0)
-			{
-				// Read efuse data
-				u32 i, offset;
+			// Read efuse data
+			u32 i, offset;
 
-				//
-				// <Roger_Note> The following operation are prevent Efuse leakage by turn on 2.5V.
-				// 2008.11.25.
-				//
-				tmpU1b = read8(padapter, EFUSE_TEST+3);
-				write8(padapter, EFUSE_TEST+3, tmpU1b | BIT(7));
-				mdelay_os(1);
-				write8(padapter, EFUSE_TEST+3, tmpU1b & (~BIT(7)));
+			//
+			// <Roger_Note> The following operation are prevent Efuse leakage by turn on 2.5V.
+			// 2008.11.25.
+			//
+			tmpU1b = read8(padapter, EFUSE_TEST+3);
+			write8(padapter, EFUSE_TEST+3, tmpU1b | BIT(7));
+			mdelay_os(1);
+			write8(padapter, EFUSE_TEST+3, tmpU1b & (~BIT(7)));
 
-				for (i = 0, offset = 0; i < 128; i += 8, offset++)
-					efuse_pg_packet_read(padapter, offset, &pdata[i]);			
+			for (i = 0, offset = 0; i < 128; i += 8, offset++)
+				efuse_pg_packet_read(padapter, offset, &pdata[i]);
+
+			if ((AutoloadFail == _TRUE) &&
+			    (le16_to_cpu(*(u16*)pdata) == 0x8712)) {
+				AutoloadFail == _FALSE;
+				printk(KERN_ERR "%s: Load EFuse OK! (0x%02x 0x%02x)\n",
+					__func__, pdata[0], pdata[1]);
 			}
 
-			if (initmac) {
-				// Users specify the mac address
-				u32 jj, kk;
+			if (AutoloadFail == _FALSE)
+				_memcpy(padapter->eeprompriv.mac_addr, &pdata[0x4f], 6);
+		}
+		padapter->eeprompriv.bautoload_fail_flag = AutoloadFail;
 
-				for (jj = 0, kk = 0; jj < ETH_ALEN; jj++, kk += 3)
-					mac[jj] = key_2char2num(initmac[kk], initmac[kk+ 1]);
-			} else {
-				// Use the mac address stored in the Efuse
-				// MAC address offset in efuse = 0x12 for usb, 0x4f for sdio
-			 	_memcpy(mac, &pdata[0x4f], ETH_ALEN);
-			}
+		if (initmac) {
+			// Users specify the mac address
+			u32 jj, kk;
+
+			for (jj = 0, kk = 0; jj < 6; jj++, kk += 3)
+				mac[jj] = key_2char2num(initmac[kk], initmac[kk+ 1]);
+		} else {
+			// Use the mac address stored in the Efuse
+			// MAC address offset in efuse = 0x12 for usb, 0x4f for sdio
+			_memcpy(mac, &pdata[0x4f], 6);
 		}
 
 		if ((AutoloadFail == _TRUE) ||
@@ -643,7 +649,7 @@ static int r871xs_drv_init(struct sdio_func *func, const struct sdio_device_id *
 			mac[5] = 0x00;
 		}
 
-		_memcpy(pnetdev->dev_addr, mac/*padapter->eeprompriv.mac_addr*/, ETH_ALEN);
+		_memcpy(pnetdev->dev_addr, mac, 6);
 
 		printk(KERN_NOTICE "%s: MAC Address=%02x:%02x:%02x:%02x:%02x:%02x\n",
 			__func__, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -653,7 +659,7 @@ static int r871xs_drv_init(struct sdio_func *func, const struct sdio_device_id *
 	/* Tell the network stack we exist */
 	if (register_netdev(pnetdev) != 0) {
 		RT_TRACE(_module_hci_intfs_c_,_drv_err_,("register_netdev() failed\n"));
-		goto error;
+		goto deinit;
 	}
 
 	// step 9.
@@ -680,11 +686,10 @@ static int r871xs_drv_init(struct sdio_func *func, const struct sdio_device_id *
 	//
 	// Led mode
 	// 
-
 	padapter->ledpriv.LedStrategy = SW_LED_MODE1;
 	padapter->ledpriv.bRegUseLed = _TRUE;
-			
-	
+
+
 #ifdef SUSPEND_MODE
 	init_rtl871x_card_pm(padapter);
 #endif
@@ -695,17 +700,16 @@ static int r871xs_drv_init(struct sdio_func *func, const struct sdio_device_id *
 
 	return 0;
 
-error:
+deinit:
 	if (padapter->dvobj_deinit == NULL) {
 		RT_TRACE(_module_hci_intfs_c_,_drv_err_,("Initialize dvobjpriv.dvobj_deinit error!!!\n"));
 	} else {
 		padapter->dvobj_deinit(padapter);
 	}
 
-	if (pnetdev) {
-		unregister_netdev(pnetdev);
+error:
+	if (pnetdev)
 		free_netdev(pnetdev);
-	}
 
 #ifdef SUSPEND_MODE
 	prtl871x_sdio_suspend_hdl = NULL;
@@ -767,14 +771,6 @@ void r871x_dev_unload(_adapter *padapter)
 		}
 		RT_TRACE(_module_hci_intfs_c_,_drv_err_,("@ r871x_dev_unload:complelt s5!\n"));
 
-		//s6.
-		if (padapter->dvobj_deinit) {
-			padapter->dvobj_deinit(padapter); // call sd_dvobj_deinit()
-		} else {
-			RT_TRACE(_module_hci_intfs_c_,_drv_err_,("Initialize hcipriv.hci_priv_init error!!!\n"));
-		}
-		RT_TRACE(_module_hci_intfs_c_,_drv_err_,("@ r871x_dev_unload:complete s6!\n"));
-
 		padapter->bup = _FALSE;
 	}
 	else {
@@ -828,6 +824,9 @@ _func_enter_;
 #endif
 
 		r871x_dev_unload(padapter);
+
+		if (padapter->dvobj_deinit)
+			padapter->dvobj_deinit(padapter); // call sd_dvobj_deinit()
 
 		free_drv_sw(padapter); // will free netdev
 
