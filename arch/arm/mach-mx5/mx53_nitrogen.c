@@ -2034,9 +2034,11 @@ static void __init mxc_board_init_nitrogen(void)
 
 #if defined (CONFIG_TOUCHSCREEN_I2C) || defined (CONFIG_TOUCHSCREEN_I2C_MODULE) \
  ||  defined (CONFIG_TOUCHSCREEN_EP0700M01) || defined (CONFIG_TOUCHSCREEN_EP0700M01_MODULE)
+#ifdef N53_I2C_CONNECTOR_BUFFER_ENABLE
 	gpio_set_value(N53_I2C_CONNECTOR_BUFFER_ENABLE,1);
-#endif
 	gpio_export(N53_I2C_CONNECTOR_BUFFER_ENABLE, 0);
+#endif
+#endif
 
 #ifdef CONFIG_WL12XX_PLATFORM_DATA
 	/* WL12xx WLAN Init */
