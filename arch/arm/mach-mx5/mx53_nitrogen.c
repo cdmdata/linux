@@ -1433,6 +1433,7 @@ static struct platform_device boundary_camera_interfaces[] = {
 #endif
 };
 
+#if defined (CONFIG_BOUNDARY_CAMERA_OV5640) || defined (CONFIG_BOUNDARY_CAMERA_OV5640_MODULE)
 static struct mxc_camera_platform_data camera_data = {
 	.io_regulator = "VDD_IO",
 	.analog_regulator = "VDD_A",
@@ -1444,6 +1445,7 @@ static struct mxc_camera_platform_data camera_data = {
 	.i2c_id = 0x3c,
 	.sensor_name = "ov5640",
 };
+#endif
 
 static void init_camera(void)
 {
@@ -1455,10 +1457,12 @@ static void init_camera(void)
 	} else
 		printk(KERN_ERR "%s: Error getting CSI clock\n", __func__ );
 
+#if defined (CONFIG_BOUNDARY_CAMERA_OV5640) || defined (CONFIG_BOUNDARY_CAMERA_OV5640_MODULE)
 	mxc_register_device(&boundary_camera_device, &camera_data);
 	for (i = 0 ; i < ARRAY_SIZE(boundary_camera_interfaces); i++ ){
 		mxc_register_device(&boundary_camera_interfaces[i], &camera_data);
 	}
+#endif
 }
 #endif
 
@@ -1491,6 +1495,19 @@ static struct platform_device da905x_chardev_dev = {
 #if defined(CONFIG_GPIO_OUTPUT) || defined (CONFIG_GPIO_OUTPUT_MODULE)
 static struct platform_device gpio_output_pdev = {
        .name = "gpio_output",
+};
+#endif
+
+#if defined (CONFIG_BOUNDARY_CAMERA_HDMI_IN) || defined (CONFIG_BOUNDARY_CAMERA_HDMI_IN_MODULE)
+static struct mxc_camera_platform_data hdmi_camera_data = {
+	.csi = 0,
+	.sensor_name = "tfp410",
+};
+static struct platform_device hdmi_input = {
+	.name = "tfp401",
+	.dev    = {
+		.platform_data  = &hdmi_camera_data
+	},
 };
 #endif
 
@@ -1527,6 +1544,10 @@ static void __init mx53_nitrogen_io_init(void)
 	gpio_set_value(N53_PHY_RESET, 1);		/* release ICS1893 Ethernet PHY reset */
 #if defined(CONFIG_VIDEO_BOUNDARY_CAMERA) || defined(CONFIG_VIDEO_BOUNDARY_CAMERA_MODULE)
 	init_camera();
+#endif
+
+#if defined (CONFIG_BOUNDARY_CAMERA_HDMI_IN) || defined (CONFIG_BOUNDARY_CAMERA_HDMI_IN_MODULE)
+	platform_device_register(&hdmi_input);
 #endif
 }
 
