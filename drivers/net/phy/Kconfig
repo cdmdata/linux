@@ -136,4 +136,10 @@ config MDIO_ICS1893
 	---help---
 	  Supports ICS 1893 Phy
 
+config MDIO_ICS1893_FORCE10
+	bool "Force 10 MBit selection"
+	depends on MDIO_ICS1893
+	help
+	  This option will remove the 100Mbit advertisement
+
 endif # PHYLIB

@@ -22,6 +22,7 @@ obj-$(CONFIG_MACH_NITROGEN_V1_IMX53) += mx53_nitrogen.o mx53_nitrogen_pmic_da905
 obj-$(CONFIG_MACH_NITROGEN_V2_IMX53) += mx53_nitrogen.o mx53_nitrogen_pmic_da9053.o
 obj-$(CONFIG_MACH_NITROGEN_A_IMX53) += mx53_nitrogen.o mx53_nitrogen_pmic_da9053.o
 obj-$(CONFIG_MACH_NITROGEN_AP_IMX53) += mx53_nitrogen.o mx53_nitrogen_pmic_da9053.o
+obj-$(CONFIG_MACH_MX53_NITROGEN_K) += mx53_nitrogen.o mx53_nitrogen_pmic_da9053.o
 obj-$(CONFIG_MACH_MX53_ARD) += mx53_ard.o mx53_ard_pmic_ltc3589.o
 obj-$(CONFIG_MACH_MX53_SMD) += mx53_smd.o mx53_smd_pmic_da9053.o
 obj-$(CONFIG_MACH_MX53_LOCO) += mx53_loco.o mx53_loco_pmic_da9053.o
