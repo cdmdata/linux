@@ -12,7 +12,6 @@
  * http://www.opensource.org/licenses/gpl-license.html
  * http://www.gnu.org/copyleft/gpl.html
  */
-//#define DEBUG
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
@@ -235,8 +234,8 @@ static void n_9bit_release(struct n_9bit *n_9bit)
 	/* Ensure that the n_9bitd process is not hanging on select()/poll() */
 	wake_up_interruptible(&tty->read_wait);
 	wake_up_interruptible(&tty->write_wait);
-
 	del_timer(&n_9bit->rx_eom_timer);
+
 	/* Release transmit and receive buffers */
 	free_list(&n_9bit->rx_free_buf_list);
 	free_list(&n_9bit->tx_free_buf_list);
@@ -368,7 +367,8 @@ static int n_9bit_tty_open(struct tty_struct *tty)
 {
 	struct n_9bit *n_9bit = (struct n_9bit *)tty->disc_data;
 
-	pr_debug("%s: called(device=%s) termios=%p\n", __func__, tty->name, tty->termios);
+	pr_debug("%s: called(device=%s) termios=%p\n", __func__, tty->name,
+			tty->termios);
 
 	/* There should not be an existing table for this slot. */
 	if (n_9bit) {
@@ -395,7 +395,7 @@ static int n_9bit_tty_open(struct tty_struct *tty)
 	/* set raw mode for input */
 	tty->termios->c_lflag &= ~(ICANON | ECHO | ISIG);
 	/* no software flow control */
-	tty->termios->c_iflag &= ~(IXON | IXOFF | IXANY| INLCR | ICRNL |
+	tty->termios->c_iflag &= ~(IXON | IXOFF | IXANY | INLCR | ICRNL |
 		IUCLC | IGNPAR);
 	/* want receive parity error status */
 	tty->termios->c_iflag |= (INPCK | PARMRK);
@@ -425,10 +425,10 @@ static void n_9bit_send_frames(struct n_9bit *n_9bit, struct tty_struct *tty)
 	pr_debug("%s: called\n", __func__);
  check_again:
 
- 	spin_lock_irqsave(&n_9bit->tx_buf_list.spinlock, flags);
+	spin_lock_irqsave(&n_9bit->tx_buf_list.spinlock, flags);
 	if (n_9bit->tbusy) {
 		n_9bit->tbusy = 2;
- 		spin_unlock_irqrestore(&n_9bit->tx_buf_list.spinlock, flags);
+		spin_unlock_irqrestore(&n_9bit->tx_buf_list.spinlock, flags);
 		return;
 	}
 	n_9bit->tbusy = 1;
@@ -436,7 +436,6 @@ static void n_9bit_send_frames(struct n_9bit *n_9bit, struct tty_struct *tty)
 
 	/* get current transmit buffer or get new transmit */
 	/* buffer from list of pending transmit buffers */
-
 
 	for (;;) {
 		struct n_9bit_buf *tbuf;
@@ -495,7 +494,6 @@ static void n_9bit_send_frames(struct n_9bit *n_9bit, struct tty_struct *tty)
 			break;
 		}
 	}
-
 
 	/* Clear the re-entry flag */
 	spin_lock_irqsave(&n_9bit->tx_buf_list.spinlock, flags);
@@ -823,7 +821,6 @@ static int n_9bit_tty_ioctl(struct tty_struct *tty, struct file *file,
 		break;
 	}
 	return error;
-
 }
 
 /*
@@ -898,8 +895,7 @@ static int __init n_9bit_init(void)
 		pr_info("N_9BIT: line discipline registered. maxframe=%u\n", maxframe);
 
 	return status;
-
-}	/* end of init_module() */
+}
 
 static void __exit n_9bit_exit(void)
 {
