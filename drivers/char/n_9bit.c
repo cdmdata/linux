@@ -226,9 +226,9 @@ void free_list(struct n_9bit_buf_list *list)
 static void n_9bit_release(struct n_9bit *n_9bit)
 {
 	struct tty_struct *tty = n_9bit->tty;
-	
+
 	pr_debug("%s: called\n", __func__);
-		
+
 	if (tty->disc_data == n_9bit)
 		tty->disc_data = NULL;	/* Break the tty->n_9bit link */
 
@@ -258,7 +258,7 @@ static void n_9bit_tty_close(struct tty_struct *tty)
 	struct n_9bit *n_9bit = tty2n_9bit(tty);
 
 	pr_debug("%s: called\n", __func__);
-		
+
 	if (n_9bit) {
 #if defined(TTY_NO_WRITE_SPLIT)
 		clear_bit(TTY_NO_WRITE_SPLIT,&tty->flags);
@@ -337,7 +337,7 @@ static struct n_9bit *n_9bit_alloc(struct tty_struct *tty)
 			break;
 		}
 	}
-	
+
 	/* allocate free tx buffer list */
 	for (i = 0; i < DEFAULT_TX_BUF_COUNT; i++) {
 		buf = kmalloc(N_9BIT_BUF_SIZE, GFP_KERNEL);
@@ -369,25 +369,25 @@ static int n_9bit_tty_open(struct tty_struct *tty)
 	struct n_9bit *n_9bit = (struct n_9bit *)tty->disc_data;
 
 	pr_debug("%s: called(device=%s) termios=%p\n", __func__, tty->name, tty->termios);
-		
+
 	/* There should not be an existing table for this slot. */
 	if (n_9bit) {
 		pr_err("%s: tty already associated!\n", __func__);
 		return -EEXIST;
 	}
-	
+
 	n_9bit = n_9bit_alloc(tty);
 	if (!n_9bit) {
 		pr_err("n_9bit_alloc failed\n");
 		return -ENFILE;
 	}
 	tty->receive_room = 65536;
-	
+
 #if defined(TTY_NO_WRITE_SPLIT)
 	/* change tty_io write() to not split large writes into 8K chunks */
 	set_bit(TTY_NO_WRITE_SPLIT,&tty->flags);
 #endif
-	
+
 	mutex_lock(&tty->termios_mutex);
 	tty->termios->c_cflag = B38400 | CLOCAL | CREAD | PARENB | CMSPAR | CS8;
 	tty->termios->c_ispeed = 38400;
@@ -424,7 +424,7 @@ static void n_9bit_send_frames(struct n_9bit *n_9bit, struct tty_struct *tty)
 
 	pr_debug("%s: called\n", __func__);
  check_again:
-		
+
  	spin_lock_irqsave(&n_9bit->tx_buf_list.spinlock, flags);
 	if (n_9bit->tbusy) {
 		n_9bit->tbusy = 2;
@@ -436,7 +436,7 @@ static void n_9bit_send_frames(struct n_9bit *n_9bit, struct tty_struct *tty)
 
 	/* get current transmit buffer or get new transmit */
 	/* buffer from list of pending transmit buffers */
-		
+
 
 	for (;;) {
 		struct n_9bit_buf *tbuf;
@@ -462,7 +462,7 @@ static void n_9bit_send_frames(struct n_9bit *n_9bit, struct tty_struct *tty)
 			pr_debug("%s: sending frame %p, count=%d ret=%d\n",
 					__func__, tbuf, tbuf->count, ret);
 		}
-			
+
 		/* Send the next block of data to device */
 		actual = tty->ops->write(tty, tbuf->buf, tbuf->count);
 
@@ -475,7 +475,7 @@ static void n_9bit_send_frames(struct n_9bit *n_9bit, struct tty_struct *tty)
 		/* pretending it was accepted by driver */
 		if (actual < 0)
 			actual = tbuf->count;
-		
+
 		if (actual == tbuf->count) {
 			pr_debug("%s: frame %p completed\n",
 					__func__, tbuf);
@@ -485,7 +485,7 @@ static void n_9bit_send_frames(struct n_9bit *n_9bit, struct tty_struct *tty)
 
 			/* wait up sleeping writers */
 			wake_up_interruptible(&tty->write_wait);
-	
+
 			/* get next pending transmit buffer */
 			tbuf = n_9bit_buf_get(&n_9bit->tx_buf_list);
 		} else {
@@ -495,14 +495,14 @@ static void n_9bit_send_frames(struct n_9bit *n_9bit, struct tty_struct *tty)
 			break;
 		}
 	}
-	
-	
+
+
 	/* Clear the re-entry flag */
 	spin_lock_irqsave(&n_9bit->tx_buf_list.spinlock, flags);
 	again = n_9bit->tbusy;
 	n_9bit->tbusy = 0;
 	spin_unlock_irqrestore(&n_9bit->tx_buf_list.spinlock, flags);
-	
+
 	if (again == 2)
 		goto check_again;
 	pr_debug("%s: exit\n", __func__);
@@ -519,7 +519,7 @@ static void n_9bit_tty_wakeup(struct tty_struct *tty)
 	struct n_9bit *n_9bit = tty2n_9bit(tty);
 
 	pr_debug("%s: called\n", __func__);
-		
+
 	if (!n_9bit)
 		return;
 	n_9bit_send_frames(n_9bit, tty);
@@ -629,7 +629,7 @@ static void n_9bit_tty_receive_buf(struct tty_struct *tty, const __u8 *data,
  * @file - pointer to open file object
  * @buf - pointer to returned data buffer
  * @nr - size of returned data buffer
- * 	
+ *
  * Returns the number of bytes returned or error code.
  */
 static ssize_t n_9bit_tty_read(struct tty_struct *tty, struct file *file,
@@ -657,7 +657,7 @@ static ssize_t n_9bit_tty_read(struct tty_struct *tty, struct file *file,
 		rbuf = n_9bit_buf_get(&n_9bit->rx_buf_list);
 		if (rbuf)
 			break;
-			
+
 		/* no data */
 		if (file->f_flags & O_NONBLOCK) {
 			return -EAGAIN;
@@ -666,7 +666,7 @@ static ssize_t n_9bit_tty_read(struct tty_struct *tty, struct file *file,
 		if (ret)
 			return ret;
 	}
-		
+
 	if (rbuf->count > nr) {
 		/* frame too large for caller's buffer */
 		n_9bit_buf_put_head(&n_9bit->rx_buf_list, rbuf);
@@ -680,13 +680,13 @@ static ssize_t n_9bit_tty_read(struct tty_struct *tty, struct file *file,
 			ret = rbuf->count;
 		}
 	}
-	
+
 	/* return 9BIT buffer to free list unless the free list */
 	/* count has exceeded the default value, in which case the */
 	/* buffer is freed back to the OS to conserve memory */
 	if (n_9bit->rx_free_buf_list.count > DEFAULT_RX_BUF_COUNT)
 		kfree(rbuf);
-	else	
+	else
 		n_9bit_buf_put(&n_9bit->rx_free_buf_list, rbuf);
 	return ret;
 }
@@ -697,7 +697,7 @@ static ssize_t n_9bit_tty_read(struct tty_struct *tty, struct file *file,
  * @file - pointer to file object data
  * @data - pointer to transmit data (one frame)
  * @count - size of transmit frame in bytes
- * 		
+ *
  * Returns the number of bytes written (or error code).
  */
 static ssize_t n_9bit_tty_write(struct tty_struct *tty, struct file *file,
@@ -708,7 +708,7 @@ static ssize_t n_9bit_tty_write(struct tty_struct *tty, struct file *file,
 	struct n_9bit_buf *tbuf;
 
 	pr_debug("%s: called count=%Zd\n", __func__, count);
-		
+
 	/* Verify pointers */
 	if (!n_9bit)
 		return -EIO;
@@ -719,7 +719,7 @@ static ssize_t n_9bit_tty_write(struct tty_struct *tty, struct file *file,
 			__func__, (unsigned long) count, maxframe);
 		count = maxframe;
 	}
-	
+
 	/* Allocate transmit buffer */
 	/* sleep until transmit buffer available */
 	for (;;) {
@@ -733,7 +733,7 @@ static ssize_t n_9bit_tty_write(struct tty_struct *tty, struct file *file,
 		error = wait_event_interruptible(tty->write_wait, n_9bit->tx_free_buf_list.head);
 		if (error)
 			break;
-			
+
 		n_9bit = tty2n_9bit(tty);
 		if (!n_9bit) {
 			pr_err("%s: invalid after wait!\n", __func__);
@@ -742,7 +742,7 @@ static ssize_t n_9bit_tty_write(struct tty_struct *tty, struct file *file,
 		}
 	}
 
-	if (!error) {		
+	if (!error) {
 		/* User's buffer is already in kernel space */
 		memcpy(tbuf->buf, data, count);
 		/* Send the data */
@@ -770,9 +770,9 @@ static int n_9bit_tty_ioctl(struct tty_struct *tty, struct file *file,
 	int error = 0;
 	int count;
 	unsigned long flags;
-	
+
 	pr_debug("%s: entry cmd=%d\n", __func__, cmd);
-		
+
 	/* Verify the status of the device */
 	if (!n_9bit)
 		return -EBADF;
@@ -823,7 +823,7 @@ static int n_9bit_tty_ioctl(struct tty_struct *tty, struct file *file,
 		break;
 	}
 	return error;
-	
+
 }
 
 /*
@@ -831,7 +831,7 @@ static int n_9bit_tty_ioctl(struct tty_struct *tty, struct file *file,
  * @tty - pointer to tty instance data
  * @filp - pointer to open file object for device
  * @poll_table - wait queue for operations
- * 
+ *
  * Determine which operations (read/write) will not block and return info
  * to caller.
  * Returns a bit mask containing info on which ops will not block.
@@ -843,7 +843,7 @@ static unsigned int n_9bit_tty_poll(struct tty_struct *tty, struct file *filp,
 	unsigned int mask = 0;
 
 	pr_debug("%s: entry\n", __func__);
-		
+
 	if (n_9bit) {
 		/* queue current process into any wait queue that */
 		/* may awaken in the future (read and write) */
@@ -898,7 +898,7 @@ static int __init n_9bit_init(void)
 		pr_info("N_9BIT: line discipline registered. maxframe=%u\n", maxframe);
 
 	return status;
-	
+
 }	/* end of init_module() */
 
 static void __exit n_9bit_exit(void)
