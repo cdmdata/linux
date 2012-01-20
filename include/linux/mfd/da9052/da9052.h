@@ -177,6 +177,8 @@ struct da9052 {
 	struct device *dev;
 	struct i2c_adapter *adapter;
 	unsigned char	slave_addr;
+	unsigned long irq_mask;
+	unsigned spurious_irq_count;
 };
 
 struct da9052_platform_data {
