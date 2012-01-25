@@ -925,22 +925,10 @@ static void da9052_tsi_pen_down_handler(struct da9052_eh_nb *eh_data, u32 event)
 			DA9052_TSICONTA_AUTOTSIEN, DA9052_TSICONTA_AUTOTSIEN))
 		goto fail;
 #endif
-	goto success;
-
+	pr_debug("%s: Exit\n", __func__);
+	return;
 fail:
 	pr_debug("%s failed\n", __func__);
-	if (ts->pd_reg_status) {
-		priv->da9052->unregister_event_notifier(priv->da9052,
-						&priv->pd_nb);
-		ts->pd_reg_status = RESET;
-
-		priv->da9052->register_event_notifier(priv->da9052,
-					&priv->datardy_nb);
-		da9052_tsi_reg_pendwn_event(priv);
-	}
-
-success:
-	pr_debug("%s: Exit\n", __func__);
 }
 
 static void da9052_tsi_reg_pendwn_event(struct da9052_ts_priv *priv)
@@ -993,7 +981,11 @@ static ssize_t da9052_tsi_config_state(struct da9052_ts_priv *priv,
 				DA9052_TSICONTA_AUTOTSIEN, 0);
 		if (ret)
 			return ret;
-
+		/* Use tsiref */
+		ret = priv->da9052->register_modify(priv->da9052, DA9052_TSICONTB_REG,
+				DA9052_TSICONTB_ADCREF, 0);
+		if (ret)
+			return ret;
 		ret = da9052_tsi_config_manual_mode(priv, DISABLE);
 		if (ret)
 			return ret;
