@@ -127,7 +127,7 @@ struct device_context{
 struct device_context *devContext;
 struct irtouch *irtouch;
 
-static void translatePoint(touch_point pt, int *x, int *y)
+static void translatePoint(struct irtouch_point pt, int *x, int *y)
 {
 	*x = ((devContext->calibX.A01 * pt.y) / 10000) + ((devContext->calibX.A10 * pt.x) / 10000) + devContext->calibX.A00;
 	*y = ((devContext->calibY.A01 * pt.y) / 10000) + ((devContext->calibY.A10 * pt.x) / 10000) + devContext->calibY.A00;
@@ -207,7 +207,7 @@ static void get_device_param(struct serio *serio)
 	unsigned char	outData[64];
 	int status = -1;
 	int length = 0;
-	printk(KERN_ALERT "+++++++++++++++++++%s++++++++++++++++++\n",__func__);
+	
 	memset(inData,0,sizeof(inData));
 	memset(outData,0,sizeof(outData));
 
@@ -294,7 +294,7 @@ static void set_calib_param(struct serio *serio)
 	unsigned char	outData[64];
 	int status = -1;
 	int length = 0;
-	printk(KERN_ALERT "+++++++++++++++++++%s++++++++++++++++++\n",__func__);
+	
 	//set touchscreen to command mode
 	memset(inData,0,sizeof(inData));
 	memset(outData,0,sizeof(outData));
@@ -365,79 +365,55 @@ static void set_calib_param(struct serio *serio)
   
 static void irtouch_send_report(struct irtouch* irtouch)  
 {  
+	int i = 0;
 	int x = 0;
 	int y = 0;
 	struct input_dev *dev = irtouch->dev;  
 	
 	memcpy(&irtouch->irpkg,&irtouch->data[0],46);
-
-	//send single-touch data
-/*	devContext->touchPoint.x = irtouch->irpkg.points[0].x >> 3;
-	devContext->touchPoint.y = irtouch->irpkg.points[0].y >> 3;
-
-	if(devContext->devConfig.calibrateStatus && !devContext->startCalib)
-	{
-		translatePoint(devContext->touchPoint,&x,&y);
-	}
-	else
-	{
-		x = devContext->touchPoint.x;
-		y = devContext->touchPoint.y;
-	}
-
-	//send single-touch data
-	input_report_abs(dev, ABS_X, x);  
-	input_report_abs(dev, ABS_Y, y);  
-	input_report_key(dev, BTN_TOUCH, (irtouch->irpkg.points[0].status == 0x07) ? 1:0); 
-	input_sync(dev);  
-*/
 	
 	//send dual-touch data
-	if(irtouch->irpkg.actualCounter > 1)
+	for(i = 0; i < (irtouch->irpkg.actualCounter & 0x1F); i++)
 	{
-		if(irtouch->irpkg.points[0].status == 0x07)
+		if(irtouch->irpkg.points[i].status == 0x07)
 		{
-			devContext->touchPoint.x = irtouch->irpkg.points[0].x;
-			devContext->touchPoint.y = irtouch->irpkg.points[0].y;
+			x = irtouch->irpkg.points[i].x;
+			y = irtouch->irpkg.points[i].y;
+
+			if(devContext->startCalib && i == 0)
+			{
+				devContext->touchPoint.x = x;
+				devContext->touchPoint.y = y;
+			}
 
 			if(devContext->devConfig.calibrateStatus && !devContext->startCalib)
 			{
-				translatePoint(devContext->touchPoint,&x,&y);
+				translatePoint(irtouch->irpkg.points[i],&x,&y);
 			}
-			else
+
+			//Edge of the acceleration;
+			if(x < 2000 && x > 500)
 			{
-				x = devContext->touchPoint.x;
-				y = devContext->touchPoint.y;
+				x = x - 500;			
+			}
+
+			else if(x > 31000 && x < 32367)
+			{
+				x = x + 500;
+			}
+
+			if(y < 2000 && y > 500)
+
+			{
+				y = y - 500;			
+			}
+			else if(y > 31000 && y < 32267)
+			{
+
+				y = y + 500;
 			}
 			
-			input_report_abs(dev,ABS_MT_TRACKING_ID,0);
-			input_report_abs(dev,ABS_MT_POSITION_X, x);
-			input_report_abs(dev,ABS_MT_POSITION_Y, y);
-			input_report_abs(dev,ABS_MT_TOUCH_MAJOR, max(x,y));
-			input_report_abs(dev,ABS_MT_TOUCH_MINOR, min(x,y));
-		}
-		else
-		{
-			input_report_abs(dev,ABS_MT_TOUCH_MAJOR, 0);
-		}
-		input_mt_sync(dev);
-
-		if(irtouch->irpkg.points[1].status == 0x07)
-		{
-			devContext->touchPoint.x = irtouch->irpkg.points[1].x;
-			devContext->touchPoint.y = irtouch->irpkg.points[1].y;
-
-			if(devContext->devConfig.calibrateStatus && !devContext->startCalib)
-			{
-				translatePoint(devContext->touchPoint,&x,&y);
-			}
-			else
-			{
-				x = devContext->touchPoint.x;
-				y = devContext->touchPoint.y;
-			}
-			
-			input_report_abs(dev,ABS_MT_TRACKING_ID,1);
+			input_report_abs(dev,ABS_MT_TRACKING_ID,irtouch->irpkg.points[i].identifier);
 			input_report_abs(dev,ABS_MT_POSITION_X, x);
 			input_report_abs(dev,ABS_MT_POSITION_Y, y);
 			input_report_abs(dev,ABS_MT_TOUCH_MAJOR, max(x,y));
@@ -449,50 +425,14 @@ static void irtouch_send_report(struct irtouch* irtouch)
 		}
 		input_mt_sync(dev);
 	}
-	else if(irtouch->irpkg.actualCounter == 1)
-	{
-		if(irtouch->irpkg.points[0].status == 0x07)
-		{
-			devContext->touchPoint.x = irtouch->irpkg.points[0].x;
-			devContext->touchPoint.y = irtouch->irpkg.points[0].y;
 
-			if(devContext->startCalib)
-			{
-				printk(KERN_ALERT "%s:     star calibretion    x(%d)    y(%d)    stauts(%x)\n",__func__,devContext->touchPoint.x,devContext->touchPoint.y,irtouch->irpkg.points[0].status);
-			}
-
-			if(devContext->devConfig.calibrateStatus && !devContext->startCalib)
-			{
-				translatePoint(devContext->touchPoint,&x,&y);
-			}
-			else
-			{
-				x = devContext->touchPoint.x;
-				y = devContext->touchPoint.y;
-			}
-			
-			input_report_abs(dev,ABS_MT_TRACKING_ID,0);
-			input_report_abs(dev,ABS_MT_POSITION_X, x);
-			input_report_abs(dev,ABS_MT_POSITION_Y, y);
-			input_report_abs(dev,ABS_MT_TOUCH_MAJOR, max(x,y));
-			input_report_abs(dev,ABS_MT_TOUCH_MINOR, min(x,y));
-		}
-		else
-		{
-			input_report_abs(dev,ABS_MT_TOUCH_MAJOR, 0);
-		}	
-
-		input_mt_sync(dev);
-	}
 	input_sync(dev);
-
-	//printk(KERN_ALERT "%s:     count(%d)    x(%d)    y(%d)    stauts(%x)\n",__func__,irtouch->irpkg.actualCounter,x,y,irtouch->irpkg.points[0].status);
 }  
 
 void irtouch_process_data(struct irtouch *irtouch, unsigned char data)
 {	
 	irtouch->data[irtouch->idx] = data;  
-
+	
 	switch(irtouch->idx){
 		case 0:
 			if(data != 0xaa)
@@ -555,7 +495,7 @@ void irtouch_process_data(struct irtouch *irtouch, unsigned char data)
 static irqreturn_t irtouch_interrupt(struct serio *serio, unsigned char data, unsigned int flags)  
 {  
 	struct irtouch* irtouch = serio_get_drvdata(serio);
-	
+
 	switch(irtouch->id){  
 	case 0: 
 		irtouch_process_data(irtouch, data);  
@@ -569,7 +509,7 @@ static long ts_ioctl(struct file * filp, unsigned int ctl_code, unsigned long ct
 {
 	unsigned char buf = 0x00;
 	int ret = -1;
-	printk(KERN_ALERT "+++++++++++++++++++%s++++++++++++++++++\n",__func__);
+	
 	switch (ctl_code){
 
 		case CTLCODE_CALIB_START:
@@ -579,11 +519,14 @@ static long ts_ioctl(struct file * filp, unsigned int ctl_code, unsigned long ct
 			{
 				devContext->startCalib = true;
 			}
+			else
+			{
+				devContext->startCalib = false;
+			}
 			break;
 
 		case CTLCODE_COORDINATE:
 			ret = copy_to_user((touch_point *)ctl_param, &devContext->touchPoint, sizeof(touch_point));
-			printk(KERN_ALERT "%s:   CTLCODE_COORDINATE   x:%d     y:%d\n",__func__,devContext->touchPoint.x,devContext->touchPoint.y);
 			break;
 	
 		case CTLCODE_CALIB_PARA_X:
@@ -599,7 +542,8 @@ static long ts_ioctl(struct file * filp, unsigned int ctl_code, unsigned long ct
 
 	if(devContext->isCalibX && devContext->isCalibY)
 	{
-		devContext->startCalib = false;
+		devContext->isCalibX = false;
+		devContext->isCalibY = false;
 
 		set_calib_param(irtouch->serio);
 	}
@@ -660,7 +604,7 @@ static int irtouch_connect(struct serio *serio, struct serio_driver *drv)
 {  
 	int err;
 	struct input_dev *input_dev;
-	printk(KERN_ALERT "+++++++++++++++++++%s++++++++++++++++++\n",__func__);
+	
 	if (!(irtouch = kmalloc(sizeof(struct irtouch), GFP_KERNEL)))  
 	return -ENOMEM;  
 
@@ -710,11 +654,6 @@ static int irtouch_connect(struct serio *serio, struct serio_driver *drv)
 	irtouch->dev->absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
 	set_bit(ABS_PRESSURE, irtouch->dev->absbit);
 
-	//single-touch
-/*	input_set_abs_params(irtouch->dev, ABS_X, 0, 4095, 0, 0);  
-	input_set_abs_params(irtouch->dev, ABS_Y, 0, 4095, 0, 0);  
-	input_set_abs_params(irtouch->dev, ABS_PRESSURE, 0, 255, 0, 0);  
-*/
 	//dual-touch
 	input_set_abs_params(irtouch->dev, ABS_MT_POSITION_X, 0, 32767, 0, 0);
 	input_set_abs_params(irtouch->dev, ABS_MT_POSITION_Y, 0, 32767, 0, 0);
@@ -792,7 +731,7 @@ static struct serio_driver irtouch_drv = {
 static int __init irtouch_init(void)  
 {  
 	int ret = 0;
-	printk(KERN_ALERT "+++++++++++++++++++%s++++++++++++++++++\n",__func__);
+	
 	ret = serio_register_driver(&irtouch_drv);  
 
 	return 0;  
