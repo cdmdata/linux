@@ -98,7 +98,7 @@ ssize_t gpio_output_read(struct file *file, char __user *data, size_t len, loff_
 		if (0 == put_user(value,data)) {
 			written=sizeof(value);
 			*off += written ;
-			printk (KERN_DEBUG "%s: gp[%u] == %c\n", name,gpio,value);
+			pr_devel ("%s: gp[%u] == %c\n", name,gpio,value);
 		} else
 			written = -EACCES ;
 	}
@@ -111,9 +111,9 @@ ssize_t gpio_output_write(struct file *file, const char __user *data, size_t len
 	unsigned char val ;
 	if (0 == copy_from_user(&val,data,sizeof(val))) {
 		val &= 1 ;
-		printk (KERN_DEBUG "%s: set gp[%u] to %d (now %d)\n", name, gpio, val, gpio_get_value(gpio));
+		pr_devel ( "%s: set gp[%u] to %d (now %d)\n", name, gpio, val, gpio_get_value(gpio));
 		gpio_set_value(gpio,val);
-		printk (KERN_DEBUG "%s: gp[%u] now %d\n", name, gpio, gpio_get_value(gpio));
+		pr_devel ( "%s: gp[%u] now %d\n", name, gpio, gpio_get_value(gpio));
 		return len ;
 	}
 	else
@@ -254,7 +254,7 @@ static int gpio_output_remove(struct platform_device *pdev)
 	unregister_chrdev_region(MKDEV(gpio_output_major, 0), ARCH_NR_GPIOS);
 	// find node containing this pdev, kill associated cdev and clear node
 	list_for_each_entry_safe(pin, next, &pin_list, list_head) {
-		printk (KERN_DEBUG "remove pin %u.%s.%u\n",pin->gpio,pin->name,pin->initlevel);
+		pr_devel ( "remove pin %u.%s.%u\n",pin->gpio,pin->name,pin->initlevel);
 		device_destroy(gpio_class, MKDEV(gpio_output_major, pin->gpio));
 		list_del(&pin->list_head);
 		cdev_del(&pin->cdev);
