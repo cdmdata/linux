@@ -26,7 +26,7 @@ struct lsm303_accelerometer {
 };
 
 #define DRVNAME		"lsm303a"
-#define DRVDESC		DRVNAME ": Accelerometer"
+#define DRVDESC		DRVNAME
 
 #define CTRL_REG1_A		0x20
 #define CTRL_REG2_A		0x21

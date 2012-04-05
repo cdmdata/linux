@@ -40,7 +40,7 @@ static unsigned const num_identbytes = ARRAY_SIZE(identbytes);
 #define IDENTOFFS 	0x0a
 
 #define DRVNAME		"lsm303c"
-#define DRVDESC		DRVNAME ": Compass"
+#define DRVDESC		DRVNAME
 
 /* returns 0..0xff for success, negative for failure */
 static s32 read_reg(struct i2c_client *client, u8 address) {

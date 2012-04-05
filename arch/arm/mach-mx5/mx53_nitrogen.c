@@ -561,6 +561,9 @@ static struct platform_pwm_backlight_data mxc_backlight_data1 = {
 	.max_brightness = 256,
 	.dft_brightness = CONFIG_DEFAULT_PWM0_BACKLIGHT,
 	.pwm_period_ns = 1000000000/32768,	/* 30517 */
+#if defined (CONFIG_MACH_MX53_NITROGEN_K) || defined (CONFIG_MACH_NITROGEN_A_IMX53)
+       .usable_range = {226,256},
+#endif
 };
 #endif
 
@@ -1684,9 +1687,11 @@ struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "i2c_pic_int",	.gpio = MAKE_GP(3, 6),		.flags = GPIOF_DIR_IN},
 #define N53_I2C_CONNECTOR_BUFFER_ENABLE		MAKE_GP(3, 10)
 //	{.label = "I2C conn. buf en",	.gpio = MAKE_GP(3, 10),		.flags = 0},		/* EIM_DA10 */
-//	{.label = "led0",		.gpio = MAKE_GP(4, 2),		.flags = 0},
+#if !defined(CONFIG_GPIO_OUTPUT) && !defined (CONFIG_GPIO_OUTPUT_MODULE)
+	{.label = "led0",		.gpio = MAKE_GP(4, 2),		.flags = 0},
 	{.label = "led1",		.gpio = MAKE_GP(4, 3),		.flags = 0},
-//	{.label = "led2",		.gpio = MAKE_GP(4, 4),		.flags = 0},
+	{.label = "led2",		.gpio = MAKE_GP(4, 4),		.flags = 0},
+#endif
 	{.label = "eMMC reset",		.gpio = MAKE_GP(5, 2),		.flags = GPIOF_INIT_HIGH},	/* EIM_A25 */
 	{.label = "mic_mux",		.gpio = MAKE_GP(6, 16),		.flags = 0},
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
