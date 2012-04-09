@@ -34,8 +34,8 @@ static unsigned const num_identbytes = ARRAY_SIZE(identbytes);
 #define CRB_REG_M	0x01
 #define MR_REG_M	0x02
 #define OUT_X_M		0x03
-#define OUT_Y_M		0x05
-#define OUT_Z_M		0x07
+#define OUT_Y_M		0x07
+#define OUT_Z_M		0x05
 #define SR_REG_M	0x09
 #define IDENTOFFS 	0x0a
 
@@ -47,7 +47,8 @@ static s32 read_reg(struct i2c_client *client, u8 address) {
 	s32 i, rval = -EIO ;
 	for (i = 0; (i < 5) && (0 > rval); i++) {
                 rval = i2c_smbus_read_byte_data(client,address);
-		if (0 >= rval) {
+		if (0 > rval) {
+                        printk (KERN_ERR "%s:%s: error %d\n", __FILE__, __func__, rval);
 			msleep(10);
 		}
 	}
@@ -66,28 +67,28 @@ static s32 read_reg(struct i2c_client *client, u8 address) {
 
 /*
  * The factory default seems to be 001, which means that each
- * LSB is 1/1055G for X and Y, and 1/950G for Z, which means
- * our range is roughly +- 2G.
+ * LSB is 1/1100G for X and Y, and 1/980G for Z, which means
+ * our range is roughly +- 1.3G.
  *
  * A micro-Tesla is 100G, yielding the following translations:
  */
-#define X_TO_UTESLA(x) ((100*x)/1055)
-#define Y_TO_UTESLA(y) ((100*y)/1055)
-#define Z_TO_UTESLA(z) ((100*z)/950)
+#define X_TO_UTESLA(x) ((100*((int)x))/1100)
+#define Y_TO_UTESLA(y) ((100*((int)y))/1100)
+#define Z_TO_UTESLA(z) ((100*((int)z))/980)
 
 static void compass_poll(struct input_polled_dev *idev)
 {
 	struct lsm303_compass *compass = idev ? idev->private : 0 ;
 	if (compass) {
-		char regs[6];
+		u8 regs[6];
 		int retval = read_reg(compass->client,SR_REG_M);
 		if (retval & 1) { /* conversion ready */
 			int i ;
 			int err = 0;
 			for (i=0; i <sizeof(regs);i++) {
 				int retval = read_reg(compass->client,OUT_X_M+i);
-				if (0 <= retval) {
-					regs[i] = (char)retval ;
+				if ((0 <= retval) && (0xff >=retval)) {
+					regs[i] = (u8)retval ;
 				} else {
 					printk (KERN_ERR "%s: error %d reading byte %u\n", __func__, retval, i);
 					err += 1<<i ;
@@ -95,24 +96,27 @@ static void compass_poll(struct input_polled_dev *idev)
 			}
 			if (!err) {
 				s16 readings[3];
+                                u8 *bytes = (u8*)readings ;
 				for (i = 0 ; i < ARRAY_SIZE(readings); i++) {
-					readings[i] = regs[i*2+1]+(regs[i*2]<<8);
+                                        bytes[1] = regs[i*2];
+                                        bytes[0] = regs[i*2+1];
+                                        bytes += 2 ;
 				}
 				readings[0] = X_TO_UTESLA(readings[0]);
-				readings[1] = Y_TO_UTESLA(readings[1]);
-				readings[2] = Z_TO_UTESLA(readings[2]);
+				readings[1] = Z_TO_UTESLA(readings[1]);
+				readings[2] = Y_TO_UTESLA(readings[2]);
 
 				input_report_abs(idev->input, ABS_X, readings[0]);
-				input_report_abs(idev->input, ABS_Y, readings[1]);
-				input_report_abs(idev->input, ABS_Z, readings[2]);
+				input_report_abs(idev->input, ABS_Y, readings[2]);
+				input_report_abs(idev->input, ABS_Z, readings[1]);
 				input_sync(idev->input);
 #if 0
-				printk (KERN_ERR "%s: %6d %6d %6d\n", __func__,
+				printk (KERN_ERR "%s: %02x:%02x %02x:%02x %02x:%02x -> %6d %6d %6d\n", __func__,
+                                        regs[0],regs[1],regs[2],regs[3],regs[4],regs[5],
 					readings[0],readings[1],readings[2]);
 #endif
 			}
 		} else {
-			printk (KERN_ERR "%s: not ready: %d\n", __func__, retval );
 			if (retval & 2) {
 				printk (KERN_ERR "%s: locked... try clearing\n", __func__ );
 				retval = i2c_smbus_write_byte_data(compass->client,MR_REG_M,3); /* stop */
