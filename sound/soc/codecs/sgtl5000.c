@@ -537,8 +537,14 @@ static int sgtl5000_pcm_startup(struct snd_pcm_substream *substream,
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 		sgtl5000->playback_active++;
-	else
+	else {
+#if defined(CONFIG_MACH_NITROGEN_A_IMX53)
+		int reg = sgtl5000_read(codec, SGTL5000_CHIP_MIC_CTRL);
+		sgtl5000_write(codec, SGTL5000_CHIP_MIC_CTRL, (reg&~0x3)|2);	/* force 30dB gain */
+#endif
+		pr_err ("%s: mic ctrl reg 0x%04x\n", __func__, reg);
 		sgtl5000->capture_active++;
+	}
 
 	/* The DAI has shared clocks so if we already have a playback or
 	 * capture going then constrain this substream to match it.
