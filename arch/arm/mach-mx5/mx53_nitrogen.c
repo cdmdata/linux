@@ -1683,8 +1683,8 @@ struct gpio nitrogen53_gpios_specific_a[] __initdata = {
 	{.label = "Camera power down",	.gpio = MAKE_GP(2, 22),		.flags = GPIOF_INIT_HIGH},	/* EIM_A16 */
 //gpio3[9] - must always be high on early board rev, (empty i2c hub without pullups)
 	{.label = "i2c empty hub",	.gpio = MAKE_GP(3, 9),		.flags = GPIOF_INIT_LOW},
-#define N53_I2C_PIC16F616_INT			MAKE_GP(3, 6)
-	{.label = "i2c_pic_int",	.gpio = MAKE_GP(3, 6),		.flags = GPIOF_DIR_IN},
+#define N53_I2C_PIC16F616_INT			MAKE_GP(3, 8)
+	{.label = "i2c_pic_int",	.gpio = MAKE_GP(3, 8),		.flags = GPIOF_DIR_IN},
 #define N53_I2C_CONNECTOR_BUFFER_ENABLE		MAKE_GP(3, 10)
 //	{.label = "I2C conn. buf en",	.gpio = MAKE_GP(3, 10),		.flags = 0},		/* EIM_DA10 */
 #if !defined(CONFIG_GPIO_OUTPUT) && !defined (CONFIG_GPIO_OUTPUT_MODULE)
@@ -1868,6 +1868,8 @@ static iomux_v3_cfg_t nitrogen53_pads_specific_a[] __initdata = {
 
 	/* i2c3 switch */
 	MX53_PAD_NANDF_RB0__GPIO_6_10,	/* SC16IS7xx Uart buffer enable */
+	MX53_PAD_EIM_DA8__GPIO_3_8,	/* pic16f616 touch int */
+
 };
 
 static unsigned int sdhc_get_card_det_status4(struct device *dev)
