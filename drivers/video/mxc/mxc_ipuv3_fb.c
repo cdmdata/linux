@@ -1161,8 +1161,12 @@ static int mxcfb_blank(int blank, struct fb_info *info)
 	case FB_BLANK_VSYNC_SUSPEND:
 	case FB_BLANK_HSYNC_SUSPEND:
 	case FB_BLANK_NORMAL:
-		ipu_disable_channel(mxc_fbi->ipu_ch, true);
-		ipu_uninit_channel(mxc_fbi->ipu_ch);
+		if ((0 == (info->flags&FBINFO_MISC_USEREVENT))
+		    ||
+		    (1 != mxc_fbi->ipu_di)) {
+			ipu_disable_channel(mxc_fbi->ipu_ch, true);
+			ipu_uninit_channel(mxc_fbi->ipu_ch);
+		}
 		break;
 	case FB_BLANK_UNBLANK:
 		mxcfb_set_par(info);
