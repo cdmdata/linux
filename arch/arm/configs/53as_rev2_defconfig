@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.3
-# Wed Apr 11 08:37:45 2012
+# Wed Jun  6 14:34:15 2012
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -1566,7 +1566,7 @@ CONFIG_USB_SERIAL=y
 # CONFIG_USB_SERIAL_CP210X is not set
 # CONFIG_USB_SERIAL_CYPRESS_M8 is not set
 # CONFIG_USB_SERIAL_EMPEG is not set
-# CONFIG_USB_SERIAL_FTDI_SIO is not set
+CONFIG_USB_SERIAL_FTDI_SIO=y
 # CONFIG_USB_SERIAL_FUNSOFT is not set
 # CONFIG_USB_SERIAL_VISOR is not set
 # CONFIG_USB_SERIAL_IPAQ is not set
