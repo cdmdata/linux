@@ -43,6 +43,37 @@
 #define OV5642_XCLK_MIN 6000000
 #define OV5642_XCLK_MAX 24000000
 
+/* OV5642 Camera Auto Focus Registers */
+#define REG_CMD_MAIN			0x3024
+#define REG_STA_FOCUS			0x3027 
+#define REG_STA_ZONE			0x3026
+
+/* OV5642 Auto Focus Commands and Responses */
+
+#define	S_STARTUP			0xFA
+#define	S_FIRWARE			0xFF
+#define	S_STARTUP			0xFA
+#define	S_ERROR				0xFE
+#define	S_DRVICERR			0xEE
+#define	S_IDLE				0x00
+#define	S_FOCUSING			0x01
+#define	S_FOCUSED			0x02
+#define	S_CAPTURE			0x12
+#define	S_STEP				0x20
+
+#define	EnableOverlay		0x01
+#define	DisableOverlay		0x02
+#define	Singlefocusmode		0x03
+#define	Constfocusmode		0x04
+#define	Stepmode			0x05
+#define	Pause				0x06
+#define	ReturnIdlemode		0x08
+#define	SetZonemode			0x10
+#define	UpdateZone			0x12
+#define	SetMotormode		0x20
+#define	SetScanmode			0x30
+
+
 enum ov5642_mode {
 	ov5642_mode_MIN = 0,
 	ov5642_mode_VGA_640_480 = 0,
@@ -2126,6 +2157,81 @@ static int ov5642_write_snapshot_para(void)
 	msleep(500);
 
 	return 0;
+}
+
+static int ov5642_get_focus_state()
+{
+	/* 
+		Returns STA_FOCUS status
+		Returns negative numnber if failure occurs
+
+		Steve Jardine - CDM Data
+	*/
+
+	retval = ov5642_read_reg(STA_FOCUS, &RegVal);
+	if (retval < 0) {
+		pr_err("%s, read reg 0x%x failed\n", __FUNCTION__, STA_FOCUS);
+	}
+
+	return(retval);
+}
+
+static int ov5642_set_focus_updatezone()
+{
+	/* 
+		Writes out Update Zone
+		Returns negative numnber if failure occurs
+
+		Steve Jardine - CDM Data
+	*/
+
+	return(ov5642_write_reg(CMD_MAIN, UpdateZone));
+}
+
+static int ov5642_set_focus_mode(int focus_mode)
+{
+	/* 
+		Sets the camera into auto focus mode
+		Valid input modes are SingleFocusMode and ConstFocusMode
+		Returns 0 if no failures
+
+		Steve Jardine - CDM Data
+	*/
+
+	int retval = 0;
+	u8 RegVal = 0;
+
+	/* Wait until camera focus is in idle */
+
+	do {
+        retval = ov5642_get_focus_state();
+       	if (retval < 0) {
+        	pr_err("%s, read reg 0x%x failed\n", __FUNCTION__,STA_FOCUS);
+            goto err;
+         }
+   		if(RegVal=S_DRVICERR)
+      		return(-1);
+   		usleep(10);
+	} while (RegVal!=S_IDLE);
+
+	/* Put camera into focus mode */
+
+	switch (focus_mode) {
+
+		case SingleFocusMode:
+		case ConstFocusMode:
+    		retval = ov5642_write_reg(CMD_MAIN, focus_mode);
+    		if (retval < 0) {
+       			pr_err("%s, write reg 0x%x failed\n", __FUNCTION__, CMD_MAIN);
+       			goto err;
+    		}
+			break;
+		default:
+			retval=-1;
+			break;
+   	}
+err:
+	return retval;
 }
 
 
