@@ -335,6 +335,25 @@ const char **v4l2_ctrl_get_menu(u32 id)
 		"Aperture Priority Mode",
 		NULL
 	};
+	static const char * const camera_exposure_metering[] = {
+		"Average",
+		"Center Weighted",
+		"Spot",
+		NULL
+	};
+	static const char * const camera_auto_focus_area[] = {
+		"All",
+		"Spot",
+		"Rectangle",
+		"Face Detection",
+		NULL
+	};
+	static const char * const camera_auto_focus_distance[] = {
+		"Normal",
+		"Macro",
+		"Infinity",
+		NULL
+	};
 	static const char *colorfx[] = {
 		"None",
 		"Black & White",
@@ -390,6 +409,12 @@ const char **v4l2_ctrl_get_menu(u32 id)
 			return camera_power_line_frequency;
 		case V4L2_CID_EXPOSURE_AUTO:
 			return camera_exposure_auto;
+		case V4L2_CID_EXPOSURE_METERING:
+			return camera_exposure_metering;
+		case V4L2_CID_AUTO_FOCUS_AREA:
+			return camera_auto_focus_area;
+		case V4L2_CID_AUTO_FOCUS_DISTANCE:
+			return camera_auto_focus_distance;
 		case V4L2_CID_COLORFX:
 			return colorfx;
 		case V4L2_CID_TUNE_PREEMPHASIS:
@@ -498,7 +523,18 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_ZOOM_RELATIVE:		return "Zoom, Relative";
 	case V4L2_CID_ZOOM_CONTINUOUS:		return "Zoom, Continuous";
 	case V4L2_CID_PRIVACY:			return "Privacy";
-
+/* Added 9/12/2012 SJ */
+	case V4L2_CID_AUTO_FOCUS_START:		return "Auto Focus, Start";
+	case V4L2_CID_AUTO_FOCUS_STOP:		return "Auto Focus, Stop";
+	case V4L2_CID_AUTO_FOCUS_STATUS:	return "Auto Focus, Status";
+	case V4L2_CID_AUTO_FOCUS_DISTANCE:	return "Auto Focus, Distance";
+	case V4L2_CID_AUTO_FOCUS_AREA:		return "Auto Focus, Area";
+ 	case V4L2_CID_IMAGE_STABILIZATION:	return "Image Stabilization";
+ 	case V4L2_CID_ISO_SENSITIVITY:		return "ISO Sensitivity";
+ 	case V4L2_CID_ISO_SENSITIVITY_AUTO:	return "ISO Sensitivity, Auto";
+	case V4L2_CID_EXPOSURE_METERING:	return "Exposure, Metering Mode";
+/*********************/
+ 
 	/* FM Radio Modulator control */
 	case V4L2_CID_FM_TX_CLASS:		return "FM Radio Modulator Controls";
 	case V4L2_CID_RDS_TX_DEVIATION:		return "RDS Signal Deviation";
@@ -562,6 +598,10 @@ int v4l2_ctrl_query_fill(struct v4l2_queryctrl *qctrl, s32 min, s32 max, s32 ste
 		break;
 	case V4L2_CID_PAN_RESET:
 	case V4L2_CID_TILT_RESET:
+ 	case V4L2_CID_FLASH_STROBE:
+ 	case V4L2_CID_FLASH_STROBE_STOP:
+	case V4L2_CID_AUTO_FOCUS_START:
+	case V4L2_CID_AUTO_FOCUS_STOP:
 		qctrl->type = V4L2_CTRL_TYPE_BUTTON;
 		qctrl->flags |= V4L2_CTRL_FLAG_WRITE_ONLY;
 		min = max = step = def = 0;
@@ -583,8 +623,11 @@ int v4l2_ctrl_query_fill(struct v4l2_queryctrl *qctrl, s32 min, s32 max, s32 ste
 	case V4L2_CID_MPEG_STREAM_TYPE:
 	case V4L2_CID_MPEG_STREAM_VBI_FMT:
 	case V4L2_CID_EXPOSURE_AUTO:
+	case V4L2_CID_AUTO_FOCUS_AREA:
+	case V4L2_CID_AUTO_FOCUS_DISTANCE:
 	case V4L2_CID_COLORFX:
 	case V4L2_CID_TUNE_PREEMPHASIS:
+	case V4L2_CID_EXPOSURE_METERING:
 		qctrl->type = V4L2_CTRL_TYPE_MENU;
 		step = 1;
 		break;
@@ -600,6 +643,12 @@ int v4l2_ctrl_query_fill(struct v4l2_queryctrl *qctrl, s32 min, s32 max, s32 ste
 		qctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 		min = max = step = def = 0;
 		break;
+ 	case V4L2_CID_FLASH_FAULT:
+ 	case V4L2_CID_JPEG_ACTIVE_MARKER:
+ 	case V4L2_CID_3A_LOCK:
+	case V4L2_CID_AUTO_FOCUS_STATUS:
+ 		qctrl->type = V4L2_CTRL_TYPE_BITMASK;
+ 		break;
 	case V4L2_CID_BG_COLOR:
 		qctrl->type = V4L2_CTRL_TYPE_INTEGER;
 		step = 1;
@@ -652,6 +701,11 @@ int v4l2_ctrl_query_fill(struct v4l2_queryctrl *qctrl, s32 min, s32 max, s32 ste
 	case V4L2_CID_ZOOM_RELATIVE:
 		qctrl->flags |= V4L2_CTRL_FLAG_WRITE_ONLY;
 		break;
+ 	case V4L2_CID_FLASH_STROBE_STATUS:
+	case V4L2_CID_AUTO_FOCUS_STATUS:
+ 	case V4L2_CID_FLASH_READY:
+ 		qctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+ 		break;
 	}
 	qctrl->minimum = min;
 	qctrl->maximum = max;
