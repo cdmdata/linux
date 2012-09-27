@@ -1010,7 +1010,7 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c)
 	int ret = 0;
 	int tmp_rotation = IPU_ROTATE_NONE;
 
-	pr_debug("In MVC:mxc_v4l2_s_ctrl\n");
+	pr_info("In MVC:mxc_v4l2_s_ctrl\n");
 
 	switch (c->id) {
 	case V4L2_CID_HFLIP:
@@ -1213,6 +1213,32 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c)
 		ipu_csi_flash_strobe(true);
 #endif
 		break;
+
+	case V4L2_CID_AUTO_FOCUS_START: {
+		pr_info(">>>>>>>>>>>>> mxc_v4l2_s_ctrl:V4L2_CID_AUTO_FOCUS_START <<<<<<<<<<<<<<<<<  ");
+
+		ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi,true, true);
+
+		if (vidioc_int_s_ctrl(cam->sensor,c)) {
+			ret = -EINVAL;
+		}
+		ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
+		break;
+	}
+
+	case V4L2_CID_AUTO_FOCUS_STOP: {
+			pr_info(">>>>>>>>>>>>> mxc_v4l2_s_ctrl:V4L2_CID_AUTO_FOCUS_STOP <<<<<<<<<<<<<<<<<  ");
+
+			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi,true, true);
+
+			if (vidioc_int_s_ctrl(cam->sensor,c)) {
+				ret = -EINVAL;
+			}
+
+			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
+
+			break;
+		}
 	default:
 		pr_debug("   default case\n");
 		ret = -EINVAL;
@@ -2319,6 +2345,8 @@ static long mxc_v4l_do_ioctl(struct file *file,
 		}
 		break;
 	}
+
+
 	case VIDIOC_TRY_FMT:
 	case VIDIOC_QUERYCTRL:
 	case VIDIOC_G_TUNER:
