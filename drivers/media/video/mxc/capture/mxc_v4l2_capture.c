@@ -1010,7 +1010,7 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c)
 	int ret = 0;
 	int tmp_rotation = IPU_ROTATE_NONE;
 
-	pr_info("In MVC:mxc_v4l2_s_ctrl\n");
+	pr_info("In MVC:mxc_v4l2_s_ctrl 0x%x", c->id);
 
 	switch (c->id) {
 	case V4L2_CID_HFLIP:

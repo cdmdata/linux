@@ -3917,7 +3917,7 @@ static int ov5642_auto_focus_start(void) {
 		pr_err("Could not get camera into idle mode. Abandoning focus attempt");
 	}
 
-	pr_info(">>>>>>>>>>>>>>>>>> Final focus status is 0x%x", RegVal);
+	pr_info(">>>>>>>>>>>>>>>>>> Final focus status is 0x%x. Loop exited after: %d", RegVal, lc);
 	retval = 0;
 	if (RegVal != S_FOCUSED)
 		retval = -1;
@@ -4451,8 +4451,7 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s, struct v4l2_control *vc) {
 	int retval = 0;
 	struct sensor *sensor = s->priv;
 	__u32 captureMode = sensor->streamcap.capturemode;
-	pr_info(" %s 0x%x\n", __func__, vc->id);
-	pr_info("In ov5642:ioctl_s_ctrl %d\n", vc->id);
+	pr_info("In ov5642:ioctl_s_ctrl 0x%x\n", vc->id);
 
 	switch (vc->id) {
 	case V4L2_CID_BRIGHTNESS:
@@ -4463,11 +4462,11 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s, struct v4l2_control *vc) {
 		break;
 	case V4L2_CID_AUTO_FOCUS_STOP:
 			pr_info(">>>>>>>>>>>>>>>>>>> Received V4L2_CID_AUTO_FOCUS_STOP command in ov5642.c <<<<<<<<<<<<<<<<<");
-			pr_info("Command not implemented yet!");
+			retval = ov5642_set_idle_mode();
 			break;
 	case V4L2_CID_AUTO_FOCUS_STATUS:
 			pr_info(">>>>>>>>>>>>>>>>>>> Received V4L2_CID_AUTO_FOCUS_STATUS command in ov5642.c <<<<<<<<<<<<<<<<<");
-			pr_info("Command not implemented yet!");
+			pr_info("Command not implemented yet!!!");
 			break;
 	case V4L2_CID_CONTRAST:
 		break;
