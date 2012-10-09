@@ -77,14 +77,19 @@
 enum ov5642_mode {
 	ov5642_mode_MIN = 0,
 	ov5642_mode_VGA_640_480 = 0,
-	ov5642_mode_QVGA_320_240 = 1,
-	ov5642_mode_NTSC_720_480 = 2,
-	ov5642_mode_PAL_720_576 = 3,
-	ov5642_mode_720P_1280_720 = 4,
-	ov5642_mode_1080P_1920_1080 = 5,
-	ov5642_mode_QSXGA_2592_1944 = 6,
-	ov5642_mode_QCIF_176_144 = 7,
-	ov5642_mode_MAX = 7
+	ov5642_mode_QSXGA_2592_1944 = 1,
+	ov5642_mode_MAX = 1
+
+//	ov5642_mode_MIN = 0,
+//	ov5642_mode_VGA_640_480 = 0,
+//	ov5642_mode_QVGA_320_240 = 1,
+//	ov5642_mode_NTSC_720_480 = 2,
+//	ov5642_mode_PAL_720_576 = 3,
+//	ov5642_mode_720P_1280_720 = 4,
+//	ov5642_mode_1080P_1920_1080 = 5,
+//	ov5642_mode_QSXGA_2592_1944 = 6,
+//	ov5642_mode_QCIF_176_144 = 7,
+//	ov5642_mode_MAX = 7
 };
 
 enum ov5642_frame_rate {
@@ -492,8 +497,7 @@ static struct reg_value ov5642_setting_15fps_QCIF_176_144[] = { { 0x3103, 0x93,
 		0, 0 }, { 0x3809, 0xb0, 0, 0 }, { 0x380a, 0x00, 0, 0 }, { 0x380b, 0x90,
 		0, 0 }, { 0x3a00, 0x78, 0, 0 }, };
 
-static struct reg_value ov5642_af_firmware[] = {
-		{ 0x3000, 0x20, 0, 0 }, {
+static struct reg_value ov5642_af_firmware[] = { { 0x3000, 0x20, 0, 0 }, {
 		0x8000, 0x02, 0, 0 }, { 0x8001, 0x00, 0, 0 }, { 0x8002, 0x06, 0, 0 }, {
 		0x8003, 0x02, 0, 0 }, { 0x8004, 0x0b, 0, 0 }, { 0x8005, 0x71, 0, 0 }, {
 		0x8006, 0x78, 0, 0 }, { 0x8007, 0x7f, 0, 0 }, { 0x8008, 0xe4, 0, 0 }, {
@@ -3699,42 +3703,30 @@ static struct reg_value ov5642_setting_15fps_1080P_1920_1080[] = { { 0x3103,
 		0x4300, 0x30, 0, 0 }, { 0x3002, 0x1c, 0, 0 }, { 0x3819, 0x80, 0, 0 }, {
 		0x5002, 0xe0, 0, 0 }, };
 
+// @formatter:off
 static struct ov5642_mode_info ov5642_mode_info_data[2][ov5642_mode_MAX + 1] = {
-		{ { ov5642_mode_VGA_640_480, 0, 0, NULL, 0 }, {
-				ov5642_mode_QVGA_320_240, 0, 0, NULL, 0 }, {
-				ov5642_mode_NTSC_720_480, 0, 0, NULL, 0 }, {
-				ov5642_mode_PAL_720_576, 0, 0, NULL, 0 }, {
-				ov5642_mode_720P_1280_720, 0, 0, NULL, 0 }, {
-				ov5642_mode_1080P_1920_1080, 1920, 1080,
-				ov5642_setting_15fps_1080P_1920_1080, ARRAY_SIZE(
-						ov5642_setting_15fps_1080P_1920_1080) }, {
-				ov5642_mode_QSXGA_2592_1944, 2592, 1944,
-				ov5642_setting_15fps_QSXGA_2592_1944, ARRAY_SIZE(
-						ov5642_setting_15fps_QSXGA_2592_1944) }, {
-				ov5642_mode_QCIF_176_144, 176, 144,
-				ov5642_setting_15fps_QCIF_176_144, ARRAY_SIZE(
-						ov5642_setting_15fps_QCIF_176_144) }, }, { {
-				ov5642_mode_VGA_640_480, 640, 480,
-				ov5642_setting_30fps_VGA_640_480, ARRAY_SIZE(
-						ov5642_setting_30fps_VGA_640_480) }, {
-				ov5642_mode_QVGA_320_240, 320, 240,
-				ov5642_setting_30fps_QVGA_320_240, ARRAY_SIZE(
-						ov5642_setting_30fps_QVGA_320_240) }, {
-				ov5642_mode_NTSC_720_480, 720, 480,
-				ov5642_setting_30fps_NTSC_720_480, ARRAY_SIZE(
-						ov5642_setting_30fps_NTSC_720_480) }, {
-				ov5642_mode_PAL_720_576, 720, 576,
-				ov5642_setting_30fps_PAL_720_576, ARRAY_SIZE(
-						ov5642_setting_30fps_PAL_720_576) }, {
-				ov5642_mode_720P_1280_720, 1280, 720,
-				ov5642_setting_30fps_720P_1280_720, ARRAY_SIZE(
-						ov5642_setting_30fps_720P_1280_720) }, {
-				ov5642_mode_1080P_1920_1080, 0, 0, NULL, 0 }, {
-				ov5642_mode_QSXGA_2592_1944, 0, 0, NULL, 0 }, {
-				ov5642_mode_QCIF_176_144, 176, 144,
-				ov5642_setting_30fps_QCIF_176_144, ARRAY_SIZE(
-						ov5642_setting_30fps_QCIF_176_144) }, }, };
-
+		{
+				{ov5642_mode_VGA_640_480, 0, 0, NULL, 0 },
+//				{ov5642_mode_QVGA_320_240, 0, 0, NULL, 0 },
+//				{ov5642_mode_NTSC_720_480, 0, 0, NULL, 0 },
+//				{ov5642_mode_PAL_720_576, 0, 0, NULL, 0 },
+//				{ov5642_mode_720P_1280_720, 0, 0, NULL, 0 },
+//				{ov5642_mode_1080P_1920_1080, 1920, 1080,ov5642_setting_15fps_1080P_1920_1080, ARRAY_SIZE(ov5642_setting_15fps_1080P_1920_1080) },
+				{ov5642_mode_QSXGA_2592_1944, 2592, 1944,ov5642_setting_15fps_QSXGA_2592_1944, ARRAY_SIZE(ov5642_setting_15fps_QSXGA_2592_1944) },
+//				{ov5642_mode_QCIF_176_144, 176, 144,ov5642_setting_15fps_QCIF_176_144, ARRAY_SIZE(ov5642_setting_15fps_QCIF_176_144) },
+		},
+		{
+				{ov5642_mode_VGA_640_480, 640, 480,	ov5642_setting_30fps_VGA_640_480, ARRAY_SIZE(ov5642_setting_30fps_VGA_640_480) },
+//				{ov5642_mode_QVGA_320_240, 320, 240,ov5642_setting_30fps_QVGA_320_240, ARRAY_SIZE(ov5642_setting_30fps_QVGA_320_240) },
+//				{ov5642_mode_NTSC_720_480, 720, 480,ov5642_setting_30fps_NTSC_720_480, ARRAY_SIZE(ov5642_setting_30fps_NTSC_720_480) },
+//				{ov5642_mode_PAL_720_576, 720, 576,ov5642_setting_30fps_PAL_720_576, ARRAY_SIZE(ov5642_setting_30fps_PAL_720_576) },
+//				{ov5642_mode_720P_1280_720, 1280, 720,ov5642_setting_30fps_720P_1280_720, ARRAY_SIZE(ov5642_setting_30fps_720P_1280_720) },
+//				{ov5642_mode_1080P_1920_1080, 0, 0, NULL, 0 },
+				{ov5642_mode_QSXGA_2592_1944, 0, 0, NULL, 0 },
+//				{ov5642_mode_QCIF_176_144, 176, 144,ov5642_setting_30fps_QCIF_176_144, ARRAY_SIZE(ov5642_setting_30fps_QCIF_176_144) },
+		},
+};
+// @formatter:on
 static struct regulator *io_regulator;
 static struct regulator *core_regulator;
 static struct regulator *analog_regulator;
@@ -3799,6 +3791,19 @@ static s32 ov5642_read_reg(u16 reg, u8 *val) {
 	return u8RdVal;
 }
 
+static int disableFocusHUD(void) {
+	register u16 RegAddr = 0;
+	register u8 Val = 0;
+	int retval = 0;
+
+	//turn off focus overlay
+	RegAddr = REG_CMD_MAIN;
+	Val = CMD_DISABLE_OVERLAY;
+
+	retval = ov5642_write_reg(RegAddr, Val);
+	return retval;
+}
+
 static int ov5642_set_rotate_mode(struct reg_value *rotate_mode) {
 	s32 i = 0;
 	s32 iModeSettingArySize = 2;
@@ -3840,7 +3845,7 @@ static int ov5642_set_rotate_mode(struct reg_value *rotate_mode) {
 	err: return retval;
 }
 
-static int ov5642_set_idle_mode(void){
+static int ov5642_set_idle_mode(void) {
 	register u16 RegAddr = 0;
 	u8 ReadVal = 0;
 	u8 WriteVal = 0;
@@ -3912,15 +3917,19 @@ static int ov5642_auto_focus_start(void) {
 //			}
 			mdelay(1);
 		}
-	}
-	else {
+	} else {
 		pr_err("Could not get camera into idle mode. Abandoning focus attempt");
 	}
 
-	pr_info(">>>>>>>>>>>>>>>>>> Final focus status is 0x%x. Loop exited after: %d", RegVal, lc);
+	pr_info(
+			">>>>>>>>>>>>>>>>>> Final focus status is 0x%x. Loop exited after: %d",
+			RegVal, lc);
 	retval = 0;
 	if (RegVal != S_FOCUSED)
 		retval = -1;
+
+	disableFocusHUD();
+
 	return retval;
 }
 
@@ -3941,7 +3950,7 @@ static int ov5642_change_mode(enum ov5642_frame_rate frame_rate,
 	pr_info("*** %s", __FUNCTION__);
 
 	if (new_mode > ov5642_mode_MAX || new_mode < ov5642_mode_MIN) {
-		pr_err("Wrong ov5642 mode detected!\n");
+		pr_err("Wrong ov5642 mode detected! new_mode==%d\n", new_mode);
 		return -1;
 	}
 
@@ -4001,6 +4010,7 @@ static int ov5642_change_mode(enum ov5642_frame_rate frame_rate,
 			msleep(Delay_ms);
 	}
 
+	disableFocusHUD();
 
 	err: return retval;
 }
@@ -4457,17 +4467,20 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s, struct v4l2_control *vc) {
 	case V4L2_CID_BRIGHTNESS:
 		break;
 	case V4L2_CID_AUTO_FOCUS_START:
-		pr_info(">>>>>>>>>>>>>>>>>>> Received V4L2_CID_AUTO_FOCUS_START command in ov5642.c <<<<<<<<<<<<<<<<<");
+		pr_info(
+				">>>>>>>>>>>>>>>>>>> Received V4L2_CID_AUTO_FOCUS_START command in ov5642.c <<<<<<<<<<<<<<<<<");
 		retval = ov5642_auto_focus_start();
 		break;
 	case V4L2_CID_AUTO_FOCUS_STOP:
-			pr_info(">>>>>>>>>>>>>>>>>>> Received V4L2_CID_AUTO_FOCUS_STOP command in ov5642.c <<<<<<<<<<<<<<<<<");
-			retval = ov5642_set_idle_mode();
-			break;
+		pr_info(
+				">>>>>>>>>>>>>>>>>>> Received V4L2_CID_AUTO_FOCUS_STOP command in ov5642.c <<<<<<<<<<<<<<<<<");
+		retval = ov5642_set_idle_mode();
+		break;
 	case V4L2_CID_AUTO_FOCUS_STATUS:
-			pr_info(">>>>>>>>>>>>>>>>>>> Received V4L2_CID_AUTO_FOCUS_STATUS command in ov5642.c <<<<<<<<<<<<<<<<<");
-			pr_info("Command not implemented yet!!!");
-			break;
+		pr_info(
+				">>>>>>>>>>>>>>>>>>> Received V4L2_CID_AUTO_FOCUS_STATUS command in ov5642.c <<<<<<<<<<<<<<<<<");
+		pr_info("Command not implemented yet!!!");
+		break;
 	case V4L2_CID_CONTRAST:
 		break;
 	case V4L2_CID_SATURATION:
@@ -4707,13 +4720,7 @@ static int ioctl_dev_init(struct v4l2_int_device *s) {
 			msleep(Delay_ms);
 	}
 
-	//turn off focus overlay
-	RegAddr = REG_CMD_MAIN;
-	Val = CMD_DISABLE_OVERLAY;
-
-	retval = ov5642_write_reg(RegAddr, Val);
-	if (retval < 0)
-		goto err;
+	retval = disableFocusHUD();
 
 	err: return retval;
 }
@@ -4736,13 +4743,14 @@ static int ioctl_dev_exit(struct v4l2_int_device *s) {
  * This structure defines all the ioctls for this module and links them to the
  * enumeration.
  */
-static struct v4l2_int_ioctl_desc ov5642_ioctl_desc[] = { {
+static struct v4l2_int_ioctl_desc ov5642_ioctl_desc[] = {  {
 		vidioc_int_dev_init_num, (v4l2_int_ioctl_func*) ioctl_dev_init }, {
 		vidioc_int_dev_exit_num, ioctl_dev_exit }, { vidioc_int_s_power_num,
 		(v4l2_int_ioctl_func*) ioctl_s_power }, { vidioc_int_g_ifparm_num,
 		(v4l2_int_ioctl_func*) ioctl_g_ifparm },
 /*	{vidioc_int_g_needs_reset_num,
  (v4l2_int_ioctl_func *)ioctl_g_needs_reset}, */
+
 /*	{vidioc_int_reset_num, (v4l2_int_ioctl_func *)ioctl_reset}, */
 { vidioc_int_init_num, (v4l2_int_ioctl_func*) ioctl_init },
 		{ vidioc_int_enum_fmt_cap_num,
@@ -4759,8 +4767,7 @@ static struct v4l2_int_ioctl_desc ov5642_ioctl_desc[] = { {
 				vidioc_int_enum_framesizes_num,
 				(v4l2_int_ioctl_func *) ioctl_enum_framesizes }, {
 				vidioc_int_g_chip_ident_num,
-				(v4l2_int_ioctl_func *) ioctl_g_chip_ident },
-};
+				(v4l2_int_ioctl_func *) ioctl_g_chip_ident }, };
 
 static struct v4l2_int_slave ov5642_slave = { .ioctls = ov5642_ioctl_desc,
 		.num_ioctls = ARRAY_SIZE(ov5642_ioctl_desc), };
