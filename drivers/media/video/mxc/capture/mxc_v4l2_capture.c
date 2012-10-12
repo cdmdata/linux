@@ -1227,7 +1227,21 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c)
 	}
 
 	case V4L2_CID_AUTO_FOCUS_STOP: {
-			pr_info(">>>>>>>>>>>>> mxc_v4l2_s_ctrl:V4L2_CID_AUTO_FOCUS_STOP <<<<<<<<<<<<<<<<<  ");
+		pr_info(">>>>>>>>>>>>> mxc_v4l2_s_ctrl:V4L2_CID_AUTO_FOCUS_STOP <<<<<<<<<<<<<<<<<  ");
+
+		ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi,true, true);
+
+		if (vidioc_int_s_ctrl(cam->sensor,c)) {
+			ret = -EINVAL;
+		}
+
+		ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
+
+		break;
+	}
+
+	case V4L2_CID_AUTO_N_PRESET_WHITE_BALANCE:{
+		pr_info(">>>>>>>>>>>>> mxc_v4l2_s_ctrl:V4L2_CID_AUTO_N_PRESET_WHITE_BALANCE <<<<<<<<<<<<<<<<<  ");
 
 			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi,true, true);
 
@@ -1239,6 +1253,7 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c)
 
 			break;
 		}
+
 	default:
 		pr_debug("   default case\n");
 		ret = -EINVAL;
