@@ -1254,6 +1254,30 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c)
 			break;
 		}
 
+	case V4L2_CID_FLASH_STROBE_START:{
+		pr_info(">>>>>>>>>>>>> mxc_v4l2_s_ctrl:V4L2_CID_FLASH_STROBE_START <<<<<<<<<<<<<<<<<  ");
+		ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi,true, true);
+
+		if (vidioc_int_s_ctrl(cam->sensor,c)) {
+			ret = -EINVAL;
+		}
+
+		ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
+		break;
+	}
+
+	case V4L2_CID_FLASH_STROBE_STOP:{
+		pr_info(">>>>>>>>>>>>> mxc_v4l2_s_ctrl:V4L2_CID_FLASH_STROBE_STOP <<<<<<<<<<<<<<<<<  ");
+		ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi,true, true);
+
+		if (vidioc_int_s_ctrl(cam->sensor,c)) {
+			ret = -EINVAL;
+		}
+
+		ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
+		break;
+	}
+
 	default:
 		pr_debug("   default case\n");
 		ret = -EINVAL;
