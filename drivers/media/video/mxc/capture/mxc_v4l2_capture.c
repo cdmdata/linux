@@ -917,7 +917,11 @@ static int mxc_v4l2_g_ctrl(cam_data *cam, struct v4l2_control *c)
 	case V4L2_CID_BRIGHTNESS:
 		if (cam->sensor) {
 			c->value = cam->bright;
+
+			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi,true, true);
 			status = vidioc_int_g_ctrl(cam->sensor, c);
+			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi,false, false);
+
 			cam->bright = c->value;
 		} else {
 			pr_err("ERROR: v4l2 capture: slave not found!\n");

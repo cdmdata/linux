@@ -6943,28 +6943,35 @@ static int ov5642_auto_focus_start(void) {
 	return retval;
 }
 
+
 static int ov5642_strobe_start(void){
-	int retval = 0;
-	pr_info("*** %s", __FUNCTION__);
+    int retval = 0;
+    int bl=0, lc=0;
+    u8 rdata=0, rbdata=0;
+    u8 range1=0, range2=0;
+    u8 cur_range=0;
 
-	//set LED mode 3, strobe off
-	retval = ov5642_write_reg(0x3b00, 0x03);
+    pr_info("*** %s", __FUNCTION__);
+    retval = ov5642_write_reg(0x3000, 0x00);
+    retval = ov5642_write_reg(0x3004, 0xFF);
+    retval = ov5642_write_reg(0x3016, 0x02);
+    retval = ov5642_write_reg(0x3b07, 0x0a);
 
-	//set LED mode 3, strobe on
-	retval = ov5642_write_reg(0x3b00, 0x83);
-
-	return retval;
+    //set LED mode 3, strobe on
+    retval = ov5642_write_reg(0x3b00, 0x03);
+    retval = ov5642_write_reg(0x3b00, 0x83);
+    return retval;
 }
 
 static int ov5642_strobe_stop(void){
-	int retval = 0;
-	u8 RegVal = 0;
-	pr_info("*** %s", __FUNCTION__);
+    int retval = 0;
+    u8 RegVal = 0;
+    pr_info("*** %s", __FUNCTION__);
 
-	//set LED mode 3, strobe off
-	retval = ov5642_write_reg(0x3b00, 0x03);
+    //set LED mode 3, strobe off
+    retval = ov5642_write_reg(0x3b00, 0x03);
 
-	return retval;
+    return retval;
 }
 
 static int ov5642_init_mode(enum ov5642_frame_rate frame_rate,
@@ -7440,6 +7447,18 @@ static int ioctl_g_fmt_cap(struct v4l2_int_device *s, struct v4l2_format *f) {
 	return 0;
 }
 
+static void updateSensorData(void){
+	u8 RegVal = 0;
+	register u16 RegAddr = 0;
+	pr_info("*** %s", __FUNCTION__);
+
+	//update exposure
+	RegAddr = 0x5690;
+	ov5642_read_reg(RegAddr, &RegVal);
+	ov5642_data.brightness = RegVal;
+	pr_info("Avarage luminance: 0x%x", RegVal);
+}
+
 /*!
  * ioctl_g_ctrl - V4L2 sensor interface handler for VIDIOC_G_CTRL ioctl
  * @s: pointer to standard V4L2 device structure
@@ -7449,10 +7468,14 @@ static int ioctl_g_fmt_cap(struct v4l2_int_device *s, struct v4l2_format *f) {
  * value from the video_control[] array.  Otherwise, returns -EINVAL
  * if the control is not supported.
  */
+
 static int ioctl_g_ctrl(struct v4l2_int_device *s, struct v4l2_control *vc) {
 
 	int ret = 0;
 	pr_info(" %s : ID:0x%x\n", __func__, vc->id);
+
+	updateSensorData();
+
 	switch (vc->id) {
 	case V4L2_CID_BRIGHTNESS:
 		vc->value = ov5642_data.brightness;
@@ -7481,6 +7504,8 @@ static int ioctl_g_ctrl(struct v4l2_int_device *s, struct v4l2_control *vc) {
 
 	return ret;
 }
+
+
 
 /*!
  * ioctl_s_ctrl - V4L2 sensor interface handler for VIDIOC_S_CTRL ioctl
