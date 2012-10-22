@@ -2736,6 +2736,10 @@ static struct i2c_board_info n53k_i2c6_board_info[] __initdata = {
 	 .platform_data  = &camera_data,
 	},
 #endif
+ 	{
+ 	.type = "xrp6840", 
+ 	.addr = 0x28,
+ 	},
 };
 #else
 
