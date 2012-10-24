@@ -208,7 +208,7 @@ static void report_abs(void)
 
 	//x *= -1; //Reverse X direction
 
-	printk("mma8451 read: x:%hd, y:%hd, z:%hd\n", x, y, z);
+	//printk("mma8451 read: x:%hd, y:%hd, z:%hd\n", x, y, z);
 
 	input_report_abs(mma8451_idev->input, ABS_X, x);
 	input_report_abs(mma8451_idev->input, ABS_Y, y);
