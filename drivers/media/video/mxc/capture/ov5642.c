@@ -6957,6 +6957,18 @@ static int ov5642_strobe_start(void){
     retval = ov5642_write_reg(0x3016, 0x02);
     retval = ov5642_write_reg(0x3b07, 0x0a);
 
+    //write max exposure and gain
+//    ov5642_write_reg(0x3503 ,0x07); //stop aec, agc
+//
+//    ov5642_write_reg(0x350b, 0x00);
+//	ov5642_write_reg(0x3502, 0x00);
+//	ov5642_write_reg(0x3501, 0x00);
+//	ov5642_write_reg(0x3500, 0x00);
+//
+//	ov5642_write_reg(0x3503 ,0x00);
+
+
+
     //set LED mode 3, strobe on
     retval = ov5642_write_reg(0x3b00, 0x03);
     retval = ov5642_write_reg(0x3b00, 0x83);
@@ -7129,13 +7141,16 @@ static int ov5642_write_snapshot_para(void) {
 	u16 ulcapture_exposure, icapture_gain, preview_maxlines;
 	u32 ulcapture_exposure_gain, capture_maxlines, g_preview_exposure;
 
-	pr_info("*** %s", __FUNCTION__);
+	pr_info(">>>>>>>>>>>> %s", __FUNCTION__);
+
+//	ov5642_write_reg(0x3503, 0x07);
+//	ov5642_write_reg(0x3024, 0x04); //Force autofocus
+//	ov5642_write_reg(0x3024, 0x12); //Force update zone
+//	ov5642_read_reg(0x3027, &ret_af);
+//	pr_info("After cont AF and zone update, status = 0x%x\n", ret_af);
 
 	ov5642_write_reg(0x3503, 0x07);
-	ov5642_write_reg(0x3024, 0x04); //Force autofocus
-	ov5642_write_reg(0x3024, 0x12); //Force update zone
-	ov5642_read_reg(0x3027, &ret_af);
-	pr_info("After cont AF and zone update, status = 0x%x\n", ret_af);
+
 	ret_h = ret_m = ret_l = 0;
 	g_preview_exposure = 0;
 	ov5642_read_reg(0x3500, &ret_h);
@@ -7152,7 +7167,7 @@ static int ov5642_write_snapshot_para(void) {
 	gain = 0;
 	ov5642_read_reg(0x350b, &gain);
 
-	ov5642_init_mode(ov5642_15_fps, ov5642_mode_QSXGA_2592_1944);
+	//ov5642_init_mode(ov5642_15_fps, ov5642_mode_QSXGA_2592_1944);
 	ret_h = ret_m = ret_l = 0;
 	ov5642_read_reg(0x380e, &ret_h);
 	ov5642_read_reg(0x380f, &ret_l);
@@ -7223,11 +7238,11 @@ static int ov5642_write_snapshot_para(void) {
 	if (gain == 0x10)
 		gain = 0x11;
 
-	ov5642_write_reg(0x350b, gain);
+	ov5642_write_reg(0x350b, 0x0);//gain);
 	ov5642_write_reg(0x3502, exposure_low);
 	ov5642_write_reg(0x3501, exposure_mid);
 	ov5642_write_reg(0x3500, exposure_high);
-	msleep(500);
+	//msleep(500);
 
 	return 0;
 }
@@ -7400,12 +7415,31 @@ static int ioctl_s_parm(struct v4l2_int_device *s, struct v4l2_streamparm *a) {
 			return -EINVAL;
 		}
 
+//		sensor->streamcap.timeperframe = *timeperframe;
+//		sensor->streamcap.capturemode =
+//				(u32)a->parm.capture.capturemode;
+//		if (frame_rate == ov5642_15_fps &&
+//			sensor->streamcap.capturemode == ov5642_mode_QSXGA_2592_1944) {
+//			ret =  ov5642_write_snapshot_para();
+//		} else {
+//			ret = ov5642_init_mode(frame_rate,
+//					   sensor->streamcap.capturemode);
+//		}
+//		break;
 		ret = ov5642_change_mode(frame_rate, a->parm.capture.capturemode,
 				sensor->streamcap.capturemode);
 		if (ret < 0)
 			return ret;
 		sensor->streamcap.timeperframe = *timeperframe;
 		sensor->streamcap.capturemode = (u32) a->parm.capture.capturemode;
+
+		pr_info("framerate: %d mode: %d",frame_rate,sensor->streamcap.capturemode);
+
+		if (frame_rate == ov5642_30_fps &&
+					sensor->streamcap.capturemode == ov5642_mode_QSXGA_2592_1944) {
+					//ret =  ov5642_write_snapshot_para();
+		}
+
 		break;
 
 		/* These are all the possible cases. */
