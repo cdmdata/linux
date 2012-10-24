@@ -186,6 +186,8 @@ static int mma8451_read_data(short *x, short *y, short *z)
 		(*z) = (*z) << 2;
 	}
 
+	//printk("mma8451 read: x:%hd, y:%hd, z:%hd\n", *x, *y, *z);
+
 	return 0;
 }
 
@@ -201,8 +203,12 @@ static void report_abs(void)
 					     MMA8451_STATUS);
 	} while (!(result & MMA8451_STATUS_ZYXDR));
 
-	if (mma8451_read_data(&x, &y, &z) != 0)
+	if (mma8451_read_data(&y, &x, &z) != 0)
 		goto out;
+
+	//x *= -1; //Reverse X direction
+
+	printk("mma8451 read: x:%hd, y:%hd, z:%hd\n", x, y, z);
 
 	input_report_abs(mma8451_idev->input, ABS_X, x);
 	input_report_abs(mma8451_idev->input, ABS_Y, y);
