@@ -301,7 +301,7 @@ static uint8_t checksum(uint8_t const *buf, unsigned len)
 
 static void report_touch(struct input_dev *idev, unsigned x, unsigned y)
 {
-#ifdef TOUCHSCREEN_EKTF2K_SINGLE_TOUCH
+#ifndef TOUCHSCREEN_EKTF2K_SINGLE_TOUCH
 	input_event(idev, EV_ABS, ABS_MT_POSITION_X, x);
 	input_event(idev, EV_ABS, ABS_MT_POSITION_Y, y);
 	input_event(idev, EV_ABS, ABS_MT_TOUCH_MAJOR, 1);
@@ -320,7 +320,7 @@ static void process_fingers(struct elan_ktf2k_ts_data *ts, uint8_t *pkt)
 	unsigned count = pkt[2]&0x0f;
 	if (0 == count) {
 		dev_dbg(&ts->client->dev, "[elan] release\n");
-#ifdef TOUCHSCREEN_EKTF2K_SINGLE_TOUCH
+#ifndef TOUCHSCREEN_EKTF2K_SINGLE_TOUCH
 		input_report_abs(idev, ABS_MT_TOUCH_MAJOR, 0);
 		input_report_abs(idev, ABS_MT_WIDTH_MAJOR, 0);
 		input_mt_sync(idev);
@@ -372,7 +372,7 @@ static void elan_ktf2k_ts_work_func(struct work_struct *work)
 	while (0 == gpio_get_value(ts->intr_gpio)) {
 		int numread ;
 		uint8_t buf[PACKET_SIZE];
-		uint8_t *next = buf ;
+		uint8_t *next = buf ; 
 
 		if (0 == bufsize)
 			bufsize = sizeof(buf);
@@ -517,11 +517,12 @@ static int elan_ktf2k_ts_probe(struct i2c_client *client,
 
 	set_bit(BTN_TOUCH, ts->input_dev->keybit);
 
+#ifdef TOUCHSCREEN_EKTF2K_SINGLE_TOUCH
 	input_set_abs_params(ts->input_dev, ABS_X, 0, REPORTED_TOUCH_RANGE-1, 0, 0);
 	input_set_abs_params(ts->input_dev, ABS_Y, 0, REPORTED_TOUCH_RANGE-1, 0, 0);
 	input_set_abs_params(ts->input_dev, ABS_PRESSURE, 0, 255, 0, 0);
 	input_set_abs_params(ts->input_dev, ABS_TOOL_WIDTH, 0, 255, 0, 0);
-#ifdef TOUCHSCREEN_EKTF2K_SINGLE_TOUCH
+#else
 	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_X, 0, REPORTED_TOUCH_RANGE-1, 0, 0);
 	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_Y, 0, REPORTED_TOUCH_RANGE-1, 0, 0);
 	input_set_abs_params(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);
