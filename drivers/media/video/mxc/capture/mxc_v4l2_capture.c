@@ -362,7 +362,7 @@ static int mxc_streamon(cam_data *cam)
 	struct mxc_v4l_frame *frame;
 	int err = 0;
 
-	pr_debug("In MVC:mxc_streamon\n");
+	pr_info("In MVC:mxc_streamon\n");
 
 	if (NULL == cam) {
 		pr_err("ERROR! cam parameter is NULL\n");
@@ -421,8 +421,9 @@ static int mxc_streamon(cam_data *cam)
 		return -EINVAL;
 	}
 
-	if (cam->overlay_on == true)
+	if (cam->overlay_on == true){
 		start_preview(cam);
+	}
 
 	if (cam->enc_enable_csi) {
 		err = cam->enc_enable_csi(cam);
@@ -607,7 +608,7 @@ static int start_preview(cam_data *cam)
 {
 	int err = 0;
 
-	pr_debug("MVC: start_preview\n");
+	pr_info("MVC: start_preview\n");
 
 	if (cam->v4l2_fb.flags == V4L2_FBUF_FLAG_OVERLAY)
 		err = prp_vf_sdc_select(cam);
