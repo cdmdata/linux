@@ -305,46 +305,56 @@ static void report_touch(struct input_dev *idev, unsigned x, unsigned y)
 	int newx = 0;
 	int outy = 0;
 	int outx = 0;
+	int ydiff = 0;
+	int xdiff = 0;
 
 	//fix the y value
 	if (y >= 512) {
-		newy = y - (((y - 512) * 2 ) / 100);
+		ydiff = (((y - 512) * 50 ) / 1000);
+		newy = y - ydiff;
 	}
 	else {
 		newy = 512 - y;
-		newy = ((newy * 2) / 100);
-		newy = y + newy;
+		ydiff = ((newy * 50) / 1000);
+		//fudge the edge
+		if (y < ydiff) {
+			ydiff = ydiff/2;
+		}
+		newy = y + ydiff;
 	}
 
 	if (newy < 0) {
 		newy = 0;
 	}
-	if (newy > 1024) {
-		newy = 1024;
+	if (newy > 1023 || y == 1023) {
+		newy = 1015;
 	}
 
 	outy = newy;
 
 	//fix the x value
 	if (x >= 512) {
-		newx = x - (((x - 512) * 2 ) / 100);
+		xdiff = (((x - 512) * 35 ) / 1000);
+		newx = x - xdiff;
 	}
 	else {
 		newx = 512 - x;
-		newx = ((newx * 2) / 100);
-		newx = x + newx;
+		xdiff = ((newx * 35) / 1000);
+		//fudge the edge
+		if (x < xdiff) {
+			xdiff = xdiff/2;
+		}
+		newx = x + xdiff;
 	}
 
 	if (newx < 0) {
 		newx = 0;
 	}
-	if (newx > 1024) {
-		newx = 1024;
+	if (newx > 1023 || x == 1023) {
+		newx = 1015;
 	}
 
 	outx = newx;
-
-
 
 
 #ifndef TOUCHSCREEN_EKTF2K_SINGLE_TOUCH
