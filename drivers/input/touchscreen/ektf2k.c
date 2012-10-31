@@ -301,14 +301,64 @@ static uint8_t checksum(uint8_t const *buf, unsigned len)
 
 static void report_touch(struct input_dev *idev, unsigned x, unsigned y)
 {
+	int newy = 0;
+	int newx = 0;
+	int outy = 0;
+	int outx = 0;
+
+	//fix the y value
+	if (y >= 512) {
+		newy = y - (((y - 512) * 2 ) / 100);
+	}
+	else {
+		newy = 512 - y;
+		newy = ((newy * 2) / 100);
+		newy = y + newy;
+	}
+
+	if (newy < 0) {
+		newy = 0;
+	}
+	if (newy > 1024) {
+		newy = 1024;
+	}
+
+	outy = newy;
+
+	//fix the x value
+	if (x >= 512) {
+		newx = x - (((x - 512) * 2 ) / 100);
+	}
+	else {
+		newx = 512 - x;
+		newx = ((newx * 2) / 100);
+		newx = x + newx;
+	}
+
+	if (newx < 0) {
+		newx = 0;
+	}
+	if (newx > 1024) {
+		newx = 1024;
+	}
+
+	outx = newx;
+
+
+
+
 #ifndef TOUCHSCREEN_EKTF2K_SINGLE_TOUCH
-	input_event(idev, EV_ABS, ABS_MT_POSITION_X, x);
-	input_event(idev, EV_ABS, ABS_MT_POSITION_Y, y);
+	//printk(KERN_INFO "Multi Touch org.. %d,%d",x,y);
+	//printk(KERN_INFO "Multi Touch fixed %d,%d",outx,outy);
+	input_event(idev, EV_ABS, ABS_MT_POSITION_X, outx);
+	input_event(idev, EV_ABS, ABS_MT_POSITION_Y, outy);
 	input_event(idev, EV_ABS, ABS_MT_TOUCH_MAJOR, 1);
 	input_mt_sync(idev);
 #else
-	input_event(idev, EV_ABS, ABS_X, x);
-	input_event(idev, EV_ABS, ABS_Y, y);
+	//printk(KERN_INFO "Single Touch org.. %d,%d",x,y);
+	//printk(KERN_INFO "Single Touch fixed %d,%d",outx,outy);
+	input_event(idev, EV_ABS, ABS_X, outx);
+	input_event(idev, EV_ABS, ABS_Y, outy);
 	input_event(idev, EV_ABS, ABS_PRESSURE, 1);
 	input_report_key(idev, BTN_TOUCH, 1);
 #endif
