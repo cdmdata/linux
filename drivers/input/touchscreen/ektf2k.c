@@ -13,7 +13,7 @@
  *
  */
 
-/* #define DEBUG */
+#define DEBUG
 
 #include <linux/module.h>
 #include <linux/input.h>
@@ -232,23 +232,7 @@ static inline int elan_ktf2k_ts_parse_xy(uint8_t *data,
 	return 0;
 }
 
-static int elan_ktf2k_ts_setup(struct i2c_client *client)
-{
-	int rc;
 
-	rc = __hello_packet_handler(client);
-	if (rc < 0)
-		goto hand_shake_failed;
-	dev_dbg(&client->dev, "[elan] %s: hello packet got.\n", __func__);
-
-	rc = __fw_packet_handler(client);
-	if (rc < 0)
-		goto hand_shake_failed;
-	dev_dbg(&client->dev, "[elan] %s: firmware checking done.\n", __func__);
-
-hand_shake_failed:
-	return rc;
-}
 
 static int elan_ktf2k_ts_set_power_state(struct i2c_client *client, int state)
 {
@@ -269,6 +253,29 @@ static int elan_ktf2k_ts_set_power_state(struct i2c_client *client, int state)
 	}
 
 	return 0;
+}
+
+static int elan_ktf2k_ts_setup(struct i2c_client *client)
+{
+	int rc;
+
+	rc = __hello_packet_handler(client);
+	if (rc < 0)
+		goto hand_shake_failed;
+	dev_dbg(&client->dev, "[elan] %s: hello packet got.\n", __func__);
+
+	rc = __fw_packet_handler(client);
+	if (rc < 0)
+		goto hand_shake_failed;
+	dev_dbg(&client->dev, "[elan] %s: firmware checking done.\n", __func__);
+
+	/* seems to fix controller issue when board is rebooted during suspend state */
+	dev_dbg(&client->dev, "[elan] %s: forcing power_state to normal\n", __func__);
+	rc = elan_ktf2k_ts_set_power_state(client, PWR_STATE_NORMAL);
+
+
+hand_shake_failed:
+	return rc;
 }
 
 static int elan_ktf2k_ts_get_power_state(struct i2c_client *client)
