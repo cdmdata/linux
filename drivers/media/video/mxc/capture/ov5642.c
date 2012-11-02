@@ -6786,9 +6786,14 @@ static int ov5642_set_awb(__s32 value){
 	switch (value) {
 		case V4L2_WHITE_BALANCE_AUTO:
 			pr_info("Setting AWB to AUTO");
-			RegAddr = REG_AWB_MANUAL;
-			retval = ov5642_write_reg(RegAddr, 0x0000);
-			if (retval < 0) pr_err("%s, write reg 0x%x failed\n", __FUNCTION__, RegAddr);
+//			RegAddr = REG_AWB_MANUAL;
+//			retval = ov5642_write_reg(RegAddr, 0x0000);
+//			if (retval < 0) pr_err("%s, write reg 0x%x failed\n", __FUNCTION__, RegAddr);
+
+			//based on DellStreak 5
+			ov5642_write_reg(0x5191, 0xff);
+			ov5642_write_reg(0x5192, 0x00);
+			ov5642_write_reg(0x5183, 0x94);
 			break;
 
 		case V4L2_WHITE_BALANCE_INCANDESCENT:
