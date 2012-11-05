@@ -2750,7 +2750,7 @@ static struct i2c_board_info n53k_i2c7_board_info[] __initdata = {
 	 .addr = 0x6f,
 	},
 #endif
-);
+};
 #else
 
 static struct i2c_board_info n53k_i2c0_board_info[] __initdata = {
