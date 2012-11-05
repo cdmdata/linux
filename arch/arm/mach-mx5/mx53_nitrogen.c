@@ -2749,7 +2749,7 @@ static struct i2c_board_info n53k_i2c7_board_info[] __initdata = {
 	 .type = "isl1208",
 	 .addr = 0x6f,
 	},
-+#endif
+#endif
 );
 #else
 
