@@ -36,11 +36,11 @@ static int pwm_backlight_update_status(struct backlight_device *bl)
 	int brightness = bl->props.brightness;
 	int max = bl->props.max_brightness;
 
-	if (bl->props.power != FB_BLANK_UNBLANK)
+	if ((bl->props.state & (BL_CORE_SUSPENDED | BL_CORE_FBBLANK)) ||
+      	(bl->props.power != FB_BLANK_UNBLANK) ||
+      	(bl->props.fb_blank != FB_BLANK_UNBLANK))
 		brightness = 0;
 
-	if (bl->props.fb_blank != FB_BLANK_UNBLANK)
-		brightness = 0;
 
 	if (brightness && (pb->usable_range[0]|pb->usable_range[1])) {
 		unsigned outrange = pb->usable_range[1]-pb->usable_range[0];
@@ -72,6 +72,7 @@ static int pwm_backlight_check_fb(struct backlight_device *bl, struct fb_info *i
 }
 
 static const struct backlight_ops pwm_backlight_ops = {
+ 	.options = BL_CORE_SUSPENDRESUME,
 	.update_status	= pwm_backlight_update_status,
 	.get_brightness	= pwm_backlight_get_brightness,
 	.check_fb = pwm_backlight_check_fb,
