@@ -173,6 +173,10 @@ static int bq27x00_battery_rsoc(struct bq27x00_device_info *di)
 {
 	int ret;
 	int rsoc = 0;
+        long rsoc_scaled;
+
+#define RSOC_SF 100000
+#define RSOC_100        100
 
 	if (di->chip == BQ27500)
 		ret = bq27x00_read(BQ27500_REG_SOC, &rsoc, 0, di);
@@ -182,8 +186,11 @@ static int bq27x00_battery_rsoc(struct bq27x00_device_info *di)
 		dev_err(di->dev, "error reading relative State-of-Charge\n");
 		return ret;
 	}
+       /* Scale output for 6% - OSBC = 100 – [(100 – ABC)* 1.0638] */
 
-	return rsoc;
+        rsoc_scaled = RSOC_100-(((RSOC_100-rsoc)*106832)/RSOC_SF);
+
+        return (int)rsoc_scaled;
 }
 
 static int bq27x00_battery_status(struct bq27x00_device_info *di,
