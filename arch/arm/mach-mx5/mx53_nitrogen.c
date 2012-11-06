@@ -776,7 +776,7 @@ static struct platform_pwm_backlight_data mxc_backlight_data_pwm2 = {
 	.dft_brightness = CONFIG_DEFAULT_PWM0_BACKLIGHT,
 	.pwm_period_ns = 1000000000/32768,	/* 30517 */
 #ifdef CONFIG_MACH_MX53_NITROGEN_K
-	.usable_range = {226,256},
+	.usable_range = {0,256},
 #endif
 };
 #endif
@@ -2698,7 +2698,7 @@ static struct plat_i2c_bq2416x_data i2c_bq2416x_data = {
 	.policy = {
 		.charge_mV = 4200,			/* 3500mV - 4440mV, default 3600mV, charge voltage  */
 		.charge_current_limit_mA = 1000,	/* 550mA - 2875mA, default 1000mA */
-		.terminate_current_mA = 150,		/* 50mA - 400mA, default 150mA, Stop charging when current drops to this */
+		.terminate_current_mA = 50,		/* 50mA - 400mA, default 150mA, Stop charging when current drops to this */
 		.usb_voltage_limit_mV = 4200,		/* 4200mV - 47600mV, default 4200mV, reduce charge current to stay above this */
 		.usb_current_limit_mA = 100,		/* 100mA - 1500mA, default 100mA */
 		.in_voltage_limit_mV = 4200,		/* 4200mV - 47600mV, default 4200mV,  reduce charge current to stay above this */
