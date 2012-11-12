@@ -57,6 +57,7 @@
 #include <linux/fcntl.h>
 #include <linux/spinlock.h>
 #include <linux/list.h>
+#include <linux/smp_lock.h>
 #include <linux/usb.h>
 #include <linux/timer.h>
 
@@ -89,7 +90,7 @@ struct header_struct {
 	/* SNAP */
 	u8 oui[3];
 	__be16 ethertype;
-} __packed;
+} __attribute__ ((packed));
 
 struct ez_usb_fw {
 	u16 size;
@@ -199,7 +200,7 @@ MODULE_FIRMWARE("orinoco_ezusb_fw");
 #define EZUSB_FRAME_DATA		1
 #define EZUSB_FRAME_CONTROL		2
 
-#define DEF_TIMEOUT			(3 * HZ)
+#define DEF_TIMEOUT			(3*HZ)
 
 #define BULK_BUF_SIZE			2048
 
@@ -221,7 +222,7 @@ struct ezusb_packet {
 	__le16 hermes_len;
 	__le16 hermes_rid;
 	u8 data[0];
-} __packed;
+} __attribute__ ((packed));
 
 /* Table of devices that work or may work with this driver */
 static struct usb_device_id ezusb_table[] = {
@@ -355,9 +356,11 @@ static struct request_context *ezusb_alloc_ctx(struct ezusb_priv *upriv,
 {
 	struct request_context *ctx;
 
-	ctx = kzalloc(sizeof(*ctx), GFP_ATOMIC);
+	ctx = kmalloc(sizeof(*ctx), GFP_ATOMIC);
 	if (!ctx)
 		return NULL;
+
+	memset(ctx, 0, sizeof(*ctx));
 
 	ctx->buf = kmalloc(BULK_BUF_SIZE, GFP_ATOMIC);
 	if (!ctx->buf) {
@@ -959,7 +962,7 @@ static int ezusb_access_ltv(struct ezusb_priv *upriv,
 	return retval;
 }
 
-static int ezusb_write_ltv(struct hermes *hw, int bap, u16 rid,
+static int ezusb_write_ltv(hermes_t *hw, int bap, u16 rid,
 			   u16 length, const void *data)
 {
 	struct ezusb_priv *upriv = hw->priv;
@@ -989,7 +992,7 @@ static int ezusb_write_ltv(struct hermes *hw, int bap, u16 rid,
 				NULL, 0, NULL);
 }
 
-static int ezusb_read_ltv(struct hermes *hw, int bap, u16 rid,
+static int ezusb_read_ltv(hermes_t *hw, int bap, u16 rid,
 			  unsigned bufsize, u16 *length, void *buf)
 {
 	struct ezusb_priv *upriv = hw->priv;
@@ -1006,7 +1009,7 @@ static int ezusb_read_ltv(struct hermes *hw, int bap, u16 rid,
 				buf, bufsize, length);
 }
 
-static int ezusb_doicmd_wait(struct hermes *hw, u16 cmd, u16 parm0, u16 parm1,
+static int ezusb_doicmd_wait(hermes_t *hw, u16 cmd, u16 parm0, u16 parm1,
 			     u16 parm2, struct hermes_response *resp)
 {
 	struct ezusb_priv *upriv = hw->priv;
@@ -1028,7 +1031,7 @@ static int ezusb_doicmd_wait(struct hermes *hw, u16 cmd, u16 parm0, u16 parm1,
 				EZUSB_FRAME_CONTROL, NULL, 0, NULL);
 }
 
-static int ezusb_docmd_wait(struct hermes *hw, u16 cmd, u16 parm0,
+static int ezusb_docmd_wait(hermes_t *hw, u16 cmd, u16 parm0,
 			    struct hermes_response *resp)
 {
 	struct ezusb_priv *upriv = hw->priv;
@@ -1196,7 +1199,7 @@ static netdev_tx_t ezusb_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct orinoco_private *priv = ndev_priv(dev);
 	struct net_device_stats *stats = &priv->stats;
 	struct ezusb_priv *upriv = priv->card;
-	u8 mic[MICHAEL_MIC_LEN + 1];
+	u8 mic[MICHAEL_MIC_LEN+1];
 	int err = 0;
 	int tx_control;
 	unsigned long flags;
@@ -1356,7 +1359,7 @@ static int ezusb_hard_reset(struct orinoco_private *priv)
 }
 
 
-static int ezusb_init(struct hermes *hw)
+static int ezusb_init(hermes_t *hw)
 {
 	struct ezusb_priv *upriv = hw->priv;
 	int retval;
@@ -1438,7 +1441,7 @@ static void ezusb_bulk_in_callback(struct urb *urb)
 	} else if (upriv->dev) {
 		struct net_device *dev = upriv->dev;
 		struct orinoco_private *priv = ndev_priv(dev);
-		struct hermes *hw = &priv->hw;
+		hermes_t *hw = &priv->hw;
 
 		if (hermes_rid == EZUSB_RID_RX) {
 			__orinoco_ev_rx(dev, hw);
@@ -1501,16 +1504,16 @@ static inline void ezusb_delete(struct ezusb_priv *upriv)
 	    ezusb_ctx_complete(list_entry(item,
 					  struct request_context, list));
 
-	if (upriv->read_urb && upriv->read_urb->status == -EINPROGRESS)
+	if (upriv->read_urb->status == -EINPROGRESS)
 		printk(KERN_ERR PFX "Some URB in progress\n");
 
 	mutex_unlock(&upriv->mtx);
 
-	if (upriv->read_urb) {
-		kfree(upriv->read_urb->transfer_buffer);
+	kfree(upriv->read_urb->transfer_buffer);
+	if (upriv->bap_buf != NULL)
+		kfree(upriv->bap_buf);
+	if (upriv->read_urb != NULL)
 		usb_free_urb(upriv->read_urb);
-	}
-	kfree(upriv->bap_buf);
 	if (upriv->dev) {
 		struct orinoco_private *priv = ndev_priv(upriv->dev);
 		orinoco_if_del(priv);
@@ -1562,7 +1565,7 @@ static const struct net_device_ops ezusb_netdev_ops = {
 	.ndo_open		= orinoco_open,
 	.ndo_stop		= orinoco_stop,
 	.ndo_start_xmit		= ezusb_xmit,
-	.ndo_set_rx_mode	= orinoco_set_multicast_list,
+	.ndo_set_multicast_list	= orinoco_set_multicast_list,
 	.ndo_change_mtu		= orinoco_change_mtu,
 	.ndo_set_mac_address	= eth_mac_addr,
 	.ndo_validate_addr	= eth_validate_addr,
@@ -1575,7 +1578,7 @@ static int ezusb_probe(struct usb_interface *interface,
 {
 	struct usb_device *udev = interface_to_usbdev(interface);
 	struct orinoco_private *priv;
-	struct hermes *hw;
+	hermes_t *hw;
 	struct ezusb_priv *upriv = NULL;
 	struct usb_interface_descriptor *iface_desc;
 	struct usb_endpoint_descriptor *ep;
@@ -1754,8 +1757,39 @@ static struct usb_driver orinoco_driver = {
 	.id_table = ezusb_table,
 };
 
-module_usb_driver(orinoco_driver);
+/* Can't be declared "const" or the whole __initdata section will
+ * become const */
+static char version[] __initdata = DRIVER_NAME " " DRIVER_VERSION
+    " (Manuel Estrada Sainz)";
+
+static int __init ezusb_module_init(void)
+{
+	int err;
+
+	printk(KERN_DEBUG "%s\n", version);
+
+	/* register this driver with the USB subsystem */
+	err = usb_register(&orinoco_driver);
+	if (err < 0) {
+		printk(KERN_ERR PFX "usb_register failed, error %d\n",
+		       err);
+		return err;
+	}
+
+	return 0;
+}
+
+static void __exit ezusb_module_exit(void)
+{
+	/* deregister this driver with the USB subsystem */
+	usb_deregister(&orinoco_driver);
+}
+
+
+module_init(ezusb_module_init);
+module_exit(ezusb_module_exit);
 
 MODULE_AUTHOR("Manuel Estrada Sainz");
-MODULE_DESCRIPTION("Driver for Orinoco wireless LAN cards using EZUSB bridge");
+MODULE_DESCRIPTION
+    ("Driver for Orinoco wireless LAN cards using EZUSB bridge");
 MODULE_LICENSE("Dual MPL/GPL");

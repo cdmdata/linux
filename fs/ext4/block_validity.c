@@ -13,6 +13,7 @@
 #include <linux/namei.h>
 #include <linux/quotaops.h>
 #include <linux/buffer_head.h>
+#include <linux/module.h>
 #include <linux/swap.h>
 #include <linux/pagemap.h>
 #include <linux/blkdev.h>
@@ -28,15 +29,16 @@ struct ext4_system_zone {
 
 static struct kmem_cache *ext4_system_zone_cachep;
 
-int __init ext4_init_system_zone(void)
+int __init init_ext4_system_zone(void)
 {
-	ext4_system_zone_cachep = KMEM_CACHE(ext4_system_zone, 0);
+	ext4_system_zone_cachep = KMEM_CACHE(ext4_system_zone,
+					     SLAB_RECLAIM_ACCOUNT);
 	if (ext4_system_zone_cachep == NULL)
 		return -ENOMEM;
 	return 0;
 }
 
-void ext4_exit_system_zone(void)
+void exit_ext4_system_zone(void)
 {
 	kmem_cache_destroy(ext4_system_zone_cachep);
 }
@@ -227,42 +229,17 @@ int ext4_data_block_valid(struct ext4_sb_info *sbi, ext4_fsblk_t start_blk,
 
 	if ((start_blk <= le32_to_cpu(sbi->s_es->s_first_data_block)) ||
 	    (start_blk + count < start_blk) ||
-	    (start_blk + count > ext4_blocks_count(sbi->s_es))) {
-		sbi->s_es->s_last_error_block = cpu_to_le64(start_blk);
+	    (start_blk + count > ext4_blocks_count(sbi->s_es)))
 		return 0;
-	}
 	while (n) {
 		entry = rb_entry(n, struct ext4_system_zone, node);
 		if (start_blk + count - 1 < entry->start_blk)
 			n = n->rb_left;
 		else if (start_blk >= (entry->start_blk + entry->count))
 			n = n->rb_right;
-		else {
-			sbi->s_es->s_last_error_block = cpu_to_le64(start_blk);
+		else
 			return 0;
-		}
 	}
 	return 1;
-}
-
-int ext4_check_blockref(const char *function, unsigned int line,
-			struct inode *inode, __le32 *p, unsigned int max)
-{
-	struct ext4_super_block *es = EXT4_SB(inode->i_sb)->s_es;
-	__le32 *bref = p;
-	unsigned int blk;
-
-	while (bref < p+max) {
-		blk = le32_to_cpu(*bref++);
-		if (blk &&
-		    unlikely(!ext4_data_block_valid(EXT4_SB(inode->i_sb),
-						    blk, 1))) {
-			es->s_last_error_block = cpu_to_le64(blk);
-			ext4_error_inode(inode, function, line, blk,
-					 "invalid block");
-			return -EIO;
-		}
-	}
-	return 0;
 }
 

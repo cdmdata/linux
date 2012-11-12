@@ -65,7 +65,7 @@ static inline void i2c_pnx_arm_timer(struct i2c_pnx_algo_data *alg_data)
 		jiffies, expires);
 
 	timer->expires = jiffies + expires;
-	timer->data = (unsigned long)alg_data;
+	timer->data = (unsigned long)&alg_data;
 
 	add_timer(timer);
 }
@@ -546,7 +546,8 @@ static int i2c_pnx_controller_suspend(struct platform_device *pdev,
 {
 	struct i2c_pnx_algo_data *alg_data = platform_get_drvdata(pdev);
 
-	clk_disable(alg_data->clk);
+	/* FIXME: shouldn't this be clk_disable? */
+	clk_enable(alg_data->clk);
 
 	return 0;
 }

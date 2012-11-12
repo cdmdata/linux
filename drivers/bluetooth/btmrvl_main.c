@@ -18,8 +18,6 @@
  * this warranty disclaimer.
  **/
 
-#include <linux/module.h>
-
 #include <net/bluetooth/bluetooth.h>
 #include <net/bluetooth/hci_core.h>
 
@@ -119,8 +117,8 @@ int btmrvl_process_event(struct btmrvl_private *priv, struct sk_buff *skb)
 				(event->data[2] == MODULE_ALREADY_UP)) ?
 				"Bring-up succeed" : "Bring-up failed");
 
-			if (event->length > 3 && event->data[3])
-				priv->btmrvl_dev.dev_type = HCI_AMP;
+			if (event->length > 3)
+				priv->btmrvl_dev.dev_type = event->data[3];
 			else
 				priv->btmrvl_dev.dev_type = HCI_BREDR;
 
@@ -387,6 +385,10 @@ static int btmrvl_ioctl(struct hci_dev *hdev,
 	return -ENOIOCTLCMD;
 }
 
+static void btmrvl_destruct(struct hci_dev *hdev)
+{
+}
+
 static int btmrvl_send_frame(struct sk_buff *skb)
 {
 	struct hci_dev *hdev = (struct hci_dev *) skb->dev;
@@ -394,13 +396,12 @@ static int btmrvl_send_frame(struct sk_buff *skb)
 
 	BT_DBG("type=%d, len=%d", skb->pkt_type, skb->len);
 
-	if (!hdev) {
+	if (!hdev || !hdev->driver_data) {
 		BT_ERR("Frame for unknown HCI device");
 		return -ENODEV;
 	}
 
-	priv = hci_get_drvdata(hdev);
-
+	priv = (struct btmrvl_private *) hdev->driver_data;
 	if (!test_bit(HCI_RUNNING, &hdev->flags)) {
 		BT_ERR("Failed testing HCI_RUNING, flags=%lx", hdev->flags);
 		print_hex_dump_bytes("data: ", DUMP_PREFIX_OFFSET,
@@ -431,7 +432,7 @@ static int btmrvl_send_frame(struct sk_buff *skb)
 
 static int btmrvl_flush(struct hci_dev *hdev)
 {
-	struct btmrvl_private *priv = hci_get_drvdata(hdev);
+	struct btmrvl_private *priv = hdev->driver_data;
 
 	skb_queue_purge(&priv->adapter->tx_queue);
 
@@ -440,7 +441,7 @@ static int btmrvl_flush(struct hci_dev *hdev)
 
 static int btmrvl_close(struct hci_dev *hdev)
 {
-	struct btmrvl_private *priv = hci_get_drvdata(hdev);
+	struct btmrvl_private *priv = hdev->driver_data;
 
 	if (!test_and_clear_bit(HCI_RUNNING, &hdev->flags))
 		return 0;
@@ -472,6 +473,8 @@ static int btmrvl_service_main_thread(void *data)
 
 	init_waitqueue_entry(&wait, current);
 
+	current->flags |= PF_NOFREEZE;
+
 	for (;;) {
 		add_wait_queue(&thread->wait_q, &wait);
 
@@ -499,17 +502,14 @@ static int btmrvl_service_main_thread(void *data)
 		spin_lock_irqsave(&priv->driver_lock, flags);
 		if (adapter->int_count) {
 			adapter->int_count = 0;
-			spin_unlock_irqrestore(&priv->driver_lock, flags);
-			priv->hw_process_int_status(priv);
 		} else if (adapter->ps_state == PS_SLEEP &&
 					!skb_queue_empty(&adapter->tx_queue)) {
 			spin_unlock_irqrestore(&priv->driver_lock, flags);
 			adapter->wakeup_tries++;
 			priv->hw_wakeup_firmware(priv);
 			continue;
-		} else {
-			spin_unlock_irqrestore(&priv->driver_lock, flags);
 		}
+		spin_unlock_irqrestore(&priv->driver_lock, flags);
 
 		if (adapter->ps_state == PS_SLEEP)
 			continue;
@@ -543,14 +543,16 @@ int btmrvl_register_hdev(struct btmrvl_private *priv)
 	}
 
 	priv->btmrvl_dev.hcidev = hdev;
-	hci_set_drvdata(hdev, priv);
+	hdev->driver_data = priv;
 
 	hdev->bus = HCI_SDIO;
 	hdev->open = btmrvl_open;
 	hdev->close = btmrvl_close;
 	hdev->flush = btmrvl_flush;
 	hdev->send = btmrvl_send_frame;
+	hdev->destruct = btmrvl_destruct;
 	hdev->ioctl = btmrvl_ioctl;
+	hdev->owner = THIS_MODULE;
 
 	btmrvl_send_module_cfg_cmd(priv, MODULE_BRINGUP_REQ);
 

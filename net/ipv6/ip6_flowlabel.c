@@ -21,7 +21,6 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>
-#include <linux/export.h>
 
 #include <net/net_namespace.h>
 #include <net/sock.h>
@@ -323,8 +322,8 @@ static int fl6_renew(struct ip6_flowlabel *fl, unsigned long linger, unsigned lo
 }
 
 static struct ip6_flowlabel *
-fl_create(struct net *net, struct sock *sk, struct in6_flowlabel_req *freq,
-	  char __user *optval, int optlen, int *err_p)
+fl_create(struct net *net, struct in6_flowlabel_req *freq, char __user *optval,
+	  int optlen, int *err_p)
 {
 	struct ip6_flowlabel *fl = NULL;
 	int olen;
@@ -343,7 +342,7 @@ fl_create(struct net *net, struct sock *sk, struct in6_flowlabel_req *freq,
 
 	if (olen > 0) {
 		struct msghdr msg;
-		struct flowi6 flowi6;
+		struct flowi flowi;
 		int junk;
 
 		err = -ENOMEM;
@@ -359,9 +358,9 @@ fl_create(struct net *net, struct sock *sk, struct in6_flowlabel_req *freq,
 
 		msg.msg_controllen = olen;
 		msg.msg_control = (void*)(fl->opt+1);
-		memset(&flowi6, 0, sizeof(flowi6));
+		flowi.oif = 0;
 
-		err = datagram_send_ctl(net, sk, &msg, &flowi6, fl->opt, &junk,
+		err = datagram_send_ctl(net, &msg, &flowi, fl->opt, &junk,
 					&junk, &junk);
 		if (err)
 			goto done;
@@ -386,7 +385,7 @@ fl_create(struct net *net, struct sock *sk, struct in6_flowlabel_req *freq,
 		err = -EINVAL;
 		goto done;
 	}
-	fl->dst = freq->flr_dst;
+	ipv6_addr_copy(&fl->dst, &freq->flr_dst);
 	atomic_set(&fl->users, 1);
 	switch (fl->share) {
 	case IPV6_FL_S_EXCL:
@@ -529,7 +528,7 @@ int ipv6_flowlabel_opt(struct sock *sk, char __user *optval, int optlen)
 		if (freq.flr_label & ~IPV6_FLOWLABEL_MASK)
 			return -EINVAL;
 
-		fl = fl_create(net, sk, &freq, optval, optlen, &err);
+		fl = fl_create(net, &freq, optval, optlen, &err);
 		if (fl == NULL)
 			return err;
 		sfl1 = kmalloc(sizeof(*sfl1), GFP_KERNEL);

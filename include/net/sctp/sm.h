@@ -165,7 +165,6 @@ sctp_state_fn_t sctp_sf_do_prm_requestheartbeat;
 sctp_state_fn_t sctp_sf_do_prm_asconf;
 
 /* Prototypes for other event state functions.  */
-sctp_state_fn_t sctp_sf_do_no_pending_tsn;
 sctp_state_fn_t sctp_sf_do_9_2_start_shutdown;
 sctp_state_fn_t sctp_sf_do_9_2_shutdown_ack;
 sctp_state_fn_t sctp_sf_ignore_other;
@@ -233,7 +232,9 @@ struct sctp_chunk *sctp_make_violation_paramlen(const struct sctp_association *,
 				   const struct sctp_chunk *,
 				   struct sctp_paramhdr *);
 struct sctp_chunk *sctp_make_heartbeat(const struct sctp_association *,
-				  const struct sctp_transport *);
+				  const struct sctp_transport *,
+				  const void *payload,
+				  const size_t paylen);
 struct sctp_chunk *sctp_make_heartbeat_ack(const struct sctp_association *,
 				      const struct sctp_chunk *,
 				      const void *payload,
@@ -344,12 +345,12 @@ enum {
 
 static inline int TSN_lt(__u32 s, __u32 t)
 {
-	return ((s) - (t)) & TSN_SIGN_BIT;
+	return (((s) - (t)) & TSN_SIGN_BIT);
 }
 
 static inline int TSN_lte(__u32 s, __u32 t)
 {
-	return ((s) == (t)) || (((s) - (t)) & TSN_SIGN_BIT);
+	return (((s) == (t)) || (((s) - (t)) & TSN_SIGN_BIT));
 }
 
 /* Compare two SSNs */
@@ -368,12 +369,12 @@ enum {
 
 static inline int SSN_lt(__u16 s, __u16 t)
 {
-	return ((s) - (t)) & SSN_SIGN_BIT;
+	return (((s) - (t)) & SSN_SIGN_BIT);
 }
 
 static inline int SSN_lte(__u16 s, __u16 t)
 {
-	return ((s) == (t)) || (((s) - (t)) & SSN_SIGN_BIT);
+	return (((s) == (t)) || (((s) - (t)) & SSN_SIGN_BIT));
 }
 
 /*
@@ -387,7 +388,7 @@ enum {
 
 static inline int ADDIP_SERIAL_gte(__u16 s, __u16 t)
 {
-	return ((s) == (t)) || (((t) - (s)) & ADDIP_SERIAL_SIGN_BIT);
+	return (((s) == (t)) || (((t) - (s)) & ADDIP_SERIAL_SIGN_BIT));
 }
 
 /* Check VTAG of the packet matches the sender's own tag. */

@@ -1,7 +1,8 @@
 #ifndef __INC_DOT11D_H
 #define __INC_DOT11D_H
 
-#include "ieee80211/ieee80211.h"
+#ifdef ENABLE_DOT11D
+#include "ieee80211.h"
 
 
 typedef struct _CHNL_TXPOWER_TRIPLE {
@@ -97,4 +98,5 @@ int ToLegalChannel(
 	struct ieee80211_device *dev,
 	u8 channel
 );
+#endif /* ENABLE_DOT11D */
 #endif /* #ifndef __INC_DOT11D_H */

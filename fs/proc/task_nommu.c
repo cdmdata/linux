@@ -92,14 +92,13 @@ unsigned long task_vsize(struct mm_struct *mm)
 	return vsize;
 }
 
-unsigned long task_statm(struct mm_struct *mm,
-			 unsigned long *shared, unsigned long *text,
-			 unsigned long *data, unsigned long *resident)
+int task_statm(struct mm_struct *mm, int *shared, int *text,
+	       int *data, int *resident)
 {
 	struct vm_area_struct *vma;
 	struct vm_region *region;
 	struct rb_node *p;
-	unsigned long size = kobjsize(mm);
+	int size = kobjsize(mm);
 
 	down_read(&mm->mmap_sem);
 	for (p = rb_first(&mm->mm_rb); p; p = rb_next(p)) {
@@ -134,11 +133,9 @@ static void pad_len_spaces(struct seq_file *m, int len)
 /*
  * display a single VMA to a sequenced file
  */
-static int nommu_vma_show(struct seq_file *m, struct vm_area_struct *vma,
-			  int is_pid)
+static int nommu_vma_show(struct seq_file *m, struct vm_area_struct *vma)
 {
 	struct mm_struct *mm = vma->vm_mm;
-	struct proc_maps_private *priv = m->private;
 	unsigned long ino = 0;
 	struct file *file;
 	dev_t dev = 0;
@@ -150,6 +147,10 @@ static int nommu_vma_show(struct seq_file *m, struct vm_area_struct *vma,
 
 	if (file) {
 		struct inode *inode = vma->vm_file->f_path.dentry->d_inode;
+		if (vma->vm_prfile) {
+			file = vma->vm_prfile;
+			inode = file->f_path.dentry->d_inode;
+		}
 		dev = inode->i_sb->s_dev;
 		ino = inode->i_ino;
 		pgoff = (loff_t)vma->vm_pgoff << PAGE_SHIFT;
@@ -170,19 +171,10 @@ static int nommu_vma_show(struct seq_file *m, struct vm_area_struct *vma,
 		pad_len_spaces(m, len);
 		seq_path(m, &file->f_path, "");
 	} else if (mm) {
-		pid_t tid = vm_is_stack(priv->task, vma, is_pid);
-
-		if (tid != 0) {
+		if (vma->vm_start <= mm->start_stack &&
+			vma->vm_end >= mm->start_stack) {
 			pad_len_spaces(m, len);
-			/*
-			 * Thread stack in /proc/PID/task/TID/maps or
-			 * the main process stack.
-			 */
-			if (!is_pid || (vma->vm_start <= mm->start_stack &&
-			    vma->vm_end >= mm->start_stack))
-				seq_printf(m, "[stack]");
-			else
-				seq_printf(m, "[stack:%d]", tid);
+			seq_puts(m, "[stack]");
 		}
 	}
 
@@ -193,22 +185,11 @@ static int nommu_vma_show(struct seq_file *m, struct vm_area_struct *vma,
 /*
  * display mapping lines for a particular process's /proc/pid/maps
  */
-static int show_map(struct seq_file *m, void *_p, int is_pid)
+static int show_map(struct seq_file *m, void *_p)
 {
 	struct rb_node *p = _p;
 
-	return nommu_vma_show(m, rb_entry(p, struct vm_area_struct, vm_rb),
-			      is_pid);
-}
-
-static int show_pid_map(struct seq_file *m, void *_p)
-{
-	return show_map(m, _p, 1);
-}
-
-static int show_tid_map(struct seq_file *m, void *_p)
-{
-	return show_map(m, _p, 0);
+	return nommu_vma_show(m, rb_entry(p, struct vm_area_struct, vm_rb));
 }
 
 static void *m_start(struct seq_file *m, loff_t *pos)
@@ -221,13 +202,13 @@ static void *m_start(struct seq_file *m, loff_t *pos)
 	/* pin the task and mm whilst we play with them */
 	priv->task = get_pid_task(priv->pid, PIDTYPE_PID);
 	if (!priv->task)
-		return ERR_PTR(-ESRCH);
+		return NULL;
 
 	mm = mm_for_maps(priv->task);
-	if (!mm || IS_ERR(mm)) {
+	if (!mm) {
 		put_task_struct(priv->task);
 		priv->task = NULL;
-		return mm;
+		return NULL;
 	}
 	down_read(&mm->mmap_sem);
 
@@ -262,18 +243,10 @@ static const struct seq_operations proc_pid_maps_ops = {
 	.start	= m_start,
 	.next	= m_next,
 	.stop	= m_stop,
-	.show	= show_pid_map
+	.show	= show_map
 };
 
-static const struct seq_operations proc_tid_maps_ops = {
-	.start	= m_start,
-	.next	= m_next,
-	.stop	= m_stop,
-	.show	= show_tid_map
-};
-
-static int maps_open(struct inode *inode, struct file *file,
-		     const struct seq_operations *ops)
+static int maps_open(struct inode *inode, struct file *file)
 {
 	struct proc_maps_private *priv;
 	int ret = -ENOMEM;
@@ -281,7 +254,7 @@ static int maps_open(struct inode *inode, struct file *file,
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
 	if (priv) {
 		priv->pid = proc_pid(inode);
-		ret = seq_open(file, ops);
+		ret = seq_open(file, &proc_pid_maps_ops);
 		if (!ret) {
 			struct seq_file *m = file->private_data;
 			m->private = priv;
@@ -292,25 +265,8 @@ static int maps_open(struct inode *inode, struct file *file,
 	return ret;
 }
 
-static int pid_maps_open(struct inode *inode, struct file *file)
-{
-	return maps_open(inode, file, &proc_pid_maps_ops);
-}
-
-static int tid_maps_open(struct inode *inode, struct file *file)
-{
-	return maps_open(inode, file, &proc_tid_maps_ops);
-}
-
-const struct file_operations proc_pid_maps_operations = {
-	.open		= pid_maps_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= seq_release_private,
-};
-
-const struct file_operations proc_tid_maps_operations = {
-	.open		= tid_maps_open,
+const struct file_operations proc_maps_operations = {
+	.open		= maps_open,
 	.read		= seq_read,
 	.llseek		= seq_lseek,
 	.release	= seq_release_private,

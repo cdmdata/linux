@@ -15,12 +15,11 @@
  */
 
 #include <linux/types.h>
-#include <linux/stat.h>
 #include <linux/device.h>
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/console.h>
-#include <linux/export.h>
+#include <linux/module.h>
 #include <linux/mm.h>
 #include <linux/dma-mapping.h>
 #include <linux/kobject.h>
@@ -34,6 +33,11 @@
 #include <asm/abs_addr.h>
 #include <asm/page.h>
 #include <asm/hvcall.h>
+#include <asm/iseries/vio.h>
+#include <asm/iseries/hv_types.h>
+#include <asm/iseries/hv_lp_config.h>
+#include <asm/iseries/hv_call_xm.h>
+#include <asm/iseries/iommu.h>
 
 static struct bus_type vio_bus_type;
 
@@ -234,7 +238,9 @@ static inline void vio_cmo_dealloc(struct vio_dev *viodev, size_t size)
 	 * memory in this pool does not change.
 	 */
 	if (spare_needed && reserve_freed) {
-		tmp = min3(spare_needed, reserve_freed, (viodev->cmo.entitled - VIO_CMO_MIN_ENT));
+		tmp = min(spare_needed, min(reserve_freed,
+		                            (viodev->cmo.entitled -
+		                             VIO_CMO_MIN_ENT)));
 
 		vio_cmo.spare += tmp;
 		viodev->cmo.entitled -= tmp;
@@ -482,8 +488,7 @@ static void vio_cmo_balance(struct work_struct *work)
 }
 
 static void *vio_dma_iommu_alloc_coherent(struct device *dev, size_t size,
-					  dma_addr_t *dma_handle, gfp_t flag,
-					  struct dma_attrs *attrs)
+                                          dma_addr_t *dma_handle, gfp_t flag)
 {
 	struct vio_dev *viodev = to_vio_dev(dev);
 	void *ret;
@@ -493,7 +498,7 @@ static void *vio_dma_iommu_alloc_coherent(struct device *dev, size_t size,
 		return NULL;
 	}
 
-	ret = dma_iommu_ops.alloc(dev, size, dma_handle, flag, attrs);
+	ret = dma_iommu_ops.alloc_coherent(dev, size, dma_handle, flag);
 	if (unlikely(ret == NULL)) {
 		vio_cmo_dealloc(viodev, roundup(size, PAGE_SIZE));
 		atomic_inc(&viodev->cmo.allocs_failed);
@@ -503,12 +508,11 @@ static void *vio_dma_iommu_alloc_coherent(struct device *dev, size_t size,
 }
 
 static void vio_dma_iommu_free_coherent(struct device *dev, size_t size,
-					void *vaddr, dma_addr_t dma_handle,
-					struct dma_attrs *attrs)
+                                        void *vaddr, dma_addr_t dma_handle)
 {
 	struct vio_dev *viodev = to_vio_dev(dev);
 
-	dma_iommu_ops.free(dev, size, vaddr, dma_handle, attrs);
+	dma_iommu_ops.free_coherent(dev, size, vaddr, dma_handle);
 
 	vio_cmo_dealloc(viodev, roundup(size, PAGE_SIZE));
 }
@@ -598,25 +602,14 @@ static void vio_dma_iommu_unmap_sg(struct device *dev,
 	vio_cmo_dealloc(viodev, alloc_size);
 }
 
-static int vio_dma_iommu_dma_supported(struct device *dev, u64 mask)
-{
-        return dma_iommu_ops.dma_supported(dev, mask);
-}
-
-static u64 vio_dma_get_required_mask(struct device *dev)
-{
-        return dma_iommu_ops.get_required_mask(dev);
-}
-
 struct dma_map_ops vio_dma_mapping_ops = {
-	.alloc             = vio_dma_iommu_alloc_coherent,
-	.free              = vio_dma_iommu_free_coherent,
-	.map_sg            = vio_dma_iommu_map_sg,
-	.unmap_sg          = vio_dma_iommu_unmap_sg,
-	.map_page          = vio_dma_iommu_map_page,
-	.unmap_page        = vio_dma_iommu_unmap_page,
-	.dma_supported     = vio_dma_iommu_dma_supported,
-	.get_required_mask = vio_dma_get_required_mask,
+	.alloc_coherent = vio_dma_iommu_alloc_coherent,
+	.free_coherent  = vio_dma_iommu_free_coherent,
+	.map_sg         = vio_dma_iommu_map_sg,
+	.unmap_sg       = vio_dma_iommu_unmap_sg,
+	.map_page       = vio_dma_iommu_map_page,
+	.unmap_page     = vio_dma_iommu_unmap_page,
+
 };
 
 /**
@@ -867,7 +860,8 @@ static void vio_cmo_bus_remove(struct vio_dev *viodev)
 
 static void vio_cmo_set_dma_ops(struct vio_dev *viodev)
 {
-	set_dma_ops(&viodev->dev, &vio_dma_mapping_ops);
+	vio_dma_mapping_ops.dma_supported = dma_iommu_ops.dma_supported;
+	viodev->dev.archdata.dma_ops = &vio_dma_mapping_ops;
 }
 
 /**
@@ -1039,6 +1033,7 @@ static void vio_cmo_sysfs_init(void)
 	vio_bus_type.bus_attrs = vio_cmo_bus_attrs;
 }
 #else /* CONFIG_PPC_SMLPAR */
+/* Dummy functions for iSeries platform */
 int vio_cmo_entitlement_update(size_t new_entitlement) { return 0; }
 void vio_cmo_set_dev_desired(struct vio_dev *viodev, size_t desired) {}
 static int vio_cmo_bus_probe(struct vio_dev *viodev) { return 0; }
@@ -1056,12 +1051,15 @@ static struct iommu_table *vio_build_iommu_table(struct vio_dev *dev)
 	struct iommu_table *tbl;
 	unsigned long offset, size;
 
+	if (firmware_has_feature(FW_FEATURE_ISERIES))
+		return vio_build_iommu_table_iseries(dev);
+
 	dma_window = of_get_property(dev->dev.of_node,
 				  "ibm,my-dma-window", NULL);
 	if (!dma_window)
 		return NULL;
 
-	tbl = kzalloc(sizeof(*tbl), GFP_KERNEL);
+	tbl = kmalloc(sizeof(*tbl), GFP_KERNEL);
 	if (tbl == NULL)
 		return NULL;
 
@@ -1074,7 +1072,6 @@ static struct iommu_table *vio_build_iommu_table(struct vio_dev *dev)
 	tbl->it_offset = offset >> IOMMU_PAGE_SHIFT;
 	tbl->it_busno = 0;
 	tbl->it_type = TCE_VB;
-	tbl->it_blocksize = 16;
 
 	return iommu_init_table(tbl, -1);
 }
@@ -1161,21 +1158,17 @@ static int vio_bus_remove(struct device *dev)
  * vio_register_driver: - Register a new vio driver
  * @drv:	The vio_driver structure to be registered.
  */
-int __vio_register_driver(struct vio_driver *viodrv, struct module *owner,
-			  const char *mod_name)
+int vio_register_driver(struct vio_driver *viodrv)
 {
-	pr_debug("%s: driver %s registering\n", __func__, viodrv->name);
+	printk(KERN_DEBUG "%s: driver %s registering\n", __func__,
+		viodrv->driver.name);
 
 	/* fill in 'struct driver' fields */
-	viodrv->driver.name = viodrv->name;
-	viodrv->driver.pm = viodrv->pm;
 	viodrv->driver.bus = &vio_bus_type;
-	viodrv->driver.owner = owner;
-	viodrv->driver.mod_name = mod_name;
 
 	return driver_register(&viodrv->driver);
 }
-EXPORT_SYMBOL(__vio_register_driver);
+EXPORT_SYMBOL(vio_register_driver);
 
 /**
  * vio_unregister_driver - Remove registration of vio driver.
@@ -1190,11 +1183,7 @@ EXPORT_SYMBOL(vio_unregister_driver);
 /* vio_dev refcount hit 0 */
 static void __devinit vio_dev_release(struct device *dev)
 {
-	struct iommu_table *tbl = get_iommu_table_base(dev);
-
-	if (tbl)
-		iommu_free_table(tbl, dev->of_node ?
-			dev->of_node->full_name : dev_name(dev));
+	/* XXX should free TCE table */
 	of_node_put(dev->of_node);
 	kfree(to_vio_dev(dev));
 }
@@ -1240,12 +1229,18 @@ struct vio_dev *vio_register_device_node(struct device_node *of_node)
 	viodev->name = of_node->name;
 	viodev->type = of_node->type;
 	viodev->unit_address = *unit_address;
+	if (firmware_has_feature(FW_FEATURE_ISERIES)) {
+		unit_address = of_get_property(of_node,
+				"linux,unit_address", NULL);
+		if (unit_address != NULL)
+			viodev->unit_address = *unit_address;
+	}
 	viodev->dev.of_node = of_node_get(of_node);
 
 	if (firmware_has_feature(FW_FEATURE_CMO))
 		vio_cmo_set_dma_ops(viodev);
 	else
-		set_dma_ops(&viodev->dev, &dma_iommu_ops);
+		viodev->dev.archdata.dma_ops = &dma_iommu_ops;
 	set_iommu_table_base(&viodev->dev, vio_build_iommu_table(viodev));
 	set_dev_node(&viodev->dev, of_node_to_nid(of_node));
 
@@ -1253,16 +1248,13 @@ struct vio_dev *vio_register_device_node(struct device_node *of_node)
 	viodev->dev.parent = &vio_bus_device.dev;
 	viodev->dev.bus = &vio_bus_type;
 	viodev->dev.release = vio_dev_release;
-        /* needed to ensure proper operation of coherent allocations
-         * later, in case driver doesn't set it explicitly */
-        dma_set_mask(&viodev->dev, DMA_BIT_MASK(64));
-        dma_set_coherent_mask(&viodev->dev, DMA_BIT_MASK(64));
 
 	/* register with generic device framework */
 	if (device_register(&viodev->dev)) {
 		printk(KERN_ERR "%s: failed to register device %s\n",
 				__func__, dev_name(&viodev->dev));
-		put_device(&viodev->dev);
+		/* XXX free TCE table */
+		kfree(viodev);
 		return NULL;
 	}
 
@@ -1396,6 +1388,7 @@ static struct bus_type vio_bus_type = {
 	.match = vio_bus_match,
 	.probe = vio_bus_probe,
 	.remove = vio_bus_remove,
+	.pm = GENERIC_SUBSYS_PM_OPS,
 };
 
 /**

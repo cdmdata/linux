@@ -53,7 +53,6 @@ static const unsigned char ethertype_ipv4[] = { ETHERTYPE_IPV4 };
 static const unsigned char ethertype_ipv6[] = { ETHERTYPE_IPV6 };
 static const unsigned char llc_oui_pid_pad[] =
 			{ LLC, SNAP_BRIDGED, PID_ETHERNET, PAD_BRIDGED };
-static const unsigned char pad[] = { PAD_BRIDGED };
 static const unsigned char llc_oui_ipv4[] = { LLC, SNAP_ROUTED, ETHERTYPE_IPV4 };
 static const unsigned char llc_oui_ipv6[] = { LLC, SNAP_ROUTED, ETHERTYPE_IPV6 };
 
@@ -98,7 +97,7 @@ static LIST_HEAD(br2684_devs);
 
 static inline struct br2684_dev *BRPRIV(const struct net_device *net_dev)
 {
-	return netdev_priv(net_dev);
+	return (struct br2684_dev *)netdev_priv(net_dev);
 }
 
 static inline struct net_device *list_entry_brdev(const struct list_head *le)
@@ -140,43 +139,6 @@ static struct net_device *br2684_find_dev(const struct br2684_if_spec *s)
 	return NULL;
 }
 
-static int atm_dev_event(struct notifier_block *this, unsigned long event,
-		 void *arg)
-{
-	struct atm_dev *atm_dev = arg;
-	struct list_head *lh;
-	struct net_device *net_dev;
-	struct br2684_vcc *brvcc;
-	struct atm_vcc *atm_vcc;
-	unsigned long flags;
-
-	pr_debug("event=%ld dev=%p\n", event, atm_dev);
-
-	read_lock_irqsave(&devs_lock, flags);
-	list_for_each(lh, &br2684_devs) {
-		net_dev = list_entry_brdev(lh);
-
-		list_for_each_entry(brvcc, &BRPRIV(net_dev)->brvccs, brvccs) {
-			atm_vcc = brvcc->atmvcc;
-			if (atm_vcc && brvcc->atmvcc->dev == atm_dev) {
-
-				if (atm_vcc->dev->signal == ATM_PHY_SIG_LOST)
-					netif_carrier_off(net_dev);
-				else
-					netif_carrier_on(net_dev);
-
-			}
-		}
-	}
-	read_unlock_irqrestore(&devs_lock, flags);
-
-	return NOTIFY_DONE;
-}
-
-static struct notifier_block atm_dev_notifier = {
-	.notifier_call = atm_dev_event,
-};
-
 /* chained vcc->pop function.  Check if we should wake the netif_queue */
 static void br2684_pop(struct atm_vcc *vcc, struct sk_buff *skb)
 {
@@ -203,10 +165,7 @@ static int br2684_xmit_vcc(struct sk_buff *skb, struct net_device *dev,
 {
 	struct br2684_dev *brdev = BRPRIV(dev);
 	struct atm_vcc *atmvcc;
-	int minheadroom = (brvcc->encaps == e_llc) ?
-		((brdev->payload == p_bridged) ?
-			sizeof(llc_oui_pid_pad) : sizeof(llc_oui_ipv4)) :
-		((brdev->payload == p_bridged) ? BR2684_PAD_LEN : 0);
+	int minheadroom = (brvcc->encaps == e_llc) ? 10 : 2;
 
 	if (skb_headroom(skb) < minheadroom) {
 		struct sk_buff *skb2 = skb_realloc_headroom(skb, minheadroom);
@@ -246,6 +205,8 @@ static int br2684_xmit_vcc(struct sk_buff *skb, struct net_device *dev,
 		if (brdev->payload == p_bridged) {
 			skb_push(skb, 2);
 			memset(skb->data, 0, 2);
+		} else { /* p_routed */
+			skb_pull(skb, ETH_HLEN);
 		}
 	}
 	skb_debug(skb);
@@ -454,7 +415,7 @@ static void br2684_push(struct atm_vcc *atmvcc, struct sk_buff *skb)
 			skb->pkt_type = PACKET_HOST;
 		} else { /* p_bridged */
 			/* first 2 chars should be 0 */
-			if (memcmp(skb->data, pad, BR2684_PAD_LEN) != 0)
+			if (*((u16 *) (skb->data)) != 0)
 				goto error;
 			skb_pull(skb, BR2684_PAD_LEN);
 			skb->protocol = eth_type_trans(skb, net_dev);
@@ -493,11 +454,15 @@ free_skb:
  */
 static int br2684_regvcc(struct atm_vcc *atmvcc, void __user * arg)
 {
+	struct sk_buff_head queue;
+	int err;
 	struct br2684_vcc *brvcc;
+	struct sk_buff *skb, *tmp;
+	struct sk_buff_head *rq;
 	struct br2684_dev *brdev;
 	struct net_device *net_dev;
 	struct atm_backend_br2684 be;
-	int err;
+	unsigned long flags;
 
 	if (copy_from_user(&be, arg, sizeof be))
 		return -EFAULT;
@@ -507,7 +472,7 @@ static int br2684_regvcc(struct atm_vcc *atmvcc, void __user * arg)
 	write_lock_irq(&devs_lock);
 	net_dev = br2684_find_dev(&be.ifspec);
 	if (net_dev == NULL) {
-		pr_err("tried to attach to non-existent device\n");
+		pr_err("tried to attach to non-existant device\n");
 		err = -ENXIO;
 		goto error;
 	}
@@ -550,17 +515,22 @@ static int br2684_regvcc(struct atm_vcc *atmvcc, void __user * arg)
 	atmvcc->push = br2684_push;
 	atmvcc->pop = br2684_pop;
 
-	/* initialize netdev carrier state */
-	if (atmvcc->dev->signal == ATM_PHY_SIG_LOST)
-		netif_carrier_off(net_dev);
-	else
-		netif_carrier_on(net_dev);
+	__skb_queue_head_init(&queue);
+	rq = &sk_atm(atmvcc)->sk_receive_queue;
 
+	spin_lock_irqsave(&rq->lock, flags);
+	skb_queue_splice_init(rq, &queue);
+	spin_unlock_irqrestore(&rq->lock, flags);
+
+	skb_queue_walk_safe(&queue, skb, tmp) {
+		struct net_device *dev = skb->dev;
+
+		dev->stats.rx_bytes -= skb->len;
+		dev->stats.rx_packets--;
+
+		br2684_push(atmvcc, skb);
+	}
 	__module_get(THIS_MODULE);
-
-	/* re-process everything received between connection setup and
-	   backend setup */
-	vcc_process_recv_queue(atmvcc);
 	return 0;
 
 error:
@@ -587,7 +557,6 @@ static void br2684_setup(struct net_device *netdev)
 	struct br2684_dev *brdev = BRPRIV(netdev);
 
 	ether_setup(netdev);
-	netdev->hard_header_len += sizeof(llc_oui_pid_pad); /* worst case */
 	brdev->net_dev = netdev;
 
 	netdev->netdev_ops = &br2684_netdev_ops;
@@ -600,7 +569,7 @@ static void br2684_setup_routed(struct net_device *netdev)
 	struct br2684_dev *brdev = BRPRIV(netdev);
 
 	brdev->net_dev = netdev;
-	netdev->hard_header_len = sizeof(llc_oui_ipv4); /* worst case */
+	netdev->hard_header_len = 0;
 	netdev->netdev_ops = &br2684_netdev_ops_routed;
 	netdev->addr_len = 0;
 	netdev->mtu = 1500;
@@ -651,15 +620,9 @@ static int br2684_create(void __user *arg)
 	}
 
 	write_lock_irq(&devs_lock);
-
 	brdev->payload = payload;
-
-	if (list_empty(&br2684_devs)) {
-		/* 1st br2684 device */
-		brdev->number = 1;
-	} else
-		brdev->number = BRPRIV(list_entry_brdev(br2684_devs.prev))->number + 1;
-
+	brdev->number = list_empty(&br2684_devs) ? 1 :
+	    BRPRIV(list_entry_brdev(br2684_devs.prev))->number + 1;
 	list_add_tail(&brdev->br2684_devs, &br2684_devs);
 	write_unlock_irq(&devs_lock);
 	return 0;
@@ -795,7 +758,6 @@ static int __init br2684_init(void)
 		return -ENOMEM;
 #endif
 	register_atm_ioctl(&br2684_ioctl_ops);
-	register_atmdevice_notifier(&atm_dev_notifier);
 	return 0;
 }
 
@@ -809,9 +771,6 @@ static void __exit br2684_exit(void)
 #ifdef CONFIG_PROC_FS
 	remove_proc_entry("br2684", atm_proc_root);
 #endif
-
-
-	unregister_atmdevice_notifier(&atm_dev_notifier);
 
 	while (!list_empty(&br2684_devs)) {
 		net_dev = list_entry_brdev(br2684_devs.next);

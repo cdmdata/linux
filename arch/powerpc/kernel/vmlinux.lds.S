@@ -109,6 +109,11 @@ SECTIONS
 		__ptov_table_begin = .;
 		*(.ptov_fixup);
 		__ptov_table_end = .;
+#ifdef CONFIG_PPC_ISERIES
+		__dt_strings_start = .;
+		*(.dt_strings);
+		__dt_strings_end = .;
+#endif
 	}
 
 	.init.setup : AT(ADDR(.init.setup) - LOAD_OFFSET) {
@@ -155,7 +160,7 @@ SECTIONS
 		INIT_RAM_FS
 	}
 
-	PERCPU_SECTION(L1_CACHE_BYTES)
+	PERCPU(PAGE_SIZE)
 
 	. = ALIGN(8);
 	.machine.desc : AT(ADDR(.machine.desc) - LOAD_OFFSET) {
@@ -165,13 +170,7 @@ SECTIONS
 	}
 #ifdef CONFIG_RELOCATABLE
 	. = ALIGN(8);
-	.dynsym : AT(ADDR(.dynsym) - LOAD_OFFSET)
-	{
-#ifdef CONFIG_RELOCATABLE_PPC32
-		__dynamic_symtab = .;
-#endif
-		*(.dynsym)
-	}
+	.dynsym : AT(ADDR(.dynsym) - LOAD_OFFSET) { *(.dynsym) }
 	.dynstr : AT(ADDR(.dynstr) - LOAD_OFFSET) { *(.dynstr) }
 	.dynamic : AT(ADDR(.dynamic) - LOAD_OFFSET)
 	{

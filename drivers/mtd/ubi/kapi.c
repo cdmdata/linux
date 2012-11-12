@@ -40,9 +40,7 @@ void ubi_do_get_device_info(struct ubi_device *ubi, struct ubi_device_info *di)
 {
 	di->ubi_num = ubi->ubi_num;
 	di->leb_size = ubi->leb_size;
-	di->leb_start = ubi->leb_start;
 	di->min_io_size = ubi->min_io_size;
-	di->max_write_size = ubi->max_write_size;
 	di->ro_mode = ubi->ro_mode;
 	di->cdev = ubi->cdev.dev;
 }
@@ -410,7 +408,7 @@ int ubi_leb_read(struct ubi_volume_desc *desc, int lnum, char *buf, int offset,
 		return 0;
 
 	err = ubi_eba_read_leb(ubi, vol, lnum, buf, offset, len, check);
-	if (err && mtd_is_eccerr(err) && vol->vol_type == UBI_STATIC_VOLUME) {
+	if (err && err == -EBADMSG && vol->vol_type == UBI_STATIC_VOLUME) {
 		ubi_warn("mark volume %d as corrupted", vol_id);
 		vol->corrupted = 1;
 	}
@@ -714,7 +712,9 @@ int ubi_sync(int ubi_num)
 	if (!ubi)
 		return -ENODEV;
 
-	mtd_sync(ubi->mtd);
+	if (ubi->mtd->sync)
+		ubi->mtd->sync(ubi->mtd);
+
 	ubi_put_device(ubi);
 	return 0;
 }

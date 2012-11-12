@@ -24,8 +24,6 @@
  *
  */
 
-#include <linux/module.h>
-
 #include "ch7006_priv.h"
 
 /* DRM encoder functions */
@@ -35,7 +33,7 @@ static void ch7006_encoder_set_config(struct drm_encoder *encoder,
 {
 	struct ch7006_priv *priv = to_ch7006_priv(encoder);
 
-	priv->params = *(struct ch7006_encoder_params *)params;
+	priv->params = params;
 }
 
 static void ch7006_encoder_destroy(struct drm_encoder *encoder)
@@ -116,7 +114,7 @@ static void ch7006_encoder_mode_set(struct drm_encoder *encoder,
 {
 	struct i2c_client *client = drm_i2c_encoder_get_client(encoder);
 	struct ch7006_priv *priv = to_ch7006_priv(encoder);
-	struct ch7006_encoder_params *params = &priv->params;
+	struct ch7006_encoder_params *params = priv->params;
 	struct ch7006_state *state = &priv->state;
 	uint8_t *regs = state->regs;
 	struct ch7006_mode *mode = priv->mode;
@@ -252,7 +250,10 @@ static int ch7006_encoder_create_resources(struct drm_encoder *encoder,
 
 	drm_mode_create_tv_properties(dev, NUM_TV_NORMS, ch7006_tv_norm_names);
 
-	priv->scale_property = drm_property_create_range(dev, 0, "scale", 0, 2);
+	priv->scale_property = drm_property_create(dev, DRM_MODE_PROP_RANGE,
+						   "scale", 2);
+	priv->scale_property->values[0] = 0;
+	priv->scale_property->values[1] = 2;
 
 	drm_connector_attach_property(connector, conf->tv_select_subconnector_property,
 				      priv->select_subconnector);
@@ -427,22 +428,6 @@ static int ch7006_remove(struct i2c_client *client)
 	return 0;
 }
 
-static int ch7006_suspend(struct i2c_client *client, pm_message_t mesg)
-{
-	ch7006_dbg(client, "\n");
-
-	return 0;
-}
-
-static int ch7006_resume(struct i2c_client *client)
-{
-	ch7006_dbg(client, "\n");
-
-	ch7006_write(client, 0x3d, 0x0);
-
-	return 0;
-}
-
 static int ch7006_encoder_init(struct i2c_client *client,
 			       struct drm_device *dev,
 			       struct drm_encoder_slave *encoder)
@@ -469,7 +454,6 @@ static int ch7006_encoder_init(struct i2c_client *client,
 	priv->hmargin = 50;
 	priv->vmargin = 50;
 	priv->last_dpms = -1;
-	priv->chip_version = ch7006_read(client, CH7006_VERSION_ID);
 
 	if (ch7006_tv_norm) {
 		for (i = 0; i < NUM_TV_NORMS; i++) {
@@ -503,8 +487,6 @@ static struct drm_i2c_encoder_driver ch7006_driver = {
 	.i2c_driver = {
 		.probe = ch7006_probe,
 		.remove = ch7006_remove,
-		.suspend = ch7006_suspend,
-		.resume = ch7006_resume,
 
 		.driver = {
 			.name = "ch7006",

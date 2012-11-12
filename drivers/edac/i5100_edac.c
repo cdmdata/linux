@@ -11,7 +11,7 @@
  *
  * The intel 5100 has two independent channels. EDAC core currently
  * can not reflect this configuration so instead the chip-select
- * rows for each respective channel are laid out one after another,
+ * rows for each respective channel are layed out one after another,
  * the first half belonging to channel 0, the second half belonging
  * to channel 1.
  */
@@ -49,7 +49,7 @@
 #define		I5100_FERR_NF_MEM_M6ERR_MASK	(1 << 6)
 #define		I5100_FERR_NF_MEM_M5ERR_MASK	(1 << 5)
 #define		I5100_FERR_NF_MEM_M4ERR_MASK	(1 << 4)
-#define		I5100_FERR_NF_MEM_M1ERR_MASK	(1 << 1)
+#define		I5100_FERR_NF_MEM_M1ERR_MASK	1
 #define		I5100_FERR_NF_MEM_ANY_MASK	\
 			(I5100_FERR_NF_MEM_M16ERR_MASK | \
 			I5100_FERR_NF_MEM_M15ERR_MASK | \
@@ -535,20 +535,23 @@ static void i5100_read_log(struct mem_ctl_info *mci, int chan,
 static void i5100_check_error(struct mem_ctl_info *mci)
 {
 	struct i5100_priv *priv = mci->pvt_info;
-	u32 dw, dw2;
+	u32 dw;
+
 
 	pci_read_config_dword(priv->mc, I5100_FERR_NF_MEM, &dw);
 	if (i5100_ferr_nf_mem_any(dw)) {
+		u32 dw2;
 
 		pci_read_config_dword(priv->mc, I5100_NERR_NF_MEM, &dw2);
+		if (dw2)
+			pci_write_config_dword(priv->mc, I5100_NERR_NF_MEM,
+					       dw2);
+		pci_write_config_dword(priv->mc, I5100_FERR_NF_MEM, dw);
 
 		i5100_read_log(mci, i5100_ferr_nf_mem_chan_indx(dw),
 			       i5100_ferr_nf_mem_any(dw),
 			       i5100_nerr_nf_mem_any(dw2));
-
-		pci_write_config_dword(priv->mc, I5100_NERR_NF_MEM, dw2);
 	}
-	pci_write_config_dword(priv->mc, I5100_FERR_NF_MEM, dw);
 }
 
 /* The i5100 chipset will scrub the entire memory once, then
@@ -586,13 +589,14 @@ static void i5100_refresh_scrubbing(struct work_struct *work)
 /*
  * The bandwidth is based on experimentation, feel free to refine it.
  */
-static int i5100_set_scrub_rate(struct mem_ctl_info *mci, u32 bandwidth)
+static int i5100_set_scrub_rate(struct mem_ctl_info *mci,
+				       u32 *bandwidth)
 {
 	struct i5100_priv *priv = mci->pvt_info;
 	u32 dw;
 
 	pci_read_config_dword(priv->mc, I5100_MC, &dw);
-	if (bandwidth) {
+	if (*bandwidth) {
 		priv->scrub_enable = 1;
 		dw |= I5100_MC_SCRBEN_MASK;
 		schedule_delayed_work(&(priv->i5100_scrubbing),
@@ -606,19 +610,22 @@ static int i5100_set_scrub_rate(struct mem_ctl_info *mci, u32 bandwidth)
 
 	pci_read_config_dword(priv->mc, I5100_MC, &dw);
 
-	bandwidth = 5900000 * i5100_mc_scrben(dw);
+	*bandwidth = 5900000 * i5100_mc_scrben(dw);
 
-	return bandwidth;
+	return 0;
 }
 
-static int i5100_get_scrub_rate(struct mem_ctl_info *mci)
+static int i5100_get_scrub_rate(struct mem_ctl_info *mci,
+				u32 *bandwidth)
 {
 	struct i5100_priv *priv = mci->pvt_info;
 	u32 dw;
 
 	pci_read_config_dword(priv->mc, I5100_MC, &dw);
 
-	return 5900000 * i5100_mc_scrben(dw);
+	*bandwidth = 5900000 * i5100_mc_scrben(dw);
+
+	return 0;
 }
 
 static struct pci_dev *pci_get_device_func(unsigned vendor,
@@ -1048,7 +1055,7 @@ static void __devexit i5100_remove_one(struct pci_dev *pdev)
 	edac_mc_free(mci);
 }
 
-static DEFINE_PCI_DEVICE_TABLE(i5100_pci_tbl) = {
+static const struct pci_device_id i5100_pci_tbl[] __devinitdata = {
 	/* Device 16, Function 0, Channel 0 Memory Map, Error Flag/Mask, ... */
 	{ PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_5100_16) },
 	{ 0, }

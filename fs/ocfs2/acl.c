@@ -24,6 +24,7 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 
+#define MLOG_MASK_PREFIX ML_INODE
 #include <cluster/masklog.h>
 
 #include "ocfs2.h"
@@ -208,10 +209,7 @@ static int ocfs2_acl_set_mode(struct inode *inode, struct buffer_head *di_bh,
 	}
 
 	inode->i_mode = new_mode;
-	inode->i_ctime = CURRENT_TIME;
 	di->i_mode = cpu_to_le16(inode->i_mode);
-	di->i_ctime = cpu_to_le64(inode->i_ctime.tv_sec);
-	di->i_ctime_nsec = cpu_to_le32(inode->i_ctime.tv_nsec);
 
 	ocfs2_journal_dirty(handle, di_bh);
 
@@ -247,7 +245,7 @@ static int ocfs2_set_acl(handle_t *handle,
 	case ACL_TYPE_ACCESS:
 		name_index = OCFS2_XATTR_INDEX_POSIX_ACL_ACCESS;
 		if (acl) {
-			umode_t mode = inode->i_mode;
+			mode_t mode = inode->i_mode;
 			ret = posix_acl_equiv_mode(acl, &mode);
 			if (ret < 0)
 				return ret;
@@ -290,32 +288,25 @@ static int ocfs2_set_acl(handle_t *handle,
 	return ret;
 }
 
-struct posix_acl *ocfs2_iop_get_acl(struct inode *inode, int type)
+int ocfs2_check_acl(struct inode *inode, int mask)
 {
-	struct ocfs2_super *osb;
-	struct buffer_head *di_bh = NULL;
-	struct posix_acl *acl;
-	int ret = -EAGAIN;
+	struct posix_acl *acl = ocfs2_get_acl(inode, ACL_TYPE_ACCESS);
 
-	osb = OCFS2_SB(inode->i_sb);
-	if (!(osb->s_mount_opt & OCFS2_MOUNT_POSIX_ACL))
-		return NULL;
+	if (IS_ERR(acl))
+		return PTR_ERR(acl);
+	if (acl) {
+		int ret = posix_acl_permission(inode, acl, mask);
+		posix_acl_release(acl);
+		return ret;
+	}
 
-	ret = ocfs2_read_inode_block(inode, &di_bh);
-	if (ret < 0)
-		return ERR_PTR(ret);
-
-	acl = ocfs2_get_acl_nolock(inode, type, di_bh);
-
-	brelse(di_bh);
-
-	return acl;
+	return -EAGAIN;
 }
 
 int ocfs2_acl_chmod(struct inode *inode)
 {
 	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
-	struct posix_acl *acl;
+	struct posix_acl *acl, *clone;
 	int ret;
 
 	if (S_ISLNK(inode->i_mode))
@@ -327,12 +318,15 @@ int ocfs2_acl_chmod(struct inode *inode)
 	acl = ocfs2_get_acl(inode, ACL_TYPE_ACCESS);
 	if (IS_ERR(acl) || !acl)
 		return PTR_ERR(acl);
-	ret = posix_acl_chmod(&acl, GFP_KERNEL, inode->i_mode);
-	if (ret)
-		return ret;
-	ret = ocfs2_set_acl(NULL, inode, NULL, ACL_TYPE_ACCESS,
-			    acl, NULL, NULL);
+	clone = posix_acl_clone(acl, GFP_KERNEL);
 	posix_acl_release(acl);
+	if (!clone)
+		return -ENOMEM;
+	ret = posix_acl_chmod_masq(clone, inode->i_mode);
+	if (!ret)
+		ret = ocfs2_set_acl(NULL, inode, NULL, ACL_TYPE_ACCESS,
+				    clone, NULL, NULL);
+	posix_acl_release(clone);
 	return ret;
 }
 
@@ -350,8 +344,8 @@ int ocfs2_init_acl(handle_t *handle,
 {
 	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
 	struct posix_acl *acl = NULL;
-	int ret = 0, ret2;
-	umode_t mode;
+	int ret = 0;
+	mode_t mode;
 
 	if (!S_ISLNK(inode->i_mode)) {
 		if (osb->s_mount_opt & OCFS2_MOUNT_POSIX_ACL) {
@@ -370,6 +364,8 @@ int ocfs2_init_acl(handle_t *handle,
 		}
 	}
 	if ((osb->s_mount_opt & OCFS2_MOUNT_POSIX_ACL) && acl) {
+		struct posix_acl *clone;
+
 		if (S_ISDIR(inode->i_mode)) {
 			ret = ocfs2_set_acl(handle, inode, di_bh,
 					    ACL_TYPE_DEFAULT, acl,
@@ -377,22 +373,22 @@ int ocfs2_init_acl(handle_t *handle,
 			if (ret)
 				goto cleanup;
 		}
-		mode = inode->i_mode;
-		ret = posix_acl_create(&acl, GFP_NOFS, &mode);
-		if (ret < 0)
-			return ret;
-
-		ret2 = ocfs2_acl_set_mode(inode, di_bh, handle, mode);
-		if (ret2) {
-			mlog_errno(ret2);
-			ret = ret2;
+		clone = posix_acl_clone(acl, GFP_NOFS);
+		ret = -ENOMEM;
+		if (!clone)
 			goto cleanup;
+
+		mode = inode->i_mode;
+		ret = posix_acl_create_masq(clone, &mode);
+		if (ret >= 0) {
+			ret = ocfs2_acl_set_mode(inode, di_bh, handle, mode);
+			if (ret > 0) {
+				ret = ocfs2_set_acl(handle, inode,
+						    di_bh, ACL_TYPE_ACCESS,
+						    clone, meta_ac, data_ac);
+			}
 		}
-		if (ret > 0) {
-			ret = ocfs2_set_acl(handle, inode,
-					    di_bh, ACL_TYPE_ACCESS,
-					    acl, meta_ac, data_ac);
-		}
+		posix_acl_release(clone);
 	}
 cleanup:
 	posix_acl_release(acl);
@@ -471,7 +467,7 @@ static int ocfs2_xattr_set_acl(struct dentry *dentry, const char *name,
 	if (!(osb->s_mount_opt & OCFS2_MOUNT_POSIX_ACL))
 		return -EOPNOTSUPP;
 
-	if (!inode_owner_or_capable(inode))
+	if (!is_owner_or_cap(inode))
 		return -EPERM;
 
 	if (value) {

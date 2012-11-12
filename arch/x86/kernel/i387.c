@@ -16,7 +16,6 @@
 #include <asm/uaccess.h>
 #include <asm/ptrace.h>
 #include <asm/i387.h>
-#include <asm/fpu-internal.h>
 #include <asm/user.h>
 
 #ifdef CONFIG_X86_64
@@ -33,86 +32,6 @@
 # define user32_fxsr_struct	user_fxsr_struct
 #endif
 
-/*
- * Were we in an interrupt that interrupted kernel mode?
- *
- * We can do a kernel_fpu_begin/end() pair *ONLY* if that
- * pair does nothing at all: the thread must not have fpu (so
- * that we don't try to save the FPU state), and TS must
- * be set (so that the clts/stts pair does nothing that is
- * visible in the interrupted kernel thread).
- */
-static inline bool interrupted_kernel_fpu_idle(void)
-{
-	return !__thread_has_fpu(current) &&
-		(read_cr0() & X86_CR0_TS);
-}
-
-/*
- * Were we in user mode (or vm86 mode) when we were
- * interrupted?
- *
- * Doing kernel_fpu_begin/end() is ok if we are running
- * in an interrupt context from user mode - we'll just
- * save the FPU state as required.
- */
-static inline bool interrupted_user_mode(void)
-{
-	struct pt_regs *regs = get_irq_regs();
-	return regs && user_mode_vm(regs);
-}
-
-/*
- * Can we use the FPU in kernel mode with the
- * whole "kernel_fpu_begin/end()" sequence?
- *
- * It's always ok in process context (ie "not interrupt")
- * but it is sometimes ok even from an irq.
- */
-bool irq_fpu_usable(void)
-{
-	return !in_interrupt() ||
-		interrupted_user_mode() ||
-		interrupted_kernel_fpu_idle();
-}
-EXPORT_SYMBOL(irq_fpu_usable);
-
-void kernel_fpu_begin(void)
-{
-	struct task_struct *me = current;
-
-	WARN_ON_ONCE(!irq_fpu_usable());
-	preempt_disable();
-	if (__thread_has_fpu(me)) {
-		__save_init_fpu(me);
-		__thread_clear_has_fpu(me);
-		/* We do 'stts()' in kernel_fpu_end() */
-	} else {
-		percpu_write(fpu_owner_task, NULL);
-		clts();
-	}
-}
-EXPORT_SYMBOL(kernel_fpu_begin);
-
-void kernel_fpu_end(void)
-{
-	stts();
-	preempt_enable();
-}
-EXPORT_SYMBOL(kernel_fpu_end);
-
-void unlazy_fpu(struct task_struct *tsk)
-{
-	preempt_disable();
-	if (__thread_has_fpu(tsk)) {
-		__save_init_fpu(tsk);
-		__thread_fpu_end(tsk);
-	} else
-		tsk->fpu_counter = 0;
-	preempt_enable();
-}
-EXPORT_SYMBOL(unlazy_fpu);
-
 #ifdef CONFIG_MATH_EMULATION
 # define HAVE_HWFP		(boot_cpu_data.hard_math)
 #else
@@ -121,11 +40,10 @@ EXPORT_SYMBOL(unlazy_fpu);
 
 static unsigned int		mxcsr_feature_mask __read_mostly = 0xffffffffu;
 unsigned int xstate_size;
-EXPORT_SYMBOL_GPL(xstate_size);
 unsigned int sig_xstate_ia32_size = sizeof(struct _fpstate_ia32);
 static struct i387_fxsave_struct fx_scratch __cpuinitdata;
 
-static void __cpuinit mxcsr_feature_mask_init(void)
+void __cpuinit mxcsr_feature_mask_init(void)
 {
 	unsigned long mask = 0;
 
@@ -141,68 +59,62 @@ static void __cpuinit mxcsr_feature_mask_init(void)
 	stts();
 }
 
-static void __cpuinit init_thread_xstate(void)
+void __cpuinit init_thread_xstate(void)
 {
-	/*
-	 * Note that xstate_size might be overwriten later during
-	 * xsave_init().
-	 */
-
 	if (!HAVE_HWFP) {
-		/*
-		 * Disable xsave as we do not support it if i387
-		 * emulation is enabled.
-		 */
-		setup_clear_cpu_cap(X86_FEATURE_XSAVE);
-		setup_clear_cpu_cap(X86_FEATURE_XSAVEOPT);
 		xstate_size = sizeof(struct i387_soft_struct);
+		return;
+	}
+
+	if (cpu_has_xsave) {
+		xsave_cntxt_init();
 		return;
 	}
 
 	if (cpu_has_fxsr)
 		xstate_size = sizeof(struct i387_fxsave_struct);
+#ifdef CONFIG_X86_32
 	else
 		xstate_size = sizeof(struct i387_fsave_struct);
+#endif
 }
 
+#ifdef CONFIG_X86_64
 /*
  * Called at bootup to set up the initial FPU state that is later cloned
  * into all processes.
  */
-
 void __cpuinit fpu_init(void)
 {
-	unsigned long cr0;
-	unsigned long cr4_mask = 0;
+	unsigned long oldcr0 = read_cr0();
 
-	if (cpu_has_fxsr)
-		cr4_mask |= X86_CR4_OSFXSR;
-	if (cpu_has_xmm)
-		cr4_mask |= X86_CR4_OSXMMEXCPT;
-	if (cr4_mask)
-		set_in_cr4(cr4_mask);
+	set_in_cr4(X86_CR4_OSFXSR);
+	set_in_cr4(X86_CR4_OSXMMEXCPT);
 
-	cr0 = read_cr0();
-	cr0 &= ~(X86_CR0_TS|X86_CR0_EM); /* clear TS and EM */
-	if (!HAVE_HWFP)
-		cr0 |= X86_CR0_EM;
-	write_cr0(cr0);
+	write_cr0(oldcr0 & ~(X86_CR0_TS|X86_CR0_EM)); /* clear TS and EM */
 
+	/*
+	 * Boot processor to setup the FP and extended state context info.
+	 */
 	if (!smp_processor_id())
 		init_thread_xstate();
+	xsave_init();
 
 	mxcsr_feature_mask_init();
 	/* clean state in init */
 	current_thread_info()->status = 0;
 	clear_used_math();
 }
+#endif	/* CONFIG_X86_64 */
 
-void fpu_finit(struct fpu *fpu)
+static void fpu_finit(struct fpu *fpu)
 {
+#ifdef CONFIG_X86_32
 	if (!HAVE_HWFP) {
 		finit_soft_fpu(&fpu->state->soft);
 		return;
 	}
+#endif
 
 	if (cpu_has_fxsr) {
 		struct i387_fxsave_struct *fx = &fpu->state->fxsave;
@@ -220,13 +132,12 @@ void fpu_finit(struct fpu *fpu)
 		fp->fos = 0xffff0000u;
 	}
 }
-EXPORT_SYMBOL_GPL(fpu_finit);
 
 /*
  * The _current_ task is using the FPU for the first time
  * so initialize it and set the mxcsr to its default
  * value at reset if we support XMM instructions and then
- * remember the current task has used the FPU.
+ * remeber the current task has used the FPU.
  */
 int init_fpu(struct task_struct *tsk)
 {
@@ -235,7 +146,6 @@ int init_fpu(struct task_struct *tsk)
 	if (tsk_used_math(tsk)) {
 		if (HAVE_HWFP && tsk == current)
 			unlazy_fpu(tsk);
-		tsk->thread.fpu.last_cpu = ~0;
 		return 0;
 	}
 
@@ -251,7 +161,6 @@ int init_fpu(struct task_struct *tsk)
 	set_stopped_child_used_math(tsk);
 	return 0;
 }
-EXPORT_SYMBOL_GPL(init_fpu);
 
 /*
  * The xstateregs_active() routine is the same as the fpregs_active() routine,
@@ -281,8 +190,6 @@ int xfpregs_get(struct task_struct *target, const struct user_regset *regset,
 	if (ret)
 		return ret;
 
-	sanitize_i387_state(target);
-
 	return user_regset_copyout(&pos, &count, &kbuf, &ubuf,
 				   &target->thread.fpu.state->fxsave, 0, -1);
 }
@@ -299,8 +206,6 @@ int xfpregs_set(struct task_struct *target, const struct user_regset *regset,
 	ret = init_fpu(target);
 	if (ret)
 		return ret;
-
-	sanitize_i387_state(target);
 
 	ret = user_regset_copyin(&pos, &count, &kbuf, &ubuf,
 				 &target->thread.fpu.state->fxsave, 0, -1);
@@ -403,7 +308,7 @@ static inline unsigned short twd_i387_to_fxsr(unsigned short twd)
 	return tmp;
 }
 
-#define FPREG_ADDR(f, n)	((void *)&(f)->st_space + (n) * 16)
+#define FPREG_ADDR(f, n)	((void *)&(f)->st_space + (n) * 16);
 #define FP_EXP_TAG_VALID	0
 #define FP_EXP_TAG_ZERO		1
 #define FP_EXP_TAG_SPECIAL	2
@@ -469,17 +374,19 @@ convert_from_fxsr(struct user_i387_ia32_struct *env, struct task_struct *tsk)
 #ifdef CONFIG_X86_64
 	env->fip = fxsave->rip;
 	env->foo = fxsave->rdp;
-	/*
-	 * should be actually ds/cs at fpu exception time, but
-	 * that information is not available in 64bit mode.
-	 */
-	env->fcs = task_pt_regs(tsk)->cs;
 	if (tsk == current) {
-		savesegment(ds, env->fos);
+		/*
+		 * should be actually ds/cs at fpu exception time, but
+		 * that information is not available in 64bit mode.
+		 */
+		asm("mov %%ds, %[fos]" : [fos] "=r" (env->fos));
+		asm("mov %%cs, %[fcs]" : [fcs] "=r" (env->fcs));
 	} else {
-		env->fos = tsk->thread.ds;
+		struct pt_regs *regs = task_pt_regs(tsk);
+
+		env->fos = 0xffff0000 | tsk->thread.ds;
+		env->fcs = regs->cs;
 	}
-	env->fos |= 0xffff0000;
 #else
 	env->fip = fxsave->fip;
 	env->fcs = (u16) fxsave->fcs | ((u32) fxsave->fop << 16);
@@ -539,8 +446,6 @@ int fpregs_get(struct task_struct *target, const struct user_regset *regset,
 					   -1);
 	}
 
-	sanitize_i387_state(target);
-
 	if (kbuf && pos == 0 && count == sizeof(env)) {
 		convert_from_fxsr(kbuf, target);
 		return 0;
@@ -561,8 +466,6 @@ int fpregs_set(struct task_struct *target, const struct user_regset *regset,
 	ret = init_fpu(target);
 	if (ret)
 		return ret;
-
-	sanitize_i387_state(target);
 
 	if (!HAVE_HWFP)
 		return fpregs_soft_set(target, regset, pos, count, kbuf, ubuf);
@@ -629,9 +532,6 @@ static int save_i387_xsave(void __user *buf)
 	struct task_struct *tsk = current;
 	struct _fpstate_ia32 __user *fx = buf;
 	int err = 0;
-
-
-	sanitize_i387_state(tsk);
 
 	/*
 	 * For legacy compatible, we always set FP/SSE bits in the bit

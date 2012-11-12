@@ -1,6 +1,5 @@
 /*
- * Copyright 2008-2009 Freescale Semiconductor, Inc. All Rights Reserved.
- * Copyright 2010 Orex Computed Radiography
+ * Copyright 2008-2010 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -29,13 +28,16 @@
  * not supported by the hardware.
  */
 
+/* #define DEBUG */
+/* #define DI_DEBUG_REGIO */
+
+#include <linux/slab.h>
 #include <linux/io.h>
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/rtc.h>
-#include <linux/sched.h>
 #include <linux/workqueue.h>
 
 /* DryIce Register Definitions */
@@ -65,56 +67,78 @@
 #define DIER_WEIE (1 << 7)       /* Write Error Interrupt Enable */
 #define DIER_CAIE (1 << 4)       /* Clock Alarm Interrupt Enable */
 
-/**
- * struct imxdi_dev - private imxdi rtc data
- * @pdev: pionter to platform dev
- * @rtc: pointer to rtc struct
- * @ioaddr: IO registers pointer
- * @irq: dryice normal interrupt
- * @clk: input reference clock
- * @dsr: copy of the DSR register
- * @irq_lock: interrupt enable register (DIER) lock
- * @write_wait: registers write complete queue
- * @write_mutex: serialize registers write
- * @work: schedule alarm work
+#ifndef DI_DEBUG_REGIO
+/* dryice read register */
+#define di_read(pdata, reg)  __raw_readl((pdata)->ioaddr + (reg))
+
+/* dryice write register */
+#define di_write(pdata, val, reg)  __raw_writel((val), (pdata)->ioaddr + (reg))
+#else
+/* dryice read register - debug version */
+static inline u32 di_read(struct rtc_drv_data *pdata, int reg)
+{
+	u32 val = __raw_readl(pdata->ioaddr + reg);
+	pr_info("di_read(0x%02x) = 0x%08x\n", reg, val);
+	return val;
+}
+
+/* dryice write register - debug version */
+static inline void di_write(struct rtc_drv_data *pdata, u32 val, int reg)
+{
+	printk(KERN_INFO "di_write(0x%08x, 0x%02x)\n", val, reg);
+	__raw_writel(val, pdata->ioaddr + reg);
+}
+#endif
+
+/*
+ * dryice write register with wait and error handling.
+ * all registers, except for DIER, should use this method.
  */
-struct imxdi_dev {
-	struct platform_device *pdev;
-	struct rtc_device *rtc;
-	void __iomem *ioaddr;
-	int irq;
-	struct clk *clk;
-	u32 dsr;
-	spinlock_t irq_lock;
-	wait_queue_head_t write_wait;
-	struct mutex write_mutex;
-	struct work_struct work;
+#define di_write_wait_err(pdata, val, reg, rc, label) \
+		do { \
+			if (di_write_wait((pdata), (val), (reg))) { \
+				rc = -EIO; \
+				goto label; \
+			} \
+		} while (0)
+
+struct rtc_drv_data {
+	struct platform_device *pdev;  /* pointer to platform dev */
+	struct rtc_device *rtc;        /* pointer to rtc struct */
+	unsigned long baseaddr;        /* physical bass address */
+	void __iomem *ioaddr;          /* virtual base address */
+	int size;                      /* size of register region */
+	int irq;                       /* dryice normal irq */
+	struct clk *clk;               /* dryice clock control */
+	u32 dsr;                       /* copy of dsr reg from isr */
+	spinlock_t irq_lock;           /* irq resource lock */
+	wait_queue_head_t write_wait;  /* write-complete queue */
+	struct mutex write_mutex;      /* force reg writes to be sequential */
+	struct work_struct work;       /* schedule alarm work */
 };
 
 /*
  * enable a dryice interrupt
  */
-static void di_int_enable(struct imxdi_dev *imxdi, u32 intr)
+static inline void di_int_enable(struct rtc_drv_data *pdata, u32 intr)
 {
 	unsigned long flags;
 
-	spin_lock_irqsave(&imxdi->irq_lock, flags);
-	__raw_writel(__raw_readl(imxdi->ioaddr + DIER) | intr,
-			imxdi->ioaddr + DIER);
-	spin_unlock_irqrestore(&imxdi->irq_lock, flags);
+	spin_lock_irqsave(&pdata->irq_lock, flags);
+	di_write(pdata, di_read(pdata, DIER) | intr, DIER);
+	spin_unlock_irqrestore(&pdata->irq_lock, flags);
 }
 
 /*
  * disable a dryice interrupt
  */
-static void di_int_disable(struct imxdi_dev *imxdi, u32 intr)
+static inline void di_int_disable(struct rtc_drv_data *pdata, u32 intr)
 {
 	unsigned long flags;
 
-	spin_lock_irqsave(&imxdi->irq_lock, flags);
-	__raw_writel(__raw_readl(imxdi->ioaddr + DIER) & ~intr,
-			imxdi->ioaddr + DIER);
-	spin_unlock_irqrestore(&imxdi->irq_lock, flags);
+	spin_lock_irqsave(&pdata->irq_lock, flags);
+	di_write(pdata, di_read(pdata, DIER) & ~intr, DIER);
+	spin_unlock_irqrestore(&pdata->irq_lock, flags);
 }
 
 /*
@@ -124,23 +148,25 @@ static void di_int_disable(struct imxdi_dev *imxdi, u32 intr)
  * normal operation.  Clearing the flag requires another write, so the root
  * cause of the problem may need to be fixed before the flag can be cleared.
  */
-static void clear_write_error(struct imxdi_dev *imxdi)
+static void clear_write_error(struct rtc_drv_data *pdata)
 {
 	int cnt;
 
-	dev_warn(&imxdi->pdev->dev, "WARNING: Register write error!\n");
+	dev_warn(&pdata->pdev->dev, "WARNING: Register write error!\n");
 
-	/* clear the write error flag */
-	__raw_writel(DSR_WEF, imxdi->ioaddr + DSR);
+	for (;;) {
+		/* clear the write error flag */
+		di_write(pdata, DSR_WEF, DSR);
 
-	/* wait for it to take effect */
-	for (cnt = 0; cnt < 1000; cnt++) {
-		if ((__raw_readl(imxdi->ioaddr + DSR) & DSR_WEF) == 0)
-			return;
-		udelay(10);
-	}
-	dev_err(&imxdi->pdev->dev,
+		/* wait for it to take effect */
+		for (cnt = 0; cnt < 100; cnt++) {
+			if ((di_read(pdata, DSR) & DSR_WEF) == 0)
+				return;
+			udelay(10);
+		}
+		dev_err(&pdata->pdev->dev,
 			"ERROR: Cannot clear write-error flag!\n");
+	}
 }
 
 /*
@@ -149,44 +175,61 @@ static void clear_write_error(struct imxdi_dev *imxdi)
  * This function uses interrupts to determine when the
  * write has completed.
  */
-static int di_write_wait(struct imxdi_dev *imxdi, u32 val, int reg)
+static int di_write_wait(struct rtc_drv_data *pdata, u32 val, int reg)
 {
 	int ret;
 	int rc = 0;
 
 	/* serialize register writes */
-	mutex_lock(&imxdi->write_mutex);
+	mutex_lock(&pdata->write_mutex);
 
 	/* enable the write-complete interrupt */
-	di_int_enable(imxdi, DIER_WCIE);
+	di_int_enable(pdata, DIER_WCIE);
 
-	imxdi->dsr = 0;
+	pdata->dsr = 0;
 
 	/* do the register write */
-	__raw_writel(val, imxdi->ioaddr + reg);
+	di_write(pdata, val, reg);
 
 	/* wait for the write to finish */
-	ret = wait_event_interruptible_timeout(imxdi->write_wait,
-			imxdi->dsr & (DSR_WCF | DSR_WEF), msecs_to_jiffies(1));
-	if (ret < 0) {
-		rc = ret;
-		goto out;
-	} else if (ret == 0) {
-		dev_warn(&imxdi->pdev->dev,
-				"Write-wait timeout "
-				"val = 0x%08x reg = 0x%08x\n", val, reg);
-	}
+	ret = wait_event_interruptible_timeout(pdata->write_wait,
+					       pdata->dsr & (DSR_WCF | DSR_WEF),
+					       1 * HZ);
+	if (ret == 0)
+		dev_warn(&pdata->pdev->dev, "Write-wait timeout\n");
 
 	/* check for write error */
-	if (imxdi->dsr & DSR_WEF) {
-		clear_write_error(imxdi);
+	if (pdata->dsr & DSR_WEF) {
+		clear_write_error(pdata);
 		rc = -EIO;
 	}
-
-out:
-	mutex_unlock(&imxdi->write_mutex);
-
+	mutex_unlock(&pdata->write_mutex);
 	return rc;
+}
+
+/*
+ * rtc device ioctl
+ *
+ * The rtc framework handles the basic rtc ioctls on behalf
+ * of the driver by calling the functions registered in the
+ * rtc_ops structure.
+ */
+static int dryice_rtc_ioctl(struct device *dev, unsigned int cmd,
+			    unsigned long arg)
+{
+	struct rtc_drv_data *pdata = dev_get_drvdata(dev);
+
+	dev_dbg(dev, "%s(0x%x)\n", __func__, cmd);
+	switch (cmd) {
+	case RTC_AIE_OFF:  /* alarm disable */
+		di_int_disable(pdata, DIER_CAIE);
+		return 0;
+
+	case RTC_AIE_ON:  /* alarm enable */
+		di_int_enable(pdata, DIER_CAIE);
+		return 0;
+	}
+	return -ENOIOCTLCMD;
 }
 
 /*
@@ -194,10 +237,11 @@ out:
  */
 static int dryice_rtc_read_time(struct device *dev, struct rtc_time *tm)
 {
-	struct imxdi_dev *imxdi = dev_get_drvdata(dev);
+	struct rtc_drv_data *pdata = dev_get_drvdata(dev);
 	unsigned long now;
 
-	now = __raw_readl(imxdi->ioaddr + DTCMR);
+	dev_dbg(dev, "%s\n", __func__);
+	now = di_read(pdata, DTCMR);
 	rtc_time_to_tm(now, tm);
 
 	return 0;
@@ -207,30 +251,21 @@ static int dryice_rtc_read_time(struct device *dev, struct rtc_time *tm)
  * set the seconds portion of dryice time counter and clear the
  * fractional part.
  */
-static int dryice_rtc_set_mmss(struct device *dev, unsigned long secs)
+static int dryice_rtc_set_time(struct device *dev, struct rtc_time *tm)
 {
-	struct imxdi_dev *imxdi = dev_get_drvdata(dev);
+	struct rtc_drv_data *pdata = dev_get_drvdata(dev);
+	unsigned long now;
 	int rc;
 
-	/* zero the fractional part first */
-	rc = di_write_wait(imxdi, 0, DTCLR);
-	if (rc == 0)
-		rc = di_write_wait(imxdi, secs, DTCMR);
-
+	dev_dbg(dev, "%s\n", __func__);
+	rc = rtc_tm_to_time(tm, &now);
+	if (rc == 0) {
+		/* zero the fractional part first */
+		di_write_wait_err(pdata, 0, DTCLR, rc, err);
+		di_write_wait_err(pdata, now, DTCMR, rc, err);
+	}
+err:
 	return rc;
-}
-
-static int dryice_rtc_alarm_irq_enable(struct device *dev,
-		unsigned int enabled)
-{
-	struct imxdi_dev *imxdi = dev_get_drvdata(dev);
-
-	if (enabled)
-		di_int_enable(imxdi, DIER_CAIE);
-	else
-		di_int_disable(imxdi, DIER_CAIE);
-
-	return 0;
 }
 
 /*
@@ -239,22 +274,23 @@ static int dryice_rtc_alarm_irq_enable(struct device *dev,
  */
 static int dryice_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alarm)
 {
-	struct imxdi_dev *imxdi = dev_get_drvdata(dev);
+	struct rtc_drv_data *pdata = dev_get_drvdata(dev);
 	u32 dcamr;
 
-	dcamr = __raw_readl(imxdi->ioaddr + DCAMR);
+	dev_dbg(dev, "%s\n", __func__);
+	dcamr = di_read(pdata, DCAMR);
 	rtc_time_to_tm(dcamr, &alarm->time);
 
 	/* alarm is enabled if the interrupt is enabled */
-	alarm->enabled = (__raw_readl(imxdi->ioaddr + DIER) & DIER_CAIE) != 0;
+	alarm->enabled = (di_read(pdata, DIER) & DIER_CAIE) != 0;
 
 	/* don't allow the DSR read to mess up DSR_WCF */
-	mutex_lock(&imxdi->write_mutex);
+	mutex_lock(&pdata->write_mutex);
 
 	/* alarm is pending if the alarm flag is set */
-	alarm->pending = (__raw_readl(imxdi->ioaddr + DSR) & DSR_CAF) != 0;
+	alarm->pending = (di_read(pdata, DSR) & DSR_CAF) != 0;
 
-	mutex_unlock(&imxdi->write_mutex);
+	mutex_unlock(&pdata->write_mutex);
 
 	return 0;
 }
@@ -264,39 +300,38 @@ static int dryice_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alarm)
  */
 static int dryice_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alarm)
 {
-	struct imxdi_dev *imxdi = dev_get_drvdata(dev);
+	struct rtc_drv_data *pdata = dev_get_drvdata(dev);
 	unsigned long now;
 	unsigned long alarm_time;
 	int rc;
 
+	dev_dbg(dev, "%s\n", __func__);
 	rc = rtc_tm_to_time(&alarm->time, &alarm_time);
 	if (rc)
 		return rc;
 
 	/* don't allow setting alarm in the past */
-	now = __raw_readl(imxdi->ioaddr + DTCMR);
+	now = di_read(pdata, DTCMR);
 	if (alarm_time < now)
 		return -EINVAL;
 
 	/* write the new alarm time */
-	rc = di_write_wait(imxdi, (u32)alarm_time, DCAMR);
-	if (rc)
-		return rc;
+	di_write_wait_err(pdata, (u32)alarm_time, DCAMR, rc, err);
 
 	if (alarm->enabled)
-		di_int_enable(imxdi, DIER_CAIE);  /* enable alarm intr */
+		di_int_enable(pdata, DIER_CAIE);  /* enable alarm intr */
 	else
-		di_int_disable(imxdi, DIER_CAIE); /* disable alarm intr */
-
-	return 0;
+		di_int_disable(pdata, DIER_CAIE); /* disable alarm intr */
+err:
+	return rc;
 }
 
 static struct rtc_class_ops dryice_rtc_ops = {
-	.read_time		= dryice_rtc_read_time,
-	.set_mmss		= dryice_rtc_set_mmss,
-	.alarm_irq_enable	= dryice_rtc_alarm_irq_enable,
-	.read_alarm		= dryice_rtc_read_alarm,
-	.set_alarm		= dryice_rtc_set_alarm,
+	.ioctl = dryice_rtc_ioctl,
+	.read_time = dryice_rtc_read_time,
+	.set_time = dryice_rtc_set_time,
+	.read_alarm = dryice_rtc_read_alarm,
+	.set_alarm = dryice_rtc_set_alarm,
 };
 
 /*
@@ -304,30 +339,30 @@ static struct rtc_class_ops dryice_rtc_ops = {
  */
 static irqreturn_t dryice_norm_irq(int irq, void *dev_id)
 {
-	struct imxdi_dev *imxdi = dev_id;
+	struct rtc_drv_data *pdata = dev_id;
 	u32 dsr, dier;
 	irqreturn_t rc = IRQ_NONE;
 
-	dier = __raw_readl(imxdi->ioaddr + DIER);
+	dier = di_read(pdata, DIER);
 
 	/* handle write complete and write error cases */
 	if ((dier & DIER_WCIE)) {
 		/*If the write wait queue is empty then there is no pending
-		  operations. It means the interrupt is for DryIce -Security.
-		  IRQ must be returned as none.*/
-		if (list_empty_careful(&imxdi->write_wait.task_list))
+		   operations. It means the interrupt is for DryIce -Security.
+		   IRQ must be returned as none.*/
+		if (list_empty_careful(&pdata->write_wait.task_list))
 			return rc;
 
 		/* DSR_WCF clears itself on DSR read */
-		dsr = __raw_readl(imxdi->ioaddr + DSR);
+	    dsr = di_read(pdata, DSR);
 		if ((dsr & (DSR_WCF | DSR_WEF))) {
 			/* mask the interrupt */
-			di_int_disable(imxdi, DIER_WCIE);
+			di_int_disable(pdata, DIER_WCIE);
 
 			/* save the dsr value for the wait queue */
-			imxdi->dsr |= dsr;
+			pdata->dsr |= dsr;
 
-			wake_up_interruptible(&imxdi->write_wait);
+			wake_up_interruptible(&pdata->write_wait);
 			rc = IRQ_HANDLED;
 		}
 	}
@@ -335,13 +370,13 @@ static irqreturn_t dryice_norm_irq(int irq, void *dev_id)
 	/* handle the alarm case */
 	if ((dier & DIER_CAIE)) {
 		/* DSR_WCF clears itself on DSR read */
-		dsr = __raw_readl(imxdi->ioaddr + DSR);
+	    dsr = di_read(pdata, DSR);
 		if (dsr & DSR_CAF) {
 			/* mask the interrupt */
-			di_int_disable(imxdi, DIER_CAIE);
+			di_int_disable(pdata, DIER_CAIE);
 
 			/* finish alarm in user context */
-			schedule_work(&imxdi->work);
+			schedule_work(&pdata->work);
 			rc = IRQ_HANDLED;
 		}
 	}
@@ -354,14 +389,20 @@ static irqreturn_t dryice_norm_irq(int irq, void *dev_id)
  */
 static void dryice_work(struct work_struct *work)
 {
-	struct imxdi_dev *imxdi = container_of(work,
-			struct imxdi_dev, work);
+	struct rtc_drv_data *pdata = container_of(work, struct rtc_drv_data,
+						  work);
+	int rc;
 
 	/* dismiss the interrupt (ignore error) */
-	di_write_wait(imxdi, DSR_CAF, DSR);
-
-	/* pass the alarm event to the rtc framework. */
-	rtc_update_irq(imxdi->rtc, 1, RTC_AF | RTC_IRQF);
+	di_write_wait_err(pdata, DSR_CAF, DSR, rc, err);
+err:
+	/*
+	 * pass the alarm event to the rtc framework. note that
+	 * rtc_update_irq expects to be called with interrupts off.
+	 */
+	local_irq_disable();
+	rtc_update_irq(pdata->rtc, 1, RTC_AF | RTC_IRQF);
+	local_irq_enable();
 }
 
 /*
@@ -369,126 +410,145 @@ static void dryice_work(struct work_struct *work)
  */
 static int dryice_rtc_probe(struct platform_device *pdev)
 {
+	struct rtc_device *rtc;
 	struct resource *res;
-	struct imxdi_dev *imxdi;
-	int rc;
+	struct rtc_drv_data *pdata = NULL;
+	void __iomem *ioaddr = NULL;
+	int rc = 0;
+
+	dev_dbg(&pdev->dev, "%s\n", __func__);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res)
 		return -ENODEV;
 
-	imxdi = devm_kzalloc(&pdev->dev, sizeof(*imxdi), GFP_KERNEL);
-	if (!imxdi)
+	pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
+	if (!pdata)
 		return -ENOMEM;
 
-	imxdi->pdev = pdev;
+	pdata->pdev = pdev;
+	pdata->irq = -1;
+	pdata->size = res->end - res->start + 1;
 
-	if (!devm_request_mem_region(&pdev->dev, res->start, resource_size(res),
-				pdev->name))
-		return -EBUSY;
+	if (!request_mem_region(res->start, pdata->size, pdev->name)) {
+		rc = -EBUSY;
+		goto err;
+	}
+	pdata->baseaddr = res->start;
+	ioaddr = ioremap(pdata->baseaddr, pdata->size);
+	if (!ioaddr) {
+		rc = -ENOMEM;
+		goto err;
+	}
+	pdata->ioaddr = ioaddr;
+	pdata->irq = platform_get_irq(pdev, 0);
 
-	imxdi->ioaddr = devm_ioremap(&pdev->dev, res->start,
-			resource_size(res));
-	if (imxdi->ioaddr == NULL)
-		return -ENOMEM;
+	init_waitqueue_head(&pdata->write_wait);
 
-	imxdi->irq = platform_get_irq(pdev, 0);
-	if (imxdi->irq < 0)
-		return imxdi->irq;
+	INIT_WORK(&pdata->work, dryice_work);
 
-	init_waitqueue_head(&imxdi->write_wait);
+	mutex_init(&pdata->write_mutex);
 
-	INIT_WORK(&imxdi->work, dryice_work);
+	pdata->clk = clk_get(NULL, "dryice_clk");
+	clk_enable(pdata->clk);
 
-	mutex_init(&imxdi->write_mutex);
-
-	imxdi->clk = clk_get(&pdev->dev, NULL);
-	if (IS_ERR(imxdi->clk))
-		return PTR_ERR(imxdi->clk);
-	clk_enable(imxdi->clk);
+	if (pdata->irq >= 0) {
+		if (request_irq(pdata->irq, dryice_norm_irq, IRQF_SHARED,
+				pdev->name, pdata) < 0) {
+			dev_warn(&pdev->dev, "interrupt not available.\n");
+			pdata->irq = -1;
+			goto err;
+		}
+	}
 
 	/*
 	 * Initialize dryice hardware
 	 */
 
-	/* mask all interrupts */
-	__raw_writel(0, imxdi->ioaddr + DIER);
-
-	rc = devm_request_irq(&pdev->dev, imxdi->irq, dryice_norm_irq,
-			IRQF_SHARED, pdev->name, imxdi);
-	if (rc) {
-		dev_warn(&pdev->dev, "interrupt not available.\n");
-		goto err;
-	}
-
 	/* put dryice into valid state */
-	if (__raw_readl(imxdi->ioaddr + DSR) & DSR_NVF) {
-		rc = di_write_wait(imxdi, DSR_NVF | DSR_SVF, DSR);
-		if (rc)
-			goto err;
-	}
+	if (di_read(pdata, DSR) & DSR_NVF)
+		di_write_wait_err(pdata, DSR_NVF | DSR_SVF, DSR, rc, err);
+
+	/* mask alarm interrupt */
+	di_int_disable(pdata, DIER_CAIE);
 
 	/* initialize alarm */
-	rc = di_write_wait(imxdi, DCAMR_UNSET, DCAMR);
-	if (rc)
-		goto err;
-	rc = di_write_wait(imxdi, 0, DCALR);
-	if (rc)
-		goto err;
+	di_write_wait_err(pdata, DCAMR_UNSET, DCAMR, rc, err);
+	di_write_wait_err(pdata, 0, DCALR, rc, err);
 
 	/* clear alarm flag */
-	if (__raw_readl(imxdi->ioaddr + DSR) & DSR_CAF) {
-		rc = di_write_wait(imxdi, DSR_CAF, DSR);
-		if (rc)
-			goto err;
-	}
+	if (di_read(pdata, DSR) & DSR_CAF)
+		di_write_wait_err(pdata, DSR_CAF, DSR, rc, err);
 
 	/* the timer won't count if it has never been written to */
-	if (__raw_readl(imxdi->ioaddr + DTCMR) == 0) {
-		rc = di_write_wait(imxdi, 0, DTCMR);
-		if (rc)
-			goto err;
-	}
+	if (!di_read(pdata, DTCMR))
+		di_write_wait_err(pdata, 0, DTCMR, rc, err);
 
 	/* start keeping time */
-	if (!(__raw_readl(imxdi->ioaddr + DCR) & DCR_TCE)) {
-		rc = di_write_wait(imxdi,
-				__raw_readl(imxdi->ioaddr + DCR) | DCR_TCE,
-				DCR);
-		if (rc)
-			goto err;
-	}
+	if (!(di_read(pdata, DCR) & DCR_TCE))
+		di_write_wait_err(pdata, di_read(pdata, DCR) | DCR_TCE, DCR,
+				  rc, err);
 
-	platform_set_drvdata(pdev, imxdi);
-	imxdi->rtc = rtc_device_register(pdev->name, &pdev->dev,
+	rtc = rtc_device_register(pdev->name, &pdev->dev,
 				  &dryice_rtc_ops, THIS_MODULE);
-	if (IS_ERR(imxdi->rtc)) {
-		rc = PTR_ERR(imxdi->rtc);
+	if (IS_ERR(rtc)) {
+		rc = PTR_ERR(rtc);
 		goto err;
 	}
+	pdata->rtc = rtc;
+	platform_set_drvdata(pdev, pdata);
 
 	return 0;
-
 err:
-	clk_disable(imxdi->clk);
-	clk_put(imxdi->clk);
+	if (pdata->rtc)
+		rtc_device_unregister(pdata->rtc);
+
+	if (pdata->irq >= 0)
+		free_irq(pdata->irq, pdata);
+
+	if (pdata->clk) {
+		clk_disable(pdata->clk);
+		clk_put(pdata->clk);
+	}
+
+	if (pdata->ioaddr)
+		iounmap(pdata->ioaddr);
+
+	if (pdata->baseaddr)
+		release_mem_region(pdata->baseaddr, pdata->size);
+
+	kfree(pdata);
 
 	return rc;
 }
 
-static int __devexit dryice_rtc_remove(struct platform_device *pdev)
+static int __exit dryice_rtc_remove(struct platform_device *pdev)
 {
-	struct imxdi_dev *imxdi = platform_get_drvdata(pdev);
+	struct rtc_drv_data *pdata = platform_get_drvdata(pdev);
 
-	flush_work(&imxdi->work);
+	flush_scheduled_work();
 
-	/* mask all interrupts */
-	__raw_writel(0, imxdi->ioaddr + DIER);
+	if (pdata->rtc)
+		rtc_device_unregister(pdata->rtc);
 
-	rtc_device_unregister(imxdi->rtc);
+	/* mask alarm interrupt */
+	di_int_disable(pdata, DIER_CAIE);
 
-	clk_disable(imxdi->clk);
-	clk_put(imxdi->clk);
+	if (pdata->irq >= 0)
+		free_irq(pdata->irq, pdata);
+
+	if (pdata->clk) {
+		clk_disable(pdata->clk);
+		clk_put(pdata->clk);
+	}
+
+	if (pdata->ioaddr)
+		iounmap(pdata->ioaddr);
+
+	if (pdata->baseaddr)
+		release_mem_region(pdata->baseaddr, pdata->size);
+
+	kfree(pdata);
 
 	return 0;
 }
@@ -498,12 +558,14 @@ static struct platform_driver dryice_rtc_driver = {
 		   .name = "imxdi_rtc",
 		   .owner = THIS_MODULE,
 		   },
-	.remove = __devexit_p(dryice_rtc_remove),
+	.probe = dryice_rtc_probe,
+	.remove = __exit_p(dryice_rtc_remove),
 };
 
 static int __init dryice_rtc_init(void)
 {
-	return platform_driver_probe(&dryice_rtc_driver, dryice_rtc_probe);
+	pr_info("IMXDI Realtime Clock Driver (RTC)\n");
+	return platform_driver_register(&dryice_rtc_driver);
 }
 
 static void __exit dryice_rtc_exit(void)
@@ -515,6 +577,5 @@ module_init(dryice_rtc_init);
 module_exit(dryice_rtc_exit);
 
 MODULE_AUTHOR("Freescale Semiconductor, Inc.");
-MODULE_AUTHOR("Baruch Siach <baruch@tkos.co.il>");
-MODULE_DESCRIPTION("IMX DryIce Realtime Clock Driver (RTC)");
+MODULE_DESCRIPTION("IMXDI Realtime Clock Driver (RTC)");
 MODULE_LICENSE("GPL");

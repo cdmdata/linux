@@ -16,6 +16,7 @@
  * published by the Free Software Foundation.
  */
 
+#include <mach/io.h>
 
 /* SDRC register offsets - read/write with sdrc_{read,write}_reg() */
 
@@ -123,14 +124,8 @@ struct omap_sdrc_params {
 	u32 mr;
 };
 
-#if defined(CONFIG_ARCH_OMAP2) || defined(CONFIG_ARCH_OMAP3)
-void omap2_sdrc_init(struct omap_sdrc_params *sdrc_cs0,
+void __init omap2_sdrc_init(struct omap_sdrc_params *sdrc_cs0,
 			    struct omap_sdrc_params *sdrc_cs1);
-#else
-static inline void __init omap2_sdrc_init(struct omap_sdrc_params *sdrc_cs0,
-					  struct omap_sdrc_params *sdrc_cs1) {};
-#endif
-
 int omap2_sdrc_get_params(unsigned long r,
 			  struct omap_sdrc_params **sdrc_cs0,
 			  struct omap_sdrc_params **sdrc_cs1);
@@ -152,7 +147,6 @@ struct memory_timings {
 };
 
 extern void omap2xxx_sdrc_init_params(u32 force_lock_to_unlock_mode);
-struct omap_sdrc_params *rx51_get_sdram_timings(void);
 
 u32 omap2xxx_sdrc_dll_is_unlocked(void);
 u32 omap2xxx_sdrc_reprogram(u32 level, u32 force);

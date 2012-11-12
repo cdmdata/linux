@@ -16,7 +16,6 @@
 
 #include <linux/types.h>
 #include <linux/netdevice.h>
-#include <linux/module.h>
 #include <linux/hdlc.h>
 #include <linux/if_arp.h>
 #include <linux/init.h>
@@ -109,17 +108,17 @@ extern int  unregister_hdlc_device_v7 (hdlc_device *);
 #endif
 
 int         error_flag;         /* module load error reporting */
-int         cxt1e1_log_level = LOG_ERROR;
+int         log_level = LOG_ERROR;
 int         log_level_default = LOG_ERROR;
-module_param(cxt1e1_log_level, int, 0444);
+module_param(log_level, int, 0444);
 
-int         cxt1e1_max_mru = MUSYCC_MRU;
+int         max_mru = MUSYCC_MRU;
 int         max_mru_default = MUSYCC_MRU;
-module_param(cxt1e1_max_mru, int, 0444);
+module_param(max_mru, int, 0444);
 
-int         cxt1e1_max_mtu = MUSYCC_MTU;
+int         max_mtu = MUSYCC_MTU;
 int         max_mtu_default = MUSYCC_MTU;
-module_param(cxt1e1_max_mtu, int, 0444);
+module_param(max_mtu, int, 0444);
 
 int         max_txdesc_used = MUSYCC_TXDESC_MIN;
 int         max_txdesc_default = MUSYCC_TXDESC_MIN;
@@ -143,6 +142,10 @@ getuserbychan (int channum)
 }
 
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
+#define DEV_TO_PRIV(dev) ( * (struct c4_priv **) ((hdlc_device*)(dev)+1))
+#else
+
 char       *
 get_hdlc_name (hdlc_device * hdlc)
 {
@@ -151,6 +154,7 @@ get_hdlc_name (hdlc_device * hdlc)
 
     return dev->name;
 }
+#endif
 
 
 static      status_t
@@ -163,6 +167,7 @@ mkret (int bsd)
 }
 
 /***************************************************************************/
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2,5,41)
 #include <linux/workqueue.h>
 
 /***
@@ -254,6 +259,7 @@ c4_wq_port_cleanup (mpi_t * pi)
         pi->wq_port = 0;
     }
 }
+#endif
 
 /***************************************************************************/
 
@@ -285,6 +291,48 @@ void_open (struct net_device * ndev)
 }
 
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
+#if !defined(GENERIC_HDLC_VERSION) || (GENERIC_HDLC_VERSION < 4)
+
+/** Linux 2.4.18-19 **/
+STATIC int
+chan_open (hdlc_device * hdlc)
+{
+    status_t    ret;
+
+    if ((ret = c4_chan_up (DEV_TO_PRIV (hdlc)->ci, DEV_TO_PRIV (hdlc)->channum)))
+        return -ret;
+    MOD_INC_USE_COUNT;
+    netif_start_queue (hdlc_to_dev (hdlc));
+    return 0;                       /* no error = success */
+}
+
+#else
+
+/** Linux 2.4.20 and higher **/
+STATIC int
+chan_open (struct net_device * ndev)
+{
+    hdlc_device *hdlc = dev_to_hdlc (ndev);
+    status_t    ret;
+
+    hdlc->proto = IF_PROTO_HDLC;
+    if ((ret = hdlc_open (hdlc)))
+    {
+        pr_info("hdlc_open failure, err %d.\n", ret);
+        return ret;
+    }
+    if ((ret = c4_chan_up (DEV_TO_PRIV (hdlc)->ci, DEV_TO_PRIV (hdlc)->channum)))
+        return -ret;
+    MOD_INC_USE_COUNT;
+    netif_start_queue (hdlc_to_dev (hdlc));
+    return 0;                       /* no error = success */
+}
+#endif
+
+#else
+
+/** Linux 2.6 **/
 STATIC int
 chan_open (struct net_device * ndev)
 {
@@ -303,8 +351,39 @@ chan_open (struct net_device * ndev)
     netif_start_queue (ndev);
     return 0;                       /* no error = success */
 }
+#endif
 
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
+#if !defined(GENERIC_HDLC_VERSION) || (GENERIC_HDLC_VERSION < 4)
+
+/** Linux 2.4.18-19 **/
+STATIC void
+chan_close (hdlc_device * hdlc)
+{
+    netif_stop_queue (hdlc_to_dev (hdlc));
+    musycc_chan_down ((ci_t *) 0, DEV_TO_PRIV (hdlc)->channum);
+    MOD_DEC_USE_COUNT;
+}
+#else
+
+/** Linux 2.4.20 and higher **/
+STATIC int
+chan_close (struct net_device * ndev)
+{
+    hdlc_device *hdlc = dev_to_hdlc (ndev);
+
+    netif_stop_queue (hdlc_to_dev (hdlc));
+    musycc_chan_down ((ci_t *) 0, DEV_TO_PRIV (hdlc)->channum);
+    hdlc_close (hdlc);
+    MOD_DEC_USE_COUNT;
+    return 0;
+}
+#endif
+
+#else
+
+/** Linux 2.6 **/
 STATIC int
 chan_close (struct net_device * ndev)
 {
@@ -317,8 +396,37 @@ chan_close (struct net_device * ndev)
     module_put (THIS_MODULE);
     return 0;
 }
+#endif
 
 
+#if !defined(GENERIC_HDLC_VERSION) || (GENERIC_HDLC_VERSION < 4)
+
+/** Linux 2.4.18-19 **/
+STATIC int
+chan_ioctl (hdlc_device * hdlc, struct ifreq * ifr, int cmd)
+{
+    if (cmd == HDLCSCLOCK)
+    {
+        ifr->ifr_ifru.ifru_ivalue = LINE_DEFAULT;
+        return 0;
+    }
+    return -EINVAL;
+}
+#endif
+
+
+#if !defined(GENERIC_HDLC_VERSION) || (GENERIC_HDLC_VERSION < 4)
+STATIC int
+chan_dev_ioctl (struct net_device * hdlc, struct ifreq * ifr, int cmd)
+{
+    if (cmd == HDLCSCLOCK)
+    {
+        ifr->ifr_ifru.ifru_ivalue = LINE_DEFAULT;
+        return 0;
+    }
+    return -EINVAL;
+}
+#else
 STATIC int
 chan_dev_ioctl (struct net_device * dev, struct ifreq * ifr, int cmd)
 {
@@ -327,11 +435,16 @@ chan_dev_ioctl (struct net_device * dev, struct ifreq * ifr, int cmd)
 
 
 STATIC int
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
+chan_attach_noop (hdlc_device * hdlc, unsigned short foo_1, unsigned short foo_2)
+#else
 chan_attach_noop (struct net_device * ndev, unsigned short foo_1, unsigned short foo_2)
+#endif
 {
     return 0;                   /* our driver has nothing to do here, show's
                                  * over, go home */
 }
+#endif
 
 
 STATIC struct net_device_stats *
@@ -342,12 +455,16 @@ chan_get_stats (struct net_device * ndev)
     struct sbecom_chan_stats *stats;
     int         channum;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
+    channum = DEV_TO_PRIV (ndev)->channum;
+#else
     {
         struct c4_priv *priv;
 
         priv = (struct c4_priv *) dev_to_hdlc (ndev)->priv;
         channum = priv->channum;
     }
+#endif
 
     ch = c4_find_chan (channum);
     if (ch == NULL)
@@ -394,19 +511,34 @@ get_ci_by_dev (struct net_device * ndev)
 }
 
 
+#if !defined(GENERIC_HDLC_VERSION) || (GENERIC_HDLC_VERSION < 4)
+STATIC int
+c4_linux_xmit (hdlc_device * hdlc, struct sk_buff * skb)
+{
+    int         rval;
+
+    rval = musycc_start_xmit (DEV_TO_PRIV (hdlc)->ci, DEV_TO_PRIV (hdlc)->channum, skb);
+    return -rval;
+}
+#else                           /* new */
 STATIC int
 c4_linux_xmit (struct sk_buff * skb, struct net_device * ndev)
 {
     const struct c4_priv *priv;
     int         rval;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
+    priv = DEV_TO_PRIV (ndev);
+#else
     hdlc_device *hdlc = dev_to_hdlc (ndev);
 
     priv = hdlc->priv;
+#endif
 
     rval = musycc_start_xmit (priv->ci, priv->channum, skb);
     return -rval;
 }
+#endif                          /* GENERIC_HDLC_VERSION */
 
 static const struct net_device_ops chan_ops = {
        .ndo_open       = chan_open,
@@ -498,7 +630,7 @@ create_chan (struct net_device * ndev, ci_t * ci,
     rtnl_lock ();                   /* needed due to Ioctl calling sequence */
     if (ret)
     {
-        if (cxt1e1_log_level >= LOG_WARN)
+        if (log_level >= LOG_WARN)
             pr_info("%s: create_chan[%d] registration error = %d.\n",
                     ci->devname, cp->channum, ret);
         free_netdev (dev);          /* cleanup */
@@ -549,7 +681,7 @@ do_set_port (struct net_device * ndev, void *data)
         return -EINVAL;             /* get card info */
 
     if (pp.portnum >= ci->max_port) /* sanity check */
-        return -ENXIO;
+        return ENXIO;
 
     memcpy (&ci->port[pp.portnum].p, &pp, sizeof (struct sbecom_port_param));
     return mkret (c4_set_port (ci, pp.portnum));
@@ -691,10 +823,18 @@ do_create_chan (struct net_device * ndev, void *data)
     ret = mkret (c4_new_chan (ci, cp.port, cp.channum, dev));
     if (ret)
     {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
+        rtnl_unlock ();             /* needed due to Ioctl calling sequence */
+        V7 (unregister_hdlc_device) (dev_to_hdlc (dev));
+        rtnl_lock ();               /* needed due to Ioctl calling sequence */
+        OS_kfree (DEV_TO_PRIV (dev));
+        OS_kfree (dev);
+#else
         rtnl_unlock ();             /* needed due to Ioctl calling sequence */
         unregister_hdlc_device (dev);
         rtnl_lock ();               /* needed due to Ioctl calling sequence */
         free_netdev (dev);
+#endif
     }
     return ret;
 }
@@ -723,11 +863,11 @@ do_get_chan_stats (struct net_device * ndev, void *data)
 STATIC      status_t
 do_set_loglevel (struct net_device * ndev, void *data)
 {
-    unsigned int cxt1e1_log_level;
+    unsigned int log_level;
 
-    if (copy_from_user (&cxt1e1_log_level, data, sizeof (int)))
+    if (copy_from_user (&log_level, data, sizeof (int)))
         return -EFAULT;
-    sbecom_set_loglevel (cxt1e1_log_level);
+    sbecom_set_loglevel (log_level);
     return 0;
 }
 
@@ -743,7 +883,11 @@ do_deluser (struct net_device * ndev, int lockit)
         const struct c4_priv *priv;
         int         channum;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
+        priv = DEV_TO_PRIV (ndev);
+#else
         priv = (struct c4_priv *) dev_to_hdlc (ndev)->priv;
+#endif
         ci = priv->ci;
         channum = priv->channum;
 
@@ -753,12 +897,22 @@ do_deluser (struct net_device * ndev, int lockit)
         ch->user = 0;               /* will be freed, below */
     }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
+    if (lockit)
+        rtnl_unlock ();             /* needed if Ioctl calling sequence */
+    V7 (unregister_hdlc_device) (dev_to_hdlc (ndev));
+    if (lockit)
+        rtnl_lock ();               /* needed if Ioctl calling sequence */
+    OS_kfree (DEV_TO_PRIV (ndev));
+    OS_kfree (ndev);
+#else
     if (lockit)
         rtnl_unlock ();             /* needed if Ioctl calling sequence */
     unregister_hdlc_device (ndev);
     if (lockit)
         rtnl_lock ();               /* needed if Ioctl calling sequence */
     free_netdev (ndev);
+#endif
     return 0;
 }
 
@@ -1018,7 +1172,13 @@ c4_add_dev (hdw_info_t * hi, int brdno, unsigned long f0, unsigned long f1,
      **************************************************************/
 
     if (request_irq (irq0, &c4_linux_interrupt,
+#if defined(SBE_ISR_TASKLET)
+                     IRQF_DISABLED | IRQF_SHARED,
+#elif defined(SBE_ISR_IMMEDIATE)
+                     IRQF_DISABLED | IRQF_SHARED,
+#elif defined(SBE_ISR_INLINE)
                      IRQF_SHARED,
+#endif
                      ndev->name, ndev))
     {
         pr_warning("%s: MUSYCC could not get irq: %d\n", ndev->name, irq0);
@@ -1110,15 +1270,15 @@ c4_mod_init (void)
         return -rtn;                /* installation failure - see system log */
 
     /* housekeeping notifications */
-    if (cxt1e1_log_level != log_level_default)
-        pr_info("NOTE: driver parameter <cxt1e1_log_level> changed from default %d to %d.\n",
-                log_level_default, cxt1e1_log_level);
-       if (cxt1e1_max_mru != max_mru_default)
-               pr_info("NOTE: driver parameter <cxt1e1_max_mru> changed from default %d to %d.\n",
-                               max_mru_default, cxt1e1_max_mru);
-       if (cxt1e1_max_mtu != max_mtu_default)
-               pr_info("NOTE: driver parameter <cxt1e1_max_mtu> changed from default %d to %d.\n",
-                               max_mtu_default, cxt1e1_max_mtu);
+    if (log_level != log_level_default)
+        pr_info("NOTE: driver parameter <log_level> changed from default %d to %d.\n",
+                log_level_default, log_level);
+    if (max_mru != max_mru_default)
+        pr_info("NOTE: driver parameter <max_mru> changed from default %d to %d.\n",
+                max_mru_default, max_mru);
+    if (max_mtu != max_mtu_default)
+        pr_info("NOTE: driver parameter <max_mtu> changed from default %d to %d.\n",
+                max_mtu_default, max_mtu);
     if (max_rxdesc_used != max_rxdesc_default)
     {
         if (max_rxdesc_used > 2000)
@@ -1178,6 +1338,14 @@ c4_mod_remove (void)
 
 module_init (c4_mod_init);
 module_exit (c4_mod_remove);
+
+#ifndef SBE_INCLUDE_SYMBOLS
+#ifndef CONFIG_SBE_WANC24_NCOMM
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
+EXPORT_NO_SYMBOLS;
+#endif
+#endif
+#endif
 
 MODULE_AUTHOR ("SBE Technical Services <support@sbei.com>");
 MODULE_DESCRIPTION ("wanPCI-CxT1E1 Generic HDLC WAN Driver module");

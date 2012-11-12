@@ -186,7 +186,8 @@ static int usbtmc_ioctl_abort_bulk_in(struct usbtmc_device_data *data)
 	for (n = 0; n < current_setting->desc.bNumEndpoints; n++)
 		if (current_setting->endpoint[n].desc.bEndpointAddress ==
 			data->bulk_in)
-			max_size = usb_endpoint_maxp(&current_setting->endpoint[n].desc);
+			max_size = le16_to_cpu(current_setting->endpoint[n].
+						desc.wMaxPacketSize);
 
 	if (max_size == 0) {
 		dev_err(dev, "Couldn't get wMaxPacketSize\n");
@@ -267,7 +268,7 @@ usbtmc_abort_bulk_in_status:
 				dev_err(dev, "usb_bulk_msg returned %d\n", rv);
 				goto exit;
 			}
-		} while ((actual == max_size) &&
+		} while ((actual = max_size) &&
 			 (n < USBTMC_MAX_READS_TO_CLEAR_BULK_IN));
 
 	if (actual == max_size) {
@@ -482,7 +483,7 @@ static ssize_t usbtmc_read(struct file *filp, char __user *buf,
 		}
 
 		done += n_characters;
-		/* Terminate if end-of-message bit received from device */
+		/* Terminate if end-of-message bit recieved from device */
 		if ((buffer[8] &  0x01) && (actual >= n_characters + 12))
 			remaining = 0;
 		else
@@ -635,7 +636,7 @@ static int usbtmc_ioctl_clear(struct usbtmc_device_data *data)
 	for (n = 0; n < current_setting->desc.bNumEndpoints; n++) {
 		desc = &current_setting->endpoint[n].desc;
 		if (desc->bEndpointAddress == data->bulk_in)
-			max_size = usb_endpoint_maxp(desc);
+			max_size = le16_to_cpu(desc->wMaxPacketSize);
 	}
 
 	if (max_size == 0) {
@@ -986,7 +987,6 @@ static const struct file_operations fops = {
 	.open		= usbtmc_open,
 	.release	= usbtmc_release,
 	.unlocked_ioctl	= usbtmc_ioctl,
-	.llseek		= default_llseek,
 };
 
 static struct usb_class_driver usbtmc_class = {
@@ -1116,6 +1116,21 @@ static struct usb_driver usbtmc_driver = {
 	.resume		= usbtmc_resume,
 };
 
-module_usb_driver(usbtmc_driver);
+static int __init usbtmc_init(void)
+{
+	int retcode;
+
+	retcode = usb_register(&usbtmc_driver);
+	if (retcode)
+		printk(KERN_ERR KBUILD_MODNAME": Unable to register driver\n");
+	return retcode;
+}
+module_init(usbtmc_init);
+
+static void __exit usbtmc_exit(void)
+{
+	usb_deregister(&usbtmc_driver);
+}
+module_exit(usbtmc_exit);
 
 MODULE_LICENSE("GPL");

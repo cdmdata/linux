@@ -8,7 +8,7 @@
 #include <linux/proc_fs.h>
 #include <linux/capability.h>
 #include <linux/init.h>
-#include <linux/mutex.h>
+#include <linux/smp_lock.h>
 
 #include <mach/hardware.h>
 #include <asm/mach-types.h>
@@ -34,7 +34,6 @@
 #define CFG_CPU			2
 #define CFG_1SHOT		1
 
-static DEFINE_MUTEX(ds1620_mutex);
 static const char *fan_state[] = { "off", "on", "on (hardwired)" };
 
 /*
@@ -211,6 +210,7 @@ static void ds1620_read_state(struct therm *therm)
 
 static int ds1620_open(struct inode *inode, struct file *file)
 {
+	cycle_kernel_lock();
 	return nonseekable_open(inode, file);
 }
 
@@ -321,9 +321,9 @@ ds1620_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	int ret;
 
-	mutex_lock(&ds1620_mutex);
+	lock_kernel();
 	ret = ds1620_ioctl(file, cmd, arg);
-	mutex_unlock(&ds1620_mutex);
+	unlock_kernel();
 
 	return ret;
 }
@@ -357,7 +357,6 @@ static const struct file_operations ds1620_fops = {
 	.open		= ds1620_open,
 	.read		= ds1620_read,
 	.unlocked_ioctl	= ds1620_unlocked_ioctl,
-	.llseek		= no_llseek,
 };
 
 static struct miscdevice ds1620_miscdev = {

@@ -1,7 +1,7 @@
 /***************************************************************************
  * Copyright (c) 2005-2009, Broadcom Corporation.
  *
- *  Name: crystalhd_lnx . h
+ *  Name: crystalhd_lnx . c
  *
  *  Description:
  *		BCM70012 Linux driver
@@ -45,11 +45,13 @@
 #include <linux/io.h>
 #include <asm/irq.h>
 #include <asm/pgtable.h>
+#include <asm/system.h>
 #include <linux/uaccess.h>
 
-#include "crystalhd.h"
+#include "crystalhd_cmds.h"
 
 #define CRYSTAL_HD_NAME		"Broadcom Crystal HD Decoder (BCM70012) Driver"
+
 
 /* OS specific PCI information structure and adapter information. */
 struct crystalhd_adp {
@@ -74,7 +76,7 @@ struct crystalhd_adp {
 	spinlock_t		lock;
 
 	/* API Related */
-	int		chd_dec_major;
+	unsigned int		chd_dec_major;
 	unsigned int		cfg_users;
 
 	struct crystalhd_ioctl_data	*idata_free_head;	/* ioctl data pool */

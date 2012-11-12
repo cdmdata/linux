@@ -33,14 +33,29 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/sched.h>
 #include <linux/init.h>
+#include <linux/list.h>
+#include <linux/kobject.h>
+#include <linux/platform_device.h>
+#include <linux/io.h>
 #include <linux/debugfs.h>
 #include <linux/seq_file.h>
+
+#ifdef	CONFIG_ARM
+#include <mach/hardware.h>
+#include <mach/memory.h>
+#include <asm/mach-types.h>
+#endif
 
 #include <asm/uaccess.h>
 
 #include "musb_core.h"
 #include "musb_debug.h"
+
+#ifdef CONFIG_ARCH_DAVINCI
+#include "davinci.h"
+#endif
 
 struct musb_register_map {
 	char			*name;
@@ -180,14 +195,15 @@ static const struct file_operations musb_regdump_fops = {
 
 static int musb_test_mode_open(struct inode *inode, struct file *file)
 {
+	file->private_data = inode->i_private;
+
 	return single_open(file, musb_test_mode_show, inode->i_private);
 }
 
 static ssize_t musb_test_mode_write(struct file *file,
 		const char __user *ubuf, size_t count, loff_t *ppos)
 {
-	struct seq_file		*s = file->private_data;
-	struct musb		*musb = s->private;
+	struct musb		*musb = file->private_data;
 	u8			test = 0;
 	char			buf[18];
 
@@ -235,29 +251,29 @@ static const struct file_operations musb_test_mode_fops = {
 	.release		= single_release,
 };
 
-int __devinit musb_init_debugfs(struct musb *musb)
+int __init musb_init_debugfs(struct musb *musb)
 {
 	struct dentry		*root;
 	struct dentry		*file;
 	int			ret;
 
 	root = debugfs_create_dir("musb", NULL);
-	if (!root) {
-		ret = -ENOMEM;
+	if (IS_ERR(root)) {
+		ret = PTR_ERR(root);
 		goto err0;
 	}
 
 	file = debugfs_create_file("regdump", S_IRUGO, root, musb,
 			&musb_regdump_fops);
-	if (!file) {
-		ret = -ENOMEM;
+	if (IS_ERR(file)) {
+		ret = PTR_ERR(file);
 		goto err1;
 	}
 
 	file = debugfs_create_file("testmode", S_IRUGO | S_IWUSR,
 			root, musb, &musb_test_mode_fops);
-	if (!file) {
-		ret = -ENOMEM;
+	if (IS_ERR(file)) {
+		ret = PTR_ERR(file);
 		goto err1;
 	}
 

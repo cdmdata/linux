@@ -79,16 +79,9 @@ static unsigned int nf_nat_ftp(struct sk_buff *skb,
 
 	/* Try to get same port: if not, try to change it. */
 	for (port = ntohs(exp->saved_proto.tcp.port); port != 0; port++) {
-		int ret;
-
 		exp->tuple.dst.u.tcp.port = htons(port);
-		ret = nf_ct_expect_related(exp);
-		if (ret == 0)
+		if (nf_ct_expect_related(exp) == 0)
 			break;
-		else if (ret != -EBUSY) {
-			port = 0;
-			break;
-		}
 	}
 
 	if (port == 0)
@@ -113,14 +106,14 @@ out:
 
 static void __exit nf_nat_ftp_fini(void)
 {
-	RCU_INIT_POINTER(nf_nat_ftp_hook, NULL);
+	rcu_assign_pointer(nf_nat_ftp_hook, NULL);
 	synchronize_rcu();
 }
 
 static int __init nf_nat_ftp_init(void)
 {
 	BUG_ON(nf_nat_ftp_hook != NULL);
-	RCU_INIT_POINTER(nf_nat_ftp_hook, nf_nat_ftp);
+	rcu_assign_pointer(nf_nat_ftp_hook, nf_nat_ftp);
 	return 0;
 }
 

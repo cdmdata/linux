@@ -1,6 +1,5 @@
 #include "symbol.h"
 #include <errno.h>
-#include <inttypes.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,11 +17,14 @@ static inline int is_anon_memory(const char *filename)
 	return strcmp(filename, "//anon") == 0;
 }
 
-static inline int is_no_dso_memory(const char *filename)
+static int strcommon(const char *pathname, char *cwd, int cwdlen)
 {
-	return !strcmp(filename, "[stack]") ||
-	       !strcmp(filename, "[vdso]")  ||
-	       !strcmp(filename, "[heap]");
+	int n = 0;
+
+	while (n < cwdlen && pathname[n] == cwd[n])
+		++n;
+
+	return n;
 }
 
 void map__init(struct map *self, enum map_type type,
@@ -37,23 +39,30 @@ void map__init(struct map *self, enum map_type type,
 	self->unmap_ip = map__unmap_ip;
 	RB_CLEAR_NODE(&self->rb_node);
 	self->groups   = NULL;
-	self->referenced = false;
-	self->erange_warned = false;
 }
 
 struct map *map__new(struct list_head *dsos__list, u64 start, u64 len,
 		     u64 pgoff, u32 pid, char *filename,
-		     enum map_type type)
+		     enum map_type type, char *cwd, int cwdlen)
 {
 	struct map *self = malloc(sizeof(*self));
 
 	if (self != NULL) {
 		char newfilename[PATH_MAX];
 		struct dso *dso;
-		int anon, no_dso;
+		int anon;
+
+		if (cwd) {
+			int n = strcommon(filename, cwd, cwdlen);
+
+			if (n == cwdlen) {
+				snprintf(newfilename, sizeof(newfilename),
+					 ".%s", filename + n);
+				filename = newfilename;
+			}
+		}
 
 		anon = is_anon_memory(filename);
-		no_dso = is_no_dso_memory(filename);
 
 		if (anon) {
 			snprintf(newfilename, sizeof(newfilename), "/tmp/perf-%d.map", pid);
@@ -66,16 +75,12 @@ struct map *map__new(struct list_head *dsos__list, u64 start, u64 len,
 
 		map__init(self, type, start, start + len, pgoff, dso);
 
-		if (anon || no_dso) {
+		if (anon) {
+set_identity:
 			self->map_ip = self->unmap_ip = identity__map_ip;
-
-			/*
-			 * Set memory without DSO as loaded. All map__find_*
-			 * functions still return NULL, and we avoid the
-			 * unnecessary map__load warning.
-			 */
-			if (no_dso)
-				dso__set_loaded(dso, self->type);
+		} else if (strcmp(filename, "[vdso]") == 0) {
+			dso__set_loaded(dso, self->type);
+			goto set_identity;
 		}
 	}
 	return self;
@@ -140,8 +145,8 @@ int map__load(struct map *self, symbol_filter_t filter)
 
 		if (len > sizeof(DSO__DELETED) &&
 		    strcmp(name + real_len + 1, DSO__DELETED) == 0) {
-			pr_warning("%.*s was updated (is prelink enabled?). "
-				"Restart the long running apps that use it!\n",
+			pr_warning("%.*s was updated, restart the long "
+				   "running apps that use it!\n",
 				   (int)real_len, name);
 		} else {
 			pr_warning("no symbols found in %s, maybe install "
@@ -209,23 +214,8 @@ int map__overlap(struct map *l, struct map *r)
 
 size_t map__fprintf(struct map *self, FILE *fp)
 {
-	return fprintf(fp, " %" PRIx64 "-%" PRIx64 " %" PRIx64 " %s\n",
+	return fprintf(fp, " %Lx-%Lx %Lx %s\n",
 		       self->start, self->end, self->pgoff, self->dso->name);
-}
-
-size_t map__fprintf_dsoname(struct map *map, FILE *fp)
-{
-	const char *dsoname;
-
-	if (map && map->dso && (map->dso->name || map->dso->long_name)) {
-		if (symbol_conf.show_kernel_path && map->dso->long_name)
-			dsoname = map->dso->long_name;
-		else if (map->dso->name)
-			dsoname = map->dso->name;
-	} else
-		dsoname = "[unknown]";
-
-	return fprintf(fp, "%s", dsoname);
 }
 
 /*
@@ -248,55 +238,22 @@ u64 map__objdump_2ip(struct map *map, u64 addr)
 	return ip;
 }
 
-void map_groups__init(struct map_groups *mg)
+void map_groups__init(struct map_groups *self)
 {
 	int i;
 	for (i = 0; i < MAP__NR_TYPES; ++i) {
-		mg->maps[i] = RB_ROOT;
-		INIT_LIST_HEAD(&mg->removed_maps[i]);
+		self->maps[i] = RB_ROOT;
+		INIT_LIST_HEAD(&self->removed_maps[i]);
 	}
-	mg->machine = NULL;
+	self->machine = NULL;
 }
 
-static void maps__delete(struct rb_root *maps)
-{
-	struct rb_node *next = rb_first(maps);
-
-	while (next) {
-		struct map *pos = rb_entry(next, struct map, rb_node);
-
-		next = rb_next(&pos->rb_node);
-		rb_erase(&pos->rb_node, maps);
-		map__delete(pos);
-	}
-}
-
-static void maps__delete_removed(struct list_head *maps)
-{
-	struct map *pos, *n;
-
-	list_for_each_entry_safe(pos, n, maps, node) {
-		list_del(&pos->node);
-		map__delete(pos);
-	}
-}
-
-void map_groups__exit(struct map_groups *mg)
-{
-	int i;
-
-	for (i = 0; i < MAP__NR_TYPES; ++i) {
-		maps__delete(&mg->maps[i]);
-		maps__delete_removed(&mg->removed_maps[i]);
-	}
-}
-
-void map_groups__flush(struct map_groups *mg)
+void map_groups__flush(struct map_groups *self)
 {
 	int type;
 
 	for (type = 0; type < MAP__NR_TYPES; type++) {
-		struct rb_root *root = &mg->maps[type];
+		struct rb_root *root = &self->maps[type];
 		struct rb_node *next = rb_first(root);
 
 		while (next) {
@@ -308,17 +265,17 @@ void map_groups__flush(struct map_groups *mg)
 			 * instance in some hist_entry instances, so
 			 * just move them to a separate list.
 			 */
-			list_add_tail(&pos->node, &mg->removed_maps[pos->type]);
+			list_add_tail(&pos->node, &self->removed_maps[pos->type]);
 		}
 	}
 }
 
-struct symbol *map_groups__find_symbol(struct map_groups *mg,
+struct symbol *map_groups__find_symbol(struct map_groups *self,
 				       enum map_type type, u64 addr,
 				       struct map **mapp,
 				       symbol_filter_t filter)
 {
-	struct map *map = map_groups__find(mg, type, addr);
+	struct map *map = map_groups__find(self, type, addr);
 
 	if (map != NULL) {
 		if (mapp != NULL)
@@ -329,7 +286,7 @@ struct symbol *map_groups__find_symbol(struct map_groups *mg,
 	return NULL;
 }
 
-struct symbol *map_groups__find_symbol_by_name(struct map_groups *mg,
+struct symbol *map_groups__find_symbol_by_name(struct map_groups *self,
 					       enum map_type type,
 					       const char *name,
 					       struct map **mapp,
@@ -337,7 +294,7 @@ struct symbol *map_groups__find_symbol_by_name(struct map_groups *mg,
 {
 	struct rb_node *nd;
 
-	for (nd = rb_first(&mg->maps[type]); nd; nd = rb_next(nd)) {
+	for (nd = rb_first(&self->maps[type]); nd; nd = rb_next(nd)) {
 		struct map *pos = rb_entry(nd, struct map, rb_node);
 		struct symbol *sym = map__find_symbol_by_name(pos, name, filter);
 
@@ -351,13 +308,13 @@ struct symbol *map_groups__find_symbol_by_name(struct map_groups *mg,
 	return NULL;
 }
 
-size_t __map_groups__fprintf_maps(struct map_groups *mg,
+size_t __map_groups__fprintf_maps(struct map_groups *self,
 				  enum map_type type, int verbose, FILE *fp)
 {
 	size_t printed = fprintf(fp, "%s:\n", map_type__name[type]);
 	struct rb_node *nd;
 
-	for (nd = rb_first(&mg->maps[type]); nd; nd = rb_next(nd)) {
+	for (nd = rb_first(&self->maps[type]); nd; nd = rb_next(nd)) {
 		struct map *pos = rb_entry(nd, struct map, rb_node);
 		printed += fprintf(fp, "Map:");
 		printed += map__fprintf(pos, fp);
@@ -370,22 +327,22 @@ size_t __map_groups__fprintf_maps(struct map_groups *mg,
 	return printed;
 }
 
-size_t map_groups__fprintf_maps(struct map_groups *mg, int verbose, FILE *fp)
+size_t map_groups__fprintf_maps(struct map_groups *self, int verbose, FILE *fp)
 {
 	size_t printed = 0, i;
 	for (i = 0; i < MAP__NR_TYPES; ++i)
-		printed += __map_groups__fprintf_maps(mg, i, verbose, fp);
+		printed += __map_groups__fprintf_maps(self, i, verbose, fp);
 	return printed;
 }
 
-static size_t __map_groups__fprintf_removed_maps(struct map_groups *mg,
+static size_t __map_groups__fprintf_removed_maps(struct map_groups *self,
 						 enum map_type type,
 						 int verbose, FILE *fp)
 {
 	struct map *pos;
 	size_t printed = 0;
 
-	list_for_each_entry(pos, &mg->removed_maps[type], node) {
+	list_for_each_entry(pos, &self->removed_maps[type], node) {
 		printed += fprintf(fp, "Map:");
 		printed += map__fprintf(pos, fp);
 		if (verbose > 1) {
@@ -396,28 +353,27 @@ static size_t __map_groups__fprintf_removed_maps(struct map_groups *mg,
 	return printed;
 }
 
-static size_t map_groups__fprintf_removed_maps(struct map_groups *mg,
+static size_t map_groups__fprintf_removed_maps(struct map_groups *self,
 					       int verbose, FILE *fp)
 {
 	size_t printed = 0, i;
 	for (i = 0; i < MAP__NR_TYPES; ++i)
-		printed += __map_groups__fprintf_removed_maps(mg, i, verbose, fp);
+		printed += __map_groups__fprintf_removed_maps(self, i, verbose, fp);
 	return printed;
 }
 
-size_t map_groups__fprintf(struct map_groups *mg, int verbose, FILE *fp)
+size_t map_groups__fprintf(struct map_groups *self, int verbose, FILE *fp)
 {
-	size_t printed = map_groups__fprintf_maps(mg, verbose, fp);
+	size_t printed = map_groups__fprintf_maps(self, verbose, fp);
 	printed += fprintf(fp, "Removed maps:\n");
-	return printed + map_groups__fprintf_removed_maps(mg, verbose, fp);
+	return printed + map_groups__fprintf_removed_maps(self, verbose, fp);
 }
 
-int map_groups__fixup_overlappings(struct map_groups *mg, struct map *map,
+int map_groups__fixup_overlappings(struct map_groups *self, struct map *map,
 				   int verbose, FILE *fp)
 {
-	struct rb_root *root = &mg->maps[map->type];
+	struct rb_root *root = &self->maps[map->type];
 	struct rb_node *next = rb_first(root);
-	int err = 0;
 
 	while (next) {
 		struct map *pos = rb_entry(next, struct map, rb_node);
@@ -434,19 +390,23 @@ int map_groups__fixup_overlappings(struct map_groups *mg, struct map *map,
 
 		rb_erase(&pos->rb_node, root);
 		/*
+		 * We may have references to this map, for instance in some
+		 * hist_entry instances, so just move them to a separate
+		 * list.
+		 */
+		list_add_tail(&pos->node, &self->removed_maps[map->type]);
+		/*
 		 * Now check if we need to create new maps for areas not
 		 * overlapped by the new map:
 		 */
 		if (map->start > pos->start) {
 			struct map *before = map__clone(pos);
 
-			if (before == NULL) {
-				err = -ENOMEM;
-				goto move_map;
-			}
+			if (before == NULL)
+				return -ENOMEM;
 
 			before->end = map->start - 1;
-			map_groups__insert(mg, before);
+			map_groups__insert(self, before);
 			if (verbose >= 2)
 				map__fprintf(before, fp);
 		}
@@ -454,27 +414,14 @@ int map_groups__fixup_overlappings(struct map_groups *mg, struct map *map,
 		if (map->end < pos->end) {
 			struct map *after = map__clone(pos);
 
-			if (after == NULL) {
-				err = -ENOMEM;
-				goto move_map;
-			}
+			if (after == NULL)
+				return -ENOMEM;
 
 			after->start = map->end + 1;
-			map_groups__insert(mg, after);
+			map_groups__insert(self, after);
 			if (verbose >= 2)
 				map__fprintf(after, fp);
 		}
-move_map:
-		/*
-		 * If we have references, just move them to a separate list.
-		 */
-		if (pos->referenced)
-			list_add_tail(&pos->node, &mg->removed_maps[map->type]);
-		else
-			map__delete(pos);
-
-		if (err)
-			return err;
 	}
 
 	return 0;
@@ -483,7 +430,7 @@ move_map:
 /*
  * XXX This should not really _copy_ te maps, but refcount them.
  */
-int map_groups__clone(struct map_groups *mg,
+int map_groups__clone(struct map_groups *self,
 		      struct map_groups *parent, enum map_type type)
 {
 	struct rb_node *nd;
@@ -492,7 +439,7 @@ int map_groups__clone(struct map_groups *mg,
 		struct map *new = map__clone(map);
 		if (new == NULL)
 			return -ENOMEM;
-		map_groups__insert(mg, new);
+		map_groups__insert(self, new);
 	}
 	return 0;
 }
@@ -546,11 +493,6 @@ void maps__insert(struct rb_root *maps, struct map *map)
 	rb_insert_color(&map->rb_node, maps);
 }
 
-void maps__remove(struct rb_root *self, struct map *map)
-{
-	rb_erase(&map->rb_node, self);
-}
-
 struct map *maps__find(struct rb_root *maps, u64 ip)
 {
 	struct rb_node **p = &maps->rb_node;
@@ -578,39 +520,10 @@ int machine__init(struct machine *self, const char *root_dir, pid_t pid)
 	INIT_LIST_HEAD(&self->user_dsos);
 	INIT_LIST_HEAD(&self->kernel_dsos);
 
-	self->threads = RB_ROOT;
-	INIT_LIST_HEAD(&self->dead_threads);
-	self->last_match = NULL;
-
 	self->kmaps.machine = self;
 	self->pid	    = pid;
 	self->root_dir      = strdup(root_dir);
 	return self->root_dir == NULL ? -ENOMEM : 0;
-}
-
-static void dsos__delete(struct list_head *self)
-{
-	struct dso *pos, *n;
-
-	list_for_each_entry_safe(pos, n, self, node) {
-		list_del(&pos->node);
-		dso__delete(pos);
-	}
-}
-
-void machine__exit(struct machine *self)
-{
-	map_groups__exit(&self->kmaps);
-	dsos__delete(&self->user_dsos);
-	dsos__delete(&self->kernel_dsos);
-	free(self->root_dir);
-	self->root_dir = NULL;
-}
-
-void machine__delete(struct machine *self)
-{
-	machine__exit(self);
-	free(self);
 }
 
 struct machine *machines__add(struct rb_root *self, pid_t pid,

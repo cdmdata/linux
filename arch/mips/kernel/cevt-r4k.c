@@ -10,7 +10,6 @@
 #include <linux/interrupt.h>
 #include <linux/percpu.h>
 #include <linux/smp.h>
-#include <linux/irq.h>
 
 #include <asm/smtc_ipi.h>
 #include <asm/time.h>
@@ -32,7 +31,7 @@ static int mips_next_event(unsigned long delta,
 	cnt = read_c0_count();
 	cnt += delta;
 	write_c0_compare(cnt);
-	res = ((int)(read_c0_count() - cnt) >= 0) ? -ETIME : 0;
+	res = ((int)(read_c0_count() - cnt) > 0) ? -ETIME : 0;
 	return res;
 }
 
@@ -84,7 +83,7 @@ out:
 
 struct irqaction c0_compare_irqaction = {
 	.handler = c0_compare_interrupt,
-	.flags = IRQF_PERCPU | IRQF_TIMER,
+	.flags = IRQF_DISABLED | IRQF_PERCPU | IRQF_TIMER,
 	.name = "timer",
 };
 
@@ -103,10 +102,19 @@ static int c0_compare_int_pending(void)
 
 /*
  * Compare interrupt can be routed and latched outside the core,
- * so wait up to worst case number of cycle counter ticks for timer interrupt
- * changes to propagate to the cause register.
+ * so a single execution hazard barrier may not be enough to give
+ * it time to clear as seen in the Cause register.  4 time the
+ * pipeline depth seems reasonably conservative, and empirically
+ * works better in configurations with high CPU/bus clock ratios.
  */
-#define COMPARE_INT_SEEN_TICKS 50
+
+#define compare_change_hazard() \
+	do { \
+		irq_disable_hazard(); \
+		irq_disable_hazard(); \
+		irq_disable_hazard(); \
+		irq_disable_hazard(); \
+	} while (0)
 
 int c0_compare_int_usable(void)
 {
@@ -117,12 +125,8 @@ int c0_compare_int_usable(void)
 	 * IP7 already pending?  Try to clear it by acking the timer.
 	 */
 	if (c0_compare_int_pending()) {
-		cnt = read_c0_count();
-		write_c0_compare(cnt);
-		back_to_back_c0_hazard();
-		while (read_c0_count() < (cnt  + COMPARE_INT_SEEN_TICKS))
-			if (!c0_compare_int_pending())
-				break;
+		write_c0_compare(read_c0_count());
+		compare_change_hazard();
 		if (c0_compare_int_pending())
 			return 0;
 	}
@@ -131,7 +135,7 @@ int c0_compare_int_usable(void)
 		cnt = read_c0_count();
 		cnt += delta;
 		write_c0_compare(cnt);
-		back_to_back_c0_hazard();
+		compare_change_hazard();
 		if ((int)(read_c0_count() - cnt) < 0)
 		    break;
 		/* increase delta if the timer was already expired */
@@ -140,17 +144,12 @@ int c0_compare_int_usable(void)
 	while ((int)(read_c0_count() - cnt) <= 0)
 		;	/* Wait for expiry  */
 
-	while (read_c0_count() < (cnt + COMPARE_INT_SEEN_TICKS))
-		if (c0_compare_int_pending())
-			break;
+	compare_change_hazard();
 	if (!c0_compare_int_pending())
 		return 0;
-	cnt = read_c0_count();
-	write_c0_compare(cnt);
-	back_to_back_c0_hazard();
-	while (read_c0_count() < (cnt + COMPARE_INT_SEEN_TICKS))
-		if (!c0_compare_int_pending())
-			break;
+
+	write_c0_compare(read_c0_count());
+	compare_change_hazard();
 	if (c0_compare_int_pending())
 		return 0;
 
@@ -164,6 +163,7 @@ int c0_compare_int_usable(void)
 
 int __cpuinit r4k_clockevent_init(void)
 {
+	uint64_t mips_freq = mips_hpt_frequency;
 	unsigned int cpu = smp_processor_id();
 	struct clock_event_device *cd;
 	unsigned int irq;
@@ -188,9 +188,9 @@ int __cpuinit r4k_clockevent_init(void)
 	cd->name		= "MIPS";
 	cd->features		= CLOCK_EVT_FEAT_ONESHOT;
 
-	clockevent_set_clock(cd, mips_hpt_frequency);
-
 	/* Calculate the min / max delta */
+	cd->mult	= div_sc((unsigned long) mips_freq, NSEC_PER_SEC, 32);
+	cd->shift		= 32;
 	cd->max_delta_ns	= clockevent_delta2ns(0x7fffffff, cd);
 	cd->min_delta_ns	= clockevent_delta2ns(0x300, cd);
 

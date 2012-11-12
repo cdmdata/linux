@@ -45,7 +45,6 @@
 #include <linux/mutex.h>
 #include <linux/list.h>
 #include <linux/scatterlist.h>
-#include <linux/slab.h>
 #include <linux/io.h>
 #include <linux/fs.h>
 #include <linux/completion.h>
@@ -171,9 +170,7 @@ struct qib_ctxtdata {
 	/* how many alloc_pages() chunks in rcvegrbuf_pages */
 	u32 rcvegrbuf_chunks;
 	/* how many egrbufs per chunk */
-	u16 rcvegrbufs_perchunk;
-	/* ilog2 of above */
-	u16 rcvegrbufs_perchunk_shift;
+	u32 rcvegrbufs_perchunk;
 	/* order for rcvegrbuf_pages */
 	size_t rcvegrbuf_size;
 	/* rcvhdrq size (for freeing) */
@@ -223,9 +220,6 @@ struct qib_ctxtdata {
 	/* ctxt rcvhdrq head offset */
 	u32 head;
 	u32 pkt_count;
-	/* lookaside fields */
-	struct qib_qp *lookaside_qp;
-	u32 lookaside_qpn;
 	/* QPs waiting for context processing */
 	struct list_head qp_wait_list;
 };
@@ -332,9 +326,6 @@ struct qib_verbs_txreq {
 
 #define QIB_DEFAULT_MTU 4096
 
-/* max number of IB ports supported per HCA */
-#define QIB_MAX_IB_PORTS 2
-
 /*
  * Possible IB config parameters for f_get/set_ib_table()
  */
@@ -426,14 +417,6 @@ struct qib_verbs_txreq {
 
 /* how often we check for packet activity for "power on hours (in seconds) */
 #define ACTIVITY_TIMER 5
-
-#define MAX_NAME_SIZE 64
-struct qib_msix_entry {
-	struct msix_entry msix;
-	void *arg;
-	char name[MAX_NAME_SIZE];
-	cpumask_var_t mask;
-};
 
 /* Below is an opaque struct. Each chip (device) can maintain
  * private data needed for its operation, but not germane to the
@@ -666,7 +649,7 @@ struct diag_observer_list_elt;
 
 /* device data struct now contains only "general per-device" info.
  * fields related to a physical IB port are in a qib_pportdata struct,
- * described above) while fields only used by a particular chip-type are in
+ * described above) while fields only used by a particualr chip-type are in
  * a qib_chipdata struct, whose contents are opaque to this file.
  */
 struct qib_devdata {
@@ -779,7 +762,7 @@ struct qib_devdata {
 	void (*f_sdma_hw_start_up)(struct qib_pportdata *);
 	void (*f_sdma_init_early)(struct qib_pportdata *);
 	void (*f_set_cntr_sample)(struct qib_pportdata *, u32, u32);
-	void (*f_update_usrhead)(struct qib_ctxtdata *, u64, u32, u32, u32);
+	void (*f_update_usrhead)(struct qib_ctxtdata *, u64, u32, u32);
 	u32 (*f_hdrqempty)(struct qib_ctxtdata *);
 	u64 (*f_portcntr)(struct qib_pportdata *, u32);
 	u32 (*f_read_cntrs)(struct qib_devdata *, loff_t, char **,
@@ -820,10 +803,6 @@ struct qib_devdata {
 	 * supports, less gives more pio bufs/ctxt, etc.
 	 */
 	u32 cfgctxts;
-	/*
-	 * number of ctxts available for PSM open
-	 */
-	u32 freectxts;
 
 	/*
 	 * hint that we should update pioavailshadow before
@@ -953,9 +932,7 @@ struct qib_devdata {
 	/* chip address space used by 4k pio buffers */
 	u32 align4k;
 	/* size of each rcvegrbuffer */
-	u16 rcvegrbufsize;
-	/* log2 of above */
-	u16 rcvegrbufsize_shift;
+	u32 rcvegrbufsize;
 	/* localbus width (1, 2,4,8,16,32) from config space  */
 	u32 lbus_width;
 	/* localbus speed in MHz */
@@ -1031,8 +1008,6 @@ struct qib_devdata {
 	u8 psxmitwait_supported;
 	/* cycle length of PS* counters in HW (in picoseconds) */
 	u16 psxmitwait_check_rate;
-	/* high volume overflow errors defered to tasklet */
-	struct tasklet_struct error_tasklet;
 };
 
 /* hol_state values */
@@ -1363,7 +1338,7 @@ int qib_pcie_init(struct pci_dev *, const struct pci_device_id *);
 int qib_pcie_ddinit(struct qib_devdata *, struct pci_dev *,
 		    const struct pci_device_id *);
 void qib_pcie_ddcleanup(struct qib_devdata *);
-int qib_pcie_params(struct qib_devdata *, u32, u32 *, struct qib_msix_entry *);
+int qib_pcie_params(struct qib_devdata *, u32, u32 *, struct msix_entry *);
 int qib_reinit_intr(struct qib_devdata *);
 void qib_enable_intx(struct pci_dev *);
 void qib_nomsi(struct qib_devdata *);
@@ -1427,7 +1402,7 @@ extern struct mutex qib_mutex;
  */
 #define qib_early_err(dev, fmt, ...) \
 	do { \
-		dev_err(dev, fmt, ##__VA_ARGS__); \
+		dev_info(dev, KERN_ERR QIB_DRV_NAME ": " fmt, ##__VA_ARGS__); \
 	} while (0)
 
 #define qib_dev_err(dd, fmt, ...) \
@@ -1454,7 +1429,6 @@ extern struct mutex qib_mutex;
 struct qib_hwerror_msgs {
 	u64 mask;
 	const char *msg;
-	size_t sz;
 };
 
 #define QLOGIC_IB_HWE_MSG(a, b) { .mask = a, .msg = b }

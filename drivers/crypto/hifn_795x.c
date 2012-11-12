@@ -1467,7 +1467,7 @@ static int ablkcipher_add(unsigned int *drestp, struct scatterlist *dst,
 		return -EINVAL;
 
 	while (size) {
-		copy = min3(drest, size, dst->length);
+		copy = min(drest, min(size, dst->length));
 
 		size -= copy;
 		drest -= copy;
@@ -1729,11 +1729,11 @@ static int ablkcipher_get(void *saddr, unsigned int *srestp, unsigned int offset
 		return -EINVAL;
 
 	while (size) {
-		copy = min3(srest, dst->length, size);
+		copy = min(srest, min(dst->length, size));
 
-		daddr = kmap_atomic(sg_page(dst));
+		daddr = kmap_atomic(sg_page(dst), KM_IRQ0);
 		memcpy(daddr + dst->offset + offset, saddr, copy);
-		kunmap_atomic(daddr);
+		kunmap_atomic(daddr, KM_IRQ0);
 
 		nbytes -= copy;
 		size -= copy;
@@ -1793,17 +1793,17 @@ static void hifn_process_ready(struct ablkcipher_request *req, int error)
 				continue;
 			}
 
-			saddr = kmap_atomic(sg_page(t));
+			saddr = kmap_atomic(sg_page(t), KM_SOFTIRQ0);
 
 			err = ablkcipher_get(saddr, &t->length, t->offset,
 					dst, nbytes, &nbytes);
 			if (err < 0) {
-				kunmap_atomic(saddr);
+				kunmap_atomic(saddr, KM_SOFTIRQ0);
 				break;
 			}
 
 			idx += err;
-			kunmap_atomic(saddr);
+			kunmap_atomic(saddr, KM_SOFTIRQ0);
 		}
 
 		hifn_cipher_walk_exit(&rctx->walk);
@@ -2018,6 +2018,7 @@ static void hifn_flush(struct hifn_device *dev)
 {
 	unsigned long flags;
 	struct crypto_async_request *async_req;
+	struct hifn_context *ctx;
 	struct ablkcipher_request *req;
 	struct hifn_dma *dma = (struct hifn_dma *)dev->desc_virt;
 	int i;
@@ -2034,6 +2035,7 @@ static void hifn_flush(struct hifn_device *dev)
 
 	spin_lock_irqsave(&dev->lock, flags);
 	while ((async_req = crypto_dequeue_request(&dev->queue))) {
+		ctx = crypto_tfm_ctx(async_req->tfm);
 		req = container_of(async_req, struct ablkcipher_request, base);
 		spin_unlock_irqrestore(&dev->lock, flags);
 
@@ -2137,6 +2139,7 @@ static int hifn_setup_crypto_req(struct ablkcipher_request *req, u8 op,
 static int hifn_process_queue(struct hifn_device *dev)
 {
 	struct crypto_async_request *async_req, *backlog;
+	struct hifn_context *ctx;
 	struct ablkcipher_request *req;
 	unsigned long flags;
 	int err = 0;
@@ -2153,6 +2156,7 @@ static int hifn_process_queue(struct hifn_device *dev)
 		if (backlog)
 			backlog->complete(backlog, -EINPROGRESS);
 
+		ctx = crypto_tfm_ctx(async_req->tfm);
 		req = container_of(async_req, struct ablkcipher_request, base);
 
 		err = hifn_handle_req(req);
@@ -2494,8 +2498,7 @@ static int hifn_alg_alloc(struct hifn_device *dev, struct hifn_alg_template *t)
 		 t->drv_name, dev->name);
 
 	alg->alg.cra_priority = 300;
-	alg->alg.cra_flags = CRYPTO_ALG_TYPE_ABLKCIPHER |
-				CRYPTO_ALG_KERN_DRIVER_ONLY | CRYPTO_ALG_ASYNC;
+	alg->alg.cra_flags = CRYPTO_ALG_TYPE_ABLKCIPHER | CRYPTO_ALG_ASYNC;
 	alg->alg.cra_blocksize = t->bsize;
 	alg->alg.cra_ctxsize = sizeof(struct hifn_context);
 	alg->alg.cra_alignmask = 0;
@@ -2701,7 +2704,8 @@ static void __devexit hifn_remove(struct pci_dev *pdev)
 	dev = pci_get_drvdata(pdev);
 
 	if (dev) {
-		cancel_delayed_work_sync(&dev->work);
+		cancel_delayed_work(&dev->work);
+		flush_scheduled_work();
 
 		hifn_unregister_rng(dev);
 		hifn_unregister_alg(dev);
@@ -2745,8 +2749,10 @@ static int __init hifn_init(void)
 	unsigned int freq;
 	int err;
 
-	/* HIFN supports only 32-bit addresses */
-	BUILD_BUG_ON(sizeof(dma_addr_t) != 4);
+	if (sizeof(dma_addr_t) > 4) {
+		printk(KERN_INFO "HIFN supports only 32-bit addresses.\n");
+		return -EINVAL;
+	}
 
 	if (strncmp(hifn_pll_ref, "ext", 3) &&
 	    strncmp(hifn_pll_ref, "pci", 3)) {

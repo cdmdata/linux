@@ -536,7 +536,6 @@ static int wm8350_create_cache(struct wm8350 *wm8350, int type, int mode)
 	}
 
 out:
-	kfree(wm8350->reg_cache);
 	return ret;
 }
 
@@ -572,8 +571,6 @@ int wm8350_device_init(struct wm8350 *wm8350, int irq,
 	int ret;
 	u16 id1, id2, mask_rev;
 	u16 cust_id, mode, chip_rev;
-
-	dev_set_drvdata(wm8350->dev, wm8350);
 
 	/* get WM8350 revision and config mode */
 	ret = wm8350->read_dev(wm8350, WM8350_RESET_ID, sizeof(id1), &id1);
@@ -703,7 +700,7 @@ int wm8350_device_init(struct wm8350 *wm8350, int irq,
 
 	ret = wm8350_irq_init(wm8350, irq, pdata);
 	if (ret < 0)
-		goto err_free;
+		goto err;
 
 	if (wm8350->irq_base) {
 		ret = request_threaded_irq(wm8350->irq_base +
@@ -724,7 +721,8 @@ int wm8350_device_init(struct wm8350 *wm8350, int irq,
 		}
 	}
 
-	wm8350_reg_write(wm8350, WM8350_SYSTEM_INTERRUPTS_MASK, 0x0);
+	/*mask gpio and rtc interrupt*/
+	wm8350_reg_write(wm8350, WM8350_SYSTEM_INTERRUPTS_MASK, 0x50);
 
 	wm8350_client_dev_register(wm8350, "wm8350-codec",
 				   &(wm8350->codec.pdev));
@@ -741,9 +739,8 @@ int wm8350_device_init(struct wm8350 *wm8350, int irq,
 
 err_irq:
 	wm8350_irq_exit(wm8350);
-err_free:
-	kfree(wm8350->reg_cache);
 err:
+	kfree(wm8350->reg_cache);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(wm8350_device_init);

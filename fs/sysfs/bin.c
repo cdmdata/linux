@@ -179,14 +179,30 @@ static void bin_vma_open(struct vm_area_struct *vma)
 	struct bin_buffer *bb = file->private_data;
 	struct sysfs_dirent *attr_sd = file->f_path.dentry->d_fsdata;
 
-	if (!bb->vm_ops)
+	if (!bb->vm_ops || !bb->vm_ops->open)
 		return;
 
 	if (!sysfs_get_active(attr_sd))
 		return;
 
-	if (bb->vm_ops->open)
-		bb->vm_ops->open(vma);
+	bb->vm_ops->open(vma);
+
+	sysfs_put_active(attr_sd);
+}
+
+static void bin_vma_close(struct vm_area_struct *vma)
+{
+	struct file *file = vma->vm_file;
+	struct bin_buffer *bb = file->private_data;
+	struct sysfs_dirent *attr_sd = file->f_path.dentry->d_fsdata;
+
+	if (!bb->vm_ops || !bb->vm_ops->close)
+		return;
+
+	if (!sysfs_get_active(attr_sd))
+		return;
+
+	bb->vm_ops->close(vma);
 
 	sysfs_put_active(attr_sd);
 }
@@ -198,15 +214,13 @@ static int bin_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	struct sysfs_dirent *attr_sd = file->f_path.dentry->d_fsdata;
 	int ret;
 
-	if (!bb->vm_ops)
+	if (!bb->vm_ops || !bb->vm_ops->fault)
 		return VM_FAULT_SIGBUS;
 
 	if (!sysfs_get_active(attr_sd))
 		return VM_FAULT_SIGBUS;
 
-	ret = VM_FAULT_SIGBUS;
-	if (bb->vm_ops->fault)
-		ret = bb->vm_ops->fault(vma, vmf);
+	ret = bb->vm_ops->fault(vma, vmf);
 
 	sysfs_put_active(attr_sd);
 	return ret;
@@ -222,12 +236,13 @@ static int bin_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
 	if (!bb->vm_ops)
 		return VM_FAULT_SIGBUS;
 
+	if (!bb->vm_ops->page_mkwrite)
+		return 0;
+
 	if (!sysfs_get_active(attr_sd))
 		return VM_FAULT_SIGBUS;
 
-	ret = 0;
-	if (bb->vm_ops->page_mkwrite)
-		ret = bb->vm_ops->page_mkwrite(vma, vmf);
+	ret = bb->vm_ops->page_mkwrite(vma, vmf);
 
 	sysfs_put_active(attr_sd);
 	return ret;
@@ -241,15 +256,13 @@ static int bin_access(struct vm_area_struct *vma, unsigned long addr,
 	struct sysfs_dirent *attr_sd = file->f_path.dentry->d_fsdata;
 	int ret;
 
-	if (!bb->vm_ops)
+	if (!bb->vm_ops || !bb->vm_ops->access)
 		return -EINVAL;
 
 	if (!sysfs_get_active(attr_sd))
 		return -EINVAL;
 
-	ret = -EINVAL;
-	if (bb->vm_ops->access)
-		ret = bb->vm_ops->access(vma, addr, buf, len, write);
+	ret = bb->vm_ops->access(vma, addr, buf, len, write);
 
 	sysfs_put_active(attr_sd);
 	return ret;
@@ -263,15 +276,13 @@ static int bin_set_policy(struct vm_area_struct *vma, struct mempolicy *new)
 	struct sysfs_dirent *attr_sd = file->f_path.dentry->d_fsdata;
 	int ret;
 
-	if (!bb->vm_ops)
+	if (!bb->vm_ops || !bb->vm_ops->set_policy)
 		return 0;
 
 	if (!sysfs_get_active(attr_sd))
 		return -EINVAL;
 
-	ret = 0;
-	if (bb->vm_ops->set_policy)
-		ret = bb->vm_ops->set_policy(vma, new);
+	ret = bb->vm_ops->set_policy(vma, new);
 
 	sysfs_put_active(attr_sd);
 	return ret;
@@ -285,15 +296,13 @@ static struct mempolicy *bin_get_policy(struct vm_area_struct *vma,
 	struct sysfs_dirent *attr_sd = file->f_path.dentry->d_fsdata;
 	struct mempolicy *pol;
 
-	if (!bb->vm_ops)
+	if (!bb->vm_ops || !bb->vm_ops->get_policy)
 		return vma->vm_policy;
 
 	if (!sysfs_get_active(attr_sd))
 		return vma->vm_policy;
 
-	pol = vma->vm_policy;
-	if (bb->vm_ops->get_policy)
-		pol = bb->vm_ops->get_policy(vma, addr);
+	pol = bb->vm_ops->get_policy(vma, addr);
 
 	sysfs_put_active(attr_sd);
 	return pol;
@@ -307,15 +316,13 @@ static int bin_migrate(struct vm_area_struct *vma, const nodemask_t *from,
 	struct sysfs_dirent *attr_sd = file->f_path.dentry->d_fsdata;
 	int ret;
 
-	if (!bb->vm_ops)
+	if (!bb->vm_ops || !bb->vm_ops->migrate)
 		return 0;
 
 	if (!sysfs_get_active(attr_sd))
 		return 0;
 
-	ret = 0;
-	if (bb->vm_ops->migrate)
-		ret = bb->vm_ops->migrate(vma, from, to, flags);
+	ret = bb->vm_ops->migrate(vma, from, to, flags);
 
 	sysfs_put_active(attr_sd);
 	return ret;
@@ -324,6 +331,7 @@ static int bin_migrate(struct vm_area_struct *vma, const nodemask_t *from,
 
 static const struct vm_operations_struct bin_vm_ops = {
 	.open		= bin_vma_open,
+	.close		= bin_vma_close,
 	.fault		= bin_fault,
 	.page_mkwrite	= bin_page_mkwrite,
 	.access		= bin_access,
@@ -367,14 +375,6 @@ static int mmap(struct file *file, struct vm_area_struct *vma)
 
 	rc = -EINVAL;
 	if (bb->mmapped && bb->vm_ops != vma->vm_ops)
-		goto out_put;
-
-	/*
-	 * It is not possible to successfully wrap close.
-	 * So error if someone is trying to use close.
-	 */
-	rc = -EINVAL;
-	if (vma->vm_ops && vma->vm_ops->close)
 		goto out_put;
 
 	rc = 0;

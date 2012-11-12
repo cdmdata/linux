@@ -49,8 +49,8 @@
 
 #define VERSION "0.3"
 
-static bool txcrc = 1;
-static bool hciextn = 1;
+static int txcrc = 1;
+static int hciextn = 1;
 
 #define BCSP_TXWINSIZE	4
 
@@ -692,7 +692,7 @@ static int bcsp_open(struct hci_uart *hu)
 
 	BT_DBG("hu %p", hu);
 
-	bcsp = kzalloc(sizeof(*bcsp), GFP_KERNEL);
+	bcsp = kzalloc(sizeof(*bcsp), GFP_ATOMIC);
 	if (!bcsp)
 		return -ENOMEM;
 
@@ -739,7 +739,7 @@ static struct hci_uart_proto bcsp = {
 	.flush		= bcsp_flush
 };
 
-int __init bcsp_init(void)
+int bcsp_init(void)
 {
 	int err = hci_uart_register_proto(&bcsp);
 
@@ -751,7 +751,7 @@ int __init bcsp_init(void)
 	return err;
 }
 
-int __exit bcsp_deinit(void)
+int bcsp_deinit(void)
 {
 	return hci_uart_unregister_proto(&bcsp);
 }

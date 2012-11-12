@@ -8,7 +8,6 @@
 #include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/err.h>
-#include <linux/module.h>
 #include <linux/mfd/abx500.h>
 
 static LIST_HEAD(abx500_list);
@@ -37,7 +36,7 @@ int abx500_register_ops(struct device *dev, struct abx500_ops *ops)
 	struct abx500_device_entry *dev_entry;
 
 	dev_entry = kzalloc(sizeof(struct abx500_device_entry), GFP_KERNEL);
-	if (!dev_entry) {
+	if (IS_ERR(dev_entry)) {
 		dev_err(dev, "register_ops kzalloc failed");
 		return -ENOMEM;
 	}

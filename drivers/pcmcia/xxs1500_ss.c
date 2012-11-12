@@ -17,10 +17,13 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 
+#include <pcmcia/cs_types.h>
+#include <pcmcia/cs.h>
 #include <pcmcia/ss.h>
 #include <pcmcia/cistpl.h>
 
 #include <asm/irq.h>
+#include <asm/system.h>
 #include <asm/mach-au1x00/au1000.h>
 
 #define MEM_MAP_SIZE	0x400000
@@ -273,7 +276,7 @@ static int __devinit xxs1500_pcmcia_probe(struct platform_device *pdev)
 	 * edge detector.
 	 */
 	irq = gpio_to_irq(GPIO_CDA);
-	irq_set_irq_type(irq, IRQ_TYPE_EDGE_BOTH);
+	set_irq_type(irq, IRQ_TYPE_EDGE_BOTH);
 	ret = request_irq(irq, cdirq, 0, "pcmcia_carddetect", sock);
 	if (ret) {
 		dev_err(&pdev->dev, "cannot setup cd irq\n");
@@ -320,7 +323,18 @@ static struct platform_driver xxs1500_pcmcia_socket_driver = {
 	.remove		= __devexit_p(xxs1500_pcmcia_remove),
 };
 
-module_platform_driver(xxs1500_pcmcia_socket_driver);
+int __init xxs1500_pcmcia_socket_load(void)
+{
+	return platform_driver_register(&xxs1500_pcmcia_socket_driver);
+}
+
+void  __exit xxs1500_pcmcia_socket_unload(void)
+{
+	platform_driver_unregister(&xxs1500_pcmcia_socket_driver);
+}
+
+module_init(xxs1500_pcmcia_socket_load);
+module_exit(xxs1500_pcmcia_socket_unload);
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("PCMCIA Socket Services for MyCable XXS1500 systems");

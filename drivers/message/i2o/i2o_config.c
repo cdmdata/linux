@@ -31,7 +31,7 @@
  */
 
 #include <linux/miscdevice.h>
-#include <linux/mutex.h>
+#include <linux/smp_lock.h>
 #include <linux/compat.h>
 #include <linux/slab.h>
 
@@ -41,7 +41,6 @@
 
 #define SG_TABLESIZE		30
 
-static DEFINE_MUTEX(i2o_cfg_mutex);
 static long i2o_cfg_ioctl(struct file *, unsigned int, unsigned long);
 
 static spinlock_t i2o_config_lock;
@@ -112,11 +111,11 @@ static int i2o_cfg_gethrt(unsigned long arg)
 
 	len = 8 + ((hrt->entry_len * hrt->num_entries) << 2);
 
-	if (put_user(len, kcmd.reslen))
-		ret = -EFAULT;
-	else if (len > reslen)
+	/* We did a get user...so assuming mem is ok...is this bad? */
+	put_user(len, kcmd.reslen);
+	if (len > reslen)
 		ret = -ENOBUFS;
-	else if (copy_to_user(kcmd.resbuf, (void *)hrt, len))
+	if (copy_to_user(kcmd.resbuf, (void *)hrt, len))
 		ret = -EFAULT;
 
 	return ret;
@@ -148,9 +147,8 @@ static int i2o_cfg_getlct(unsigned long arg)
 	lct = (i2o_lct *) c->lct;
 
 	len = (unsigned int)lct->table_size << 2;
-	if (put_user(len, kcmd.reslen))
-		ret = -EFAULT;
-	else if (len > reslen)
+	put_user(len, kcmd.reslen);
+	if (len > reslen)
 		ret = -ENOBUFS;
 	else if (copy_to_user(kcmd.resbuf, lct, len))
 		ret = -EFAULT;
@@ -210,9 +208,8 @@ static int i2o_cfg_parms(unsigned long arg, unsigned int type)
 		return -EAGAIN;
 	}
 
-	if (put_user(len, kcmd.reslen))
-		ret = -EFAULT;
-	else if (len > reslen)
+	put_user(len, kcmd.reslen);
+	if (len > reslen)
 		ret = -ENOBUFS;
 	else if (copy_to_user(kcmd.resbuf, res, len))
 		ret = -EFAULT;
@@ -742,7 +739,7 @@ static long i2o_cfg_compat_ioctl(struct file *file, unsigned cmd,
 				 unsigned long arg)
 {
 	int ret;
-	mutex_lock(&i2o_cfg_mutex);
+	lock_kernel();
 	switch (cmd) {
 	case I2OGETIOPS:
 		ret = i2o_cfg_ioctl(file, cmd, arg);
@@ -754,7 +751,7 @@ static long i2o_cfg_compat_ioctl(struct file *file, unsigned cmd,
 		ret = -ENOIOCTLCMD;
 		break;
 	}
-	mutex_unlock(&i2o_cfg_mutex);
+	unlock_kernel();
 	return ret;
 }
 
@@ -982,7 +979,7 @@ static long i2o_cfg_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 {
 	int ret;
 
-	mutex_lock(&i2o_cfg_mutex);
+	lock_kernel();
 	switch (cmd) {
 	case I2OGETIOPS:
 		ret = i2o_cfg_getiops(arg);
@@ -1038,20 +1035,21 @@ static long i2o_cfg_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 		osm_debug("unknown ioctl called!\n");
 		ret = -EINVAL;
 	}
-	mutex_unlock(&i2o_cfg_mutex);
+	unlock_kernel();
 	return ret;
 }
 
 static int cfg_open(struct inode *inode, struct file *file)
 {
-	struct i2o_cfg_info *tmp = kmalloc(sizeof(struct i2o_cfg_info),
+	struct i2o_cfg_info *tmp =
+	    (struct i2o_cfg_info *)kmalloc(sizeof(struct i2o_cfg_info),
 					   GFP_KERNEL);
 	unsigned long flags;
 
 	if (!tmp)
 		return -ENOMEM;
 
-	mutex_lock(&i2o_cfg_mutex);
+	lock_kernel();
 	file->private_data = (void *)(i2o_cfg_info_id++);
 	tmp->fp = file;
 	tmp->fasync = NULL;
@@ -1065,7 +1063,7 @@ static int cfg_open(struct inode *inode, struct file *file)
 	spin_lock_irqsave(&i2o_config_lock, flags);
 	open_files = tmp;
 	spin_unlock_irqrestore(&i2o_config_lock, flags);
-	mutex_unlock(&i2o_cfg_mutex);
+	unlock_kernel();
 
 	return 0;
 }
@@ -1076,14 +1074,14 @@ static int cfg_fasync(int fd, struct file *fp, int on)
 	struct i2o_cfg_info *p;
 	int ret = -EBADF;
 
-	mutex_lock(&i2o_cfg_mutex);
+	lock_kernel();
 	for (p = open_files; p; p = p->next)
 		if (p->q_id == id)
 			break;
 
 	if (p)
 		ret = fasync_helper(fd, fp, on, &p->fasync);
-	mutex_unlock(&i2o_cfg_mutex);
+	unlock_kernel();
 	return ret;
 }
 
@@ -1093,7 +1091,7 @@ static int cfg_release(struct inode *inode, struct file *file)
 	struct i2o_cfg_info *p, **q;
 	unsigned long flags;
 
-	mutex_lock(&i2o_cfg_mutex);
+	lock_kernel();
 	spin_lock_irqsave(&i2o_config_lock, flags);
 	for (q = &open_files; (p = *q) != NULL; q = &p->next) {
 		if (p->q_id == id) {
@@ -1103,7 +1101,7 @@ static int cfg_release(struct inode *inode, struct file *file)
 		}
 	}
 	spin_unlock_irqrestore(&i2o_config_lock, flags);
-	mutex_unlock(&i2o_cfg_mutex);
+	unlock_kernel();
 
 	return 0;
 }

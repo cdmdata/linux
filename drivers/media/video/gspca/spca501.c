@@ -19,8 +19,6 @@
  *
  */
 
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
-
 #define MODULE_NAME "spca501"
 
 #include "gspca.h"
@@ -1726,7 +1724,7 @@ static const __u16 spca501c_mysterious_init_data[][3] = {
 	{0x00, 0x0000, 0x0048},
 	{0x00, 0x0000, 0x0049},
 	{0x00, 0x0008, 0x004a},
-/* DSP Registers	*/
+/* DSP Registers	 */
 	{0x01, 0x00a6, 0x0000},
 	{0x01, 0x0028, 0x0001},
 	{0x01, 0x0000, 0x0002},
@@ -1790,7 +1788,7 @@ static const __u16 spca501c_mysterious_init_data[][3] = {
 	{0x05, 0x0022, 0x0004},
 	{0x05, 0x0025, 0x0001},
 	{0x05, 0x0000, 0x0000},
-/* Part 4 */
+/* Part 4             */
 	{0x05, 0x0026, 0x0001},
 	{0x05, 0x0001, 0x0000},
 	{0x05, 0x0027, 0x0001},
@@ -1808,7 +1806,7 @@ static const __u16 spca501c_mysterious_init_data[][3] = {
 	{0x05, 0x0001, 0x0000},
 	{0x05, 0x0027, 0x0001},
 	{0x05, 0x004e, 0x0000},
-/* Part 5 */
+/* Part 5        	 */
 	{0x01, 0x0003, 0x003f},
 	{0x01, 0x0001, 0x0056},
 	{0x01, 0x000f, 0x0008},
@@ -1854,7 +1852,7 @@ static int reg_write(struct usb_device *dev,
 	PDEBUG(D_USBO, "reg write: 0x%02x 0x%02x 0x%02x",
 		req, index, value);
 	if (ret < 0)
-		pr_err("reg write: error %d\n", ret);
+		PDEBUG(D_ERR, "reg write: error %d", ret);
 	return ret;
 }
 
@@ -2157,7 +2155,7 @@ static const struct sd_desc sd_desc = {
 };
 
 /* -- module initialisation -- */
-static const struct usb_device_id device_table[] = {
+static const __devinitdata struct usb_device_id device_table[] = {
 	{USB_DEVICE(0x040a, 0x0002), .driver_info = KodakDVC325},
 	{USB_DEVICE(0x0497, 0xc001), .driver_info = SmileIntlCamera},
 	{USB_DEVICE(0x0506, 0x00df), .driver_info = ThreeComHomeConnectLite},
@@ -2188,4 +2186,21 @@ static struct usb_driver sd_driver = {
 #endif
 };
 
-module_usb_driver(sd_driver);
+/* -- module insert / remove -- */
+static int __init sd_mod_init(void)
+{
+	int ret;
+	ret = usb_register(&sd_driver);
+	if (ret < 0)
+		return ret;
+	PDEBUG(D_PROBE, "registered");
+	return 0;
+}
+static void __exit sd_mod_exit(void)
+{
+	usb_deregister(&sd_driver);
+	PDEBUG(D_PROBE, "deregistered");
+}
+
+module_init(sd_mod_init);
+module_exit(sd_mod_exit);

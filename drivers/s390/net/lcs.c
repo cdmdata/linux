@@ -50,7 +50,7 @@
 #include "lcs.h"
 
 
-#if !defined(CONFIG_ETHERNET) && \
+#if !defined(CONFIG_NET_ETHERNET) && \
     !defined(CONFIG_TR) && !defined(CONFIG_FDDI)
 #error Cannot compile lcs.c without some net devices switched on.
 #endif
@@ -840,7 +840,7 @@ lcs_notify_lancmd_waiters(struct lcs_card *card, struct lcs_cmd *cmd)
 }
 
 /**
- * Emit buffer of a lan command.
+ * Emit buffer of a lan comand.
  */
 static void
 lcs_lancmd_timeout(unsigned long data)
@@ -1122,7 +1122,7 @@ list_modified:
 	list_for_each_entry_safe(ipm, tmp, &card->ipm_list, list){
 		switch (ipm->ipm_state) {
 		case LCS_IPM_STATE_SET_REQUIRED:
-			/* del from ipm_list so no one else can tamper with
+			/* del from ipm_list so noone else can tamper with
 			 * this entry */
 			list_del_init(&ipm->list);
 			spin_unlock_irqrestore(&card->ipm_lock, flags);
@@ -1188,8 +1188,7 @@ lcs_remove_mc_addresses(struct lcs_card *card, struct in_device *in4_dev)
 	spin_lock_irqsave(&card->ipm_lock, flags);
 	list_for_each(l, &card->ipm_list) {
 		ipm = list_entry(l, struct lcs_ipm_list, list);
-		for (im4 = rcu_dereference(in4_dev->mc_list);
-		     im4 != NULL; im4 = rcu_dereference(im4->next_rcu)) {
+		for (im4 = in4_dev->mc_list; im4 != NULL; im4 = im4->next) {
 			lcs_get_mac_for_ipm(im4->multiaddr, buf, card->dev);
 			if ( (ipm->ipm.ip_addr == im4->multiaddr) &&
 			     (memcmp(buf, &ipm->ipm.mac_addr,
@@ -1234,8 +1233,7 @@ lcs_set_mc_addresses(struct lcs_card *card, struct in_device *in4_dev)
 	unsigned long flags;
 
 	LCS_DBF_TEXT(4, trace, "setmclst");
-	for (im4 = rcu_dereference(in4_dev->mc_list); im4 != NULL;
-	     im4 = rcu_dereference(im4->next_rcu)) {
+	for (im4 = in4_dev->mc_list; im4; im4 = im4->next) {
 		lcs_get_mac_for_ipm(im4->multiaddr, buf, card->dev);
 		ipm = lcs_check_addr_entry(card, im4, buf);
 		if (ipm != NULL)
@@ -1271,10 +1269,10 @@ lcs_register_mc_addresses(void *data)
 	in4_dev = in_dev_get(card->dev);
 	if (in4_dev == NULL)
 		goto out;
-	rcu_read_lock();
+	read_lock(&in4_dev->mc_list_lock);
 	lcs_remove_mc_addresses(card,in4_dev);
 	lcs_set_mc_addresses(card, in4_dev);
-	rcu_read_unlock();
+	read_unlock(&in4_dev->mc_list_lock);
 	in_dev_put(in4_dev);
 
 	netif_carrier_off(card->dev);
@@ -1481,6 +1479,7 @@ lcs_tasklet(unsigned long data)
 	struct lcs_channel *channel;
 	struct lcs_buffer *iob;
 	int buf_idx;
+	int rc;
 
 	channel = (struct lcs_channel *) data;
 	LCS_DBF_TEXT_(5, trace, "tlet%s", dev_name(&channel->ccwdev->dev));
@@ -1497,11 +1496,14 @@ lcs_tasklet(unsigned long data)
 	channel->buf_idx = buf_idx;
 
 	if (channel->state == LCS_CH_STATE_STOPPED)
-		lcs_start_channel(channel);
+		// FIXME: what if rc != 0 ??
+		rc = lcs_start_channel(channel);
 	spin_lock_irqsave(get_ccwdev_lock(channel->ccwdev), flags);
 	if (channel->state == LCS_CH_STATE_SUSPENDED &&
-	    channel->iob[channel->io_idx].state == LCS_BUF_STATE_READY)
-		__lcs_resume_channel(channel);
+	    channel->iob[channel->io_idx].state == LCS_BUF_STATE_READY) {
+		// FIXME: what if rc != 0 ??
+		rc = __lcs_resume_channel(channel);
+	}
 	spin_unlock_irqrestore(get_ccwdev_lock(channel->ccwdev), flags);
 
 	/* Something happened on the channel. Wake up waiters. */
@@ -1634,7 +1636,7 @@ lcs_startlan_auto(struct lcs_card *card)
 	int rc;
 
 	LCS_DBF_TEXT(2, trace, "strtauto");
-#ifdef CONFIG_ETHERNET
+#ifdef CONFIG_NET_ETHERNET
 	card->lan_type = LCS_FRAME_TYPE_ENET;
 	rc = lcs_send_startlan(card, LCS_INITIATOR_TCPIP);
 	if (rc == 0)
@@ -1970,7 +1972,7 @@ lcs_portno_store (struct device *dev, struct device_attribute *attr, const char 
 
 static DEVICE_ATTR(portno, 0644, lcs_portno_show, lcs_portno_store);
 
-static const char *lcs_type[] = {
+const char *lcs_type[] = {
 	"not a channel",
 	"2216 parallel",
 	"2216 channel",
@@ -2120,7 +2122,7 @@ static const struct net_device_ops lcs_mc_netdev_ops = {
 	.ndo_stop		= lcs_stop_device,
 	.ndo_get_stats		= lcs_getstats,
 	.ndo_start_xmit		= lcs_start_xmit,
-	.ndo_set_rx_mode	= lcs_set_multicast_list,
+	.ndo_set_multicast_list = lcs_set_multicast_list,
 };
 
 static int
@@ -2166,7 +2168,7 @@ lcs_new_device(struct ccwgroup_device *ccwgdev)
 		goto netdev_out;
 	}
 	switch (card->lan_type) {
-#ifdef CONFIG_ETHERNET
+#ifdef CONFIG_NET_ETHERNET
 	case LCS_FRAME_TYPE_ENET:
 		card->lan_type_trans = eth_type_trans;
 		dev = alloc_etherdev(0);
@@ -2240,7 +2242,7 @@ __lcs_shutdown_device(struct ccwgroup_device *ccwgdev, int recovery_mode)
 {
 	struct lcs_card *card;
 	enum lcs_dev_states recover_state;
-	int ret = 0, ret2 = 0, ret3 = 0;
+	int ret;
 
 	LCS_DBF_TEXT(3, setup, "shtdndev");
 	card = dev_get_drvdata(&ccwgdev->dev);
@@ -2255,15 +2257,13 @@ __lcs_shutdown_device(struct ccwgroup_device *ccwgdev, int recovery_mode)
 	recover_state = card->state;
 
 	ret = lcs_stop_device(card->dev);
-	ret2 = ccw_device_set_offline(card->read.ccwdev);
-	ret3 = ccw_device_set_offline(card->write.ccwdev);
-	if (!ret)
-		ret = (ret2) ? ret2 : ret3;
-	if (ret)
-		LCS_DBF_TEXT_(3, setup, "1err:%d", ret);
+	ret = ccw_device_set_offline(card->read.ccwdev);
+	ret = ccw_device_set_offline(card->write.ccwdev);
 	if (recover_state == DEV_STATE_UP) {
 		card->state = DEV_STATE_RECOVER;
 	}
+	if (ret)
+		return ret;
 	return 0;
 }
 
@@ -2392,24 +2392,19 @@ static struct ccw_device_id lcs_ids[] = {
 MODULE_DEVICE_TABLE(ccw, lcs_ids);
 
 static struct ccw_driver lcs_ccw_driver = {
-	.driver = {
-		.owner	= THIS_MODULE,
-		.name	= "lcs",
-	},
+	.owner	= THIS_MODULE,
+	.name	= "lcs",
 	.ids	= lcs_ids,
 	.probe	= ccwgroup_probe_ccwdev,
 	.remove	= ccwgroup_remove_ccwdev,
-	.int_class = IOINT_LCS,
 };
 
 /**
  * LCS ccwgroup driver registration
  */
 static struct ccwgroup_driver lcs_group_driver = {
-	.driver = {
-		.owner	= THIS_MODULE,
-		.name	= "lcs",
-	},
+	.owner       = THIS_MODULE,
+	.name        = "lcs",
 	.max_slaves  = 2,
 	.driver_id   = 0xD3C3E2,
 	.probe       = lcs_probe_device,

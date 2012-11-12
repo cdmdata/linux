@@ -28,15 +28,14 @@
 #include "drm.h"
 #include "nouveau_drv.h"
 #include "nouveau_dma.h"
-#include "nouveau_ramht.h"
 
 void
-nouveau_dma_init(struct nouveau_channel *chan)
+nouveau_dma_pre_init(struct nouveau_channel *chan)
 {
 	struct drm_nouveau_private *dev_priv = chan->dev->dev_private;
 	struct nouveau_bo *pushbuf = chan->pushbuf_bo;
 
-	if (dev_priv->card_type >= NV_50) {
+	if (dev_priv->card_type == NV_50) {
 		const int ib_size = pushbuf->bo.mem.size / 2;
 
 		chan->dma.ib_base = (pushbuf->bo.mem.size - ib_size) >> 2;
@@ -52,6 +51,81 @@ nouveau_dma_init(struct nouveau_channel *chan)
 	chan->dma.put  = 0;
 	chan->dma.cur  = chan->dma.put;
 	chan->dma.free = chan->dma.max - chan->dma.cur;
+}
+
+int
+nouveau_dma_init(struct nouveau_channel *chan)
+{
+	struct drm_device *dev = chan->dev;
+	struct drm_nouveau_private *dev_priv = dev->dev_private;
+	struct nouveau_gpuobj *m2mf = NULL;
+	struct nouveau_gpuobj *nvsw = NULL;
+	int ret, i;
+
+	/* Create NV_MEMORY_TO_MEMORY_FORMAT for buffer moves */
+	ret = nouveau_gpuobj_gr_new(chan, dev_priv->card_type < NV_50 ?
+				    0x0039 : 0x5039, &m2mf);
+	if (ret)
+		return ret;
+
+	ret = nouveau_gpuobj_ref_add(dev, chan, NvM2MF, m2mf, NULL);
+	if (ret)
+		return ret;
+
+	/* Create an NV_SW object for various sync purposes */
+	ret = nouveau_gpuobj_sw_new(chan, NV_SW, &nvsw);
+	if (ret)
+		return ret;
+
+	ret = nouveau_gpuobj_ref_add(dev, chan, NvSw, nvsw, NULL);
+	if (ret)
+		return ret;
+
+	/* NV_MEMORY_TO_MEMORY_FORMAT requires a notifier object */
+	ret = nouveau_notifier_alloc(chan, NvNotify0, 32, &chan->m2mf_ntfy);
+	if (ret)
+		return ret;
+
+	/* Map push buffer */
+	ret = nouveau_bo_map(chan->pushbuf_bo);
+	if (ret)
+		return ret;
+
+	/* Map M2MF notifier object - fbcon. */
+	if (drm_core_check_feature(dev, DRIVER_MODESET)) {
+		ret = nouveau_bo_map(chan->notifier_bo);
+		if (ret)
+			return ret;
+	}
+
+	/* Insert NOPS for NOUVEAU_DMA_SKIPS */
+	ret = RING_SPACE(chan, NOUVEAU_DMA_SKIPS);
+	if (ret)
+		return ret;
+
+	for (i = 0; i < NOUVEAU_DMA_SKIPS; i++)
+		OUT_RING(chan, 0);
+
+	/* Initialise NV_MEMORY_TO_MEMORY_FORMAT */
+	ret = RING_SPACE(chan, 4);
+	if (ret)
+		return ret;
+	BEGIN_RING(chan, NvSubM2MF, NV_MEMORY_TO_MEMORY_FORMAT_NAME, 1);
+	OUT_RING(chan, NvM2MF);
+	BEGIN_RING(chan, NvSubM2MF, NV_MEMORY_TO_MEMORY_FORMAT_DMA_NOTIFY, 1);
+	OUT_RING(chan, NvNotify0);
+
+	/* Initialise NV_SW */
+	ret = RING_SPACE(chan, 2);
+	if (ret)
+		return ret;
+	BEGIN_RING(chan, NvSubSw, 0, 1);
+	OUT_RING(chan, NvSw);
+
+	/* Sit back and pray the channel works.. */
+	FIRE_RING(chan);
+
+	return 0;
 }
 
 void
@@ -75,13 +149,11 @@ OUT_RINGp(struct nouveau_channel *chan, const void *data, unsigned nr_dwords)
  *  -EBUSY if timeout exceeded
  */
 static inline int
-READ_GET(struct nouveau_channel *chan, uint64_t *prev_get, int *timeout)
+READ_GET(struct nouveau_channel *chan, uint32_t *prev_get, uint32_t *timeout)
 {
-	uint64_t val;
+	uint32_t val;
 
 	val = nvchan_rd32(chan, chan->user_get);
-        if (chan->user_get_hi)
-                val |= (uint64_t)nvchan_rd32(chan, chan->user_get_hi) << 32;
 
 	/* reset counter as long as GET is still advancing, this is
 	 * to avoid misdetecting a GPU lockup if the GPU happens to
@@ -110,13 +182,8 @@ nv50_dma_push(struct nouveau_channel *chan, struct nouveau_bo *bo,
 	      int delta, int length)
 {
 	struct nouveau_bo *pb = chan->pushbuf_bo;
-	struct nouveau_vma *vma;
+	uint64_t offset = bo->bo.offset + delta;
 	int ip = (chan->dma.ib_put * 2) + chan->dma.ib_base;
-	u64 offset;
-
-	vma = nouveau_bo_vma_find(bo, chan->vm);
-	BUG_ON(!vma);
-	offset = vma->offset + delta;
 
 	BUG_ON(chan->dma.ib_free < 1);
 	nouveau_bo_wr32(pb, ip++, lower_32_bits(offset));
@@ -152,7 +219,7 @@ nv50_dma_push_wait(struct nouveau_channel *chan, int count)
 
 		chan->dma.ib_free = get - chan->dma.ib_put;
 		if (chan->dma.ib_free <= 0)
-			chan->dma.ib_free += chan->dma.ib_max;
+			chan->dma.ib_free += chan->dma.ib_max + 1;
 	}
 
 	return 0;
@@ -161,8 +228,8 @@ nv50_dma_push_wait(struct nouveau_channel *chan, int count)
 static int
 nv50_dma_wait(struct nouveau_channel *chan, int slots, int count)
 {
-	uint64_t prev_get = 0;
-	int ret, cnt = 0;
+	uint32_t cnt = 0, prev_get = 0;
+	int ret;
 
 	ret = nv50_dma_push_wait(chan, slots + 1);
 	if (unlikely(ret))
@@ -204,8 +271,8 @@ nv50_dma_wait(struct nouveau_channel *chan, int slots, int count)
 int
 nouveau_dma_wait(struct nouveau_channel *chan, int slots, int size)
 {
-	uint64_t prev_get = 0;
-	int cnt = 0, get;
+	uint32_t prev_get = 0, cnt = 0;
+	int get;
 
 	if (chan->dma.ib_max)
 		return nv50_dma_wait(chan, slots, size);

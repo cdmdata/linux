@@ -24,6 +24,13 @@
 
 #include "sysfs.h"
 
+/* used in crash dumps to help with debugging */
+static char last_sysfs_file[PATH_MAX];
+void sysfs_printk_last_file(void)
+{
+	printk(KERN_EMERG "last sysfs file: %s\n", last_sysfs_file);
+}
+
 /*
  * There's one sysfs_buffer for each open file and one
  * sysfs_open_dirent for each sysfs_dirent with one or more open
@@ -330,6 +337,11 @@ static int sysfs_open_file(struct inode *inode, struct file *file)
 	struct sysfs_buffer *buffer;
 	const struct sysfs_ops *ops;
 	int error = -EACCES;
+	char *p;
+
+	p = d_path(&file->f_path, last_sysfs_file, sizeof(last_sysfs_file));
+	if (p)
+		memmove(last_sysfs_file, p, strlen(p) + 1);
 
 	/* need attr_sd for attr and ops, its parent for kobj */
 	if (!sysfs_get_active(attr_sd))
@@ -466,6 +478,9 @@ void sysfs_notify(struct kobject *k, const char *dir, const char *attr)
 	mutex_lock(&sysfs_mutex);
 
 	if (sd && dir)
+		/* Only directories are tagged, so no need to pass
+		 * a tag explicitly.
+		 */
 		sd = sysfs_find_dirent(sd, NULL, dir);
 	if (sd && attr)
 		sd = sysfs_find_dirent(sd, NULL, attr);
@@ -485,62 +500,17 @@ const struct file_operations sysfs_file_operations = {
 	.poll		= sysfs_poll,
 };
 
-int sysfs_attr_ns(struct kobject *kobj, const struct attribute *attr,
-		  const void **pns)
-{
-	struct sysfs_dirent *dir_sd = kobj->sd;
-	const struct sysfs_ops *ops;
-	const void *ns = NULL;
-	int err;
-
-	if (!dir_sd) {
-		WARN(1, KERN_ERR "sysfs: kobject %s without dirent\n",
-			kobject_name(kobj));
-		return -ENOENT;
-	}
-
-	err = 0;
-	if (!sysfs_ns_type(dir_sd))
-		goto out;
-
-	err = -EINVAL;
-	if (!kobj->ktype)
-		goto out;
-	ops = kobj->ktype->sysfs_ops;
-	if (!ops)
-		goto out;
-	if (!ops->namespace)
-		goto out;
-
-	err = 0;
-	ns = ops->namespace(kobj, attr);
-out:
-	if (err) {
-		WARN(1, KERN_ERR "missing sysfs namespace attribute operation for "
-		     "kobject: %s\n", kobject_name(kobj));
-	}
-	*pns = ns;
-	return err;
-}
-
 int sysfs_add_file_mode(struct sysfs_dirent *dir_sd,
-			const struct attribute *attr, int type, umode_t amode)
+			const struct attribute *attr, int type, mode_t amode)
 {
 	umode_t mode = (amode & S_IALLUGO) | S_IFREG;
 	struct sysfs_addrm_cxt acxt;
 	struct sysfs_dirent *sd;
-	const void *ns;
 	int rc;
-
-	rc = sysfs_attr_ns(dir_sd->s_dir.kobj, attr, &ns);
-	if (rc)
-		return rc;
 
 	sd = sysfs_new_dirent(attr->name, mode, type);
 	if (!sd)
 		return -ENOMEM;
-
-	sd->s_ns = ns;
 	sd->s_attr.attr = (void *)attr;
 	sysfs_dirent_init_lockdep(sd);
 
@@ -623,22 +593,16 @@ EXPORT_SYMBOL_GPL(sysfs_add_file_to_group);
  * @mode: file permissions.
  *
  */
-int sysfs_chmod_file(struct kobject *kobj, const struct attribute *attr,
-		     umode_t mode)
+int sysfs_chmod_file(struct kobject *kobj, struct attribute *attr, mode_t mode)
 {
 	struct sysfs_dirent *sd;
 	struct iattr newattrs;
-	const void *ns;
 	int rc;
-
-	rc = sysfs_attr_ns(kobj, attr, &ns);
-	if (rc)
-		return rc;
 
 	mutex_lock(&sysfs_mutex);
 
 	rc = -ENOENT;
-	sd = sysfs_find_dirent(kobj->sd, ns, attr->name);
+	sd = sysfs_find_dirent(kobj->sd, NULL, attr->name);
 	if (!sd)
 		goto out;
 
@@ -663,12 +627,7 @@ EXPORT_SYMBOL_GPL(sysfs_chmod_file);
 
 void sysfs_remove_file(struct kobject * kobj, const struct attribute * attr)
 {
-	const void *ns;
-
-	if (sysfs_attr_ns(kobj, attr, &ns))
-		return;
-
-	sysfs_hash_and_remove(kobj->sd, ns, attr->name);
+	sysfs_hash_and_remove(kobj->sd, NULL, attr->name);
 }
 
 void sysfs_remove_files(struct kobject * kobj, const struct attribute **ptr)

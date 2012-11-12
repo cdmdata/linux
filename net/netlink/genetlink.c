@@ -33,14 +33,6 @@ void genl_unlock(void)
 }
 EXPORT_SYMBOL(genl_unlock);
 
-#ifdef CONFIG_PROVE_LOCKING
-int lockdep_genl_is_held(void)
-{
-	return lockdep_is_held(&genl_mutex);
-}
-EXPORT_SYMBOL(lockdep_genl_is_held);
-#endif
-
 #define GENL_FAM_TAB_SIZE	16
 #define GENL_FAM_TAB_MASK	(GENL_FAM_TAB_SIZE - 1)
 
@@ -106,7 +98,7 @@ static struct genl_ops *genl_get_cmd(u8 cmd, struct genl_family *family)
 /* Of course we are going to have problems once we hit
  * 2^16 alive types, but that can only happen by year 2K
 */
-static u16 genl_generate_id(void)
+static inline u16 genl_generate_id(void)
 {
 	static u16 id_gen_idx = GENL_MIN_ID;
 	int i;
@@ -311,7 +303,6 @@ int genl_register_ops(struct genl_family *family, struct genl_ops *ops)
 errout:
 	return err;
 }
-EXPORT_SYMBOL(genl_register_ops);
 
 /**
  * genl_unregister_ops - unregister generic netlink operations
@@ -346,7 +337,6 @@ int genl_unregister_ops(struct genl_family *family, struct genl_ops *ops)
 
 	return -ENOENT;
 }
-EXPORT_SYMBOL(genl_unregister_ops);
 
 /**
  * genl_register_family - register a generic netlink family
@@ -415,7 +405,6 @@ errout_locked:
 errout:
 	return err;
 }
-EXPORT_SYMBOL(genl_register_family);
 
 /**
  * genl_register_family_with_ops - register a generic netlink family
@@ -496,38 +485,6 @@ int genl_unregister_family(struct genl_family *family)
 
 	return -ENOENT;
 }
-EXPORT_SYMBOL(genl_unregister_family);
-
-/**
- * genlmsg_put - Add generic netlink header to netlink message
- * @skb: socket buffer holding the message
- * @pid: netlink pid the message is addressed to
- * @seq: sequence number (usually the one of the sender)
- * @family: generic netlink family
- * @flags netlink message flags
- * @cmd: generic netlink command
- *
- * Returns pointer to user specific header
- */
-void *genlmsg_put(struct sk_buff *skb, u32 pid, u32 seq,
-				struct genl_family *family, int flags, u8 cmd)
-{
-	struct nlmsghdr *nlh;
-	struct genlmsghdr *hdr;
-
-	nlh = nlmsg_put(skb, pid, seq, family->id, GENL_HDRLEN +
-			family->hdrsize, flags);
-	if (nlh == NULL)
-		return NULL;
-
-	hdr = nlmsg_data(nlh);
-	hdr->cmd = cmd;
-	hdr->version = family->version;
-	hdr->reserved = 0;
-
-	return (char *) hdr + GENL_HDRLEN;
-}
-EXPORT_SYMBOL(genlmsg_put);
 
 static int genl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 {
@@ -555,7 +512,7 @@ static int genl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 		return -EOPNOTSUPP;
 
 	if ((ops->flags & GENL_ADMIN_PERM) &&
-	    !capable(CAP_NET_ADMIN))
+	    security_netlink_recv(skb, CAP_NET_ADMIN))
 		return -EPERM;
 
 	if (nlh->nlmsg_flags & NLM_F_DUMP) {
@@ -563,13 +520,8 @@ static int genl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 			return -EOPNOTSUPP;
 
 		genl_unlock();
-		{
-			struct netlink_dump_control c = {
-				.dump = ops->dumpit,
-				.done = ops->done,
-			};
-			err = netlink_dump_start(net->genl_sock, skb, nlh, &c);
-		}
+		err = netlink_dump_start(net->genl_sock, skb, nlh,
+					 ops->dumpit, ops->done);
 		genl_lock();
 		return err;
 	}
@@ -591,20 +543,8 @@ static int genl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 	info.userhdr = nlmsg_data(nlh) + GENL_HDRLEN;
 	info.attrs = family->attrbuf;
 	genl_info_net_set(&info, net);
-	memset(&info.user_ptr, 0, sizeof(info.user_ptr));
 
-	if (family->pre_doit) {
-		err = family->pre_doit(ops, skb, &info);
-		if (err)
-			return err;
-	}
-
-	err = ops->doit(skb, &info);
-
-	if (family->post_doit)
-		family->post_doit(ops, skb, &info);
-
-	return err;
+	return ops->doit(skb, &info);
 }
 
 static void genl_rcv(struct sk_buff *skb)
@@ -828,15 +768,6 @@ static int ctrl_getfamily(struct sk_buff *skb, struct genl_info *info)
 
 		name = nla_data(info->attrs[CTRL_ATTR_FAMILY_NAME]);
 		res = genl_family_find_byname(name);
-#ifdef CONFIG_MODULES
-		if (res == NULL) {
-			genl_unlock();
-			request_module("net-pf-%d-proto-%d-type-%s",
-				       PF_NETLINK, NETLINK_GENERIC, name);
-			genl_lock();
-			res = genl_family_find_byname(name);
-		}
-#endif
 		err = -ENOENT;
 	}
 
@@ -942,7 +873,11 @@ static int __init genl_init(void)
 	for (i = 0; i < GENL_FAM_TAB_SIZE; i++)
 		INIT_LIST_HEAD(&family_ht[i]);
 
-	err = genl_register_family_with_ops(&genl_ctrl, &genl_ctrl_ops, 1);
+	err = genl_register_family(&genl_ctrl);
+	if (err < 0)
+		goto problem;
+
+	err = genl_register_ops(&genl_ctrl, &genl_ctrl_ops);
 	if (err < 0)
 		goto problem;
 
@@ -963,6 +898,11 @@ problem:
 }
 
 subsys_initcall(genl_init);
+
+EXPORT_SYMBOL(genl_register_ops);
+EXPORT_SYMBOL(genl_unregister_ops);
+EXPORT_SYMBOL(genl_register_family);
+EXPORT_SYMBOL(genl_unregister_family);
 
 static int genlmsg_mcast(struct sk_buff *skb, u32 pid, unsigned long group,
 			 gfp_t flags)
@@ -999,16 +939,3 @@ int genlmsg_multicast_allns(struct sk_buff *skb, u32 pid, unsigned int group,
 	return genlmsg_mcast(skb, pid, group, flags);
 }
 EXPORT_SYMBOL(genlmsg_multicast_allns);
-
-void genl_notify(struct sk_buff *skb, struct net *net, u32 pid, u32 group,
-		 struct nlmsghdr *nlh, gfp_t flags)
-{
-	struct sock *sk = net->genl_sock;
-	int report = 0;
-
-	if (nlh)
-		report = nlmsg_report(nlh);
-
-	nlmsg_notify(sk, skb, pid, group, report, flags);
-}
-EXPORT_SYMBOL(genl_notify);

@@ -3,7 +3,6 @@
  *
  * Copyright © 2004   Ferenc Havasi <havasi@inf.u-szeged.hu>,
  *		      University of Szeged, Hungary
- * Copyright © 2004-2010 David Woodhouse <dwmw2@infradead.org>
  *
  * For licensing information, see the file 'LICENCE' in this directory.
  *
@@ -40,8 +39,6 @@
 #define JFFS2_COMPR_MODE_PRIORITY   1
 #define JFFS2_COMPR_MODE_SIZE       2
 #define JFFS2_COMPR_MODE_FAVOURLZO  3
-#define JFFS2_COMPR_MODE_FORCELZO   4
-#define JFFS2_COMPR_MODE_FORCEZLIB  5
 
 #define FAVOUR_LZO_PERCENT 80
 
@@ -51,9 +48,9 @@ struct jffs2_compressor {
 	char *name;
 	char compr;			/* JFFS2_COMPR_XXX */
 	int (*compress)(unsigned char *data_in, unsigned char *cpage_out,
-			uint32_t *srclen, uint32_t *destlen);
+			uint32_t *srclen, uint32_t *destlen, void *model);
 	int (*decompress)(unsigned char *cdata_in, unsigned char *data_out,
-			  uint32_t cdatalen, uint32_t datalen);
+			  uint32_t cdatalen, uint32_t datalen, void *model);
 	int usecount;
 	int disabled;		/* if set the compressor won't compress */
 	unsigned char *compr_buf;	/* used by size compr. mode */

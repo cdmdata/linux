@@ -9,9 +9,8 @@
  * (at your option) any later version.
  */
 #include <linux/init.h>
-#include <linux/bug.h>
 #include <linux/kernel.h>
-#include <linux/atomic.h>
+#include <asm/atomic.h>
 
 #define INIT(c) do { atomic64_set(&v, c); r = c; } while (0)
 static __init int test_atomic64(void)
@@ -115,7 +114,7 @@ static __init int test_atomic64(void)
 	BUG_ON(v.counter != r);
 
 #if defined(CONFIG_X86) || defined(CONFIG_MIPS) || defined(CONFIG_PPC) || \
-    defined(CONFIG_S390) || defined(_ASM_GENERIC_ATOMIC64_H) || defined(CONFIG_ARM)
+    defined(CONFIG_S390) || defined(_ASM_GENERIC_ATOMIC64_H)
 	INIT(onestwos);
 	BUG_ON(atomic64_dec_if_positive(&v) != (onestwos - 1));
 	r -= one;

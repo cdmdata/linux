@@ -22,7 +22,6 @@ static const char *get_perf_dir(void)
 	return ".";
 }
 
-#ifdef NO_STRLCPY
 size_t strlcpy(char *dest, const char *src, size_t size)
 {
 	size_t ret = strlen(src);
@@ -34,7 +33,7 @@ size_t strlcpy(char *dest, const char *src, size_t size)
 	}
 	return ret;
 }
-#endif
+
 
 static char *get_pathname(void)
 {

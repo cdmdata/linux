@@ -181,9 +181,9 @@ static int logfs_releasepage(struct page *page, gfp_t only_xfs_uses_this)
 }
 
 
-long logfs_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+int logfs_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
+		unsigned long arg)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
 	struct logfs_inode *li = logfs_inode(inode);
 	unsigned int oldflags, flags;
 	int err;
@@ -196,7 +196,7 @@ long logfs_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if (IS_RDONLY(inode))
 			return -EROFS;
 
-		if (!inode_owner_or_capable(inode))
+		if (!is_owner_or_cap(inode))
 			return -EACCES;
 
 		err = get_user(flags, (int __user *)arg);
@@ -219,22 +219,11 @@ long logfs_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	}
 }
 
-int logfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
+int logfs_fsync(struct file *file, int datasync)
 {
 	struct super_block *sb = file->f_mapping->host->i_sb;
-	struct inode *inode = file->f_mapping->host;
-	int ret;
 
-	ret = filemap_write_and_wait_range(inode->i_mapping, start, end);
-	if (ret)
-		return ret;
-
-	mutex_lock(&inode->i_mutex);
-	logfs_get_wblocks(sb, NULL, WF_LOCK);
 	logfs_write_anchor(sb);
-	logfs_put_wblocks(sb, NULL, WF_LOCK);
-	mutex_unlock(&inode->i_mutex);
-
 	return 0;
 }
 
@@ -243,19 +232,15 @@ static int logfs_setattr(struct dentry *dentry, struct iattr *attr)
 	struct inode *inode = dentry->d_inode;
 	int err = 0;
 
-	err = inode_change_ok(inode, attr);
-	if (err)
-		return err;
-
-	if (attr->ia_valid & ATTR_SIZE) {
+	if (attr->ia_valid & ATTR_SIZE)
 		err = logfs_truncate(inode, attr->ia_size);
-		if (err)
-			return err;
-	}
+	attr->ia_valid &= ~ATTR_SIZE;
 
-	setattr_copy(inode, attr);
-	mark_inode_dirty(inode);
-	return 0;
+	if (!err)
+		err = inode_change_ok(inode, attr);
+	if (!err)
+		err = inode_setattr(inode, attr);
+	return err;
 }
 
 const struct inode_operations logfs_reg_iops = {
@@ -266,7 +251,7 @@ const struct file_operations logfs_reg_fops = {
 	.aio_read	= generic_file_aio_read,
 	.aio_write	= generic_file_aio_write,
 	.fsync		= logfs_fsync,
-	.unlocked_ioctl	= logfs_ioctl,
+	.ioctl		= logfs_ioctl,
 	.llseek		= generic_file_llseek,
 	.mmap		= generic_file_readonly_mmap,
 	.open		= generic_file_open,

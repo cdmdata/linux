@@ -64,13 +64,13 @@ struct nc_header {		// packed:
 	// all else is optional, and must start with:
 	// __le16	vendorId;	// from usb-if
 	// __le16	productId;
-} __packed;
+} __attribute__((__packed__));
 
 #define	PAD_BYTE	((unsigned char)0xAC)
 
 struct nc_trailer {
 	__le16	packet_id;
-} __packed;
+} __attribute__((__packed__));
 
 // packets may use FLAG_FRAMING_NC and optional pad
 #define FRAMED_SIZE(mtu) (sizeof (struct nc_header) \
@@ -560,7 +560,7 @@ static int net1080_bind(struct usbnet *dev, struct usb_interface *intf)
 
 static const struct driver_info	net1080_info = {
 	.description =	"NetChip TurboCONNECT",
-	.flags =	FLAG_POINTTOPOINT | FLAG_FRAMING_NC,
+	.flags =	FLAG_FRAMING_NC,
 	.bind =		net1080_bind,
 	.reset =	net1080_reset,
 	.check_connect = net1080_check_connect,
@@ -589,7 +589,17 @@ static struct usb_driver net1080_driver = {
 	.resume =	usbnet_resume,
 };
 
-module_usb_driver(net1080_driver);
+static int __init net1080_init(void)
+{
+ 	return usb_register(&net1080_driver);
+}
+module_init(net1080_init);
+
+static void __exit net1080_exit(void)
+{
+ 	usb_deregister(&net1080_driver);
+}
+module_exit(net1080_exit);
 
 MODULE_AUTHOR("David Brownell");
 MODULE_DESCRIPTION("NetChip 1080 based USB Host-to-Host Links");

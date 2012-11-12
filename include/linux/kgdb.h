@@ -16,7 +16,7 @@
 #include <linux/serial_8250.h>
 #include <linux/linkage.h>
 #include <linux/init.h>
-#include <linux/atomic.h>
+#include <asm/atomic.h>
 #ifdef CONFIG_HAVE_ARCH_KGDB
 #include <asm/kgdb.h>
 #endif
@@ -34,6 +34,16 @@ struct pt_regs;
  *	This can be implemented in the architecture specific portion of kgdb.
  */
 extern int kgdb_skipexception(int exception, struct pt_regs *regs);
+
+/**
+ *	kgdb_disable_hw_debug - (optional) Disable hardware debugging hook
+ *	@regs: Current &struct pt_regs.
+ *
+ *	This function will be called if the particular architecture must
+ *	disable hardware debugging while it is processing gdb packets or
+ *	handling exception.
+ */
+extern void kgdb_disable_hw_debug(struct pt_regs *regs);
 
 struct tasklet_struct;
 struct task_struct;
@@ -63,8 +73,7 @@ enum kgdb_bptype {
 	BP_HARDWARE_BREAKPOINT,
 	BP_WRITE_WATCHPOINT,
 	BP_READ_WATCHPOINT,
-	BP_ACCESS_WATCHPOINT,
-	BP_POKE_BREAKPOINT,
+	BP_ACCESS_WATCHPOINT
 };
 
 enum kgdb_bpstate {
@@ -81,19 +90,6 @@ struct kgdb_bkpt {
 	enum kgdb_bpstate	state;
 };
 
-struct dbg_reg_def_t {
-	char *name;
-	int size;
-	int offset;
-};
-
-#ifndef DBG_MAX_REG_NUM
-#define DBG_MAX_REG_NUM 0
-#else
-extern struct dbg_reg_def_t dbg_reg_def[];
-extern char *dbg_get_reg(int regno, void *mem, struct pt_regs *regs);
-extern int dbg_set_reg(int regno, void *mem, struct pt_regs *regs);
-#endif
 #ifndef KGDB_MAX_BREAKPOINTS
 # define KGDB_MAX_BREAKPOINTS	1000
 #endif
@@ -208,8 +204,8 @@ extern void kgdb_arch_set_pc(struct pt_regs *regs, unsigned long pc);
 
 /* Optional functions. */
 extern int kgdb_validate_break_address(unsigned long addr);
-extern int kgdb_arch_set_breakpoint(struct kgdb_bkpt *bpt);
-extern int kgdb_arch_remove_breakpoint(struct kgdb_bkpt *bpt);
+extern int kgdb_arch_set_breakpoint(unsigned long addr, char *saved_instr);
+extern int kgdb_arch_remove_breakpoint(unsigned long addr, char *bundle);
 
 /**
  *	kgdb_arch_late - Perform any architecture specific initalization.
@@ -234,8 +230,6 @@ extern void kgdb_arch_late(void);
  * breakpoint.
  * @remove_hw_breakpoint: Allow an architecture to specify how to remove a
  * hardware breakpoint.
- * @disable_hw_break: Allow an architecture to specify how to disable
- * hardware breakpoints for a single cpu.
  * @remove_all_hw_break: Allow an architecture to specify how to remove all
  * hardware breakpoints.
  * @correct_hw_break: Allow an architecture to specify how to correct the
@@ -249,7 +243,6 @@ struct kgdb_arch {
 	int	(*remove_breakpoint)(unsigned long, char *);
 	int	(*set_hw_breakpoint)(unsigned long, int, enum kgdb_bptype);
 	int	(*remove_hw_breakpoint)(unsigned long, int, enum kgdb_bptype);
-	void	(*disable_hw_break)(struct pt_regs *regs);
 	void	(*remove_all_hw_break)(void);
 	void	(*correct_hw_break)(void);
 };
@@ -288,7 +281,7 @@ extern void kgdb_unregister_io_module(struct kgdb_io *local_kgdb_io_ops);
 extern struct kgdb_io *dbg_io_ops;
 
 extern int kgdb_hex2long(char **ptr, unsigned long *long_val);
-extern char *kgdb_mem2hex(char *mem, char *buf, int count);
+extern int kgdb_mem2hex(char *mem, char *buf, int count);
 extern int kgdb_hex2mem(char *buf, char *mem, int count);
 
 extern int kgdb_isremovedbreak(unsigned long addr);
@@ -298,7 +291,6 @@ extern int
 kgdb_handle_exception(int ex_vector, int signo, int err_code,
 		      struct pt_regs *regs);
 extern int kgdb_nmicallback(int cpu, void *regs);
-extern void gdbstub_exit(int status);
 
 extern int			kgdb_single_step;
 extern atomic_t			kgdb_active;

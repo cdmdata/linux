@@ -44,11 +44,9 @@ enum tv_margin {
 };
 
 /** Private structure for the integrated TV support */
-struct intel_tv {
-	struct intel_encoder base;
-
+struct intel_tv_priv {
 	int type;
-	const char *tv_format;
+	char *tv_format;
 	int margin[4];
 	u32 save_TV_H_CTL_1;
 	u32 save_TV_H_CTL_2;
@@ -194,10 +192,10 @@ static const u32 filter_table[] = {
  *
  *     if (f >= 1) {
  *         exp = 0x7;
- *	   mant = 1 << 8;
+ * 	   mant = 1 << 8;
  *     } else {
  *         for (exp = 0; exp < 3 && f < 0.5; exp++)
- *	   f *= 2.0;
+ * 	       f *= 2.0;
  *         mant = (f * (1 << 9) + 0.5);
  *         if (mant >= (1 << 9))
  *             mant = (1 << 9) - 1;
@@ -350,7 +348,7 @@ static const struct video_levels component_levels = {
 
 
 struct tv_mode {
-	const char *name;
+	char *name;
 	int clock;
 	int refresh; /* in millihertz (for precision) */
 	u32 oversample;
@@ -417,7 +415,7 @@ static const struct tv_mode tv_modes[] = {
 	{
 		.name		= "NTSC-M",
 		.clock		= 108000,
-		.refresh	= 59940,
+		.refresh	= 29970,
 		.oversample	= TV_OVERSAMPLE_8X,
 		.component_only = 0,
 		/* 525 Lines, 60 Fields, 15.734KHz line, Sub-Carrier 3.580MHz */
@@ -430,7 +428,7 @@ static const struct tv_mode tv_modes[] = {
 		.vsync_start_f1	= 6,		    .vsync_start_f2	= 7,
 		.vsync_len	= 6,
 
-		.veq_ena	= true,		    .veq_start_f1	= 0,
+		.veq_ena	= true,		    .veq_start_f1    	= 0,
 		.veq_start_f2	= 1,		    .veq_len		= 18,
 
 		.vi_end_f1	= 20,		    .vi_end_f2		= 21,
@@ -460,7 +458,7 @@ static const struct tv_mode tv_modes[] = {
 	{
 		.name		= "NTSC-443",
 		.clock		= 108000,
-		.refresh	= 59940,
+		.refresh	= 29970,
 		.oversample	= TV_OVERSAMPLE_8X,
 		.component_only = 0,
 		/* 525 Lines, 60 Fields, 15.734KHz line, Sub-Carrier 4.43MHz */
@@ -472,13 +470,13 @@ static const struct tv_mode tv_modes[] = {
 		.vsync_start_f1 = 6,		    .vsync_start_f2	= 7,
 		.vsync_len	= 6,
 
-		.veq_ena	= true,		    .veq_start_f1	= 0,
+		.veq_ena	= true,		    .veq_start_f1    	= 0,
 		.veq_start_f2	= 1,		    .veq_len		= 18,
 
 		.vi_end_f1	= 20,		    .vi_end_f2		= 21,
 		.nbr_end	= 240,
 
-		.burst_ena	= true,
+		.burst_ena	= 8,
 		.hburst_start	= 72,		    .hburst_len		= 34,
 		.vburst_start_f1 = 9,		    .vburst_end_f1	= 240,
 		.vburst_start_f2 = 10,		    .vburst_end_f2	= 240,
@@ -502,7 +500,7 @@ static const struct tv_mode tv_modes[] = {
 	{
 		.name		= "NTSC-J",
 		.clock		= 108000,
-		.refresh	= 59940,
+		.refresh	= 29970,
 		.oversample	= TV_OVERSAMPLE_8X,
 		.component_only = 0,
 
@@ -515,7 +513,7 @@ static const struct tv_mode tv_modes[] = {
 		.vsync_start_f1	= 6,	    .vsync_start_f2	= 7,
 		.vsync_len	= 6,
 
-		.veq_ena      = true,	    .veq_start_f1	= 0,
+		.veq_ena	= true,		    .veq_start_f1    	= 0,
 		.veq_start_f2 = 1,	    .veq_len		= 18,
 
 		.vi_end_f1	= 20,		    .vi_end_f2		= 21,
@@ -545,7 +543,7 @@ static const struct tv_mode tv_modes[] = {
 	{
 		.name		= "PAL-M",
 		.clock		= 108000,
-		.refresh	= 59940,
+		.refresh	= 29970,
 		.oversample	= TV_OVERSAMPLE_8X,
 		.component_only = 0,
 
@@ -558,7 +556,7 @@ static const struct tv_mode tv_modes[] = {
 		.vsync_start_f1	= 6,		    .vsync_start_f2	= 7,
 		.vsync_len	= 6,
 
-		.veq_ena	= true,		    .veq_start_f1	= 0,
+		.veq_ena	= true,		    .veq_start_f1    	= 0,
 		.veq_start_f2	= 1,		    .veq_len		= 18,
 
 		.vi_end_f1	= 20,		    .vi_end_f2		= 21,
@@ -589,7 +587,7 @@ static const struct tv_mode tv_modes[] = {
 		/* 625 Lines, 50 Fields, 15.625KHz line, Sub-Carrier 4.434MHz */
 		.name	    = "PAL-N",
 		.clock		= 108000,
-		.refresh	= 50000,
+		.refresh	= 25000,
 		.oversample	= TV_OVERSAMPLE_8X,
 		.component_only = 0,
 
@@ -602,14 +600,14 @@ static const struct tv_mode tv_modes[] = {
 		.vsync_start_f1	= 6,	   .vsync_start_f2	= 7,
 		.vsync_len	= 6,
 
-		.veq_ena	= true,		    .veq_start_f1	= 0,
+		.veq_ena	= true,		    .veq_start_f1    	= 0,
 		.veq_start_f2	= 1,		    .veq_len		= 18,
 
 		.vi_end_f1	= 24,		    .vi_end_f2		= 25,
 		.nbr_end	= 286,
 
 		.burst_ena	= true,
-		.hburst_start = 73,	    .hburst_len		= 34,
+		.hburst_start = 73,	    	    .hburst_len		= 34,
 		.vburst_start_f1 = 8,	    .vburst_end_f1	= 285,
 		.vburst_start_f2 = 8,	    .vburst_end_f2	= 286,
 		.vburst_start_f3 = 9,	    .vburst_end_f3	= 286,
@@ -634,7 +632,7 @@ static const struct tv_mode tv_modes[] = {
 		/* 625 Lines, 50 Fields, 15.625KHz line, Sub-Carrier 4.434MHz */
 		.name	    = "PAL",
 		.clock		= 108000,
-		.refresh	= 50000,
+		.refresh	= 25000,
 		.oversample	= TV_OVERSAMPLE_8X,
 		.component_only = 0,
 
@@ -646,7 +644,7 @@ static const struct tv_mode tv_modes[] = {
 		.vsync_start_f1	= 5,	    .vsync_start_f2	= 6,
 		.vsync_len	= 5,
 
-		.veq_ena	= true,	    .veq_start_f1	= 0,
+		.veq_ena	= true,		    .veq_start_f1    	= 0,
 		.veq_start_f2	= 1,	    .veq_len		= 15,
 
 		.vi_end_f1	= 24,		    .vi_end_f2		= 25,
@@ -674,6 +672,78 @@ static const struct tv_mode tv_modes[] = {
 		.filter_table = filter_table,
 	},
 	{
+		.name       = "480p@59.94Hz",
+		.clock 	= 107520,
+		.refresh	= 59940,
+		.oversample     = TV_OVERSAMPLE_4X,
+		.component_only = 1,
+
+		.hsync_end      = 64,               .hblank_end         = 122,
+		.hblank_start   = 842,              .htotal             = 857,
+
+		.progressive    = true,.trilevel_sync = false,
+
+		.vsync_start_f1 = 12,               .vsync_start_f2     = 12,
+		.vsync_len      = 12,
+
+		.veq_ena        = false,
+
+		.vi_end_f1      = 44,               .vi_end_f2          = 44,
+		.nbr_end        = 479,
+
+		.burst_ena      = false,
+
+		.filter_table = filter_table,
+	},
+	{
+		.name       = "480p@60Hz",
+		.clock 	= 107520,
+		.refresh	= 60000,
+		.oversample     = TV_OVERSAMPLE_4X,
+		.component_only = 1,
+
+		.hsync_end      = 64,               .hblank_end         = 122,
+		.hblank_start   = 842,              .htotal             = 856,
+
+		.progressive    = true,.trilevel_sync = false,
+
+		.vsync_start_f1 = 12,               .vsync_start_f2     = 12,
+		.vsync_len      = 12,
+
+		.veq_ena        = false,
+
+		.vi_end_f1      = 44,               .vi_end_f2          = 44,
+		.nbr_end        = 479,
+
+		.burst_ena      = false,
+
+		.filter_table = filter_table,
+	},
+	{
+		.name       = "576p",
+		.clock 	= 107520,
+		.refresh	= 50000,
+		.oversample     = TV_OVERSAMPLE_4X,
+		.component_only = 1,
+
+		.hsync_end      = 64,               .hblank_end         = 139,
+		.hblank_start   = 859,              .htotal             = 863,
+
+		.progressive    = true,		.trilevel_sync = false,
+
+		.vsync_start_f1 = 10,               .vsync_start_f2     = 10,
+		.vsync_len      = 10,
+
+		.veq_ena        = false,
+
+		.vi_end_f1      = 48,               .vi_end_f2          = 48,
+		.nbr_end        = 575,
+
+		.burst_ena      = false,
+
+		.filter_table = filter_table,
+	},
+	{
 		.name       = "720p@60Hz",
 		.clock		= 148800,
 		.refresh	= 60000,
@@ -683,7 +753,31 @@ static const struct tv_mode tv_modes[] = {
 		.hsync_end      = 80,               .hblank_end         = 300,
 		.hblank_start   = 1580,             .htotal             = 1649,
 
-		.progressive	= true,		    .trilevel_sync = true,
+		.progressive    = true, 	    .trilevel_sync = true,
+
+		.vsync_start_f1 = 10,               .vsync_start_f2     = 10,
+		.vsync_len      = 10,
+
+		.veq_ena        = false,
+
+		.vi_end_f1      = 29,               .vi_end_f2          = 29,
+		.nbr_end        = 719,
+
+		.burst_ena      = false,
+
+		.filter_table = filter_table,
+	},
+	{
+		.name       = "720p@59.94Hz",
+		.clock		= 148800,
+		.refresh	= 59940,
+		.oversample     = TV_OVERSAMPLE_2X,
+		.component_only = 1,
+
+		.hsync_end      = 80,               .hblank_end         = 300,
+		.hblank_start   = 1580,             .htotal             = 1651,
+
+		.progressive    = true, 	    .trilevel_sync = true,
 
 		.vsync_start_f1 = 10,               .vsync_start_f2     = 10,
 		.vsync_len      = 10,
@@ -707,7 +801,7 @@ static const struct tv_mode tv_modes[] = {
 		.hsync_end      = 80,               .hblank_end         = 300,
 		.hblank_start   = 1580,             .htotal             = 1979,
 
-		.progressive	= true,		    .trilevel_sync = true,
+		.progressive    = true, 	        .trilevel_sync = true,
 
 		.vsync_start_f1 = 10,               .vsync_start_f2     = 10,
 		.vsync_len      = 10,
@@ -725,19 +819,19 @@ static const struct tv_mode tv_modes[] = {
 	{
 		.name       = "1080i@50Hz",
 		.clock		= 148800,
-		.refresh	= 50000,
+		.refresh	= 25000,
 		.oversample     = TV_OVERSAMPLE_2X,
 		.component_only = 1,
 
 		.hsync_end      = 88,               .hblank_end         = 235,
 		.hblank_start   = 2155,             .htotal             = 2639,
 
-		.progressive	= false,	  .trilevel_sync = true,
+		.progressive    = false, 	    .trilevel_sync = true,
 
 		.vsync_start_f1 = 4,              .vsync_start_f2     = 5,
 		.vsync_len      = 10,
 
-		.veq_ena	= true,	    .veq_start_f1	= 4,
+		.veq_ena	= true,		    .veq_start_f1    	= 4,
 		.veq_start_f2   = 4,	    .veq_len		= 10,
 
 
@@ -751,19 +845,19 @@ static const struct tv_mode tv_modes[] = {
 	{
 		.name       = "1080i@60Hz",
 		.clock		= 148800,
-		.refresh	= 60000,
+		.refresh	= 30000,
 		.oversample     = TV_OVERSAMPLE_2X,
 		.component_only = 1,
 
 		.hsync_end      = 88,               .hblank_end         = 235,
 		.hblank_start   = 2155,             .htotal             = 2199,
 
-		.progressive	= false,	    .trilevel_sync = true,
+		.progressive    = false, 	    .trilevel_sync = true,
 
 		.vsync_start_f1 = 4,               .vsync_start_f2     = 5,
 		.vsync_len      = 10,
 
-		.veq_ena	= true,		    .veq_start_f1	= 4,
+		.veq_ena	= true,		    .veq_start_f1    	= 4,
 		.veq_start_f2	= 4,		    .veq_len		= 10,
 
 
@@ -774,19 +868,35 @@ static const struct tv_mode tv_modes[] = {
 
 		.filter_table = filter_table,
 	},
+	{
+		.name       = "1080i@59.94Hz",
+		.clock		= 148800,
+		.refresh	= 29970,
+		.oversample     = TV_OVERSAMPLE_2X,
+		.component_only = 1,
+
+		.hsync_end      = 88,               .hblank_end         = 235,
+		.hblank_start   = 2155,             .htotal             = 2201,
+
+		.progressive    = false, 	    .trilevel_sync = true,
+
+		.vsync_start_f1 = 4,            .vsync_start_f2    = 5,
+		.vsync_len      = 10,
+
+		.veq_ena	= true,		    .veq_start_f1	= 4,
+		.veq_start_f2 = 4,	    	    .veq_len = 10,
+
+
+		.vi_end_f1      = 21,           .vi_end_f2         	= 22,
+		.nbr_end        = 539,
+
+		.burst_ena      = false,
+
+		.filter_table = filter_table,
+	},
 };
 
-static struct intel_tv *enc_to_intel_tv(struct drm_encoder *encoder)
-{
-	return container_of(encoder, struct intel_tv, base.base);
-}
-
-static struct intel_tv *intel_attached_tv(struct drm_connector *connector)
-{
-	return container_of(intel_attached_encoder(connector),
-			    struct intel_tv,
-			    base);
-}
+#define NUM_TV_MODES sizeof(tv_modes) / sizeof (tv_modes[0])
 
 static void
 intel_tv_dpms(struct drm_encoder *encoder, int mode)
@@ -794,7 +904,7 @@ intel_tv_dpms(struct drm_encoder *encoder, int mode)
 	struct drm_device *dev = encoder->dev;
 	struct drm_i915_private *dev_priv = dev->dev_private;
 
-	switch (mode) {
+	switch(mode) {
 	case DRM_MODE_DPMS_ON:
 		I915_WRITE(TV_CTL, I915_READ(TV_CTL) | TV_ENC_ENABLE);
 		break;
@@ -807,11 +917,11 @@ intel_tv_dpms(struct drm_encoder *encoder, int mode)
 }
 
 static const struct tv_mode *
-intel_tv_mode_lookup(const char *tv_format)
+intel_tv_mode_lookup (char *tv_format)
 {
 	int i;
 
-	for (i = 0; i < sizeof(tv_modes) / sizeof(tv_modes[0]); i++) {
+	for (i = 0; i < sizeof(tv_modes) / sizeof (tv_modes[0]); i++) {
 		const struct tv_mode *tv_mode = &tv_modes[i];
 
 		if (!strcmp(tv_format, tv_mode->name))
@@ -821,23 +931,24 @@ intel_tv_mode_lookup(const char *tv_format)
 }
 
 static const struct tv_mode *
-intel_tv_mode_find(struct intel_tv *intel_tv)
+intel_tv_mode_find (struct intel_encoder *intel_encoder)
 {
-	return intel_tv_mode_lookup(intel_tv->tv_format);
+	struct intel_tv_priv *tv_priv = intel_encoder->dev_priv;
+
+	return intel_tv_mode_lookup(tv_priv->tv_format);
 }
 
 static enum drm_mode_status
-intel_tv_mode_valid(struct drm_connector *connector,
-		    struct drm_display_mode *mode)
+intel_tv_mode_valid(struct drm_connector *connector, struct drm_display_mode *mode)
 {
-	struct intel_tv *intel_tv = intel_attached_tv(connector);
-	const struct tv_mode *tv_mode = intel_tv_mode_find(intel_tv);
+	struct drm_encoder *encoder = intel_attached_encoder(connector);
+	struct intel_encoder *intel_encoder = enc_to_intel_encoder(encoder);
+	const struct tv_mode *tv_mode = intel_tv_mode_find(intel_encoder);
 
 	/* Ensure TV refresh is close to desired refresh */
 	if (tv_mode && abs(tv_mode->refresh - drm_mode_vrefresh(mode) * 1000)
 				< 1000)
 		return MODE_OK;
-
 	return MODE_CLOCK_RANGE;
 }
 
@@ -848,8 +959,8 @@ intel_tv_mode_fixup(struct drm_encoder *encoder, struct drm_display_mode *mode,
 {
 	struct drm_device *dev = encoder->dev;
 	struct drm_mode_config *drm_config = &dev->mode_config;
-	struct intel_tv *intel_tv = enc_to_intel_tv(encoder);
-	const struct tv_mode *tv_mode = intel_tv_mode_find(intel_tv);
+	struct intel_encoder *intel_encoder = enc_to_intel_encoder(encoder);
+	const struct tv_mode *tv_mode = intel_tv_mode_find (intel_encoder);
 	struct drm_encoder *other_encoder;
 
 	if (!tv_mode)
@@ -874,8 +985,9 @@ intel_tv_mode_set(struct drm_encoder *encoder, struct drm_display_mode *mode,
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct drm_crtc *crtc = encoder->crtc;
 	struct intel_crtc *intel_crtc = to_intel_crtc(crtc);
-	struct intel_tv *intel_tv = enc_to_intel_tv(encoder);
-	const struct tv_mode *tv_mode = intel_tv_mode_find(intel_tv);
+	struct intel_encoder *intel_encoder = enc_to_intel_encoder(encoder);
+	struct intel_tv_priv *tv_priv = intel_encoder->dev_priv;
+	const struct tv_mode *tv_mode = intel_tv_mode_find(intel_encoder);
 	u32 tv_ctl;
 	u32 hctl1, hctl2, hctl3;
 	u32 vctl1, vctl2, vctl3, vctl4, vctl5, vctl6, vctl7;
@@ -884,7 +996,6 @@ intel_tv_mode_set(struct drm_encoder *encoder, struct drm_display_mode *mode,
 	const struct video_levels *video_levels;
 	const struct color_conversion *color_conversion;
 	bool burst_ena;
-	int pipe = intel_crtc->pipe;
 
 	if (!tv_mode)
 		return;	/* can't happen (mode_prepare prevents this) */
@@ -892,7 +1003,7 @@ intel_tv_mode_set(struct drm_encoder *encoder, struct drm_display_mode *mode,
 	tv_ctl = I915_READ(TV_CTL);
 	tv_ctl &= TV_CTL_SAVE;
 
-	switch (intel_tv->type) {
+	switch (tv_priv->type) {
 	default:
 	case DRM_MODE_CONNECTOR_Unknown:
 	case DRM_MODE_CONNECTOR_Composite:
@@ -1006,7 +1117,7 @@ intel_tv_mode_set(struct drm_encoder *encoder, struct drm_display_mode *mode,
 	if (color_conversion) {
 		I915_WRITE(TV_CSC_Y, (color_conversion->ry << 16) |
 			   color_conversion->gy);
-		I915_WRITE(TV_CSC_Y2, (color_conversion->by << 16) |
+		I915_WRITE(TV_CSC_Y2,(color_conversion->by << 16) |
 			   color_conversion->ay);
 		I915_WRITE(TV_CSC_U, (color_conversion->ru << 16) |
 			   color_conversion->gu);
@@ -1018,7 +1129,7 @@ intel_tv_mode_set(struct drm_encoder *encoder, struct drm_display_mode *mode,
 			   color_conversion->av);
 	}
 
-	if (INTEL_INFO(dev)->gen >= 4)
+	if (IS_I965G(dev))
 		I915_WRITE(TV_CLR_KNOBS, 0x00404000);
 	else
 		I915_WRITE(TV_CLR_KNOBS, 0x00606000);
@@ -1028,11 +1139,14 @@ intel_tv_mode_set(struct drm_encoder *encoder, struct drm_display_mode *mode,
 			   ((video_levels->black << TV_BLACK_LEVEL_SHIFT) |
 			    (video_levels->blank << TV_BLANK_LEVEL_SHIFT)));
 	{
-		int pipeconf_reg = PIPECONF(pipe);
-		int dspcntr_reg = DSPCNTR(intel_crtc->plane);
+		int pipeconf_reg = (intel_crtc->pipe == 0) ?
+			PIPEACONF : PIPEBCONF;
+		int dspcntr_reg = (intel_crtc->plane == 0) ?
+			DSPACNTR : DSPBCNTR;
 		int pipeconf = I915_READ(pipeconf_reg);
 		int dspcntr = I915_READ(dspcntr_reg);
-		int dspbase_reg = DSPADDR(intel_crtc->plane);
+		int dspbase_reg = (intel_crtc->plane == 0) ?
+			DSPAADDR : DSPBADDR;
 		int xpos = 0x0, ypos = 0x0;
 		unsigned int xsize, ysize;
 		/* Pipe must be off here */
@@ -1041,12 +1155,12 @@ intel_tv_mode_set(struct drm_encoder *encoder, struct drm_display_mode *mode,
 		I915_WRITE(dspbase_reg, I915_READ(dspbase_reg));
 
 		/* Wait for vblank for the disable to take effect */
-		if (IS_GEN2(dev))
-			intel_wait_for_vblank(dev, intel_crtc->pipe);
+		if (!IS_I9XX(dev))
+			intel_wait_for_vblank(dev);
 
-		I915_WRITE(pipeconf_reg, pipeconf & ~PIPECONF_ENABLE);
+		I915_WRITE(pipeconf_reg, pipeconf & ~PIPEACONF_ENABLE);
 		/* Wait for vblank for the disable to take effect. */
-		intel_wait_for_pipe_off(dev, intel_crtc->pipe);
+		intel_wait_for_vblank(dev);
 
 		/* Filter ctl must be set before TV_WIN_SIZE */
 		I915_WRITE(TV_FILTER_CTL_1, TV_AUTO_SCALE);
@@ -1056,12 +1170,12 @@ intel_tv_mode_set(struct drm_encoder *encoder, struct drm_display_mode *mode,
 		else
 			ysize = 2*tv_mode->nbr_end + 1;
 
-		xpos += intel_tv->margin[TV_MARGIN_LEFT];
-		ypos += intel_tv->margin[TV_MARGIN_TOP];
-		xsize -= (intel_tv->margin[TV_MARGIN_LEFT] +
-			  intel_tv->margin[TV_MARGIN_RIGHT]);
-		ysize -= (intel_tv->margin[TV_MARGIN_TOP] +
-			  intel_tv->margin[TV_MARGIN_BOTTOM]);
+		xpos += tv_priv->margin[TV_MARGIN_LEFT];
+		ypos += tv_priv->margin[TV_MARGIN_TOP];
+		xsize -= (tv_priv->margin[TV_MARGIN_LEFT] +
+			  tv_priv->margin[TV_MARGIN_RIGHT]);
+		ysize -= (tv_priv->margin[TV_MARGIN_TOP] +
+			  tv_priv->margin[TV_MARGIN_BOTTOM]);
 		I915_WRITE(TV_WIN_POS, (xpos<<16)|ypos);
 		I915_WRITE(TV_WIN_SIZE, (xsize<<16)|ysize);
 
@@ -1080,7 +1194,7 @@ intel_tv_mode_set(struct drm_encoder *encoder, struct drm_display_mode *mode,
 		I915_WRITE(TV_V_LUMA_0 + (i<<2), tv_mode->filter_table[j++]);
 	for (i = 0; i < 43; i++)
 		I915_WRITE(TV_V_CHROMA_0 + (i<<2), tv_mode->filter_table[j++]);
-	I915_WRITE(TV_DAC, I915_READ(TV_DAC) & TV_DAC_SAVE);
+	I915_WRITE(TV_DAC, 0);
 	I915_WRITE(TV_CTL, tv_ctl);
 }
 
@@ -1110,40 +1224,37 @@ static const struct drm_display_mode reported_modes[] = {
  * \return false if TV is disconnected.
  */
 static int
-intel_tv_detect_type(struct intel_tv *intel_tv,
-		      struct drm_connector *connector)
+intel_tv_detect_type (struct drm_crtc *crtc, struct intel_encoder *intel_encoder)
 {
-	struct drm_encoder *encoder = &intel_tv->base.base;
-	struct drm_crtc *crtc = encoder->crtc;
-	struct intel_crtc *intel_crtc = to_intel_crtc(crtc);
+	struct drm_encoder *encoder = &intel_encoder->enc;
 	struct drm_device *dev = encoder->dev;
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	unsigned long irqflags;
 	u32 tv_ctl, save_tv_ctl;
 	u32 tv_dac, save_tv_dac;
-	int type;
+	int type = DRM_MODE_CONNECTOR_Unknown;
+
+	tv_dac = I915_READ(TV_DAC);
 
 	/* Disable TV interrupts around load detect or we'll recurse */
-	if (connector->polled & DRM_CONNECTOR_POLL_HPD) {
-		spin_lock_irqsave(&dev_priv->irq_lock, irqflags);
-		i915_disable_pipestat(dev_priv, 0,
-				      PIPE_HOTPLUG_INTERRUPT_ENABLE |
-				      PIPE_HOTPLUG_TV_INTERRUPT_ENABLE);
-		spin_unlock_irqrestore(&dev_priv->irq_lock, irqflags);
-	}
+	spin_lock_irqsave(&dev_priv->user_irq_lock, irqflags);
+	i915_disable_pipestat(dev_priv, 0, PIPE_HOTPLUG_INTERRUPT_ENABLE |
+			      PIPE_HOTPLUG_TV_INTERRUPT_ENABLE);
+	spin_unlock_irqrestore(&dev_priv->user_irq_lock, irqflags);
 
-	save_tv_dac = tv_dac = I915_READ(TV_DAC);
-	save_tv_ctl = tv_ctl = I915_READ(TV_CTL);
-
-	/* Poll for TV detection */
-	tv_ctl &= ~(TV_ENC_ENABLE | TV_TEST_MODE_MASK);
+	/*
+	 * Detect TV by polling)
+	 */
+	save_tv_dac = tv_dac;
+	tv_ctl = I915_READ(TV_CTL);
+	save_tv_ctl = tv_ctl;
+	tv_ctl &= ~TV_ENC_ENABLE;
+	tv_ctl &= ~TV_TEST_MODE_MASK;
 	tv_ctl |= TV_TEST_MODE_MONITOR_DETECT;
-	if (intel_crtc->pipe == 1)
-		tv_ctl |= TV_ENC_PIPEB_SELECT;
-	else
-		tv_ctl &= ~TV_ENC_PIPEB_SELECT;
-
-	tv_dac &= ~(TVDAC_SENSE_MASK | DAC_A_MASK | DAC_B_MASK | DAC_C_MASK);
+	tv_dac &= ~TVDAC_SENSE_MASK;
+	tv_dac &= ~DAC_A_MASK;
+	tv_dac &= ~DAC_B_MASK;
+	tv_dac &= ~DAC_C_MASK;
 	tv_dac |= (TVDAC_STATE_CHG_EN |
 		   TVDAC_A_SENSE_CTL |
 		   TVDAC_B_SENSE_CTL |
@@ -1152,17 +1263,13 @@ intel_tv_detect_type(struct intel_tv *intel_tv,
 		   DAC_A_0_7_V |
 		   DAC_B_0_7_V |
 		   DAC_C_0_7_V);
-
 	I915_WRITE(TV_CTL, tv_ctl);
 	I915_WRITE(TV_DAC, tv_dac);
-	POSTING_READ(TV_DAC);
-
-	intel_wait_for_vblank(intel_tv->base.base.dev,
-			      to_intel_crtc(intel_tv->base.base.crtc)->pipe);
-
-	type = -1;
+	intel_wait_for_vblank(dev);
 	tv_dac = I915_READ(TV_DAC);
-	DRM_DEBUG_KMS("TV detected: %x, %x\n", tv_ctl, tv_dac);
+	I915_WRITE(TV_DAC, save_tv_dac);
+	I915_WRITE(TV_CTL, save_tv_ctl);
+	intel_wait_for_vblank(dev);
 	/*
 	 *  A B C
 	 *  0 1 1 Composite
@@ -1179,21 +1286,15 @@ intel_tv_detect_type(struct intel_tv *intel_tv,
 		DRM_DEBUG_KMS("Detected Component TV connection\n");
 		type = DRM_MODE_CONNECTOR_Component;
 	} else {
-		DRM_DEBUG_KMS("Unrecognised TV connection\n");
+		DRM_DEBUG_KMS("No TV connection detected\n");
 		type = -1;
 	}
 
-	I915_WRITE(TV_DAC, save_tv_dac & ~TVDAC_STATE_CHG_EN);
-	I915_WRITE(TV_CTL, save_tv_ctl);
-
 	/* Restore interrupt config */
-	if (connector->polled & DRM_CONNECTOR_POLL_HPD) {
-		spin_lock_irqsave(&dev_priv->irq_lock, irqflags);
-		i915_enable_pipestat(dev_priv, 0,
-				     PIPE_HOTPLUG_INTERRUPT_ENABLE |
-				     PIPE_HOTPLUG_TV_INTERRUPT_ENABLE);
-		spin_unlock_irqrestore(&dev_priv->irq_lock, irqflags);
-	}
+	spin_lock_irqsave(&dev_priv->user_irq_lock, irqflags);
+	i915_enable_pipestat(dev_priv, 0, PIPE_HOTPLUG_INTERRUPT_ENABLE |
+			     PIPE_HOTPLUG_TV_INTERRUPT_ENABLE);
+	spin_unlock_irqrestore(&dev_priv->user_irq_lock, irqflags);
 
 	return type;
 }
@@ -1204,11 +1305,13 @@ intel_tv_detect_type(struct intel_tv *intel_tv,
  */
 static void intel_tv_find_better_format(struct drm_connector *connector)
 {
-	struct intel_tv *intel_tv = intel_attached_tv(connector);
-	const struct tv_mode *tv_mode = intel_tv_mode_find(intel_tv);
+	struct drm_encoder *encoder = intel_attached_encoder(connector);
+	struct intel_encoder *intel_encoder = enc_to_intel_encoder(encoder);
+	struct intel_tv_priv *tv_priv = intel_encoder->dev_priv;
+	const struct tv_mode *tv_mode = intel_tv_mode_find(intel_encoder);
 	int i;
 
-	if ((intel_tv->type == DRM_MODE_CONNECTOR_Component) ==
+	if ((tv_priv->type == DRM_MODE_CONNECTOR_Component) ==
 		tv_mode->component_only)
 		return;
 
@@ -1216,12 +1319,12 @@ static void intel_tv_find_better_format(struct drm_connector *connector)
 	for (i = 0; i < sizeof(tv_modes) / sizeof(*tv_modes); i++) {
 		tv_mode = tv_modes + i;
 
-		if ((intel_tv->type == DRM_MODE_CONNECTOR_Component) ==
+		if ((tv_priv->type == DRM_MODE_CONNECTOR_Component) ==
 			tv_mode->component_only)
 			break;
 	}
 
-	intel_tv->tv_format = tv_mode->name;
+	tv_priv->tv_format = tv_mode->name;
 	drm_connector_property_set_value(connector,
 		connector->dev->mode_config.tv_mode_property, i);
 }
@@ -1233,44 +1336,46 @@ static void intel_tv_find_better_format(struct drm_connector *connector)
  * we have a pipe programmed in order to probe the TV.
  */
 static enum drm_connector_status
-intel_tv_detect(struct drm_connector *connector, bool force)
+intel_tv_detect(struct drm_connector *connector)
 {
+	struct drm_crtc *crtc;
 	struct drm_display_mode mode;
-	struct intel_tv *intel_tv = intel_attached_tv(connector);
-	int type;
+	struct drm_encoder *encoder = intel_attached_encoder(connector);
+	struct intel_encoder *intel_encoder = enc_to_intel_encoder(encoder);
+	struct intel_tv_priv *tv_priv = intel_encoder->dev_priv;
+	int dpms_mode;
+	int type = tv_priv->type;
 
 	mode = reported_modes[0];
-	drm_mode_set_crtcinfo(&mode, 0);
+	drm_mode_set_crtcinfo(&mode, CRTC_INTERLACE_HALVE_V);
 
-	if (intel_tv->base.base.crtc && intel_tv->base.base.crtc->enabled) {
-		type = intel_tv_detect_type(intel_tv, connector);
-	} else if (force) {
-		struct intel_load_detect_pipe tmp;
-
-		if (intel_get_load_detect_pipe(&intel_tv->base, connector,
-					       &mode, &tmp)) {
-			type = intel_tv_detect_type(intel_tv, connector);
-			intel_release_load_detect_pipe(&intel_tv->base,
-						       connector,
-						       &tmp);
+	if (encoder->crtc && encoder->crtc->enabled) {
+		type = intel_tv_detect_type(encoder->crtc, intel_encoder);
+	} else {
+		crtc = intel_get_load_detect_pipe(intel_encoder, connector,
+						  &mode, &dpms_mode);
+		if (crtc) {
+			type = intel_tv_detect_type(crtc, intel_encoder);
+			intel_release_load_detect_pipe(intel_encoder, connector,
+						       dpms_mode);
 		} else
-			return connector_status_unknown;
-	} else
-		return connector->status;
+			type = -1;
+	}
+
+	tv_priv->type = type;
 
 	if (type < 0)
 		return connector_status_disconnected;
 
-	intel_tv->type = type;
 	intel_tv_find_better_format(connector);
-
 	return connector_status_connected;
 }
 
-static const struct input_res {
-	const char *name;
+static struct input_res {
+	char *name;
 	int w, h;
-} input_res_table[] = {
+} input_res_table[] =
+{
 	{"640x480", 640, 480},
 	{"800x600", 800, 600},
 	{"1024x768", 1024, 768},
@@ -1287,8 +1392,9 @@ static void
 intel_tv_chose_preferred_modes(struct drm_connector *connector,
 			       struct drm_display_mode *mode_ptr)
 {
-	struct intel_tv *intel_tv = intel_attached_tv(connector);
-	const struct tv_mode *tv_mode = intel_tv_mode_find(intel_tv);
+	struct drm_encoder *encoder = intel_attached_encoder(connector);
+	struct intel_encoder *intel_encoder = enc_to_intel_encoder(encoder);
+	const struct tv_mode *tv_mode = intel_tv_mode_find(intel_encoder);
 
 	if (tv_mode->nbr_end < 480 && mode_ptr->vdisplay == 480)
 		mode_ptr->type |= DRM_MODE_TYPE_PREFERRED;
@@ -1312,14 +1418,15 @@ static int
 intel_tv_get_modes(struct drm_connector *connector)
 {
 	struct drm_display_mode *mode_ptr;
-	struct intel_tv *intel_tv = intel_attached_tv(connector);
-	const struct tv_mode *tv_mode = intel_tv_mode_find(intel_tv);
+	struct drm_encoder *encoder = intel_attached_encoder(connector);
+	struct intel_encoder *intel_encoder = enc_to_intel_encoder(encoder);
+	const struct tv_mode *tv_mode = intel_tv_mode_find(intel_encoder);
 	int j, count = 0;
 	u64 tmp;
 
-	for (j = 0; j < ARRAY_SIZE(input_res_table);
+	for (j = 0; j < sizeof(input_res_table) / sizeof(input_res_table[0]);
 	     j++) {
-		const struct input_res *input = &input_res_table[j];
+		struct input_res *input = &input_res_table[j];
 		unsigned int hactive_s = input->w;
 		unsigned int vactive_s = input->h;
 
@@ -1364,7 +1471,7 @@ intel_tv_get_modes(struct drm_connector *connector)
 }
 
 static void
-intel_tv_destroy(struct drm_connector *connector)
+intel_tv_destroy (struct drm_connector *connector)
 {
 	drm_sysfs_connector_remove(connector);
 	drm_connector_cleanup(connector);
@@ -1377,8 +1484,10 @@ intel_tv_set_property(struct drm_connector *connector, struct drm_property *prop
 		      uint64_t val)
 {
 	struct drm_device *dev = connector->dev;
-	struct intel_tv *intel_tv = intel_attached_tv(connector);
-	struct drm_crtc *crtc = intel_tv->base.base.crtc;
+	struct drm_encoder *encoder = intel_attached_encoder(connector);
+	struct intel_encoder *intel_encoder = enc_to_intel_encoder(encoder);
+	struct intel_tv_priv *tv_priv = intel_encoder->dev_priv;
+	struct drm_crtc *crtc = encoder->crtc;
 	int ret = 0;
 	bool changed = false;
 
@@ -1387,30 +1496,30 @@ intel_tv_set_property(struct drm_connector *connector, struct drm_property *prop
 		goto out;
 
 	if (property == dev->mode_config.tv_left_margin_property &&
-		intel_tv->margin[TV_MARGIN_LEFT] != val) {
-		intel_tv->margin[TV_MARGIN_LEFT] = val;
+		tv_priv->margin[TV_MARGIN_LEFT] != val) {
+		tv_priv->margin[TV_MARGIN_LEFT] = val;
 		changed = true;
 	} else if (property == dev->mode_config.tv_right_margin_property &&
-		intel_tv->margin[TV_MARGIN_RIGHT] != val) {
-		intel_tv->margin[TV_MARGIN_RIGHT] = val;
+		tv_priv->margin[TV_MARGIN_RIGHT] != val) {
+		tv_priv->margin[TV_MARGIN_RIGHT] = val;
 		changed = true;
 	} else if (property == dev->mode_config.tv_top_margin_property &&
-		intel_tv->margin[TV_MARGIN_TOP] != val) {
-		intel_tv->margin[TV_MARGIN_TOP] = val;
+		tv_priv->margin[TV_MARGIN_TOP] != val) {
+		tv_priv->margin[TV_MARGIN_TOP] = val;
 		changed = true;
 	} else if (property == dev->mode_config.tv_bottom_margin_property &&
-		intel_tv->margin[TV_MARGIN_BOTTOM] != val) {
-		intel_tv->margin[TV_MARGIN_BOTTOM] = val;
+		tv_priv->margin[TV_MARGIN_BOTTOM] != val) {
+		tv_priv->margin[TV_MARGIN_BOTTOM] = val;
 		changed = true;
 	} else if (property == dev->mode_config.tv_mode_property) {
-		if (val >= ARRAY_SIZE(tv_modes)) {
+		if (val >= NUM_TV_MODES) {
 			ret = -EINVAL;
 			goto out;
 		}
-		if (!strcmp(intel_tv->tv_format, tv_modes[val].name))
+		if (!strcmp(tv_priv->tv_format, tv_modes[val].name))
 			goto out;
 
-		intel_tv->tv_format = tv_modes[val].name;
+		tv_priv->tv_format = tv_modes[val].name;
 		changed = true;
 	} else {
 		ret = -EINVAL;
@@ -1443,11 +1552,19 @@ static const struct drm_connector_funcs intel_tv_connector_funcs = {
 static const struct drm_connector_helper_funcs intel_tv_connector_helper_funcs = {
 	.mode_valid = intel_tv_mode_valid,
 	.get_modes = intel_tv_get_modes,
-	.best_encoder = intel_best_encoder,
+	.best_encoder = intel_attached_encoder,
 };
 
+static void intel_tv_enc_destroy(struct drm_encoder *encoder)
+{
+	struct intel_encoder *intel_encoder = enc_to_intel_encoder(encoder);
+
+	drm_encoder_cleanup(encoder);
+	kfree(intel_encoder);
+}
+
 static const struct drm_encoder_funcs intel_tv_enc_funcs = {
-	.destroy = intel_encoder_destroy,
+	.destroy = intel_tv_enc_destroy,
 };
 
 /*
@@ -1491,11 +1608,11 @@ intel_tv_init(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct drm_connector *connector;
-	struct intel_tv *intel_tv;
 	struct intel_encoder *intel_encoder;
 	struct intel_connector *intel_connector;
+	struct intel_tv_priv *tv_priv;
 	u32 tv_dac_on, tv_dac_off, save_tv_dac;
-	char *tv_format_names[ARRAY_SIZE(tv_modes)];
+	char **tv_format_names;
 	int i, initial_mode = 0;
 
 	if ((I915_READ(TV_CTL) & TV_FUSE_STATE_MASK) == TV_FUSE_STATE_DISABLED)
@@ -1532,78 +1649,72 @@ intel_tv_init(struct drm_device *dev)
 	    (tv_dac_off & TVDAC_STATE_CHG_EN) != 0)
 		return;
 
-	intel_tv = kzalloc(sizeof(struct intel_tv), GFP_KERNEL);
-	if (!intel_tv) {
+	intel_encoder = kzalloc(sizeof(struct intel_encoder) +
+			       sizeof(struct intel_tv_priv), GFP_KERNEL);
+	if (!intel_encoder) {
 		return;
 	}
 
 	intel_connector = kzalloc(sizeof(struct intel_connector), GFP_KERNEL);
 	if (!intel_connector) {
-		kfree(intel_tv);
+		kfree(intel_encoder);
 		return;
 	}
 
-	intel_encoder = &intel_tv->base;
 	connector = &intel_connector->base;
-
-	/* The documentation, for the older chipsets at least, recommend
-	 * using a polling method rather than hotplug detection for TVs.
-	 * This is because in order to perform the hotplug detection, the PLLs
-	 * for the TV must be kept alive increasing power drain and starving
-	 * bandwidth from other encoders. Notably for instance, it causes
-	 * pipe underruns on Crestline when this encoder is supposedly idle.
-	 *
-	 * More recent chipsets favour HDMI rather than integrated S-Video.
-	 */
-	connector->polled = DRM_CONNECTOR_POLL_CONNECT;
 
 	drm_connector_init(dev, connector, &intel_tv_connector_funcs,
 			   DRM_MODE_CONNECTOR_SVIDEO);
 
-	drm_encoder_init(dev, &intel_encoder->base, &intel_tv_enc_funcs,
+	drm_encoder_init(dev, &intel_encoder->enc, &intel_tv_enc_funcs,
 			 DRM_MODE_ENCODER_TVDAC);
 
-	intel_connector_attach_encoder(intel_connector, intel_encoder);
+	drm_mode_connector_attach_encoder(&intel_connector->base, &intel_encoder->enc);
+	tv_priv = (struct intel_tv_priv *)(intel_encoder + 1);
 	intel_encoder->type = INTEL_OUTPUT_TVOUT;
 	intel_encoder->crtc_mask = (1 << 0) | (1 << 1);
 	intel_encoder->clone_mask = (1 << INTEL_TV_CLONE_BIT);
-	intel_encoder->base.possible_crtcs = ((1 << 0) | (1 << 1));
-	intel_encoder->base.possible_clones = (1 << INTEL_OUTPUT_TVOUT);
-	intel_tv->type = DRM_MODE_CONNECTOR_Unknown;
+	intel_encoder->enc.possible_crtcs = ((1 << 0) | (1 << 1));
+	intel_encoder->enc.possible_clones = (1 << INTEL_OUTPUT_TVOUT);
+	intel_encoder->dev_priv = tv_priv;
+	tv_priv->type = DRM_MODE_CONNECTOR_Unknown;
 
 	/* BIOS margin values */
-	intel_tv->margin[TV_MARGIN_LEFT] = 54;
-	intel_tv->margin[TV_MARGIN_TOP] = 36;
-	intel_tv->margin[TV_MARGIN_RIGHT] = 46;
-	intel_tv->margin[TV_MARGIN_BOTTOM] = 37;
+	tv_priv->margin[TV_MARGIN_LEFT] = 54;
+	tv_priv->margin[TV_MARGIN_TOP] = 36;
+	tv_priv->margin[TV_MARGIN_RIGHT] = 46;
+	tv_priv->margin[TV_MARGIN_BOTTOM] = 37;
 
-	intel_tv->tv_format = tv_modes[initial_mode].name;
+	tv_priv->tv_format = kstrdup(tv_modes[initial_mode].name, GFP_KERNEL);
 
-	drm_encoder_helper_add(&intel_encoder->base, &intel_tv_helper_funcs);
+	drm_encoder_helper_add(&intel_encoder->enc, &intel_tv_helper_funcs);
 	drm_connector_helper_add(connector, &intel_tv_connector_helper_funcs);
 	connector->interlace_allowed = false;
 	connector->doublescan_allowed = false;
 
 	/* Create TV properties then attach current values */
-	for (i = 0; i < ARRAY_SIZE(tv_modes); i++)
-		tv_format_names[i] = (char *)tv_modes[i].name;
-	drm_mode_create_tv_properties(dev,
-				      ARRAY_SIZE(tv_modes),
-				      tv_format_names);
+	tv_format_names = kmalloc(sizeof(char *) * NUM_TV_MODES,
+				  GFP_KERNEL);
+	if (!tv_format_names)
+		goto out;
+	for (i = 0; i < NUM_TV_MODES; i++)
+		tv_format_names[i] = tv_modes[i].name;
+	drm_mode_create_tv_properties(dev, NUM_TV_MODES, tv_format_names);
 
 	drm_connector_attach_property(connector, dev->mode_config.tv_mode_property,
 				   initial_mode);
 	drm_connector_attach_property(connector,
 				   dev->mode_config.tv_left_margin_property,
-				   intel_tv->margin[TV_MARGIN_LEFT]);
+				   tv_priv->margin[TV_MARGIN_LEFT]);
 	drm_connector_attach_property(connector,
 				   dev->mode_config.tv_top_margin_property,
-				   intel_tv->margin[TV_MARGIN_TOP]);
+				   tv_priv->margin[TV_MARGIN_TOP]);
 	drm_connector_attach_property(connector,
 				   dev->mode_config.tv_right_margin_property,
-				   intel_tv->margin[TV_MARGIN_RIGHT]);
+				   tv_priv->margin[TV_MARGIN_RIGHT]);
 	drm_connector_attach_property(connector,
 				   dev->mode_config.tv_bottom_margin_property,
-				   intel_tv->margin[TV_MARGIN_BOTTOM]);
+				   tv_priv->margin[TV_MARGIN_BOTTOM]);
+out:
 	drm_sysfs_connector_add(connector);
 }

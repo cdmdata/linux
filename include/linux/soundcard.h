@@ -198,8 +198,7 @@ typedef struct seq_event_rec {
 #  else
 #    error "could not determine byte order"
 #  endif
-#else
-# if defined(__BYTE_ORDER)
+#elif defined(__BYTE_ORDER)
 #  if __BYTE_ORDER == __BIG_ENDIAN
 #    define AFMT_S16_NE AFMT_S16_BE
 #  elif __BYTE_ORDER == __LITTLE_ENDIAN
@@ -207,7 +206,6 @@ typedef struct seq_event_rec {
 #  else
 #    error "could not determine byte order"
 #  endif
-# endif
 #endif
 
 /*
@@ -875,12 +873,16 @@ typedef struct copr_msg {
 #define SOUND_MIXER_READ_LINE1		MIXER_READ(SOUND_MIXER_LINE1)
 #define SOUND_MIXER_READ_LINE2		MIXER_READ(SOUND_MIXER_LINE2)
 #define SOUND_MIXER_READ_LINE3		MIXER_READ(SOUND_MIXER_LINE3)
+#define SOUND_MIXER_READ_PHONEIN	MIXER_READ(SOUND_MIXER_PHONEIN)
+#define SOUND_MIXER_READ_PHONEOUT	MIXER_READ(SOUND_MIXER_PHONEOUT)
 
 /* Obsolete macros */
 #define SOUND_MIXER_READ_MUTE		MIXER_READ(SOUND_MIXER_MUTE)
 #define SOUND_MIXER_READ_ENHANCE	MIXER_READ(SOUND_MIXER_ENHANCE)
 #define SOUND_MIXER_READ_LOUD		MIXER_READ(SOUND_MIXER_LOUD)
 
+#define SOUND_MIXER_READ_OUTSRC		MIXER_READ(SOUND_MIXER_OUTSRC)
+#define SOUND_MIXER_READ_OUTMASK	MIXER_READ(SOUND_MIXER_OUTMASK)
 #define SOUND_MIXER_READ_RECSRC		MIXER_READ(SOUND_MIXER_RECSRC)
 #define SOUND_MIXER_READ_DEVMASK	MIXER_READ(SOUND_MIXER_DEVMASK)
 #define SOUND_MIXER_READ_RECMASK	MIXER_READ(SOUND_MIXER_RECMASK)
@@ -905,6 +907,8 @@ typedef struct copr_msg {
 #define SOUND_MIXER_WRITE_LINE1		MIXER_WRITE(SOUND_MIXER_LINE1)
 #define SOUND_MIXER_WRITE_LINE2		MIXER_WRITE(SOUND_MIXER_LINE2)
 #define SOUND_MIXER_WRITE_LINE3		MIXER_WRITE(SOUND_MIXER_LINE3)
+#define SOUND_MIXER_WRITE_PHONEIN	MIXER_WRITE(SOUND_MIXER_PHONEIN)
+#define SOUND_MIXER_WRITE_PHONEOUT	MIXER_WRITE(SOUND_MIXER_PHONEOUT)
 
 /* Obsolete macros */
 #define SOUND_MIXER_WRITE_MUTE		MIXER_WRITE(SOUND_MIXER_MUTE)
@@ -912,6 +916,7 @@ typedef struct copr_msg {
 #define SOUND_MIXER_WRITE_LOUD		MIXER_WRITE(SOUND_MIXER_LOUD)
 
 #define SOUND_MIXER_WRITE_RECSRC	MIXER_WRITE(SOUND_MIXER_RECSRC)
+#define SOUND_MIXER_WRITE_OUTSRC	MIXER_WRITE(SOUND_MIXER_OUTSRC)
 
 typedef struct mixer_info
 {
@@ -1233,7 +1238,7 @@ void seqbuf_dump(void);	/* This function must be provided by programs */
 #define SEQ_PANNING(dev, voice, pos) SEQ_CONTROL(dev, voice, CTL_PAN, (pos+128) / 2)
 
 /*
- * Timing and synchronization macros
+ * Timing and syncronization macros
  */
 
 #define _TIMER_EVENT(ev, parm)		{_SEQ_NEEDBUF(8);\

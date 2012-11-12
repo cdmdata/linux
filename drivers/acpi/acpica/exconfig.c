@@ -5,7 +5,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2012, Intel Corp.
+ * Copyright (C) 2000 - 2010, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -120,7 +120,7 @@ acpi_ex_add_table(u32 table_index,
 	acpi_ns_exec_module_code_list();
 	acpi_ex_enter_interpreter();
 
-	/* Update GPEs for any new _Lxx/_Exx methods. Ignore errors */
+	/* Update GPEs for any new _PRW or _Lxx/_Exx methods. Ignore errors */
 
 	status = acpi_tb_get_owner_id(table_index, &owner_id);
 	if (ACPI_SUCCESS(status)) {
@@ -297,9 +297,9 @@ acpi_ex_region_read(union acpi_operand_object *obj_desc, u32 length, u8 *buffer)
 	/* Bytewise reads */
 
 	for (i = 0; i < length; i++) {
-		status =
-		    acpi_ev_address_space_dispatch(obj_desc, NULL, ACPI_READ,
-						   region_offset, 8, &value);
+		status = acpi_ev_address_space_dispatch(obj_desc, ACPI_READ,
+							region_offset, 8,
+							&value);
 		if (ACPI_FAILURE(status)) {
 			return status;
 		}

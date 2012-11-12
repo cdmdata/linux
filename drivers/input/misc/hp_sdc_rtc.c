@@ -43,7 +43,7 @@
 #include <linux/proc_fs.h>
 #include <linux/poll.h>
 #include <linux/rtc.h>
-#include <linux/mutex.h>
+#include <linux/smp_lock.h>
 #include <linux/semaphore.h>
 
 MODULE_AUTHOR("Brian S. Julin <bri@calyx.com>");
@@ -52,7 +52,6 @@ MODULE_LICENSE("Dual BSD/GPL");
 
 #define RTC_VERSION "1.10d"
 
-static DEFINE_MUTEX(hp_sdc_rtc_mutex);
 static unsigned long epoch = 2000;
 
 static struct semaphore i8042tregs;
@@ -105,7 +104,7 @@ static int hp_sdc_rtc_do_read_bbrtc (struct rtc_time *rtctm)
 	t.endidx =		91;
 	t.seq =			tseq;
 	t.act.semaphore =	&tsem;
-	sema_init(&tsem, 0);
+	init_MUTEX_LOCKED(&tsem);
 	
 	if (hp_sdc_enqueue_transaction(&t)) return -1;
 	
@@ -666,9 +665,9 @@ static long hp_sdc_rtc_unlocked_ioctl(struct file *file,
 {
 	int ret;
 
-	mutex_lock(&hp_sdc_rtc_mutex);
+	lock_kernel();
 	ret = hp_sdc_rtc_ioctl(file, cmd, arg);
-	mutex_unlock(&hp_sdc_rtc_mutex);
+	unlock_kernel();
 
 	return ret;
 }
@@ -699,7 +698,7 @@ static int __init hp_sdc_rtc_init(void)
 		return -ENODEV;
 #endif
 
-	sema_init(&i8042tregs, 1);
+	init_MUTEX(&i8042tregs);
 
 	if ((ret = hp_sdc_request_timer_irq(&hp_sdc_rtc_isr)))
 		return ret;

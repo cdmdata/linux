@@ -37,6 +37,9 @@ struct ktermios {
 	speed_t c_ospeed;		/* output speed */
 };
 
+struct rx_mask {
+	unsigned long map[256/32];
+};
 
 /* c_cc characters */
 #define VINTR 0
@@ -177,7 +180,6 @@ struct ktermios {
 #define FLUSHO	0010000
 #define PENDIN	0040000
 #define IEXTEN	0100000
-#define EXTPROC	0200000
 
 /* tcflow() and TCXONC use these */
 #define	TCOOFF		0

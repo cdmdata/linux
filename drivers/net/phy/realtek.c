@@ -14,7 +14,6 @@
  *
  */
 #include <linux/phy.h>
-#include <linux/module.h>
 
 #define RTL821x_PHYSR		0x11
 #define RTL821x_PHYSR_DUPLEX	0x2000
@@ -80,7 +79,7 @@ static void __exit realtek_exit(void)
 module_init(realtek_init);
 module_exit(realtek_exit);
 
-static struct mdio_device_id __maybe_unused realtek_tbl[] = {
+static struct mdio_device_id realtek_tbl[] = {
 	{ 0x001cc912, 0x001fffff },
 	{ }
 };

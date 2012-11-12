@@ -15,19 +15,21 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
 #include <unistd.h>
 #include <locale.h>
 
+#define LKC_DIRECT_LINK
 #include "lkc.h"
 #include "lxdialog/dialog.h"
 
 static const char mconf_readme[] = N_(
 "Overview\n"
 "--------\n"
-"This interface let you select features and parameters for the build.\n"
-"Features can either be built-in, modularized, or ignored. Parameters\n"
-"must be entered in as decimal or hexadecimal numbers or text.\n"
+"Some kernel features may be built directly into the kernel.\n"
+"Some may be made into loadable runtime modules.  Some features\n"
+"may be completely removed altogether.  There are also certain\n"
+"kernel parameters which are not really features, but must be\n"
+"entered in as decimal or hexadecimal numbers or possibly text.\n"
 "\n"
 "Menu items beginning with following braces represent features that\n"
 "  [ ] can be built in or removed\n"
@@ -72,7 +74,7 @@ static const char mconf_readme[] = N_(
 "\n"
 "   Shortcut: Press <H> or <?>.\n"
 "\n"
-"o  To toggle the display of hidden options, press <Z>.\n"
+"o  To show hidden options, press <Z>.\n"
 "\n"
 "\n"
 "Radiolists  (Choice lists)\n"
@@ -115,7 +117,7 @@ static const char mconf_readme[] = N_(
 "-----------------------------\n"
 "Menuconfig supports the use of alternate configuration files for\n"
 "those who, for various reasons, find it necessary to switch\n"
-"between different configurations.\n"
+"between different kernel configurations.\n"
 "\n"
 "At the end of the main menu you will find two options.  One is\n"
 "for saving the current configuration to a file of your choosing.\n"
@@ -148,9 +150,9 @@ static const char mconf_readme[] = N_(
 "\n"
 "Optional personality available\n"
 "------------------------------\n"
-"If you prefer to have all of the options listed in a single menu, rather\n"
-"than the default multimenu hierarchy, run the menuconfig with\n"
-"MENUCONFIG_MODE environment variable set to single_menu. Example:\n"
+"If you prefer to have all of the kernel options listed in a single\n"
+"menu, rather than the default multimenu hierarchy, run the menuconfig\n"
+"with MENUCONFIG_MODE environment variable set to single_menu. Example:\n"
 "\n"
 "make MENUCONFIG_MODE=single_menu menuconfig\n"
 "\n"
@@ -205,12 +207,12 @@ load_config_text[] = N_(
 	"last retrieved.  Leave blank to abort."),
 load_config_help[] = N_(
 	"\n"
-	"For various reasons, one may wish to keep several different\n"
+	"For various reasons, one may wish to keep several different kernel\n"
 	"configurations available on a single machine.\n"
 	"\n"
 	"If you have saved a previous configuration in a file other than the\n"
-	"default one, entering its name here will allow you to modify that\n"
-	"configuration.\n"
+	"kernel's default, entering the name of the file here will allow you\n"
+	"to modify that configuration.\n"
 	"\n"
 	"If you are uncertain, then you have probably never used alternate\n"
 	"configuration files. You should therefore leave this blank to abort.\n"),
@@ -219,8 +221,8 @@ save_config_text[] = N_(
 	"as an alternate.  Leave blank to abort."),
 save_config_help[] = N_(
 	"\n"
-	"For various reasons, one may wish to keep different configurations\n"
-	"available on a single machine.\n"
+	"For various reasons, one may wish to keep different kernel\n"
+	"configurations available on a single machine.\n"
 	"\n"
 	"Entering a file name here will allow you to later retrieve, modify\n"
 	"and use the current configuration as an alternate to whatever\n"
@@ -230,7 +232,7 @@ save_config_help[] = N_(
 	"leave this blank.\n"),
 search_help[] = N_(
 	"\n"
-	"Search for symbols and display their relations.\n"
+	"Search for CONFIG_ symbols and display their relations.\n"
 	"Regular expressions are allowed.\n"
 	"Example: search for \"^FOO\"\n"
 	"Result:\n"
@@ -247,7 +249,7 @@ search_help[] = N_(
 	"Selected by: BAR\n"
 	"-----------------------------------------------------------------\n"
 	"o The line 'Prompt:' shows the text used in the menu structure for\n"
-	"  this symbol\n"
+	"  this CONFIG_ symbol\n"
 	"o The 'Defined at' line tell at what file / line number the symbol\n"
 	"  is defined\n"
 	"o The 'Depends on:' line tell what symbols needs to be defined for\n"
@@ -263,9 +265,9 @@ search_help[] = N_(
 	"Only relevant lines are shown.\n"
 	"\n\n"
 	"Search examples:\n"
-	"Examples: USB	=> find all symbols containing USB\n"
-	"          ^USB => find all symbols starting with USB\n"
-	"          USB$ => find all symbols ending with USB\n"
+	"Examples: USB	=> find all CONFIG_ symbols containing USB\n"
+	"          ^USB => find all CONFIG_ symbols starting with USB\n"
+	"          USB$ => find all CONFIG_ symbols ending with USB\n"
 	"\n");
 
 static int indent;
@@ -273,7 +275,6 @@ static struct menu *current_menu;
 static int child_count;
 static int single_menu_mode;
 static int show_all_options;
-static int saved_x, saved_y;
 
 static void conf(struct menu *menu);
 static void conf_choice(struct menu *menu);
@@ -289,9 +290,13 @@ static void set_config_filename(const char *config_filename)
 {
 	static char menu_backtitle[PATH_MAX+128];
 	int size;
+	struct symbol *sym;
 
+	sym = sym_lookup("KERNELVERSION", 0);
+	sym_calc_value(sym);
 	size = snprintf(menu_backtitle, sizeof(menu_backtitle),
-	                "%s - %s", config_filename, rootmenu.prompt->text);
+	                _("%s - Linux Kernel v%s Configuration"),
+		        config_filename, sym_get_string_value(sym));
 	if (size >= sizeof(menu_backtitle))
 		menu_backtitle[sizeof(menu_backtitle)-1] = '\0';
 	set_dialog_backtitle(menu_backtitle);
@@ -311,8 +316,8 @@ static void search_conf(void)
 again:
 	dialog_clear();
 	dres = dialog_inputbox(_("Search Configuration Parameter"),
-			      _("Enter " CONFIG_ " (sub)string to search for "
-				"(with or without \"" CONFIG_ "\")"),
+			      _("Enter CONFIG_ (sub)string to search for "
+				"(with or without \"CONFIG\")"),
 			      10, 75, "");
 	switch (dres) {
 	case 0:
@@ -324,10 +329,10 @@ again:
 		return;
 	}
 
-	/* strip the prefix if necessary */
+	/* strip CONFIG_ if necessary */
 	dialog_input = dialog_input_result;
-	if (strncasecmp(dialog_input_result, CONFIG_, strlen(CONFIG_)) == 0)
-		dialog_input += strlen(CONFIG_);
+	if (strncasecmp(dialog_input_result, "CONFIG_", 7) == 0)
+		dialog_input += 7;
 
 	sym_arr = sym_re_search(dialog_input);
 	res = get_relations_str(sym_arr);
@@ -794,64 +799,15 @@ static void conf_save(void)
 	}
 }
 
-static int handle_exit(void)
-{
-	int res;
-
-	dialog_clear();
-	if (conf_get_changed())
-		res = dialog_yesno(NULL,
-				   _("Do you wish to save your new configuration ?\n"
-				     "<ESC><ESC> to continue."),
-				   6, 60);
-	else
-		res = -1;
-
-	end_dialog(saved_x, saved_y);
-
-	switch (res) {
-	case 0:
-		if (conf_write(filename)) {
-			fprintf(stderr, _("\n\n"
-					  "Error while writing of the configuration.\n"
-					  "Your configuration changes were NOT saved."
-					  "\n\n"));
-			return 1;
-		}
-		/* fall through */
-	case -1:
-		printf(_("\n\n"
-			 "*** End of the configuration.\n"
-			 "*** Execute 'make' to start the build or try 'make help'."
-			 "\n\n"));
-		res = 0;
-		break;
-	default:
-		fprintf(stderr, _("\n\n"
-				  "Your configuration changes were NOT saved."
-				  "\n\n"));
-		if (res != KEY_ESC)
-			res = 0;
-	}
-
-	return res;
-}
-
-static void sig_handler(int signo)
-{
-	exit(handle_exit());
-}
-
 int main(int ac, char **av)
 {
+	int saved_x, saved_y;
 	char *mode;
 	int res;
 
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
-
-	signal(SIGINT, sig_handler);
 
 	conf_parse(av[1]);
 	conf_read(NULL);
@@ -874,9 +830,39 @@ int main(int ac, char **av)
 	set_config_filename(conf_get_configname());
 	do {
 		conf(&rootmenu);
-		res = handle_exit();
+		dialog_clear();
+		if (conf_get_changed())
+			res = dialog_yesno(NULL,
+					   _("Do you wish to save your "
+					     "new kernel configuration?\n"
+					     "<ESC><ESC> to continue."),
+					   6, 60);
+		else
+			res = -1;
 	} while (res == KEY_ESC);
+	end_dialog(saved_x, saved_y);
 
-	return res;
+	switch (res) {
+	case 0:
+		if (conf_write(filename)) {
+			fprintf(stderr, _("\n\n"
+				"Error during writing of the kernel configuration.\n"
+				"Your kernel configuration changes were NOT saved."
+				"\n\n"));
+			return 1;
+		}
+	case -1:
+		printf(_("\n\n"
+			"*** End of Linux kernel configuration.\n"
+			"*** Execute 'make' to build the kernel or try 'make help'."
+			"\n\n"));
+		break;
+	default:
+		fprintf(stderr, _("\n\n"
+			"Your kernel configuration changes were NOT saved."
+			"\n\n"));
+	}
+
+	return 0;
 }
 

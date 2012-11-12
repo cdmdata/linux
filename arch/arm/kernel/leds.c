@@ -7,11 +7,9 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-#include <linux/export.h>
+#include <linux/module.h>
 #include <linux/init.h>
-#include <linux/device.h>
-#include <linux/syscore_ops.h>
-#include <linux/string.h>
+#include <linux/sysdev.h>
 
 #include <asm/leds.h>
 
@@ -34,8 +32,8 @@ static const struct leds_evt_name evt_names[] = {
 	{ "red",   led_red_on,   led_red_off   },
 };
 
-static ssize_t leds_store(struct device *dev,
-			struct device_attribute *attr,
+static ssize_t leds_store(struct sys_device *dev,
+			struct sysdev_attribute *attr,
 			const char *buf, size_t size)
 {
 	int ret = -EINVAL, len = strcspn(buf, " ");
@@ -69,50 +67,46 @@ static ssize_t leds_store(struct device *dev,
 	return ret;
 }
 
-static DEVICE_ATTR(event, 0200, NULL, leds_store);
+static SYSDEV_ATTR(event, 0200, NULL, leds_store);
 
-static struct bus_type leds_subsys = {
-	.name		= "leds",
-	.dev_name	= "leds",
-};
-
-static struct device leds_device = {
-	.id		= 0,
-	.bus		= &leds_subsys,
-};
-
-static int leds_suspend(void)
+static int leds_suspend(struct sys_device *dev, pm_message_t state)
 {
 	leds_event(led_stop);
 	return 0;
 }
 
-static void leds_resume(void)
+static int leds_resume(struct sys_device *dev)
 {
 	leds_event(led_start);
+	return 0;
 }
 
-static void leds_shutdown(void)
+static int leds_shutdown(struct sys_device *dev)
 {
 	leds_event(led_halted);
+	return 0;
 }
 
-static struct syscore_ops leds_syscore_ops = {
+static struct sysdev_class leds_sysclass = {
+	.name		= "leds",
 	.shutdown	= leds_shutdown,
 	.suspend	= leds_suspend,
 	.resume		= leds_resume,
 };
 
+static struct sys_device leds_device = {
+	.id		= 0,
+	.cls		= &leds_sysclass,
+};
+
 static int __init leds_init(void)
 {
 	int ret;
-	ret = subsys_system_register(&leds_subsys, NULL);
+	ret = sysdev_class_register(&leds_sysclass);
 	if (ret == 0)
-		ret = device_register(&leds_device);
+		ret = sysdev_register(&leds_device);
 	if (ret == 0)
-		ret = device_create_file(&leds_device, &dev_attr_event);
-	if (ret == 0)
-		register_syscore_ops(&leds_syscore_ops);
+		ret = sysdev_create_file(&leds_device, &attr_event);
 	return ret;
 }
 

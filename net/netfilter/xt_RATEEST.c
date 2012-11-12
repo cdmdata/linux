@@ -66,11 +66,7 @@ void xt_rateest_put(struct xt_rateest *est)
 	if (--est->refcnt == 0) {
 		hlist_del(&est->list);
 		gen_kill_estimator(&est->bstats, &est->rstats);
-		/*
-		 * gen_estimator est_timer() might access est->lock or bstats,
-		 * wait a RCU grace period before freeing 'est'
-		 */
-		kfree_rcu(est, rcu);
+		kfree(est);
 	}
 	mutex_unlock(&xt_rateest_mutex);
 }

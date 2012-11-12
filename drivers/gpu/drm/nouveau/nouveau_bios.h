@@ -34,32 +34,30 @@
 
 #define DCB_LOC_ON_CHIP 0
 
-#define ROM16(x) le16_to_cpu(*(u16 *)&(x))
-#define ROM32(x) le32_to_cpu(*(u32 *)&(x))
-#define ROM48(x) ({ u8 *p = &(x); (u64)ROM16(p[4]) << 32 | ROM32(p[0]); })
-#define ROM64(x) le64_to_cpu(*(u64 *)&(x))
-#define ROMPTR(d,x) ({            \
-	struct drm_nouveau_private *dev_priv = (d)->dev_private; \
-	ROM16(x) ? &dev_priv->vbios.data[ROM16(x)] : NULL; \
-})
-
-struct bit_entry {
-	uint8_t  id;
-	uint8_t  version;
-	uint16_t length;
-	uint16_t offset;
-	uint8_t *data;
+struct dcb_i2c_entry {
+	uint32_t entry;
+	uint8_t port_type;
+	uint8_t read, write;
+	struct nouveau_i2c_chan *chan;
 };
 
-int bit_table(struct drm_device *, u8 id, struct bit_entry *);
-
 enum dcb_gpio_tag {
-	DCB_GPIO_PANEL_POWER = 0x01,
-	DCB_GPIO_TVDAC0 = 0x0c,
+	DCB_GPIO_TVDAC0 = 0xc,
 	DCB_GPIO_TVDAC1 = 0x2d,
-	DCB_GPIO_PWM_FAN = 0x09,
-	DCB_GPIO_FAN_SENSE = 0x3d,
-	DCB_GPIO_UNUSED = 0xff
+};
+
+struct dcb_gpio_entry {
+	enum dcb_gpio_tag tag;
+	int line;
+	bool invert;
+	uint32_t entry;
+	uint8_t state_default;
+	uint8_t state[2];
+};
+
+struct dcb_gpio_table {
+	int entries;
+	struct dcb_gpio_entry entry[DCB_MAX_NUM_GPIO_ENTRIES];
 };
 
 enum dcb_connector_type {
@@ -69,17 +67,25 @@ enum dcb_connector_type {
 	DCB_CONNECTOR_TV_3 = 0x13,
 	DCB_CONNECTOR_DVI_I = 0x30,
 	DCB_CONNECTOR_DVI_D = 0x31,
-	DCB_CONNECTOR_DMS59_0 = 0x38,
-	DCB_CONNECTOR_DMS59_1 = 0x39,
 	DCB_CONNECTOR_LVDS = 0x40,
-	DCB_CONNECTOR_LVDS_SPWG = 0x41,
 	DCB_CONNECTOR_DP = 0x46,
 	DCB_CONNECTOR_eDP = 0x47,
 	DCB_CONNECTOR_HDMI_0 = 0x60,
 	DCB_CONNECTOR_HDMI_1 = 0x61,
-	DCB_CONNECTOR_DMS59_DP0 = 0x64,
-	DCB_CONNECTOR_DMS59_DP1 = 0x65,
 	DCB_CONNECTOR_NONE = 0xff
+};
+
+struct dcb_connector_table_entry {
+	uint8_t index;
+	uint32_t entry;
+	enum dcb_connector_type type;
+	uint8_t index2;
+	uint8_t gpio_tag;
+};
+
+struct dcb_connector_table {
+	int entries;
+	struct dcb_connector_table_entry entry[DCB_MAX_NUM_CONNECTOR_ENTRIES];
 };
 
 enum dcb_type {
@@ -88,8 +94,6 @@ enum dcb_type {
 	OUTPUT_TMDS = 2,
 	OUTPUT_LVDS = 3,
 	OUTPUT_DP = 6,
-	OUTPUT_EOL = 14, /* DCB 4.0+, appears to be end-of-list */
-	OUTPUT_UNUSED = 15,
 	OUTPUT_ANY = -1
 };
 
@@ -113,7 +117,6 @@ struct dcb_entry {
 		struct {
 			struct sor_conf sor;
 			bool use_straps_for_mode;
-			bool use_acpi_for_edid;
 			bool use_power_scripts;
 		} lvdsconf;
 		struct {
@@ -126,7 +129,6 @@ struct dcb_entry {
 		} dpconf;
 		struct {
 			struct sor_conf sor;
-			int slave_addr;
 		} tmdsconf;
 	};
 	bool i2c_upper_default;
@@ -134,8 +136,18 @@ struct dcb_entry {
 
 struct dcb_table {
 	uint8_t version;
+
 	int entries;
 	struct dcb_entry entry[DCB_MAX_NUM_ENTRIES];
+
+	uint8_t *i2c_table;
+	uint8_t i2c_default_indices;
+	struct dcb_i2c_entry i2c[DCB_MAX_NUM_I2C_ENTRIES];
+
+	uint16_t gpio_table_ptr;
+	struct dcb_gpio_table gpio;
+	uint16_t connector_table_ptr;
+	struct dcb_connector_table connector;
 };
 
 enum nouveau_or {
@@ -154,28 +166,16 @@ enum LVDS_script {
 	LVDS_PANEL_OFF
 };
 
-/* these match types in pll limits table version 0x40,
- * nouveau uses them on all chipsets internally where a
- * specific pll needs to be referenced, but the exact
- * register isn't known.
- */
+/* changing these requires matching changes to reg tables in nv_get_clock */
+#define MAX_PLL_TYPES	4
 enum pll_types {
-	PLL_CORE   = 0x01,
-	PLL_SHADER = 0x02,
-	PLL_UNK03  = 0x03,
-	PLL_MEMORY = 0x04,
-	PLL_VDEC   = 0x05,
-	PLL_UNK40  = 0x40,
-	PLL_UNK41  = 0x41,
-	PLL_UNK42  = 0x42,
-	PLL_VPLL0  = 0x80,
-	PLL_VPLL1  = 0x81,
-	PLL_MAX    = 0xff
+	NVPLL,
+	MPLL,
+	VPLL1,
+	VPLL2
 };
 
 struct pll_lims {
-	u32 reg;
-
 	struct {
 		int minfreq;
 		int maxfreq;
@@ -208,13 +208,6 @@ struct pll_lims {
 
 struct nvbios {
 	struct drm_device *dev;
-	enum {
-		NVBIOS_BMP,
-		NVBIOS_BIT
-	} type;
-	uint16_t offset;
-	uint32_t length;
-	uint8_t *data;
 
 	uint8_t chip_version;
 
@@ -223,8 +216,10 @@ struct nvbios {
 	uint8_t digital_min_front_porch;
 	bool fp_no_ddc;
 
-	spinlock_t lock;
+	struct mutex lock;
 
+	uint8_t data[NV_PROM_SIZE];
+	unsigned int length;
 	bool execute;
 
 	uint8_t major_version;
@@ -254,12 +249,14 @@ struct nvbios {
 
 	struct {
 		int crtchead;
+		/* these need remembering across suspend */
+		uint32_t saved_nv_pfb_cfg0;
 	} state;
 
 	struct {
 		struct dcb_entry *output;
-		int crtc;
 		uint16_t script_table_ptr;
+		uint16_t dp_table_ptr;
 	} display;
 
 	struct {
@@ -301,12 +298,5 @@ struct nvbios {
 		uint16_t lvds_single_a_script_ptr;
 	} legacy;
 };
-
-void *dcb_table(struct drm_device *);
-void *dcb_outp(struct drm_device *, u8 idx);
-int dcb_outp_foreach(struct drm_device *, void *data,
-		     int (*)(struct drm_device *, void *, int idx, u8 *outp));
-u8 *dcb_conntab(struct drm_device *);
-u8 *dcb_conn(struct drm_device *, u8 idx);
 
 #endif

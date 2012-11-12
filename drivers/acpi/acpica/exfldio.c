@@ -5,7 +5,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2012, Intel Corp.
+ * Copyright (C) 2000 - 2010, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -86,7 +86,6 @@ acpi_ex_setup_region(union acpi_operand_object *obj_desc,
 {
 	acpi_status status = AE_OK;
 	union acpi_operand_object *rgn_desc;
-	u8 space_id;
 
 	ACPI_FUNCTION_TRACE_U32(ex_setup_region, field_datum_byte_offset);
 
@@ -100,17 +99,6 @@ acpi_ex_setup_region(union acpi_operand_object *obj_desc,
 			    acpi_ut_get_object_type_name(rgn_desc)));
 
 		return_ACPI_STATUS(AE_AML_OPERAND_TYPE);
-	}
-
-	space_id = rgn_desc->region.space_id;
-
-	/* Validate the Space ID */
-
-	if (!acpi_is_valid_space_id(space_id)) {
-		ACPI_ERROR((AE_INFO,
-			    "Invalid/unknown Address Space ID: 0x%2.2X",
-			    space_id));
-		return_ACPI_STATUS(AE_AML_INVALID_SPACE_ID);
 	}
 
 	/*
@@ -131,12 +119,11 @@ acpi_ex_setup_region(union acpi_operand_object *obj_desc,
 	}
 
 	/*
-	 * Exit now for SMBus, GSBus or IPMI address space, it has a non-linear
-	 * address space and the request cannot be directly validated
+	 * Exit now for SMBus or IPMI address space, it has a non-linear address space
+	 * and the request cannot be directly validated
 	 */
-	if (space_id == ACPI_ADR_SPACE_SMBUS ||
-	    space_id == ACPI_ADR_SPACE_GSBUS ||
-	    space_id == ACPI_ADR_SPACE_IPMI) {
+	if (rgn_desc->region.space_id == ACPI_ADR_SPACE_SMBUS ||
+	    rgn_desc->region.space_id == ACPI_ADR_SPACE_IPMI) {
 
 		/* SMBus or IPMI has a non-linear address space */
 
@@ -160,7 +147,8 @@ acpi_ex_setup_region(union acpi_operand_object *obj_desc,
 	 * (Region length is specified in bytes)
 	 */
 	if (rgn_desc->region.length <
-	    (obj_desc->common_field.base_byte_offset + field_datum_byte_offset +
+	    (obj_desc->common_field.base_byte_offset +
+	     field_datum_byte_offset +
 	     obj_desc->common_field.access_byte_width)) {
 		if (acpi_gbl_enable_interpreter_slack) {
 			/*
@@ -284,23 +272,22 @@ acpi_ex_access_region(union acpi_operand_object *obj_desc,
 
 	/* Invoke the appropriate address_space/op_region handler */
 
-	status = acpi_ev_address_space_dispatch(rgn_desc, obj_desc,
-						function, region_offset,
-						ACPI_MUL_8(obj_desc->
-							   common_field.
-							   access_byte_width),
-						value);
+	status =
+	    acpi_ev_address_space_dispatch(rgn_desc, function, region_offset,
+					   ACPI_MUL_8(obj_desc->common_field.
+						      access_byte_width),
+					   value);
 
 	if (ACPI_FAILURE(status)) {
 		if (status == AE_NOT_IMPLEMENTED) {
 			ACPI_ERROR((AE_INFO,
-				    "Region %s (ID=%u) not implemented",
+				    "Region %s(0x%X) not implemented",
 				    acpi_ut_get_region_name(rgn_desc->region.
 							    space_id),
 				    rgn_desc->region.space_id));
 		} else if (status == AE_NOT_EXIST) {
 			ACPI_ERROR((AE_INFO,
-				    "Region %s (ID=%u) has no handler",
+				    "Region %s(0x%X) has no handler",
 				    acpi_ut_get_region_name(rgn_desc->region.
 							    space_id),
 				    rgn_desc->region.space_id));
@@ -330,7 +317,6 @@ acpi_ex_access_region(union acpi_operand_object *obj_desc,
 static u8
 acpi_ex_register_overflow(union acpi_operand_object *obj_desc, u64 value)
 {
-	ACPI_FUNCTION_NAME(ex_register_overflow);
 
 	if (obj_desc->common_field.bit_length >= ACPI_INTEGER_BIT_SIZE) {
 		/*
@@ -345,11 +331,6 @@ acpi_ex_register_overflow(union acpi_operand_object *obj_desc, u64 value)
 		 * The Value is larger than the maximum value that can fit into
 		 * the register.
 		 */
-		ACPI_ERROR((AE_INFO,
-			    "Index value 0x%8.8X%8.8X overflows field width 0x%X",
-			    ACPI_FORMAT_UINT64(value),
-			    obj_desc->common_field.bit_length));
-
 		return (TRUE);
 	}
 
@@ -553,13 +534,13 @@ acpi_ex_field_datum_io(union acpi_operand_object *obj_desc,
 	if (ACPI_SUCCESS(status)) {
 		if (read_write == ACPI_READ) {
 			ACPI_DEBUG_PRINT((ACPI_DB_BFIELD,
-					  "Value Read %8.8X%8.8X, Width %u\n",
+					  "Value Read %8.8X%8.8X, Width %d\n",
 					  ACPI_FORMAT_UINT64(*value),
 					  obj_desc->common_field.
 					  access_byte_width));
 		} else {
 			ACPI_DEBUG_PRINT((ACPI_DB_BFIELD,
-					  "Value Written %8.8X%8.8X, Width %u\n",
+					  "Value Written %8.8X%8.8X, Width %d\n",
 					  ACPI_FORMAT_UINT64(*value),
 					  obj_desc->common_field.
 					  access_byte_width));
@@ -699,7 +680,6 @@ acpi_ex_extract_from_field(union acpi_operand_object *obj_desc,
 	u32 buffer_tail_bits;
 	u32 datum_count;
 	u32 field_datum_count;
-	u32 access_bit_width;
 	u32 i;
 
 	ACPI_FUNCTION_TRACE(ex_extract_from_field);
@@ -714,36 +694,16 @@ acpi_ex_extract_from_field(union acpi_operand_object *obj_desc,
 
 		return_ACPI_STATUS(AE_BUFFER_OVERFLOW);
 	}
-
 	ACPI_MEMSET(buffer, 0, buffer_length);
-	access_bit_width = ACPI_MUL_8(obj_desc->common_field.access_byte_width);
-
-	/* Handle the simple case here */
-
-	if ((obj_desc->common_field.start_field_bit_offset == 0) &&
-	    (obj_desc->common_field.bit_length == access_bit_width)) {
-		status = acpi_ex_field_datum_io(obj_desc, 0, buffer, ACPI_READ);
-		return_ACPI_STATUS(status);
-	}
-
-/* TBD: Move to common setup code */
-
-	/* Field algorithm is limited to sizeof(u64), truncate if needed */
-
-	if (obj_desc->common_field.access_byte_width > sizeof(u64)) {
-		obj_desc->common_field.access_byte_width = sizeof(u64);
-		access_bit_width = sizeof(u64) * 8;
-	}
 
 	/* Compute the number of datums (access width data items) */
 
-	datum_count =
-	    ACPI_ROUND_UP_TO(obj_desc->common_field.bit_length,
-			     access_bit_width);
-
+	datum_count = ACPI_ROUND_UP_TO(obj_desc->common_field.bit_length,
+				       obj_desc->common_field.access_bit_width);
 	field_datum_count = ACPI_ROUND_UP_TO(obj_desc->common_field.bit_length +
 					     obj_desc->common_field.
 					     start_field_bit_offset,
+					     obj_desc->common_field.
 					     access_bit_width);
 
 	/* Priming read from the field */
@@ -778,11 +738,12 @@ acpi_ex_extract_from_field(union acpi_operand_object *obj_desc,
 		 * This avoids the differences in behavior between different compilers
 		 * concerning shift values larger than the target data width.
 		 */
-		if (access_bit_width -
-		    obj_desc->common_field.start_field_bit_offset <
+		if ((obj_desc->common_field.access_bit_width -
+		     obj_desc->common_field.start_field_bit_offset) <
 		    ACPI_INTEGER_BIT_SIZE) {
 			merged_datum |=
-			    raw_datum << (access_bit_width -
+			    raw_datum << (obj_desc->common_field.
+					  access_bit_width -
 					  obj_desc->common_field.
 					  start_field_bit_offset);
 		}
@@ -804,7 +765,8 @@ acpi_ex_extract_from_field(union acpi_operand_object *obj_desc,
 
 	/* Mask off any extra bits in the last datum */
 
-	buffer_tail_bits = obj_desc->common_field.bit_length % access_bit_width;
+	buffer_tail_bits = obj_desc->common_field.bit_length %
+	    obj_desc->common_field.access_bit_width;
 	if (buffer_tail_bits) {
 		merged_datum &= ACPI_MASK_BITS_ABOVE(buffer_tail_bits);
 	}
@@ -836,7 +798,6 @@ acpi_status
 acpi_ex_insert_into_field(union acpi_operand_object *obj_desc,
 			  void *buffer, u32 buffer_length)
 {
-	void *new_buffer;
 	acpi_status status;
 	u64 mask;
 	u64 width_mask;
@@ -847,9 +808,9 @@ acpi_ex_insert_into_field(union acpi_operand_object *obj_desc,
 	u32 buffer_tail_bits;
 	u32 datum_count;
 	u32 field_datum_count;
-	u32 access_bit_width;
-	u32 required_length;
 	u32 i;
+	u32 required_length;
+	void *new_buffer;
 
 	ACPI_FUNCTION_TRACE(ex_insert_into_field);
 
@@ -883,24 +844,17 @@ acpi_ex_insert_into_field(union acpi_operand_object *obj_desc,
 		buffer_length = required_length;
 	}
 
-/* TBD: Move to common setup code */
-
-	/* Algo is limited to sizeof(u64), so cut the access_byte_width */
-	if (obj_desc->common_field.access_byte_width > sizeof(u64)) {
-		obj_desc->common_field.access_byte_width = sizeof(u64);
-	}
-
-	access_bit_width = ACPI_MUL_8(obj_desc->common_field.access_byte_width);
-
 	/*
 	 * Create the bitmasks used for bit insertion.
 	 * Note: This if/else is used to bypass compiler differences with the
 	 * shift operator
 	 */
-	if (access_bit_width == ACPI_INTEGER_BIT_SIZE) {
+	if (obj_desc->common_field.access_bit_width == ACPI_INTEGER_BIT_SIZE) {
 		width_mask = ACPI_UINT64_MAX;
 	} else {
-		width_mask = ACPI_MASK_BITS_ABOVE(access_bit_width);
+		width_mask =
+		    ACPI_MASK_BITS_ABOVE(obj_desc->common_field.
+					 access_bit_width);
 	}
 
 	mask = width_mask &
@@ -909,11 +863,12 @@ acpi_ex_insert_into_field(union acpi_operand_object *obj_desc,
 	/* Compute the number of datums (access width data items) */
 
 	datum_count = ACPI_ROUND_UP_TO(obj_desc->common_field.bit_length,
-				       access_bit_width);
+				       obj_desc->common_field.access_bit_width);
 
 	field_datum_count = ACPI_ROUND_UP_TO(obj_desc->common_field.bit_length +
 					     obj_desc->common_field.
 					     start_field_bit_offset,
+					     obj_desc->common_field.
 					     access_bit_width);
 
 	/* Get initial Datum from the input buffer */
@@ -950,11 +905,12 @@ acpi_ex_insert_into_field(union acpi_operand_object *obj_desc,
 		 * This avoids the differences in behavior between different compilers
 		 * concerning shift values larger than the target data width.
 		 */
-		if ((access_bit_width -
+		if ((obj_desc->common_field.access_bit_width -
 		     obj_desc->common_field.start_field_bit_offset) <
 		    ACPI_INTEGER_BIT_SIZE) {
 			merged_datum =
-			    raw_datum >> (access_bit_width -
+			    raw_datum >> (obj_desc->common_field.
+					  access_bit_width -
 					  obj_desc->common_field.
 					  start_field_bit_offset);
 		} else {
@@ -973,7 +929,6 @@ acpi_ex_insert_into_field(union acpi_operand_object *obj_desc,
 		ACPI_MEMCPY(&raw_datum, ((char *)buffer) + buffer_offset,
 			    ACPI_MIN(obj_desc->common_field.access_byte_width,
 				     buffer_length - buffer_offset));
-
 		merged_datum |=
 		    raw_datum << obj_desc->common_field.start_field_bit_offset;
 	}
@@ -982,7 +937,7 @@ acpi_ex_insert_into_field(union acpi_operand_object *obj_desc,
 
 	buffer_tail_bits = (obj_desc->common_field.bit_length +
 			    obj_desc->common_field.start_field_bit_offset) %
-	    access_bit_width;
+	    obj_desc->common_field.access_bit_width;
 	if (buffer_tail_bits) {
 		mask &= ACPI_MASK_BITS_ABOVE(buffer_tail_bits);
 	}

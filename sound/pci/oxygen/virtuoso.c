@@ -19,20 +19,19 @@
 
 #include <linux/pci.h>
 #include <linux/delay.h>
-#include <linux/module.h>
 #include <sound/core.h>
 #include <sound/initval.h>
 #include <sound/pcm.h>
 #include "xonar.h"
 
 MODULE_AUTHOR("Clemens Ladisch <clemens@ladisch.de>");
-MODULE_DESCRIPTION("Asus Virtuoso driver");
+MODULE_DESCRIPTION("Asus AVx00 driver");
 MODULE_LICENSE("GPL v2");
-MODULE_SUPPORTED_DEVICE("{{Asus,AV66},{Asus,AV100},{Asus,AV200}}");
+MODULE_SUPPORTED_DEVICE("{{Asus,AV100},{Asus,AV200}}");
 
 static int index[SNDRV_CARDS] = SNDRV_DEFAULT_IDX;
 static char *id[SNDRV_CARDS] = SNDRV_DEFAULT_STR;
-static bool enable[SNDRV_CARDS] = SNDRV_DEFAULT_ENABLE_PNP;
+static int enable[SNDRV_CARDS] = SNDRV_DEFAULT_ENABLE_PNP;
 
 module_param_array(index, int, NULL, 0444);
 MODULE_PARM_DESC(index, "card index");
@@ -50,7 +49,6 @@ static DEFINE_PCI_DEVICE_TABLE(xonar_ids) = {
 	{ OXYGEN_PCI_SUBID(0x1043, 0x834f) },
 	{ OXYGEN_PCI_SUBID(0x1043, 0x835c) },
 	{ OXYGEN_PCI_SUBID(0x1043, 0x835d) },
-	{ OXYGEN_PCI_SUBID(0x1043, 0x835e) },
 	{ OXYGEN_PCI_SUBID(0x1043, 0x838e) },
 	{ OXYGEN_PCI_SUBID_BROKEN_EEPROM },
 	{ }
@@ -89,7 +87,7 @@ static int __devinit xonar_probe(struct pci_dev *pci,
 }
 
 static struct pci_driver xonar_driver = {
-	.name = KBUILD_MODNAME,
+	.name = "AV200",
 	.id_table = xonar_ids,
 	.probe = xonar_probe,
 	.remove = __devexit_p(oxygen_pci_remove),
@@ -97,7 +95,6 @@ static struct pci_driver xonar_driver = {
 	.suspend = oxygen_pci_suspend,
 	.resume = oxygen_pci_resume,
 #endif
-	.shutdown = oxygen_pci_shutdown,
 };
 
 static int __init alsa_card_xonar_init(void)

@@ -23,62 +23,16 @@
 #include <linux/ahci_platform.h>
 #include "ahci.h"
 
-enum ahci_type {
-	AHCI,		/* standard platform ahci */
-	IMX53_AHCI,	/* ahci on i.mx53 */
-	STRICT_AHCI,	/* delayed DMA engine start */
-};
-
-static struct platform_device_id ahci_devtype[] = {
-	{
-		.name = "ahci",
-		.driver_data = AHCI,
-	}, {
-		.name = "imx53-ahci",
-		.driver_data = IMX53_AHCI,
-	}, {
-		.name = "strict-ahci",
-		.driver_data = STRICT_AHCI,
-	}, {
-		/* sentinel */
-	}
-};
-MODULE_DEVICE_TABLE(platform, ahci_devtype);
-
-
-static const struct ata_port_info ahci_port_info[] = {
-	/* by features */
-	[AHCI] = {
-		.flags		= AHCI_FLAG_COMMON,
-		.pio_mask	= ATA_PIO4,
-		.udma_mask	= ATA_UDMA6,
-		.port_ops	= &ahci_ops,
-	},
-	[IMX53_AHCI] = {
-		.flags		= AHCI_FLAG_COMMON,
-		.pio_mask	= ATA_PIO4,
-		.udma_mask	= ATA_UDMA6,
-		.port_ops	= &ahci_pmp_retry_srst_ops,
-	},
-	[STRICT_AHCI] = {
-		AHCI_HFLAGS	(AHCI_HFLAG_DELAY_ENGINE),
-		.flags		= AHCI_FLAG_COMMON,
-		.pio_mask	= ATA_PIO4,
-		.udma_mask	= ATA_UDMA6,
-		.port_ops	= &ahci_ops,
-	},
-};
-
-static struct scsi_host_template ahci_platform_sht = {
-	AHCI_SHT("ahci_platform"),
-};
-
 static int __init ahci_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct ahci_platform_data *pdata = dev_get_platdata(dev);
-	const struct platform_device_id *id = platform_get_device_id(pdev);
-	struct ata_port_info pi = ahci_port_info[id ? id->driver_data : 0];
+	struct ahci_platform_data *pdata = dev->platform_data;
+	struct ata_port_info pi = {
+		.flags		= AHCI_FLAG_COMMON,
+		.pio_mask	= ATA_PIO4,
+		.udma_mask	= ATA_UDMA6,
+		.port_ops	= &ahci_ops,
+	};
 	const struct ata_port_info *ppi[] = { &pi, NULL };
 	struct ahci_host_priv *hpriv;
 	struct ata_host *host;
@@ -100,13 +54,19 @@ static int __init ahci_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
+	if (pdata && pdata->init) {
+		rc = pdata->init(dev);
+		if (rc)
+			return rc;
+	}
+
 	if (pdata && pdata->ata_port_info)
 		pi = *pdata->ata_port_info;
 
 	hpriv = devm_kzalloc(dev, sizeof(*hpriv), GFP_KERNEL);
 	if (!hpriv) {
-		dev_err(dev, "can't alloc ahci_host_priv\n");
-		return -ENOMEM;
+		rc = -ENOMEM;
+		goto err0;
 	}
 
 	hpriv->flags |= (unsigned long)pi.private_data;
@@ -114,19 +74,8 @@ static int __init ahci_probe(struct platform_device *pdev)
 	hpriv->mmio = devm_ioremap(dev, mem->start, resource_size(mem));
 	if (!hpriv->mmio) {
 		dev_err(dev, "can't map %pR\n", mem);
-		return -ENOMEM;
-	}
-
-	/*
-	 * Some platforms might need to prepare for mmio region access,
-	 * which could be done in the following init call. So, the mmio
-	 * region shouldn't be accessed before init (if provided) has
-	 * returned successfully.
-	 */
-	if (pdata && pdata->init) {
-		rc = pdata->init(dev, hpriv->mmio);
-		if (rc)
-			return rc;
+		rc = -ENOMEM;
+		goto err0;
 	}
 
 	ahci_save_initial_config(dev, hpriv,
@@ -171,6 +120,9 @@ static int __init ahci_probe(struct platform_device *pdev)
 		ata_port_desc(ap, "mmio %pR", mem);
 		ata_port_desc(ap, "port 0x%x", 0x100 + ap->port_no * 0x80);
 
+		/* set initial link pm policy */
+		ap->pm_policy = NOT_AVAILABLE;
+
 		/* set enclosure management message type */
 		if (ap->flags & ATA_FLAG_EM)
 			ap->em_message_type = hpriv->em_msg_type;
@@ -188,7 +140,7 @@ static int __init ahci_probe(struct platform_device *pdev)
 	ahci_print_info(host, "platform");
 
 	rc = ata_host_activate(host, irq, ahci_interrupt, IRQF_SHARED,
-			       &ahci_platform_sht);
+			       &ahci_sht);
 	if (rc)
 		goto err0;
 
@@ -202,7 +154,7 @@ err0:
 static int __devexit ahci_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct ahci_platform_data *pdata = dev_get_platdata(dev);
+	struct ahci_platform_data *pdata = dev->platform_data;
 	struct ata_host *host = dev_get_drvdata(dev);
 
 	ata_host_detach(host);
@@ -213,89 +165,12 @@ static int __devexit ahci_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM
-static int ahci_suspend(struct device *dev)
-{
-	struct ahci_platform_data *pdata = dev_get_platdata(dev);
-	struct ata_host *host = dev_get_drvdata(dev);
-	struct ahci_host_priv *hpriv = host->private_data;
-	void __iomem *mmio = hpriv->mmio;
-	u32 ctl;
-	int rc;
-
-	if (hpriv->flags & AHCI_HFLAG_NO_SUSPEND) {
-		dev_err(dev, "firmware update required for suspend/resume\n");
-		return -EIO;
-	}
-
-	/*
-	 * AHCI spec rev1.1 section 8.3.3:
-	 * Software must disable interrupts prior to requesting a
-	 * transition of the HBA to D3 state.
-	 */
-	ctl = readl(mmio + HOST_CTL);
-	ctl &= ~HOST_IRQ_EN;
-	writel(ctl, mmio + HOST_CTL);
-	readl(mmio + HOST_CTL); /* flush */
-
-	rc = ata_host_suspend(host, PMSG_SUSPEND);
-	if (rc)
-		return rc;
-
-	if (pdata && pdata->suspend)
-		return pdata->suspend(dev);
-	return 0;
-}
-
-static int ahci_resume(struct device *dev)
-{
-	struct ahci_platform_data *pdata = dev_get_platdata(dev);
-	struct ata_host *host = dev_get_drvdata(dev);
-	int rc;
-
-	if (pdata && pdata->resume) {
-		rc = pdata->resume(dev);
-		if (rc)
-			return rc;
-	}
-
-	if (dev->power.power_state.event == PM_EVENT_SUSPEND) {
-		rc = ahci_reset_controller(host);
-		if (rc)
-			return rc;
-
-		ahci_init_controller(host);
-	}
-
-	ata_host_resume(host);
-
-	return 0;
-}
-
-static struct dev_pm_ops ahci_pm_ops = {
-	.suspend		= &ahci_suspend,
-	.resume			= &ahci_resume,
-};
-#endif
-
-static const struct of_device_id ahci_of_match[] = {
-	{ .compatible = "calxeda,hb-ahci", },
-	{ .compatible = "snps,spear-ahci", },
-	{},
-};
-MODULE_DEVICE_TABLE(of, ahci_of_match);
-
 static struct platform_driver ahci_driver = {
 	.remove = __devexit_p(ahci_remove),
 	.driver = {
 		.name = "ahci",
 		.owner = THIS_MODULE,
-		.of_match_table = ahci_of_match,
-#ifdef CONFIG_PM
-		.pm = &ahci_pm_ops,
-#endif
 	},
-	.id_table	= ahci_devtype,
 };
 
 static int __init ahci_init(void)

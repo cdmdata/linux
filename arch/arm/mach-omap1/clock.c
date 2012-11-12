@@ -11,15 +11,16 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
+#include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
 #include <linux/errno.h>
 #include <linux/err.h>
-#include <linux/io.h>
 #include <linux/clk.h>
-#include <linux/clkdev.h>
+#include <linux/io.h>
 
 #include <asm/mach-types.h>
+#include <asm/clkdev.h>
 
 #include <plat/cpu.h>
 #include <plat/usb.h>
@@ -27,18 +28,15 @@
 #include <plat/sram.h>
 #include <plat/clkdev_omap.h>
 
-#include <mach/hardware.h>
-
-#include "iomap.h"
 #include "clock.h"
 #include "opp.h"
 
 __u32 arm_idlect1_mask;
 struct clk *api_ck_p, *ck_dpll1_p, *ck_ref_p;
 
-/*
+/*-------------------------------------------------------------------------
  * Omap1 specific clock functions
- */
+ *-------------------------------------------------------------------------*/
 
 unsigned long omap1_uart_recalc(struct clk *clk)
 {
@@ -200,10 +198,11 @@ int omap1_select_table_rate(struct clk *clk, unsigned long rate)
 	ref_rate = ck_ref_p->rate;
 
 	for (ptr = omap1_rate_table; ptr->rate; ptr++) {
-		if (!(ptr->flags & cpu_mask))
+		if (ptr->xtal != ref_rate)
 			continue;
 
-		if (ptr->xtal != ref_rate)
+		/* DPLL1 cannot be reprogrammed without risking system crash */
+		if (likely(dpll1_rate != 0) && ptr->pll_rate != dpll1_rate)
 			continue;
 
 		/* Can check only after xtal frequency check */
@@ -217,8 +216,12 @@ int omap1_select_table_rate(struct clk *clk, unsigned long rate)
 	/*
 	 * In most cases we should not need to reprogram DPLL.
 	 * Reprogramming the DPLL is tricky, it must be done from SRAM.
+	 * (on 730, bit 13 must always be 1)
 	 */
-	omap_sram_reprogram_clock(ptr->dpllctl_val, ptr->ckctl_val);
+	if (cpu_is_omap7xx())
+		omap_sram_reprogram_clock(ptr->dpllctl_val, ptr->ckctl_val | 0x2000);
+	else
+		omap_sram_reprogram_clock(ptr->dpllctl_val, ptr->ckctl_val);
 
 	/* XXX Do we need to recalculate the tree below DPLL1 at this point? */
 	ck_dpll1_p->rate = ptr->pll_rate;
@@ -288,9 +291,6 @@ long omap1_round_to_table_rate(struct clk *clk, unsigned long rate)
 	highest_rate = -EINVAL;
 
 	for (ptr = omap1_rate_table; ptr->rate; ptr++) {
-		if (!(ptr->flags & cpu_mask))
-			continue;
-
 		if (ptr->xtal != ref_rate)
 			continue;
 
@@ -523,8 +523,7 @@ const struct clkops clkops_dspck = {
 	.disable	= omap1_clk_disable_dsp_domain,
 };
 
-/* XXX SYSC register handling does not belong in the clock framework */
-static int omap1_clk_enable_uart_functional_16xx(struct clk *clk)
+static int omap1_clk_enable_uart_functional(struct clk *clk)
 {
 	int ret;
 	struct uart_clk *uclk;
@@ -540,8 +539,7 @@ static int omap1_clk_enable_uart_functional_16xx(struct clk *clk)
 	return ret;
 }
 
-/* XXX SYSC register handling does not belong in the clock framework */
-static void omap1_clk_disable_uart_functional_16xx(struct clk *clk)
+static void omap1_clk_disable_uart_functional(struct clk *clk)
 {
 	struct uart_clk *uclk;
 
@@ -552,10 +550,9 @@ static void omap1_clk_disable_uart_functional_16xx(struct clk *clk)
 	omap1_clk_disable_generic(clk);
 }
 
-/* XXX SYSC register handling does not belong in the clock framework */
-const struct clkops clkops_uart_16xx = {
-	.enable		= omap1_clk_enable_uart_functional_16xx,
-	.disable	= omap1_clk_disable_uart_functional_16xx,
+const struct clkops clkops_uart = {
+	.enable		= omap1_clk_enable_uart_functional,
+	.disable	= omap1_clk_disable_uart_functional,
 };
 
 long omap1_clk_round_rate(struct clk *clk, unsigned long rate)
@@ -575,9 +572,9 @@ int omap1_clk_set_rate(struct clk *clk, unsigned long rate)
 	return ret;
 }
 
-/*
+/*-------------------------------------------------------------------------
  * Omap1 clock reset and init functions
- */
+ *-------------------------------------------------------------------------*/
 
 #ifdef CONFIG_OMAP_RESET_CLOCKS
 

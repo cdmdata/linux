@@ -14,6 +14,7 @@
  */
 
 #include <asm/uaccess.h>
+#include <asm/system.h>
 #include <linux/bitops.h>
 #include <linux/module.h>
 #include <linux/types.h>
@@ -231,7 +232,7 @@ int gen_new_estimator(struct gnet_stats_basic_packed *bstats,
 	est->last_packets = bstats->packets;
 	est->avpps = rate_est->pps<<10;
 
-	spin_lock_bh(&est_tree_lock);
+	spin_lock(&est_tree_lock);
 	if (!elist[idx].timer.function) {
 		INIT_LIST_HEAD(&elist[idx].list);
 		setup_timer(&elist[idx].timer, est_timer, idx);
@@ -242,11 +243,18 @@ int gen_new_estimator(struct gnet_stats_basic_packed *bstats,
 
 	list_add_rcu(&est->list, &elist[idx].list);
 	gen_add_node(est);
-	spin_unlock_bh(&est_tree_lock);
+	spin_unlock(&est_tree_lock);
 
 	return 0;
 }
 EXPORT_SYMBOL(gen_new_estimator);
+
+static void __gen_kill_estimator(struct rcu_head *head)
+{
+	struct gen_estimator *e = container_of(head,
+					struct gen_estimator, e_rcu);
+	kfree(e);
+}
 
 /**
  * gen_kill_estimator - remove a rate estimator
@@ -255,25 +263,24 @@ EXPORT_SYMBOL(gen_new_estimator);
  *
  * Removes the rate estimator specified by &bstats and &rate_est.
  *
- * Note : Caller should respect an RCU grace period before freeing stats_lock
  */
 void gen_kill_estimator(struct gnet_stats_basic_packed *bstats,
 			struct gnet_stats_rate_est *rate_est)
 {
 	struct gen_estimator *e;
 
-	spin_lock_bh(&est_tree_lock);
+	spin_lock(&est_tree_lock);
 	while ((e = gen_find_node(bstats, rate_est))) {
 		rb_erase(&e->node, &est_root);
 
-		write_lock(&est_lock);
+		write_lock_bh(&est_lock);
 		e->bstats = NULL;
-		write_unlock(&est_lock);
+		write_unlock_bh(&est_lock);
 
 		list_del_rcu(&e->list);
-		kfree_rcu(e, e_rcu);
+		call_rcu(&e->e_rcu, __gen_kill_estimator);
 	}
-	spin_unlock_bh(&est_tree_lock);
+	spin_unlock(&est_tree_lock);
 }
 EXPORT_SYMBOL(gen_kill_estimator);
 
@@ -312,9 +319,9 @@ bool gen_estimator_active(const struct gnet_stats_basic_packed *bstats,
 
 	ASSERT_RTNL();
 
-	spin_lock_bh(&est_tree_lock);
+	spin_lock(&est_tree_lock);
 	res = gen_find_node(bstats, rate_est) != NULL;
-	spin_unlock_bh(&est_tree_lock);
+	spin_unlock(&est_tree_lock);
 
 	return res;
 }

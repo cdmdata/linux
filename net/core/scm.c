@@ -28,6 +28,7 @@
 #include <linux/nsproxy.h>
 #include <linux/slab.h>
 
+#include <asm/system.h>
 #include <asm/uaccess.h>
 
 #include <net/protocol.h>
@@ -78,11 +79,10 @@ static int scm_fp_copy(struct cmsghdr *cmsg, struct scm_fp_list **fplp)
 			return -ENOMEM;
 		*fplp = fpl;
 		fpl->count = 0;
-		fpl->max = SCM_MAX_FD;
 	}
 	fpp = &fpl->fp[fpl->count];
 
-	if (fpl->count + num > fpl->max)
+	if (fpl->count + num > SCM_MAX_FD)
 		return -EINVAL;
 
 	/*
@@ -94,7 +94,7 @@ static int scm_fp_copy(struct cmsghdr *cmsg, struct scm_fp_list **fplp)
 		int fd = fdp[i];
 		struct file *file;
 
-		if (fd < 0 || !(file = fget_raw(fd)))
+		if (fd < 0 || !(file = fget(fd)))
 			return -EBADF;
 		*fpp++ = file;
 		fpl->count++;
@@ -130,7 +130,6 @@ void __scm_destroy(struct scm_cookie *scm)
 		}
 	}
 }
-EXPORT_SYMBOL(__scm_destroy);
 
 int __scm_send(struct socket *sock, struct msghdr *msg, struct scm_cookie *p)
 {
@@ -171,32 +170,6 @@ int __scm_send(struct socket *sock, struct msghdr *msg, struct scm_cookie *p)
 			err = scm_check_creds(&p->creds);
 			if (err)
 				goto error;
-
-			if (!p->pid || pid_vnr(p->pid) != p->creds.pid) {
-				struct pid *pid;
-				err = -ESRCH;
-				pid = find_get_pid(p->creds.pid);
-				if (!pid)
-					goto error;
-				put_pid(p->pid);
-				p->pid = pid;
-			}
-
-			if (!p->cred ||
-			    (p->cred->euid != p->creds.uid) ||
-			    (p->cred->egid != p->creds.gid)) {
-				struct cred *cred;
-				err = -ENOMEM;
-				cred = prepare_creds();
-				if (!cred)
-					goto error;
-
-				cred->uid = cred->euid = p->creds.uid;
-				cred->gid = cred->egid = p->creds.gid;
-				if (p->cred)
-					put_cred(p->cred);
-				p->cred = cred;
-			}
 			break;
 		default:
 			goto error;
@@ -214,7 +187,6 @@ error:
 	scm_destroy(p);
 	return err;
 }
-EXPORT_SYMBOL(__scm_send);
 
 int put_cmsg(struct msghdr * msg, int level, int type, int len, void *data)
 {
@@ -253,7 +225,6 @@ int put_cmsg(struct msghdr * msg, int level, int type, int len, void *data)
 out:
 	return err;
 }
-EXPORT_SYMBOL(put_cmsg);
 
 void scm_detach_fds(struct msghdr *msg, struct scm_cookie *scm)
 {
@@ -323,7 +294,6 @@ void scm_detach_fds(struct msghdr *msg, struct scm_cookie *scm)
 	 */
 	__scm_destroy(scm);
 }
-EXPORT_SYMBOL(scm_detach_fds);
 
 struct scm_fp_list *scm_fp_dup(struct scm_fp_list *fpl)
 {
@@ -333,13 +303,17 @@ struct scm_fp_list *scm_fp_dup(struct scm_fp_list *fpl)
 	if (!fpl)
 		return NULL;
 
-	new_fpl = kmemdup(fpl, offsetof(struct scm_fp_list, fp[fpl->count]),
-			  GFP_KERNEL);
+	new_fpl = kmalloc(sizeof(*fpl), GFP_KERNEL);
 	if (new_fpl) {
-		for (i = 0; i < fpl->count; i++)
+		for (i=fpl->count-1; i>=0; i--)
 			get_file(fpl->fp[i]);
-		new_fpl->max = new_fpl->count;
+		memcpy(new_fpl, fpl, sizeof(*fpl));
 	}
 	return new_fpl;
 }
+
+EXPORT_SYMBOL(__scm_destroy);
+EXPORT_SYMBOL(__scm_send);
+EXPORT_SYMBOL(put_cmsg);
+EXPORT_SYMBOL(scm_detach_fds);
 EXPORT_SYMBOL(scm_fp_dup);

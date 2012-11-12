@@ -33,7 +33,7 @@
 #include <linux/types.h>
 #include <linux/sched.h>
 #include <linux/init.h>
-#include <linux/export.h>
+#include <linux/module.h>
 #include <linux/adb.h>
 #include <linux/pmu.h>
 #include <linux/delay.h>
@@ -366,20 +366,11 @@ static void kw_i2c_timeout(unsigned long data)
 	unsigned long flags;
 
 	spin_lock_irqsave(&host->lock, flags);
-
-	/*
-	 * If the timer is pending, that means we raced with the
-	 * irq, in which case we just return
-	 */
-	if (timer_pending(&host->timeout_timer))
-		goto skip;
-
 	kw_i2c_handle_interrupt(host, kw_read_reg(reg_isr));
 	if (host->state != state_idle) {
 		host->timeout_timer.expires = jiffies + KW_POLL_TIMEOUT;
 		add_timer(&host->timeout_timer);
 	}
- skip:
 	spin_unlock_irqrestore(&host->lock, flags);
 }
 
@@ -551,12 +542,11 @@ static struct pmac_i2c_host_kw *__init kw_i2c_host_init(struct device_node *np)
 	/* Make sure IRQ is disabled */
 	kw_write_reg(reg_ier, 0);
 
-	/* Request chip interrupt. We set IRQF_NO_SUSPEND because we don't
+	/* Request chip interrupt. We set IRQF_TIMER because we don't
 	 * want that interrupt disabled between the 2 passes of driver
 	 * suspend or we'll have issues running the pfuncs
 	 */
-	if (request_irq(host->irq, kw_i2c_irq, IRQF_NO_SUSPEND,
-			"keywest i2c", host))
+	if (request_irq(host->irq, kw_i2c_irq, IRQF_TIMER, "keywest i2c", host))
 		host->irq = NO_IRQ;
 
 	printk(KERN_INFO "KeyWest i2c @0x%08x irq %d %s\n",
@@ -913,7 +903,7 @@ static void __init smu_i2c_probe(void)
 	printk(KERN_INFO "SMU i2c %s\n", controller->full_name);
 
 	/* Look for childs, note that they might not be of the right
-	 * type as older device trees mix i2c busses and other things
+	 * type as older device trees mix i2c busses and other thigns
 	 * at the same level
 	 */
 	for (busnode = NULL;

@@ -1,4 +1,5 @@
 /*
+ * Copyright (C) 2011 Freescale Semiconductor, Inc.
  * Copyright (C) 2009 by Jan Weitzel Phytec Messtechnik GmbH,
  *			<armlinux@phytec.de>
  *
@@ -54,6 +55,9 @@
 */
 
 typedef u64 iomux_v3_cfg_t;
+typedef u32 iomux_grp_cfg_t;
+
+#define IOMUX_TO_IRQ_V3(pin)	(MXC_GPIO_IRQ_START + pin)
 
 #define MUX_CTRL_OFS_SHIFT	0
 #define MUX_CTRL_OFS_MASK	((iomux_v3_cfg_t)0xfff << MUX_CTRL_OFS_SHIFT)
@@ -80,7 +84,14 @@ typedef u64 iomux_v3_cfg_t;
 		((iomux_v3_cfg_t)(_sel_input_ofs) << MUX_SEL_INPUT_OFS_SHIFT) | \
 		((iomux_v3_cfg_t)(_sel_input) << MUX_SEL_INPUT_SHIFT))
 
-#define NEW_PAD_CTRL(cfg, pad)	(((cfg) & ~MUX_PAD_CTRL_MASK) | MUX_PAD_CTRL(pad))
+#define MUX_PAD_GRP_CTRL_SHIFT		16
+#define MUX_PAD_GRP_CTRL_MASK		((iomux_grp_cfg_t)0xFFF << MUX_PAD_GRP_CTRL_SHIFT)
+#define MUX_PAD_GRP_SHIFT_SHIFT	0
+#define MUX_PAD_GRP_SHIFT_MASK	((iomux_grp_cfg_t)0xFF << MUX_PAD_GRP_SHIFT_SHIFT)
+#define IOMUX_PAD_GRP(_pad_ctrl_ofs, _pad_ctrl_shift) \
+	(((iomux_grp_cfg_t)(_pad_ctrl_ofs) << MUX_PAD_GRP_CTRL_SHIFT) |	\
+		((iomux_grp_cfg_t)(_pad_ctrl_shift) << MUX_PAD_GRP_SHIFT_SHIFT))
+
 /*
  * Use to set PAD control
  */
@@ -90,11 +101,13 @@ typedef u64 iomux_v3_cfg_t;
 #define PAD_CTL_HYS			(1 << 8)
 
 #define PAD_CTL_PKE			(1 << 7)
-#define PAD_CTL_PUE			(1 << 6 | PAD_CTL_PKE)
-#define PAD_CTL_PUS_100K_DOWN		(0 << 4 | PAD_CTL_PUE)
-#define PAD_CTL_PUS_47K_UP		(1 << 4 | PAD_CTL_PUE)
-#define PAD_CTL_PUS_100K_UP		(2 << 4 | PAD_CTL_PUE)
-#define PAD_CTL_PUS_22K_UP		(3 << 4 | PAD_CTL_PUE)
+#define PAD_CTL_PUE			(1 << 6)
+#define PAD_CTL_PUS_100K_DOWN		(0 << 4)
+#define PAD_CTL_PUS_360K_DOWN		(0 << 4)
+#define PAD_CTL_PUS_47K_UP		(1 << 4)
+#define PAD_CTL_PUS_75K_UP		(1 << 4)
+#define PAD_CTL_PUS_100K_UP		(2 << 4)
+#define PAD_CTL_PUS_22K_UP		(3 << 4)
 
 #define PAD_CTL_ODE			(1 << 3)
 
@@ -108,29 +121,19 @@ typedef u64 iomux_v3_cfg_t;
 
 #define IOMUX_CONFIG_SION		(0x1 << 4)
 
-#define MX51_NUM_GPIO_PORT	4
-
-#define GPIO_PIN_MASK 0x1f
-
-#define GPIO_PORT_SHIFT 5
-#define GPIO_PORT_MASK (0x7 << GPIO_PORT_SHIFT)
-
-#define GPIO_PORTA	(0 << GPIO_PORT_SHIFT)
-#define GPIO_PORTB	(1 << GPIO_PORT_SHIFT)
-#define GPIO_PORTC	(2 << GPIO_PORT_SHIFT)
-#define GPIO_PORTD	(3 << GPIO_PORT_SHIFT)
-#define GPIO_PORTE	(4 << GPIO_PORT_SHIFT)
-#define GPIO_PORTF	(5 << GPIO_PORT_SHIFT)
+void mxc_iomux_set_pad_groups(iomux_grp_cfg_t pad_grp, int value);
 
 /*
- * setups a single pad in the iomuxer
+ * read/write a single pad in the iomuxer
  */
+int mxc_iomux_v3_get_pad(iomux_v3_cfg_t *pad);
 int mxc_iomux_v3_setup_pad(iomux_v3_cfg_t pad);
 
 /*
- * setups mutliple pads
+ * read/write mutliple pads
  * convenient way to call the above function with tables
  */
+int mxc_iomux_v3_get_multiple_pads(iomux_v3_cfg_t *pad_list, unsigned count);
 int mxc_iomux_v3_setup_multiple_pads(iomux_v3_cfg_t *pad_list, unsigned count);
 
 /*

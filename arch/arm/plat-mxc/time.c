@@ -27,7 +27,6 @@
 #include <linux/clk.h>
 
 #include <mach/hardware.h>
-#include <asm/sched_clock.h>
 #include <asm/mach/time.h>
 #include <mach/common.h>
 
@@ -54,9 +53,10 @@
 #define MX2_TSTAT_CAPT		(1 << 1)
 #define MX2_TSTAT_COMP		(1 << 0)
 
-/* MX31, MX35, MX25, MX5 */
+/* MX31, MX35, MX25, MXC91231, MX5 */
 #define V2_TCTL_WAITEN		(1 << 3) /* Wait enable mode */
 #define V2_TCTL_CLK_IPG		(1 << 6)
+#define V2_TCTL_CLK_PER		(2 << 6)
 #define V2_TCTL_FRR		(1 << 9)
 #define V2_IR			0x0c
 #define V2_TSTAT		0x08
@@ -106,23 +106,46 @@ static void gpt_irq_acknowledge(void)
 		__raw_writel(V2_TSTAT_OF1, timer_base + V2_TSTAT);
 }
 
-static void __iomem *sched_clock_reg;
-
-static u32 notrace mxc_read_sched_clock(void)
+static cycle_t mx1_2_get_cycles(struct clocksource *cs)
 {
-	return sched_clock_reg ? __raw_readl(sched_clock_reg) : 0;
+	return __raw_readl(timer_base + MX1_2_TCN);
+}
+
+static cycle_t v2_get_cycles(struct clocksource *cs)
+{
+	return __raw_readl(timer_base + V2_TCN);
+}
+
+static struct clocksource clocksource_mxc = {
+	.name 		= "mxc_timer1",
+	.rating		= 200,
+	.read		= mx1_2_get_cycles,
+	.mask		= CLOCKSOURCE_MASK(32),
+	.shift 		= 20,
+	.flags		= CLOCK_SOURCE_IS_CONTINUOUS,
+};
+
+unsigned long long sched_clock(void)
+{
+	if (!timer_base)
+		return 0;
+
+	return clocksource_cyc2ns(clocksource_mxc.read(&clocksource_mxc),
+			clocksource_mxc.mult, clocksource_mxc.shift);
 }
 
 static int __init mxc_clocksource_init(struct clk *timer_clk)
 {
 	unsigned int c = clk_get_rate(timer_clk);
-	void __iomem *reg = timer_base + (timer_is_v2() ? V2_TCN : MX1_2_TCN);
 
-	sched_clock_reg = reg;
+	if (timer_is_v2())
+		clocksource_mxc.read = v2_get_cycles;
 
-	setup_sched_clock(mxc_read_sched_clock, 32, c);
-	return clocksource_mmio_init(reg, "mxc_timer1", c, 200, 32,
-			clocksource_mmio_readl_up);
+	clocksource_mxc.mult = clocksource_hz2mult(c,
+					clocksource_mxc.shift);
+	clocksource_register(&clocksource_mxc);
+
+	return 0;
 }
 
 /* clock event */
@@ -283,7 +306,7 @@ void __init mxc_timer_init(struct clk *timer_clk, void __iomem *base, int irq)
 {
 	uint32_t tctl_val;
 
-	clk_prepare_enable(timer_clk);
+	clk_enable(timer_clk);
 
 	timer_base = base;
 
@@ -295,7 +318,7 @@ void __init mxc_timer_init(struct clk *timer_clk, void __iomem *base, int irq)
 	__raw_writel(0, timer_base + MXC_TPRER); /* see datasheet note */
 
 	if (timer_is_v2())
-		tctl_val = V2_TCTL_CLK_IPG | V2_TCTL_FRR | V2_TCTL_WAITEN | MXC_TCTL_TEN;
+		tctl_val = V2_TCTL_CLK_PER | V2_TCTL_FRR | V2_TCTL_WAITEN | MXC_TCTL_TEN;
 	else
 		tctl_val = MX1_2_TCTL_FRR | MX1_2_TCTL_CLK_PCLK1 | MXC_TCTL_TEN;
 

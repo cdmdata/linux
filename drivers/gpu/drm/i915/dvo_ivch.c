@@ -167,6 +167,7 @@ static bool ivch_read(struct intel_dvo_device *dvo, int addr, uint16_t *data)
 {
 	struct ivch_priv *priv = dvo->dev_priv;
 	struct i2c_adapter *adapter = dvo->i2c_bus;
+	struct intel_i2c_chan *i2cbus = container_of(adapter, struct intel_i2c_chan, adapter);
 	u8 out_buf[1];
 	u8 in_buf[2];
 
@@ -192,7 +193,7 @@ static bool ivch_read(struct intel_dvo_device *dvo, int addr, uint16_t *data)
 
 	out_buf[0] = addr;
 
-	if (i2c_transfer(adapter, msgs, 3) == 3) {
+	if (i2c_transfer(&i2cbus->adapter, msgs, 3) == 3) {
 		*data = (in_buf[1] << 8) | in_buf[0];
 		return true;
 	};
@@ -200,7 +201,7 @@ static bool ivch_read(struct intel_dvo_device *dvo, int addr, uint16_t *data)
 	if (!priv->quiet) {
 		DRM_DEBUG_KMS("Unable to read register 0x%02x from "
 				"%s:%02x.\n",
-			  addr, adapter->name, dvo->slave_addr);
+			  addr, i2cbus->adapter.name, dvo->slave_addr);
 	}
 	return false;
 }
@@ -210,6 +211,7 @@ static bool ivch_write(struct intel_dvo_device *dvo, int addr, uint16_t data)
 {
 	struct ivch_priv *priv = dvo->dev_priv;
 	struct i2c_adapter *adapter = dvo->i2c_bus;
+	struct intel_i2c_chan *i2cbus = container_of(adapter, struct intel_i2c_chan, adapter);
 	u8 out_buf[3];
 	struct i2c_msg msg = {
 		.addr = dvo->slave_addr,
@@ -222,12 +224,12 @@ static bool ivch_write(struct intel_dvo_device *dvo, int addr, uint16_t data)
 	out_buf[1] = data & 0xff;
 	out_buf[2] = data >> 8;
 
-	if (i2c_transfer(adapter, &msg, 1) == 1)
+	if (i2c_transfer(&i2cbus->adapter, &msg, 1) == 1)
 		return true;
 
 	if (!priv->quiet) {
 		DRM_DEBUG_KMS("Unable to write register 0x%02x to %s:%d.\n",
-			  addr, adapter->name, dvo->slave_addr);
+			  addr, i2cbus->adapter.name, dvo->slave_addr);
 	}
 
 	return false;
@@ -344,8 +346,8 @@ static void ivch_mode_set(struct intel_dvo_device *dvo,
 			   (adjusted_mode->hdisplay - 1)) >> 2;
 		y_ratio = (((mode->vdisplay - 1) << 16) /
 			   (adjusted_mode->vdisplay - 1)) >> 2;
-		ivch_write(dvo, VR42, x_ratio);
-		ivch_write(dvo, VR41, y_ratio);
+		ivch_write (dvo, VR42, x_ratio);
+		ivch_write (dvo, VR41, y_ratio);
 	} else {
 		vr01 &= ~VR01_PANEL_FIT_ENABLE;
 		vr40 &= ~VR40_CLOCK_GATING_ENABLE;
@@ -410,7 +412,7 @@ static void ivch_destroy(struct intel_dvo_device *dvo)
 	}
 }
 
-struct intel_dvo_dev_ops ivch_ops = {
+struct intel_dvo_dev_ops ivch_ops= {
 	.init = ivch_init,
 	.dpms = ivch_dpms,
 	.mode_valid = ivch_mode_valid,

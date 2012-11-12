@@ -97,8 +97,6 @@
 #include <linux/gameport.h>
 #include <linux/device.h>
 #include <linux/firmware.h>
-#include <linux/kernel.h>
-#include <linux/module.h>
 #include <asm/io.h>
 #include <sound/core.h>
 #include <sound/info.h>
@@ -122,7 +120,7 @@ MODULE_FIRMWARE("riptide.hex");
 
 static int index[SNDRV_CARDS] = SNDRV_DEFAULT_IDX;
 static char *id[SNDRV_CARDS] = SNDRV_DEFAULT_STR;
-static bool enable[SNDRV_CARDS] = SNDRV_DEFAULT_ENABLE;
+static int enable[SNDRV_CARDS] = SNDRV_DEFAULT_ENABLE;
 
 #ifdef SUPPORT_JOYSTICK
 static int joystick_port[SNDRV_CARDS] = { [0 ... (SNDRV_CARDS - 1)] = 0x200 };
@@ -669,12 +667,13 @@ static u32 atoh(const unsigned char *in, unsigned int len)
 	unsigned char c;
 
 	while (len) {
-		int value;
-
 		c = in[len - 1];
-		value = hex_to_bin(c);
-		if (value >= 0)
-			sum += mult * value;
+		if ((c >= '0') && (c <= '9'))
+			sum += mult * (c - '0');
+		else if ((c >= 'A') && (c <= 'F'))
+			sum += mult * (c - ('A' - 10));
+		else if ((c >= 'a') && (c <= 'f'))
+			sum += mult * (c - ('a' - 10));
 		mult *= 16;
 		--len;
 	}
@@ -1225,14 +1224,15 @@ static int try_to_load_firmware(struct cmdif *cif, struct snd_riptide *chip)
 		    firmware.firmware.ASIC, firmware.firmware.CODEC,
 		    firmware.firmware.AUXDSP, firmware.firmware.PROG);
 
-	if (!chip)
-		return 1;
-
 	for (i = 0; i < FIRMWARE_VERSIONS; i++) {
 		if (!memcmp(&firmware_versions[i], &firmware, sizeof(firmware)))
-			return 1; /* OK */
-
+			break;
 	}
+	if (i >= FIRMWARE_VERSIONS)
+		return 0; /* no match */
+
+	if (!chip)
+		return 1; /* OK */
 
 	snd_printdd("Writing Firmware\n");
 	if (!chip->fw_entry) {
@@ -1615,10 +1615,7 @@ static int snd_riptide_playback_open(struct snd_pcm_substream *substream)
 
 	chip->playback_substream[sub_num] = substream;
 	runtime->hw = snd_riptide_playback;
-
 	data = kzalloc(sizeof(struct pcmhw), GFP_KERNEL);
-	if (data == NULL)
-		return -ENOMEM;
 	data->paths = lbus_play_paths[sub_num];
 	data->id = play_ids[sub_num];
 	data->source = play_sources[sub_num];
@@ -1638,10 +1635,7 @@ static int snd_riptide_capture_open(struct snd_pcm_substream *substream)
 
 	chip->capture_substream = substream;
 	runtime->hw = snd_riptide_capture;
-
 	data = kzalloc(sizeof(struct pcmhw), GFP_KERNEL);
-	if (data == NULL)
-		return -ENOMEM;
 	data->paths = lbus_rec_path;
 	data->id = PADC;
 	data->source = ACLNK2PADC;
@@ -1891,7 +1885,7 @@ snd_riptide_create(struct snd_card *card, struct pci_dev *pci,
 	UNSET_AIE(hwport);
 
 	if (request_irq(pci->irq, snd_riptide_interrupt, IRQF_SHARED,
-			KBUILD_MODNAME, chip)) {
+			"RIPTIDE", chip)) {
 		snd_printk(KERN_ERR "Riptide: unable to grab IRQ %d\n",
 			   pci->irq);
 		snd_riptide_free(chip);
@@ -2110,7 +2104,7 @@ snd_card_riptide_probe(struct pci_dev *pci, const struct pci_device_id *pci_id)
 		val = mpu_port[dev];
 		pci_write_config_word(chip->pci, PCI_EXT_MPU_Base, val);
 		err = snd_mpu401_uart_new(card, 0, MPU401_HW_RIPTIDE,
-					  val, MPU401_INFO_IRQ_HOOK, -1,
+					  val, 0, chip->irq, 0,
 					  &chip->rmidi);
 		if (err < 0)
 			snd_printk(KERN_WARNING
@@ -2177,7 +2171,7 @@ static void __devexit snd_card_riptide_remove(struct pci_dev *pci)
 }
 
 static struct pci_driver driver = {
-	.name = KBUILD_MODNAME,
+	.name = "RIPTIDE",
 	.id_table = snd_riptide_ids,
 	.probe = snd_card_riptide_probe,
 	.remove = __devexit_p(snd_card_riptide_remove),
@@ -2189,7 +2183,7 @@ static struct pci_driver driver = {
 
 #ifdef SUPPORT_JOYSTICK
 static struct pci_driver joystick_driver = {
-	.name = KBUILD_MODNAME "-joystick",
+	.name = "Riptide Joystick",
 	.id_table = snd_riptide_joystick_ids,
 	.probe = snd_riptide_joystick_probe,
 	.remove = __devexit_p(snd_riptide_joystick_remove),

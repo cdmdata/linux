@@ -14,12 +14,14 @@
 #include <asm/dwarf2.h>
 
 .macro SAVE reg
-	pushl_cfi %\reg
+	pushl %\reg
+	CFI_ADJUST_CFA_OFFSET 4
 	CFI_REL_OFFSET \reg, 0
 .endm
 
 .macro RESTORE reg
-	popl_cfi %\reg
+	popl %\reg
+	CFI_ADJUST_CFA_OFFSET -4
 	CFI_RESTORE \reg
 .endm
 
@@ -55,6 +57,8 @@ ENDPROC(atomic64_set_cx8)
 ENTRY(atomic64_xchg_cx8)
 	CFI_STARTPROC
 
+	movl %ebx, %eax
+	movl %ecx, %edx
 1:
 	LOCK_PREFIX
 	cmpxchg8b (%esi)
@@ -76,7 +80,7 @@ ENTRY(atomic64_\func\()_return_cx8)
 	movl %edx, %edi
 	movl %ecx, %ebp
 
-	read64 %ecx
+	read64 %ebp
 1:
 	movl %eax, %ebx
 	movl %edx, %ecx
@@ -157,22 +161,23 @@ ENTRY(atomic64_add_unless_cx8)
 	SAVE ebx
 /* these just push these two parameters on the stack */
 	SAVE edi
-	SAVE ecx
+	SAVE esi
 
-	movl %eax, %ebp
+	movl %ecx, %ebp
+	movl %eax, %esi
 	movl %edx, %edi
 
-	read64 %esi
+	read64 %ebp
 1:
 	cmpl %eax, 0(%esp)
 	je 4f
 2:
 	movl %eax, %ebx
 	movl %edx, %ecx
-	addl %ebp, %ebx
+	addl %esi, %ebx
 	adcl %edi, %ecx
 	LOCK_PREFIX
-	cmpxchg8b (%esi)
+	cmpxchg8b (%ebp)
 	jne 1b
 
 	movl $1, %eax
@@ -196,13 +201,13 @@ ENTRY(atomic64_inc_not_zero_cx8)
 
 	read64 %esi
 1:
-	movl %eax, %ecx
-	orl %edx, %ecx
-	jz 3f
+	testl %eax, %eax
+	je 4f
+2:
 	movl %eax, %ebx
-	xorl %ecx, %ecx
+	movl %edx, %ecx
 	addl $1, %ebx
-	adcl %edx, %ecx
+	adcl $0, %ecx
 	LOCK_PREFIX
 	cmpxchg8b (%esi)
 	jne 1b
@@ -211,5 +216,9 @@ ENTRY(atomic64_inc_not_zero_cx8)
 3:
 	RESTORE ebx
 	ret
+4:
+	testl %edx, %edx
+	jne 2b
+	jmp 3b
 	CFI_ENDPROC
 ENDPROC(atomic64_inc_not_zero_cx8)

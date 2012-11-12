@@ -10,7 +10,6 @@
 #include <linux/bootmem.h>
 #include <linux/efi.h>
 #include <linux/elf.h>
-#include <linux/memblock.h>
 #include <linux/mm.h>
 #include <linux/mmzone.h>
 #include <linux/module.h>
@@ -30,11 +29,14 @@
 #include <asm/pgalloc.h>
 #include <asm/sal.h>
 #include <asm/sections.h>
+#include <asm/system.h>
 #include <asm/tlb.h>
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
 #include <asm/mca.h>
 #include <asm/paravirt.h>
+
+DEFINE_PER_CPU(struct mmu_gather, mmu_gathers);
 
 extern void ia64_tlb_init (void);
 
@@ -557,7 +559,8 @@ int __init register_active_ranges(u64 start, u64 len, int nid)
 #endif
 
 	if (start < end)
-		memblock_add_node(__pa(start), end - start, nid);
+		add_active_range(nid, __pa(start) >> PAGE_SHIFT,
+			__pa(end) >> PAGE_SHIFT);
 	return 0;
 }
 

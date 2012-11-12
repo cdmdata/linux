@@ -421,7 +421,7 @@ void vRunCommand(void *hDeviceContext)
                     pMgmt->eScanState = WMAC_IS_SCANNING;
                     pDevice->byScanBBType = pDevice->byBBType;  //lucas
                     pDevice->bStopDataPkt = TRUE;
-                    // Turn off RCR_BSSID filter every time
+                    // Turn off RCR_BSSID filter everytime
                     MACvRegBitsOff(pDevice, MAC_REG_RCR, RCR_BSSID);
                     pDevice->byRxMode &= ~RCR_BSSID;
 
@@ -500,7 +500,7 @@ void vRunCommand(void *hDeviceContext)
             DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "Scanning, set back to channel: [%d]\n", pMgmt->uCurrChannel);
             pMgmt->eScanState = WMAC_NO_SCANNING;
             pDevice->bStopDataPkt = FALSE;
-
+//2008-0409-07, <Add> by Einsn Liu
 #ifdef WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
 	if(pMgmt->eScanType == WMAC_SCAN_PASSIVE)
 		{
@@ -565,9 +565,11 @@ void vRunCommand(void *hDeviceContext)
                 return;
             }
 
+//20080131-03,<Add> by Mike Liu
+	#ifdef Adhoc_STA
             memcpy(pMgmt->abyAdHocSSID,pMgmt->abyDesireSSID,
                               ((PWLAN_IE_SSID)pMgmt->abyDesireSSID)->len + WLAN_IEHDR_LEN);
-
+	#endif
             pItemSSID = (PWLAN_IE_SSID)pMgmt->abyDesireSSID;
             pItemSSIDCurr = (PWLAN_IE_SSID)pMgmt->abyCurrSSID;
             DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" cmd: desire ssid = %s\n", pItemSSID->abySSID);
@@ -604,7 +606,7 @@ void vRunCommand(void *hDeviceContext)
             // if Infra mode
             if ((pMgmt->eCurrMode == WMAC_MODE_ESS_STA) && (pMgmt->eCurrState == WMAC_STATE_JOINTED)) {
                 // Call mgr to begin the deauthentication
-                // reason = (3) because sta has left ESS
+                // reason = (3) beacuse sta has left ESS
 	      if (pMgmt->eCurrState >= WMAC_STATE_AUTH) {
 		vMgrDeAuthenBeginSta((void *)pDevice,
 				     pMgmt,
@@ -642,7 +644,7 @@ void vRunCommand(void *hDeviceContext)
                     if (Status != CMD_STATUS_SUCCESS){
 			DBG_PRT(MSG_LEVEL_DEBUG,
 				KERN_INFO "WLAN_CMD_IBSS_CREATE fail!\n");
-                    }
+                    };
                     BSSvAddMulticastNode(pDevice);
                 }
                 s_bClearBSSID_SCAN(pDevice);
@@ -658,7 +660,7 @@ void vRunCommand(void *hDeviceContext)
                     if (Status != CMD_STATUS_SUCCESS){
 			DBG_PRT(MSG_LEVEL_DEBUG,
 				KERN_INFO "WLAN_CMD_IBSS_CREATE fail!\n");
-                    }
+                    };
                     BSSvAddMulticastNode(pDevice);
                     s_bClearBSSID_SCAN(pDevice);
 /*
@@ -714,6 +716,18 @@ void vRunCommand(void *hDeviceContext)
 	       return;
 	   }
 	          pDevice->byLinkWaitCount = 0;
+		 #if 0
+                     #ifdef WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
+                    // if(pDevice->bWPASuppWextEnabled == TRUE)
+                        {
+                  	union iwreq_data  wrqu;
+                  	memset(&wrqu, 0, sizeof (wrqu));
+                          wrqu.ap_addr.sa_family = ARPHRD_ETHER;
+                  	printk("wireless_send_event--->SIOCGIWAP(disassociated:AUTHENTICATE_WAIT_timeout)\n");
+                  	wireless_send_event(pDevice->dev, SIOCGIWAP, &wrqu, NULL);
+                       }
+                    #endif
+	         #endif
 
             s_bCommandComplete(pDevice);
             break;
@@ -740,6 +754,8 @@ void vRunCommand(void *hDeviceContext)
                     netif_wake_queue(pDevice->dev);
                 }
 
+	//2007-0115-07<Add>by MikeLiu
+	     #ifdef TxInSleep
 		 if(pDevice->IsTxDataTrigger != FALSE)   {    //TxDataTimer is not triggered at the first time
                      // printk("Re-initial TxDataTimer****\n");
 		    del_timer(&pDevice->sTimerTxData);
@@ -755,6 +771,7 @@ void vRunCommand(void *hDeviceContext)
 		 }
 		pDevice->IsTxDataTrigger = TRUE;
                 add_timer(&pDevice->sTimerTxData);
+             #endif
 
             }
 	   else if(pMgmt->eCurrState < WMAC_STATE_ASSOCPENDING) {
@@ -768,6 +785,18 @@ void vRunCommand(void *hDeviceContext)
 	       return;
 	   }
 	          pDevice->byLinkWaitCount = 0;
+		#if 0
+                     #ifdef WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
+                    // if(pDevice->bWPASuppWextEnabled == TRUE)
+                        {
+                  	union iwreq_data  wrqu;
+                  	memset(&wrqu, 0, sizeof (wrqu));
+                          wrqu.ap_addr.sa_family = ARPHRD_ETHER;
+                  	printk("wireless_send_event--->SIOCGIWAP(disassociated:ASSOCIATE_WAIT_timeout)\n");
+                  	wireless_send_event(pDevice->dev, SIOCGIWAP, &wrqu, NULL);
+                       }
+                    #endif
+		#endif
 
             s_bCommandComplete(pDevice);
             break;
@@ -793,7 +822,7 @@ void vRunCommand(void *hDeviceContext)
 		if (Status != CMD_STATUS_SUCCESS) {
 			DBG_PRT(MSG_LEVEL_DEBUG,
 				KERN_INFO "vMgrCreateOwnIBSS fail!\n");
-                }
+                };
                 // alway turn off unicast bit
                 MACvRegBitsOff(pDevice, MAC_REG_RCR, RCR_UNICAST);
                 pDevice->byRxMode &= ~RCR_UNICAST;
@@ -827,7 +856,7 @@ void vRunCommand(void *hDeviceContext)
 
                     pMgmt->sNodeDBTable[0].wEnQueueCnt--;
                 }
-            }
+            };
 
             // PS nodes tx
             for (ii = 1; ii < (MAX_NODE_NUM + 1); ii++) {
@@ -876,9 +905,9 @@ void vRunCommand(void *hDeviceContext)
        //         CARDbRadioPowerOn(pDevice);
        //     else
        //         CARDbRadioPowerOff(pDevice);
-
+       //2008-09-09<Add> BY Mike:Hot Key for Radio On/Off
        {
-	       int ntStatus = STATUS_SUCCESS;
+        NTSTATUS        ntStatus = STATUS_SUCCESS;
         BYTE            byTmp;
 
         ntStatus = CONTROLnsRequestIn(pDevice,
@@ -1271,6 +1300,8 @@ void vResetCommandTimer(void *hDeviceContext)
     pDevice->bCmdClear = FALSE;
 }
 
+//2007-0115-08<Add>by MikeLiu
+#ifdef TxInSleep
 void BSSvSecondTxData(void *hDeviceContext)
 {
   PSDevice        pDevice = (PSDevice)hDeviceContext;
@@ -1289,8 +1320,12 @@ void BSSvSecondTxData(void *hDeviceContext)
 
   spin_lock_irq(&pDevice->lock);
   //is wap_supplicant running successful OR only open && sharekey mode!
+  #if 1
   if(((pDevice->bLinkPass ==TRUE)&&(pMgmt->eAuthenMode < WMAC_AUTH_WPA)) ||  //open && sharekey linking
       (pDevice->fWPA_Authened == TRUE)) {   //wpa linking
+ #else
+  if(pDevice->bLinkPass ==TRUE) {
+ #endif
         //   printk("mike:%s-->InSleep Tx Data Procedure\n",__FUNCTION__);
 	  pDevice->fTxDataInSleep = TRUE;
 	  PSbSendNullPacket(pDevice);      //send null packet
@@ -1302,3 +1337,5 @@ void BSSvSecondTxData(void *hDeviceContext)
   add_timer(&pDevice->sTimerTxData);
   return;
 }
+#endif
+

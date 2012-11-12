@@ -152,9 +152,9 @@ dasd_3990_erp_alternate_path(struct dasd_ccw_req * erp)
 	spin_lock_irqsave(get_ccwdev_lock(device->cdev), flags);
 	opm = ccw_device_get_path_mask(device->cdev);
 	spin_unlock_irqrestore(get_ccwdev_lock(device->cdev), flags);
+	//FIXME: start with get_opm ?
 	if (erp->lpm == 0)
-		erp->lpm = device->path_data.opm &
-			~(erp->irb.esw.esw0.sublog.lpum);
+		erp->lpm = LPM_ANYPATH & ~(erp->irb.esw.esw0.sublog.lpum);
 	else
 		erp->lpm &= ~(erp->irb.esw.esw0.sublog.lpum);
 
@@ -221,7 +221,6 @@ dasd_3990_erp_DCTL(struct dasd_ccw_req * erp, char modifier)
 	ccw->cmd_code = CCW_CMD_DCTL;
 	ccw->count = 4;
 	ccw->cda = (__u32)(addr_t) DCTL_data;
-	dctl_cqr->flags = erp->flags;
 	dctl_cqr->function = dasd_3990_erp_DCTL;
 	dctl_cqr->refers = erp;
 	dctl_cqr->startdev = device;
@@ -270,11 +269,10 @@ static struct dasd_ccw_req *dasd_3990_erp_action_1(struct dasd_ccw_req *erp)
 {
 	erp->function = dasd_3990_erp_action_1;
 	dasd_3990_erp_alternate_path(erp);
-	if (erp->status == DASD_CQR_FAILED &&
-	    !test_bit(DASD_CQR_VERIFY_PATH, &erp->flags)) {
+	if (erp->status == DASD_CQR_FAILED) {
 		erp->status = DASD_CQR_FILLED;
 		erp->retries = 10;
-		erp->lpm = erp->startdev->path_data.opm;
+		erp->lpm = LPM_ANYPATH;
 		erp->function = dasd_3990_erp_action_1_sec;
 	}
 	return erp;
@@ -1712,13 +1710,12 @@ dasd_3990_erp_action_1B_32(struct dasd_ccw_req * default_erp, char *sense)
 	ccw->cda = cpa;
 
 	/* fill erp related fields */
-	erp->flags = default_erp->flags;
 	erp->function = dasd_3990_erp_action_1B_32;
 	erp->refers = default_erp->refers;
 	erp->startdev = device;
 	erp->memdev = device;
 	erp->magic = default_erp->magic;
-	erp->expires = default_erp->expires;
+	erp->expires = 0;
 	erp->retries = 256;
 	erp->buildclk = get_clock();
 	erp->status = DASD_CQR_FILLED;
@@ -1908,14 +1905,15 @@ dasd_3990_erp_compound_retry(struct dasd_ccw_req * erp, char *sense)
 static void
 dasd_3990_erp_compound_path(struct dasd_ccw_req * erp, char *sense)
 {
+
 	if (sense[25] & DASD_SENSE_BIT_3) {
 		dasd_3990_erp_alternate_path(erp);
 
-		if (erp->status == DASD_CQR_FAILED &&
-		    !test_bit(DASD_CQR_VERIFY_PATH, &erp->flags)) {
+		if (erp->status == DASD_CQR_FAILED) {
 			/* reset the lpm and the status to be able to
 			 * try further actions. */
-			erp->lpm = erp->startdev->path_data.opm;
+
+			erp->lpm = 0;
 			erp->status = DASD_CQR_NEED_ERP;
 		}
 	}
@@ -2199,7 +2197,7 @@ dasd_3990_erp_inspect_32(struct dasd_ccw_req * erp, char *sense)
 
 /*
  *****************************************************************************
- * main ERP control functions (24 and 32 byte sense)
+ * main ERP control fuctions (24 and 32 byte sense)
  *****************************************************************************
  */
 
@@ -2207,7 +2205,7 @@ dasd_3990_erp_inspect_32(struct dasd_ccw_req * erp, char *sense)
  * DASD_3990_ERP_CONTROL_CHECK
  *
  * DESCRIPTION
- *   Does a generic inspection if a control check occurred and sets up
+ *   Does a generic inspection if a control check occured and sets up
  *   the related error recovery procedure
  *
  * PARAMETER
@@ -2250,7 +2248,7 @@ dasd_3990_erp_inspect(struct dasd_ccw_req *erp)
 	struct dasd_ccw_req *erp_new = NULL;
 	char *sense;
 
-	/* if this problem occurred on an alias retry on base */
+	/* if this problem occured on an alias retry on base */
 	erp_new = dasd_3990_erp_inspect_alias(erp);
 	if (erp_new)
 		return erp_new;
@@ -2282,7 +2280,7 @@ dasd_3990_erp_inspect(struct dasd_ccw_req *erp)
  * DASD_3990_ERP_ADD_ERP
  *
  * DESCRIPTION
- *   This function adds an additional request block (ERP) to the head of
+ *   This funtion adds an additional request block (ERP) to the head of
  *   the given cqr (or erp).
  *   For a command mode cqr the erp is initialized as an default erp
  *   (retry TIC).
@@ -2356,14 +2354,13 @@ static struct dasd_ccw_req *dasd_3990_erp_add_erp(struct dasd_ccw_req *cqr)
 		ccw->cda      = (long)(cqr->cpaddr);
 	}
 
-	erp->flags = cqr->flags;
 	erp->function = dasd_3990_erp_add_erp;
 	erp->refers   = cqr;
 	erp->startdev = device;
 	erp->memdev   = device;
 	erp->block    = cqr->block;
 	erp->magic    = cqr->magic;
-	erp->expires  = cqr->expires;
+	erp->expires  = 0;
 	erp->retries  = 256;
 	erp->buildclk = get_clock();
 	erp->status = DASD_CQR_FILLED;

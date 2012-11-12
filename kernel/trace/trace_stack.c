@@ -13,9 +13,6 @@
 #include <linux/sysctl.h>
 #include <linux/init.h>
 #include <linux/fs.h>
-
-#include <asm/setup.h>
-
 #include "trace.h"
 
 #define STACK_TRACE_ENTRIES 500
@@ -113,12 +110,12 @@ static inline void check_stack(void)
 static void
 stack_trace_call(unsigned long ip, unsigned long parent_ip)
 {
-	int cpu;
+	int cpu, resched;
 
 	if (unlikely(!ftrace_enabled || stack_trace_disabled))
 		return;
 
-	preempt_disable_notrace();
+	resched = ftrace_preempt_disable();
 
 	cpu = raw_smp_processor_id();
 	/* no atomic needed, we only modify this variable by this cpu */
@@ -130,7 +127,7 @@ stack_trace_call(unsigned long ip, unsigned long parent_ip)
  out:
 	per_cpu(trace_active, cpu)--;
 	/* prevent recursion in schedule */
-	preempt_enable_notrace();
+	ftrace_preempt_enable(resched);
 }
 
 static struct ftrace_ops trace_ops __read_mostly =
@@ -158,11 +155,20 @@ stack_max_size_write(struct file *filp, const char __user *ubuf,
 {
 	long *ptr = filp->private_data;
 	unsigned long val, flags;
+	char buf[64];
 	int ret;
 	int cpu;
 
-	ret = kstrtoul_from_user(ubuf, count, 10, &val);
-	if (ret)
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(&buf, ubuf, count))
+		return -EFAULT;
+
+	buf[count] = 0;
+
+	ret = strict_strtoul(buf, 10, &val);
+	if (ret < 0)
 		return ret;
 
 	local_irq_save(flags);
@@ -189,7 +195,6 @@ static const struct file_operations stack_max_size_fops = {
 	.open		= tracing_open_generic,
 	.read		= stack_max_size_read,
 	.write		= stack_max_size_write,
-	.llseek		= default_llseek,
 };
 
 static void *
@@ -244,7 +249,7 @@ static int trace_lookup_stack(struct seq_file *m, long i)
 {
 	unsigned long addr = stack_dump_trace[i];
 
-	return seq_printf(m, "%pS\n", (void *)addr);
+	return seq_printf(m, "%pF\n", (void *)addr);
 }
 
 static void print_disabled(struct seq_file *m)
@@ -313,21 +318,6 @@ static const struct file_operations stack_trace_fops = {
 	.release	= seq_release,
 };
 
-static int
-stack_trace_filter_open(struct inode *inode, struct file *file)
-{
-	return ftrace_regex_open(&trace_ops, FTRACE_ITER_FILTER,
-				 inode, file);
-}
-
-static const struct file_operations stack_trace_filter_fops = {
-	.open = stack_trace_filter_open,
-	.read = seq_read,
-	.write = ftrace_filter_write,
-	.llseek = ftrace_regex_lseek,
-	.release = ftrace_regex_release,
-};
-
 int
 stack_trace_sysctl(struct ctl_table *table, int write,
 		   void __user *buffer, size_t *lenp,
@@ -355,13 +345,8 @@ stack_trace_sysctl(struct ctl_table *table, int write,
 	return ret;
 }
 
-static char stack_trace_filter_buf[COMMAND_LINE_SIZE+1] __initdata;
-
 static __init int enable_stacktrace(char *str)
 {
-	if (strncmp(str, "_filter=", 8) == 0)
-		strncpy(stack_trace_filter_buf, str+8, COMMAND_LINE_SIZE);
-
 	stack_tracer_enabled = 1;
 	last_stack_tracer_enabled = 1;
 	return 1;
@@ -379,12 +364,6 @@ static __init int stack_trace_init(void)
 
 	trace_create_file("stack_trace", 0444, d_tracer,
 			NULL, &stack_trace_fops);
-
-	trace_create_file("stack_trace_filter", 0444, d_tracer,
-			NULL, &stack_trace_filter_fops);
-
-	if (stack_trace_filter_buf[0])
-		ftrace_set_early_filter(&trace_ops, stack_trace_filter_buf, 1);
 
 	if (stack_tracer_enabled)
 		register_ftrace_function(&trace_ops);

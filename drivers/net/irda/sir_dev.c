@@ -11,7 +11,6 @@
  *
  ********************************************************************/    
 
-#include <linux/hardirq.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/slab.h>
@@ -337,7 +336,7 @@ static int sirdev_is_receiving(struct sir_dev *dev)
 	if (!atomic_read(&dev->enable_rx))
 		return 0;
 
-	return dev->rx_buff.state != OUTSIDE_FRAME;
+	return (dev->rx_buff.state != OUTSIDE_FRAME);
 }
 
 int sirdev_set_dongle(struct sir_dev *dev, IRDA_DONGLE type)
@@ -910,7 +909,7 @@ struct sir_dev * sirdev_get_instance(const struct sir_driver *drv, const char *n
 	dev->tx_skb = NULL;
 
 	spin_lock_init(&dev->tx_lock);
-	sema_init(&dev->fsm.sem, 1);
+	init_MUTEX(&dev->fsm.sem);
 
 	dev->drv = drv;
 	dev->netdev = ndev;

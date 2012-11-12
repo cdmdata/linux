@@ -22,10 +22,9 @@
 #include <linux/compiler.h>
 #include <linux/spinlock.h>
 #include <linux/kref.h>
-#include <linux/kobject_ns.h>
 #include <linux/kernel.h>
 #include <linux/wait.h>
-#include <linux/atomic.h>
+#include <asm/atomic.h>
 
 #define UEVENT_HELPER_PATH_LEN		256
 #define UEVENT_NUM_ENVP			32	/* number of env pointers */
@@ -72,8 +71,8 @@ struct kobject {
 	unsigned int uevent_suppress:1;
 };
 
-extern __printf(2, 3)
-int kobject_set_name(struct kobject *kobj, const char *name, ...);
+extern int kobject_set_name(struct kobject *kobj, const char *name, ...)
+			    __attribute__((format(printf, 2, 3)));
 extern int kobject_set_name_vargs(struct kobject *kobj, const char *fmt,
 				  va_list vargs);
 
@@ -83,13 +82,13 @@ static inline const char *kobject_name(const struct kobject *kobj)
 }
 
 extern void kobject_init(struct kobject *kobj, struct kobj_type *ktype);
-extern __printf(3, 4) __must_check
-int kobject_add(struct kobject *kobj, struct kobject *parent,
-		const char *fmt, ...);
-extern __printf(4, 5) __must_check
-int kobject_init_and_add(struct kobject *kobj,
-			 struct kobj_type *ktype, struct kobject *parent,
-			 const char *fmt, ...);
+extern int __must_check kobject_add(struct kobject *kobj,
+				    struct kobject *parent,
+				    const char *fmt, ...);
+extern int __must_check kobject_init_and_add(struct kobject *kobj,
+					     struct kobj_type *ktype,
+					     struct kobject *parent,
+					     const char *fmt, ...);
 
 extern void kobject_del(struct kobject *kobj);
 
@@ -137,7 +136,41 @@ struct kobj_attribute {
 
 extern const struct sysfs_ops kobj_sysfs_ops;
 
+/*
+ * Namespace types which are used to tag kobjects and sysfs entries.
+ * Network namespace will likely be the first.
+ */
+enum kobj_ns_type {
+	KOBJ_NS_TYPE_NONE = 0,
+	KOBJ_NS_TYPE_NET,
+	KOBJ_NS_TYPES
+};
+
 struct sock;
+
+/*
+ * Callbacks so sysfs can determine namespaces
+ *   @current_ns: return calling task's namespace
+ *   @netlink_ns: return namespace to which a sock belongs (right?)
+ *   @initial_ns: return the initial namespace (i.e. init_net_ns)
+ */
+struct kobj_ns_type_operations {
+	enum kobj_ns_type type;
+	const void *(*current_ns)(void);
+	const void *(*netlink_ns)(struct sock *sk);
+	const void *(*initial_ns)(void);
+};
+
+int kobj_ns_type_register(const struct kobj_ns_type_operations *ops);
+int kobj_ns_type_registered(enum kobj_ns_type type);
+const struct kobj_ns_type_operations *kobj_child_ns_ops(struct kobject *parent);
+const struct kobj_ns_type_operations *kobj_ns_ops(struct kobject *kobj);
+
+const void *kobj_ns_current(enum kobj_ns_type type);
+const void *kobj_ns_netlink(enum kobj_ns_type type, struct sock *sk);
+const void *kobj_ns_initial(enum kobj_ns_type type);
+void kobj_ns_exit(enum kobj_ns_type type, const void *ns);
+
 
 /**
  * struct kset - a set of kobjects of a specific type, belonging to a specific subsystem.
@@ -208,8 +241,8 @@ int kobject_uevent(struct kobject *kobj, enum kobject_action action);
 int kobject_uevent_env(struct kobject *kobj, enum kobject_action action,
 			char *envp[]);
 
-__printf(2, 3)
-int add_uevent_var(struct kobj_uevent_env *env, const char *format, ...);
+int add_uevent_var(struct kobj_uevent_env *env, const char *format, ...)
+	__attribute__((format (printf, 2, 3)));
 
 int kobject_action_type(const char *buf, size_t count,
 			enum kobject_action *type);
@@ -222,8 +255,8 @@ static inline int kobject_uevent_env(struct kobject *kobj,
 				      char *envp[])
 { return 0; }
 
-static inline __printf(2, 3)
-int add_uevent_var(struct kobj_uevent_env *env, const char *format, ...)
+static inline int add_uevent_var(struct kobj_uevent_env *env,
+				 const char *format, ...)
 { return 0; }
 
 static inline int kobject_action_type(const char *buf, size_t count,

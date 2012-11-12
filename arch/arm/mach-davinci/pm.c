@@ -17,7 +17,6 @@
 
 #include <asm/cacheflush.h>
 #include <asm/delay.h>
-#include <asm/io.h>
 
 #include <mach/da8xx.h>
 #include <mach/sram.h>
@@ -111,7 +110,7 @@ static int davinci_pm_enter(suspend_state_t state)
 	return ret;
 }
 
-static const struct platform_suspend_ops davinci_pm_ops = {
+static struct platform_suspend_ops davinci_pm_ops = {
 	.enter		= davinci_pm_enter,
 	.valid		= suspend_valid_only_mem,
 };

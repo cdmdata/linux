@@ -48,8 +48,6 @@
  * be incorporated into the next SCTP release.
  */
 
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
-
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <linux/random.h>
@@ -211,17 +209,15 @@ void sctp_transport_set_owner(struct sctp_transport *transport,
 }
 
 /* Initialize the pmtu of a transport. */
-void sctp_transport_pmtu(struct sctp_transport *transport, struct sock *sk)
+void sctp_transport_pmtu(struct sctp_transport *transport)
 {
-	/* If we don't have a fresh route, look one up */
-	if (!transport->dst || transport->dst->obsolete > 1) {
-		dst_release(transport->dst);
-		transport->af_specific->get_dst(transport, &transport->saddr,
-						&transport->fl, sk);
-	}
+	struct dst_entry *dst;
 
-	if (transport->dst) {
-		transport->pathmtu = dst_mtu(transport->dst);
+	dst = transport->af_specific->get_dst(NULL, &transport->ipaddr, NULL);
+
+	if (dst) {
+		transport->pathmtu = dst_mtu(dst);
+		dst_release(dst);
 	} else
 		transport->pathmtu = SCTP_DEFAULT_MAXSEGMENT;
 }
@@ -248,9 +244,10 @@ void sctp_transport_update_pmtu(struct sctp_transport *t, u32 pmtu)
 	struct dst_entry *dst;
 
 	if (unlikely(pmtu < SCTP_DEFAULT_MINSEGMENT)) {
-		pr_warn("%s: Reported pmtu %d too low, using default minimum of %d\n",
-			__func__, pmtu,
-			SCTP_DEFAULT_MINSEGMENT);
+		printk(KERN_WARNING "%s: Reported pmtu %d too low, "
+		       "using default minimum of %d\n",
+		       __func__, pmtu,
+		       SCTP_DEFAULT_MINSEGMENT);
 		/* Use default minimum segment size and disable
 		 * pmtu discovery on this transport.
 		 */
@@ -272,19 +269,22 @@ void sctp_transport_route(struct sctp_transport *transport,
 {
 	struct sctp_association *asoc = transport->asoc;
 	struct sctp_af *af = transport->af_specific;
+	union sctp_addr *daddr = &transport->ipaddr;
+	struct dst_entry *dst;
 
-	af->get_dst(transport, saddr, &transport->fl, sctp_opt2sk(opt));
+	dst = af->get_dst(asoc, daddr, saddr);
 
 	if (saddr)
 		memcpy(&transport->saddr, saddr, sizeof(union sctp_addr));
 	else
-		af->get_saddr(opt, transport, &transport->fl);
+		af->get_saddr(opt, asoc, dst, daddr, &transport->saddr);
 
+	transport->dst = dst;
 	if ((transport->param_flags & SPP_PMTUD_DISABLE) && transport->pathmtu) {
 		return;
 	}
-	if (transport->dst) {
-		transport->pathmtu = dst_mtu(transport->dst);
+	if (dst) {
+		transport->pathmtu = dst_mtu(dst);
 
 		/* Initialize sk->sk_rcv_saddr, if the transport is the
 		 * association's active path for getsockname().
@@ -640,20 +640,4 @@ void sctp_transport_reset(struct sctp_transport *t)
 	t->cacc.cycling_changeover = 0;
 	t->cacc.next_tsn_at_change = 0;
 	t->cacc.cacc_saw_newack = 0;
-}
-
-/* Schedule retransmission on the given transport */
-void sctp_transport_immediate_rtx(struct sctp_transport *t)
-{
-	/* Stop pending T3_rtx_timer */
-	if (timer_pending(&t->T3_rtx_timer)) {
-		(void)del_timer(&t->T3_rtx_timer);
-		sctp_transport_put(t);
-	}
-	sctp_retransmit(&t->asoc->outqueue, t, SCTP_RTXR_T3_RTX);
-	if (!timer_pending(&t->T3_rtx_timer)) {
-		if (!mod_timer(&t->T3_rtx_timer, jiffies + t->rto))
-			sctp_transport_hold(t);
-	}
-	return;
 }

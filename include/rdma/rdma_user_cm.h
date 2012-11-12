@@ -77,8 +77,7 @@ struct rdma_ucm_create_id {
 	__u64 uid;
 	__u64 response;
 	__u16 ps;
-	__u8  qp_type;
-	__u8  reserved[5];
+	__u8  reserved[6];
 };
 
 struct rdma_ucm_create_id_resp {
@@ -222,9 +221,8 @@ enum {
 
 /* Option details */
 enum {
-	RDMA_OPTION_ID_TOS	 = 0,
-	RDMA_OPTION_ID_REUSEADDR = 1,
-	RDMA_OPTION_IB_PATH	 = 1
+	RDMA_OPTION_ID_TOS	= 0,
+	RDMA_OPTION_IB_PATH	= 1
 };
 
 struct rdma_ucm_set_option {

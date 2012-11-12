@@ -321,14 +321,14 @@ iwm_rx_ticket_node_alloc(struct iwm_priv *iwm, struct iwm_rx_ticket *ticket)
 		return ERR_PTR(-ENOMEM);
 	}
 
-	ticket_node->ticket = kmemdup(ticket, sizeof(struct iwm_rx_ticket),
-				      GFP_KERNEL);
+	ticket_node->ticket = kzalloc(sizeof(struct iwm_rx_ticket), GFP_KERNEL);
 	if (!ticket_node->ticket) {
 		IWM_ERR(iwm, "Couldn't allocate RX ticket\n");
 		kfree(ticket_node);
 		return ERR_PTR(-ENOMEM);
 	}
 
+	memcpy(ticket_node->ticket, ticket, sizeof(struct iwm_rx_ticket));
 	INIT_LIST_HEAD(&ticket_node->node);
 
 	return ticket_node;
@@ -543,10 +543,7 @@ static int iwm_mlme_assoc_complete(struct iwm_priv *iwm, u8 *buf,
 	switch (le32_to_cpu(complete->status)) {
 	case UMAC_ASSOC_COMPLETE_SUCCESS:
 		chan = ieee80211_get_channel(wiphy,
-			ieee80211_channel_to_frequency(complete->channel,
-				complete->band == UMAC_BAND_2GHZ ?
-					IEEE80211_BAND_2GHZ :
-					IEEE80211_BAND_5GHZ));
+			ieee80211_channel_to_frequency(complete->channel));
 		if (!chan || chan->flags & IEEE80211_CHAN_DISABLED) {
 			/* Associated to a unallowed channel, disassociate. */
 			__iwm_invalidate_mlme_profile(iwm);
@@ -565,7 +562,7 @@ static int iwm_mlme_assoc_complete(struct iwm_priv *iwm, u8 *buf,
 		if (!test_and_clear_bit(IWM_STATUS_SME_CONNECTING, &iwm->status)
 		    && iwm->conf.mode == UMAC_MODE_BSS) {
 			cancel_delayed_work(&iwm->disconnect);
-			cfg80211_roamed(iwm_to_ndev(iwm), NULL,
+			cfg80211_roamed(iwm_to_ndev(iwm),
 					complete->bssid,
 					iwm->req_ie, iwm->req_ie_len,
 					iwm->resp_ie, iwm->resp_ie_len,
@@ -586,7 +583,7 @@ static int iwm_mlme_assoc_complete(struct iwm_priv *iwm, u8 *buf,
 						WLAN_STATUS_SUCCESS,
 						GFP_KERNEL);
 		else
-			cfg80211_roamed(iwm_to_ndev(iwm), NULL,
+			cfg80211_roamed(iwm_to_ndev(iwm),
 					complete->bssid,
 					iwm->req_ie, iwm->req_ie_len,
 					iwm->resp_ie, iwm->resp_ie_len,
@@ -660,7 +657,7 @@ static int iwm_mlme_profile_invalidate(struct iwm_priv *iwm, u8 *buf,
 	clear_bit(IWM_STATUS_SME_CONNECTING, &iwm->status);
 	clear_bit(IWM_STATUS_ASSOCIATED, &iwm->status);
 
-	iwm->umac_profile_active = false;
+	iwm->umac_profile_active = 0;
 	memset(iwm->bssid, 0, ETH_ALEN);
 	iwm->channel = 0;
 
@@ -735,7 +732,7 @@ static int iwm_mlme_update_sta_table(struct iwm_priv *iwm, u8 *buf,
 			     umac_sta->mac_addr,
 			     umac_sta->flags & UMAC_STA_FLAG_QOS);
 
-		sta->valid = true;
+		sta->valid = 1;
 		sta->qos = umac_sta->flags & UMAC_STA_FLAG_QOS;
 		sta->color = GET_VAL8(umac_sta->sta_id, LMAC_STA_COLOR);
 		memcpy(sta->addr, umac_sta->mac_addr, ETH_ALEN);
@@ -750,12 +747,12 @@ static int iwm_mlme_update_sta_table(struct iwm_priv *iwm, u8 *buf,
 		sta = &iwm->sta_table[GET_VAL8(umac_sta->sta_id, LMAC_STA_ID)];
 
 		if (!memcmp(sta->addr, umac_sta->mac_addr, ETH_ALEN))
-			sta->valid = false;
+			sta->valid = 0;
 
 		break;
 	case UMAC_OPCODE_CLEAR_ALL:
 		for (i = 0; i < IWM_STA_TABLE_NUM; i++)
-			iwm->sta_table[i].valid = false;
+			iwm->sta_table[i].valid = 0;
 
 		break;
 	default:
@@ -844,7 +841,7 @@ static int iwm_mlme_update_bss_table(struct iwm_priv *iwm, u8 *buf,
 		goto err;
 	}
 
-	freq = ieee80211_channel_to_frequency(umac_bss->channel, band->band);
+	freq = ieee80211_channel_to_frequency(umac_bss->channel);
 	channel = ieee80211_get_channel(wiphy, freq);
 	signal = umac_bss->rssi * 100;
 
@@ -1198,12 +1195,15 @@ static int iwm_ntf_wifi_if_wrapper(struct iwm_priv *iwm, u8 *buf,
 	IWM_DBG_NTF(iwm, DBG, "WIFI_IF_WRAPPER cmd is delivered to UMAC: "
 		    "oid is 0x%x\n", hdr->oid);
 
-	set_bit(hdr->oid, &iwm->wifi_ntfy[0]);
-	wake_up_interruptible(&iwm->wifi_ntfy_queue);
+	if (hdr->oid <= WIFI_IF_NTFY_MAX) {
+		set_bit(hdr->oid, &iwm->wifi_ntfy[0]);
+		wake_up_interruptible(&iwm->wifi_ntfy_queue);
+	} else
+		return -EINVAL;
 
 	switch (hdr->oid) {
 	case UMAC_WIFI_IF_CMD_SET_PROFILE:
-		iwm->umac_profile_active = true;
+		iwm->umac_profile_active = 1;
 		break;
 	default:
 		break;
@@ -1363,7 +1363,7 @@ static int iwm_rx_handle_nonwifi(struct iwm_priv *iwm, u8 *buf,
 	 */
 	list_for_each_entry(cmd, &iwm->nonwifi_pending_cmd, pending)
 		if (cmd->seq_num == seq_num) {
-			cmd->resp_received = true;
+			cmd->resp_received = 1;
 			cmd->buf.len = buf_size;
 			memcpy(cmd->buf.hdr, buf, buf_size);
 			wake_up_interruptible(&iwm->nonwifi_queue);
@@ -1576,8 +1576,7 @@ static void iwm_rx_process_amsdu(struct iwm_priv *iwm, struct sk_buff *skb)
 	IWM_HEXDUMP(iwm, DBG, RX, "A-MSDU: ", skb->data, skb->len);
 
 	__skb_queue_head_init(&list);
-	ieee80211_amsdu_to_8023s(skb, &list, ndev->dev_addr, wdev->iftype, 0,
-									true);
+	ieee80211_amsdu_to_8023s(skb, &list, ndev->dev_addr, wdev->iftype, 0);
 
 	while ((frame = __skb_dequeue(&list))) {
 		ndev->stats.rx_packets++;

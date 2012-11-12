@@ -58,16 +58,12 @@
 #define USB_PRODUCT_IPHONE      0x1290
 #define USB_PRODUCT_IPHONE_3G   0x1292
 #define USB_PRODUCT_IPHONE_3GS  0x1294
-#define USB_PRODUCT_IPHONE_4	0x1297
-#define USB_PRODUCT_IPHONE_4_VZW 0x129c
-#define USB_PRODUCT_IPHONE_4S	0x12a0
 
 #define IPHETH_USBINTF_CLASS    255
 #define IPHETH_USBINTF_SUBCLASS 253
 #define IPHETH_USBINTF_PROTO    1
 
 #define IPHETH_BUF_SIZE         1516
-#define IPHETH_IP_ALIGN		2	/* padding at front of URB */
 #define IPHETH_TX_TIMEOUT       (5 * HZ)
 
 #define IPHETH_INTFNUM          2
@@ -94,18 +90,6 @@ static struct usb_device_id ipheth_table[] = {
 		IPHETH_USBINTF_PROTO) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(
 		USB_VENDOR_APPLE, USB_PRODUCT_IPHONE_3GS,
-		IPHETH_USBINTF_CLASS, IPHETH_USBINTF_SUBCLASS,
-		IPHETH_USBINTF_PROTO) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(
-		USB_VENDOR_APPLE, USB_PRODUCT_IPHONE_4,
-		IPHETH_USBINTF_CLASS, IPHETH_USBINTF_SUBCLASS,
-		IPHETH_USBINTF_PROTO) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(
-		USB_VENDOR_APPLE, USB_PRODUCT_IPHONE_4_VZW,
-		IPHETH_USBINTF_CLASS, IPHETH_USBINTF_SUBCLASS,
-		IPHETH_USBINTF_PROTO) },
-	{ USB_DEVICE_AND_INTERFACE_INFO(
-		USB_VENDOR_APPLE, USB_PRODUCT_IPHONE_4S,
 		IPHETH_USBINTF_CLASS, IPHETH_USBINTF_SUBCLASS,
 		IPHETH_USBINTF_PROTO) },
 	{ }
@@ -209,25 +193,22 @@ static void ipheth_rcvbulk_callback(struct urb *urb)
 	case 0:
 		break;
 	default:
-		err("%s: urb status: %d", __func__, status);
+		err("%s: urb status: %d", __func__, urb->status);
 		return;
 	}
 
-	if (urb->actual_length <= IPHETH_IP_ALIGN) {
-		dev->net->stats.rx_length_errors++;
-		return;
-	}
-	len = urb->actual_length - IPHETH_IP_ALIGN;
-	buf = urb->transfer_buffer + IPHETH_IP_ALIGN;
+	len = urb->actual_length;
+	buf = urb->transfer_buffer;
 
-	skb = dev_alloc_skb(len);
+	skb = dev_alloc_skb(NET_IP_ALIGN + len);
 	if (!skb) {
 		err("%s: dev_alloc_skb: -ENOMEM", __func__);
 		dev->net->stats.rx_dropped++;
 		return;
 	}
 
-	memcpy(skb_put(skb, len), buf, len);
+	skb_reserve(skb, NET_IP_ALIGN);
+	memcpy(skb_put(skb, len), buf + NET_IP_ALIGN, len - NET_IP_ALIGN);
 	skb->dev = dev->net;
 	skb->protocol = eth_type_trans(skb, dev->net);
 
@@ -241,17 +222,16 @@ static void ipheth_rcvbulk_callback(struct urb *urb)
 static void ipheth_sndbulk_callback(struct urb *urb)
 {
 	struct ipheth_device *dev;
-	int status = urb->status;
 
 	dev = urb->context;
 	if (dev == NULL)
 		return;
 
-	if (status != 0 &&
-	    status != -ENOENT &&
-	    status != -ECONNRESET &&
-	    status != -ESHUTDOWN)
-		err("%s: urb status: %d", __func__, status);
+	if (urb->status != 0 &&
+	    urb->status != -ENOENT &&
+	    urb->status != -ECONNRESET &&
+	    urb->status != -ESHUTDOWN)
+		err("%s: urb status: %d", __func__, urb->status);
 
 	dev_kfree_skb_irq(dev->tx_skb);
 	netif_wake_queue(dev->net);
@@ -377,7 +357,7 @@ static int ipheth_tx(struct sk_buff *skb, struct net_device *net)
 
 	/* Paranoid */
 	if (skb->len > IPHETH_BUF_SIZE) {
-		WARN(1, "%s: skb too large: %d bytes\n", __func__, skb->len);
+		WARN(1, "%s: skb too large: %d bytes", __func__, skb->len);
 		dev->net->stats.tx_dropped++;
 		dev_kfree_skb_irq(skb);
 		return NETDEV_TX_OK;
@@ -419,21 +399,32 @@ static void ipheth_tx_timeout(struct net_device *net)
 	usb_unlink_urb(dev->tx_urb);
 }
 
+static struct net_device_stats *ipheth_stats(struct net_device *net)
+{
+	struct ipheth_device *dev = netdev_priv(net);
+	return &dev->net->stats;
+}
+
 static u32 ipheth_ethtool_op_get_link(struct net_device *net)
 {
 	struct ipheth_device *dev = netdev_priv(net);
 	return netif_carrier_ok(dev->net);
 }
 
-static const struct ethtool_ops ops = {
+static struct ethtool_ops ops = {
 	.get_link = ipheth_ethtool_op_get_link
 };
 
 static const struct net_device_ops ipheth_netdev_ops = {
-	.ndo_open = ipheth_open,
-	.ndo_stop = ipheth_close,
-	.ndo_start_xmit = ipheth_tx,
-	.ndo_tx_timeout = ipheth_tx_timeout,
+	.ndo_open = &ipheth_open,
+	.ndo_stop = &ipheth_close,
+	.ndo_start_xmit = &ipheth_tx,
+	.ndo_tx_timeout = &ipheth_tx_timeout,
+	.ndo_get_stats = &ipheth_stats,
+};
+
+static struct device_type ipheth_type = {
+	.name	= "wwan",
 };
 
 static int ipheth_probe(struct usb_interface *intf,
@@ -453,7 +444,7 @@ static int ipheth_probe(struct usb_interface *intf,
 
 	netdev->netdev_ops = &ipheth_netdev_ops;
 	netdev->watchdog_timeo = IPHETH_TX_TIMEOUT;
-	strcpy(netdev->name, "eth%d");
+	strcpy(netdev->name, "wwan%d");
 
 	dev = netdev_priv(netdev);
 	dev->udev = udev;
@@ -503,6 +494,7 @@ static int ipheth_probe(struct usb_interface *intf,
 
 	SET_NETDEV_DEV(netdev, &intf->dev);
 	SET_ETHTOOL_OPS(netdev, &ops);
+	SET_NETDEV_DEVTYPE(netdev, &ipheth_type);
 
 	retval = register_netdev(netdev);
 	if (retval) {
@@ -548,7 +540,25 @@ static struct usb_driver ipheth_driver = {
 	.id_table =	ipheth_table,
 };
 
-module_usb_driver(ipheth_driver);
+static int __init ipheth_init(void)
+{
+	int retval;
+
+	retval = usb_register(&ipheth_driver);
+	if (retval) {
+		err("usb_register failed: %d", retval);
+		return retval;
+	}
+	return 0;
+}
+
+static void __exit ipheth_exit(void)
+{
+	usb_deregister(&ipheth_driver);
+}
+
+module_init(ipheth_init);
+module_exit(ipheth_exit);
 
 MODULE_AUTHOR("Diego Giagio <diego@giagio.com>");
 MODULE_DESCRIPTION("Apple iPhone USB Ethernet driver");

@@ -34,11 +34,10 @@
 #include <linux/workqueue.h>
 #include <linux/pci.h>
 #include <linux/pci_hotplug.h>
-#include <linux/mutex.h>
+#include <linux/smp_lock.h>
 #include <linux/debugfs.h>
 #include "cpqphp.h"
 
-static DEFINE_MUTEX(cpqphp_mutex);
 static int show_ctrl (struct controller *ctrl, char *buf)
 {
 	char *out = buf;
@@ -148,7 +147,7 @@ static int open(struct inode *inode, struct file *file)
 	struct ctrl_dbg *dbg;
 	int retval = -ENOMEM;
 
-	mutex_lock(&cpqphp_mutex);
+	lock_kernel();
 	dbg = kmalloc(sizeof(*dbg), GFP_KERNEL);
 	if (!dbg)
 		goto exit;
@@ -161,7 +160,7 @@ static int open(struct inode *inode, struct file *file)
 	file->private_data = dbg;
 	retval = 0;
 exit:
-	mutex_unlock(&cpqphp_mutex);
+	unlock_kernel();
 	return retval;
 }
 
@@ -170,7 +169,7 @@ static loff_t lseek(struct file *file, loff_t off, int whence)
 	struct ctrl_dbg *dbg;
 	loff_t new = -1;
 
-	mutex_lock(&cpqphp_mutex);
+	lock_kernel();
 	dbg = file->private_data;
 
 	switch (whence) {
@@ -182,10 +181,10 @@ static loff_t lseek(struct file *file, loff_t off, int whence)
 		break;
 	}
 	if (new < 0 || new > dbg->size) {
-		mutex_unlock(&cpqphp_mutex);
+		unlock_kernel();
 		return -EINVAL;
 	}
-	mutex_unlock(&cpqphp_mutex);
+	unlock_kernel();
 	return (file->f_pos = new);
 }
 

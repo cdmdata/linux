@@ -7,7 +7,7 @@
 #include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/mm.h>
-#include <linux/mutex.h>
+#include <linux/spinlock.h>
 #include <linux/memcontrol.h>
 
 /*
@@ -25,17 +25,19 @@
  * pointing to this anon_vma once its vma list is empty.
  */
 struct anon_vma {
-	struct anon_vma *root;	/* Root of this anon_vma tree */
-	struct mutex mutex;	/* Serialize access to vma list */
+	spinlock_t lock;	/* Serialize access to vma list */
+#if defined(CONFIG_KSM) || defined(CONFIG_MIGRATION)
+
 	/*
-	 * The refcount is taken on an anon_vma when there is no
+	 * The external_refcount is taken by either KSM or page migration
+	 * to take a reference to an anon_vma when there is no
 	 * guarantee that the vma of page tables will exist for
 	 * the duration of the operation. A caller that takes
 	 * the reference is responsible for clearing up the
 	 * anon_vma if they are the last user on release
 	 */
-	atomic_t refcount;
-
+	atomic_t external_refcount;
+#endif
 	/*
 	 * NOTE: the LSB of the head.next is set by
 	 * mm_take_all_locks() _after_ taking the above lock. So the
@@ -64,22 +66,30 @@ struct anon_vma_chain {
 	struct vm_area_struct *vma;
 	struct anon_vma *anon_vma;
 	struct list_head same_vma;   /* locked by mmap_sem & page_table_lock */
-	struct list_head same_anon_vma;	/* locked by anon_vma->mutex */
+	struct list_head same_anon_vma;	/* locked by anon_vma->lock */
 };
 
 #ifdef CONFIG_MMU
-static inline void get_anon_vma(struct anon_vma *anon_vma)
+#if defined(CONFIG_KSM) || defined(CONFIG_MIGRATION)
+static inline void anonvma_external_refcount_init(struct anon_vma *anon_vma)
 {
-	atomic_inc(&anon_vma->refcount);
+	atomic_set(&anon_vma->external_refcount, 0);
 }
 
-void __put_anon_vma(struct anon_vma *anon_vma);
-
-static inline void put_anon_vma(struct anon_vma *anon_vma)
+static inline int anonvma_external_refcount(struct anon_vma *anon_vma)
 {
-	if (atomic_dec_and_test(&anon_vma->refcount))
-		__put_anon_vma(anon_vma);
+	return atomic_read(&anon_vma->external_refcount);
 }
+#else
+static inline void anonvma_external_refcount_init(struct anon_vma *anon_vma)
+{
+}
+
+static inline int anonvma_external_refcount(struct anon_vma *anon_vma)
+{
+	return 0;
+}
+#endif /* CONFIG_KSM */
 
 static inline struct anon_vma *page_anon_vma(struct page *page)
 {
@@ -89,28 +99,18 @@ static inline struct anon_vma *page_anon_vma(struct page *page)
 	return page_rmapping(page);
 }
 
-static inline void vma_lock_anon_vma(struct vm_area_struct *vma)
+static inline void anon_vma_lock(struct vm_area_struct *vma)
 {
 	struct anon_vma *anon_vma = vma->anon_vma;
 	if (anon_vma)
-		mutex_lock(&anon_vma->root->mutex);
+		spin_lock(&anon_vma->lock);
 }
 
-static inline void vma_unlock_anon_vma(struct vm_area_struct *vma)
+static inline void anon_vma_unlock(struct vm_area_struct *vma)
 {
 	struct anon_vma *anon_vma = vma->anon_vma;
 	if (anon_vma)
-		mutex_unlock(&anon_vma->root->mutex);
-}
-
-static inline void anon_vma_lock(struct anon_vma *anon_vma)
-{
-	mutex_lock(&anon_vma->root->mutex);
-}
-
-static inline void anon_vma_unlock(struct anon_vma *anon_vma)
-{
-	mutex_unlock(&anon_vma->root->mutex);
+		spin_unlock(&anon_vma->lock);
 }
 
 /*
@@ -120,8 +120,9 @@ void anon_vma_init(void);	/* create anon_vma_cachep */
 int  anon_vma_prepare(struct vm_area_struct *);
 void unlink_anon_vmas(struct vm_area_struct *);
 int anon_vma_clone(struct vm_area_struct *, struct vm_area_struct *);
-void anon_vma_moveto_tail(struct vm_area_struct *);
 int anon_vma_fork(struct vm_area_struct *, struct vm_area_struct *);
+void __anon_vma_link(struct vm_area_struct *);
+void anon_vma_free(struct anon_vma *);
 
 static inline void anon_vma_merge(struct vm_area_struct *vma,
 				  struct vm_area_struct *next)
@@ -130,23 +131,14 @@ static inline void anon_vma_merge(struct vm_area_struct *vma,
 	unlink_anon_vmas(next);
 }
 
-struct anon_vma *page_get_anon_vma(struct page *page);
-
 /*
  * rmap interfaces called when adding or removing pte of page
  */
 void page_move_anon_rmap(struct page *, struct vm_area_struct *, unsigned long);
 void page_add_anon_rmap(struct page *, struct vm_area_struct *, unsigned long);
-void do_page_add_anon_rmap(struct page *, struct vm_area_struct *,
-			   unsigned long, int);
 void page_add_new_anon_rmap(struct page *, struct vm_area_struct *, unsigned long);
 void page_add_file_rmap(struct page *);
 void page_remove_rmap(struct page *);
-
-void hugepage_add_anon_rmap(struct page *, struct vm_area_struct *,
-			    unsigned long);
-void hugepage_add_new_anon_rmap(struct page *, struct vm_area_struct *,
-				unsigned long);
 
 static inline void page_dup_rmap(struct page *page)
 {
@@ -157,7 +149,7 @@ static inline void page_dup_rmap(struct page *page)
  * Called from mm/vmscan.c to handle paging out
  */
 int page_referenced(struct page *, int is_locked,
-			struct mem_cgroup *memcg, unsigned long *vm_flags);
+			struct mem_cgroup *cnt, unsigned long *vm_flags);
 int page_referenced_one(struct page *, struct vm_area_struct *,
 	unsigned long address, unsigned int *mapcount, unsigned long *vm_flags);
 
@@ -173,8 +165,6 @@ enum ttu_flags {
 };
 #define TTU_ACTION(x) ((x) & TTU_ACTION_MASK)
 
-bool is_vma_temporary_stack(struct vm_area_struct *vma);
-
 int try_to_unmap(struct page *, enum ttu_flags flags);
 int try_to_unmap_one(struct page *, struct vm_area_struct *,
 			unsigned long address, enum ttu_flags flags);
@@ -182,19 +172,8 @@ int try_to_unmap_one(struct page *, struct vm_area_struct *,
 /*
  * Called from mm/filemap_xip.c to unmap empty zero page
  */
-pte_t *__page_check_address(struct page *, struct mm_struct *,
+pte_t *page_check_address(struct page *, struct mm_struct *,
 				unsigned long, spinlock_t **, int);
-
-static inline pte_t *page_check_address(struct page *page, struct mm_struct *mm,
-					unsigned long address,
-					spinlock_t **ptlp, int sync)
-{
-	pte_t *ptep;
-
-	__cond_lock(*ptlp, ptep = __page_check_address(page, mm, address,
-						       ptlp, sync));
-	return ptep;
-}
 
 /*
  * Used by swapoff to help locate where page is expected in vma.
@@ -235,7 +214,7 @@ int rmap_walk(struct page *page, int (*rmap_one)(struct page *,
 #define anon_vma_link(vma)	do {} while (0)
 
 static inline int page_referenced(struct page *page, int is_locked,
-				  struct mem_cgroup *memcg,
+				  struct mem_cgroup *cnt,
 				  unsigned long *vm_flags)
 {
 	*vm_flags = 0;

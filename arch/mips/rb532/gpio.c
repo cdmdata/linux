@@ -29,7 +29,6 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/types.h>
-#include <linux/export.h>
 #include <linux/spinlock.h>
 #include <linux/platform_device.h>
 #include <linux/gpio.h>
@@ -186,7 +185,7 @@ int __init rb532_gpio_init(void)
 	struct resource *r;
 
 	r = rb532_gpio_reg0_res;
-	rb532_gpio_chip->regbase = ioremap_nocache(r->start, resource_size(r));
+	rb532_gpio_chip->regbase = ioremap_nocache(r->start, r->end - r->start);
 
 	if (!rb532_gpio_chip->regbase) {
 		printk(KERN_ERR "rb532: cannot remap GPIO register 0\n");

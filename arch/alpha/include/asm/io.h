@@ -6,6 +6,7 @@
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <asm/compiler.h>
+#include <asm/system.h>
 #include <asm/pgtable.h>
 #include <asm/machvec.h>
 #include <asm/hwrpb.h>
@@ -36,9 +37,8 @@
  */
 extern inline void __set_hae(unsigned long new_hae)
 {
-	unsigned long flags = swpipl(IPL_MAX);
-
-	barrier();
+	unsigned long flags;
+	local_irq_save(flags);
 
 	alpha_mv.hae_cache = new_hae;
 	*alpha_mv.hae_register = new_hae;
@@ -46,8 +46,7 @@ extern inline void __set_hae(unsigned long new_hae)
 	/* Re-read to make sure it was written.  */
 	new_hae = *alpha_mv.hae_register;
 
-	setipl(flags);
-	barrier();
+	local_irq_restore(flags);
 }
 
 extern inline void set_hae(unsigned long new_hae)

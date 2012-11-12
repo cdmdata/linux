@@ -241,13 +241,30 @@ static void flush_send_queue(struct cardstate *cs)
  * return value:
  *	number of bytes queued, or error code < 0
  */
-static int gigaset_write_cmd(struct cardstate *cs, struct cmdbuf_t *cb)
+static int gigaset_write_cmd(struct cardstate *cs, const unsigned char *buf,
+			     int len, struct tasklet_struct *wake_tasklet)
 {
+	struct cmdbuf_t *cb;
 	unsigned long flags;
 
 	gigaset_dbg_buffer(cs->mstate != MS_LOCKED ?
-			   DEBUG_TRANSCMD : DEBUG_LOCKCMD,
-			   "CMD Transmit", cb->len, cb->buf);
+				DEBUG_TRANSCMD : DEBUG_LOCKCMD,
+			   "CMD Transmit", len, buf);
+
+	if (len <= 0)
+		return 0;
+
+	cb = kmalloc(sizeof(struct cmdbuf_t) + len, GFP_ATOMIC);
+	if (!cb) {
+		dev_err(cs->dev, "%s: out of memory!\n", __func__);
+		return -ENOMEM;
+	}
+
+	memcpy(cb->buf, buf, len);
+	cb->len = len;
+	cb->offset = 0;
+	cb->next = NULL;
+	cb->wake_tasklet = wake_tasklet;
 
 	spin_lock_irqsave(&cs->cmdlock, flags);
 	cb->prev = cs->lastcmdbuf;
@@ -255,9 +272,9 @@ static int gigaset_write_cmd(struct cardstate *cs, struct cmdbuf_t *cb)
 		cs->lastcmdbuf->next = cb;
 	else {
 		cs->cmdbuf = cb;
-		cs->curlen = cb->len;
+		cs->curlen = len;
 	}
-	cs->cmdbytes += cb->len;
+	cs->cmdbytes += len;
 	cs->lastcmdbuf = cb;
 	spin_unlock_irqrestore(&cs->cmdlock, flags);
 
@@ -265,7 +282,7 @@ static int gigaset_write_cmd(struct cardstate *cs, struct cmdbuf_t *cb)
 	if (cs->connected)
 		tasklet_schedule(&cs->write_tasklet);
 	spin_unlock_irqrestore(&cs->lock, flags);
-	return cb->len;
+	return len;
 }
 
 /*
@@ -440,7 +457,7 @@ static int gigaset_set_modem_ctrl(struct cardstate *cs, unsigned old_state,
 	if (!set && !clear)
 		return 0;
 	gig_dbg(DEBUG_IF, "tiocmset set %x clear %x", set, clear);
-	return tty->ops->tiocmset(tty, set, clear);
+	return tty->ops->tiocmset(tty, NULL, set, clear);
 }
 
 static int gigaset_baud_rate(struct cardstate *cs, unsigned cflag)
@@ -513,7 +530,7 @@ gigaset_tty_open(struct tty_struct *tty)
 		return -ENODEV;
 	}
 
-	/* allocate memory for our device state and initialize it */
+	/* allocate memory for our device state and intialize it */
 	cs = gigaset_initcs(driver, 1, 1, 0, cidmode, GIGASET_MODULENAME);
 	if (!cs)
 		goto error;
@@ -771,10 +788,10 @@ static int __init ser_gigaset_init(void)
 		return rc;
 	}
 
-	/* allocate memory for our driver state and initialize it */
+	/* allocate memory for our driver state and intialize it */
 	driver = gigaset_initdriver(GIGASET_MINOR, GIGASET_MINORS,
-				    GIGASET_MODULENAME, GIGASET_DEVNAME,
-				    &ops, THIS_MODULE);
+					  GIGASET_MODULENAME, GIGASET_DEVNAME,
+					  &ops, THIS_MODULE);
 	if (!driver)
 		goto error;
 

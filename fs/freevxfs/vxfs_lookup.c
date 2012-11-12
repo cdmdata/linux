@@ -36,6 +36,7 @@
 #include <linux/highmem.h>
 #include <linux/kernel.h>
 #include <linux/pagemap.h>
+#include <linux/smp_lock.h>
 
 #include "vxfs.h"
 #include "vxfs_dir.h"
@@ -162,7 +163,7 @@ vxfs_find_entry(struct inode *ip, struct dentry *dp, struct page **ppp)
 /**
  * vxfs_inode_by_name - find inode number for dentry
  * @dip:	directory to search in
- * @dp:		dentry we search for
+ * @dp:		dentry we seach for
  *
  * Description:
  *   vxfs_inode_by_name finds out the inode number of
@@ -211,12 +212,16 @@ vxfs_lookup(struct inode *dip, struct dentry *dp, struct nameidata *nd)
 	if (dp->d_name.len > VXFS_NAMELEN)
 		return ERR_PTR(-ENAMETOOLONG);
 				 
+	lock_kernel();
 	ino = vxfs_inode_by_name(dip, dp);
 	if (ino) {
 		ip = vxfs_iget(dip->i_sb, ino);
-		if (IS_ERR(ip))
+		if (IS_ERR(ip)) {
+			unlock_kernel();
 			return ERR_CAST(ip);
+		}
 	}
+	unlock_kernel();
 	d_add(dp, ip);
 	return NULL;
 }
@@ -243,6 +248,8 @@ vxfs_readdir(struct file *fp, void *retp, filldir_t filler)
 	u_long			page, npages, block, pblocks, nblocks, offset;
 	loff_t			pos;
 
+	lock_kernel();
+
 	switch ((long)fp->f_pos) {
 	case 0:
 		if (filler(retp, ".", 1, fp->f_pos, ip->i_ino, DT_DIR) < 0)
@@ -258,8 +265,10 @@ vxfs_readdir(struct file *fp, void *retp, filldir_t filler)
 
 	pos = fp->f_pos - 2;
 	
-	if (pos > VXFS_DIRROUND(ip->i_size))
+	if (pos > VXFS_DIRROUND(ip->i_size)) {
+		unlock_kernel();
 		return 0;
+	}
 
 	npages = dir_pages(ip);
 	nblocks = dir_blocks(ip);
@@ -318,5 +327,6 @@ vxfs_readdir(struct file *fp, void *retp, filldir_t filler)
 done:
 	fp->f_pos = ((page << PAGE_CACHE_SHIFT) | offset) + 2;
 out:
+	unlock_kernel();
 	return 0;
 }

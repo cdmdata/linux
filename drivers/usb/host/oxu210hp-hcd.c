@@ -40,6 +40,7 @@
 #include <linux/io.h>
 
 #include <asm/irq.h>
+#include <asm/system.h>
 #include <asm/unaligned.h>
 
 #include <linux/irq.h>
@@ -232,7 +233,7 @@ module_param(park, uint, S_IRUGO);
 MODULE_PARM_DESC(park, "park setting; 1-3 back-to-back async packets");
 
 /* For flakey hardware, ignore overcurrent indicators */
-static bool ignore_oc;
+static int ignore_oc;
 module_param(ignore_oc, bool, S_IRUGO);
 MODULE_PARM_DESC(ignore_oc, "ignore bogus hardware overcurrent indications");
 
@@ -450,9 +451,9 @@ static void ehci_hub_descriptor(struct oxu_hcd *oxu,
 	temp = 1 + (ports / 8);
 	desc->bDescLength = 7 + 2 * temp;
 
-	/* ports removable, and usb 1.0 legacy PortPwrCtrlMask */
-	memset(&desc->u.hs.DeviceRemovable[0], 0, temp);
-	memset(&desc->u.hs.DeviceRemovable[temp], 0xff, temp);
+	/* two bitmaps:  ports removable, and usb 1.0 legacy PortPwrCtrlMask */
+	memset(&desc->bitmap[0], 0, temp);
+	memset(&desc->bitmap[temp], 0xff, temp);
 
 	temp = 0x0008;			/* per-port overcurrent reporting */
 	if (HCS_PPC(oxu->hcs_params))
@@ -543,6 +544,8 @@ static void oxu_buf_free(struct oxu_hcd *oxu, struct ehci_qtd *qtd)
 	qtd->buffer = NULL;
 
 	spin_unlock(&oxu->mem_lock);
+
+	return;
 }
 
 static inline void ehci_qtd_init(struct ehci_qtd *qtd, dma_addr_t dma)
@@ -568,6 +571,8 @@ static inline void oxu_qtd_free(struct oxu_hcd *oxu, struct ehci_qtd *qtd)
 	oxu->qtd_used[index] = 0;
 
 	spin_unlock(&oxu->mem_lock);
+
+	return;
 }
 
 static struct ehci_qtd *ehci_qtd_alloc(struct oxu_hcd *oxu)
@@ -610,6 +615,8 @@ static void oxu_qh_free(struct oxu_hcd *oxu, struct ehci_qh *qh)
 	oxu->qh_used[index] = 0;
 
 	spin_unlock(&oxu->mem_lock);
+
+	return;
 }
 
 static void qh_destroy(struct kref *kref)
@@ -686,6 +693,8 @@ static void oxu_murb_free(struct oxu_hcd *oxu, struct oxu_murb *murb)
 	oxu->murb_used[index] = 0;
 
 	spin_unlock(&oxu->mem_lock);
+
+	return;
 }
 
 static struct oxu_murb *oxu_murb_alloc(struct oxu_hcd *oxu)
@@ -1632,7 +1641,8 @@ static int submit_async(struct oxu_hcd	*oxu, struct urb *urb,
 #endif
 
 	spin_lock_irqsave(&oxu->lock, flags);
-	if (unlikely(!HCD_HW_ACCESSIBLE(oxu_to_hcd(oxu)))) {
+	if (unlikely(!test_bit(HCD_FLAG_HW_ACCESSIBLE,
+			       &oxu_to_hcd(oxu)->flags))) {
 		rc = -ESHUTDOWN;
 		goto done;
 	}
@@ -1883,7 +1893,6 @@ static int enable_periodic(struct oxu_hcd *oxu)
 	status = handshake(oxu, &oxu->regs->status, STS_PSS, 0, 9 * 125);
 	if (status != 0) {
 		oxu_to_hcd(oxu)->state = HC_STATE_HALT;
-		usb_hc_died(oxu_to_hcd(oxu));
 		return status;
 	}
 
@@ -1909,7 +1918,6 @@ static int disable_periodic(struct oxu_hcd *oxu)
 	status = handshake(oxu, &oxu->regs->status, STS_PSS, STS_PSS, 9 * 125);
 	if (status != 0) {
 		oxu_to_hcd(oxu)->state = HC_STATE_HALT;
-		usb_hc_died(oxu_to_hcd(oxu));
 		return status;
 	}
 
@@ -2201,7 +2209,8 @@ static int intr_submit(struct oxu_hcd *oxu, struct urb *urb,
 
 	spin_lock_irqsave(&oxu->lock, flags);
 
-	if (unlikely(!HCD_HW_ACCESSIBLE(oxu_to_hcd(oxu)))) {
+	if (unlikely(!test_bit(HCD_FLAG_HW_ACCESSIBLE,
+			       &oxu_to_hcd(oxu)->flags))) {
 		status = -ESHUTDOWN;
 		goto done;
 	}
@@ -2450,9 +2459,8 @@ static irqreturn_t oxu210_hcd_irq(struct usb_hcd *hcd)
 		goto dead;
 	}
 
-	/* Shared IRQ? */
 	status &= INTR_MASK;
-	if (!status || unlikely(hcd->state == HC_STATE_HALT)) {
+	if (!status) {			/* irq sharing? */
 		spin_unlock(&oxu->lock);
 		return IRQ_NONE;
 	}
@@ -2518,7 +2526,6 @@ static irqreturn_t oxu210_hcd_irq(struct usb_hcd *hcd)
 dead:
 			ehci_reset(oxu);
 			writel(0, &oxu->regs->configured_flag);
-			usb_hc_died(hcd);
 			/* generic layer kills/unlinks all urbs, then
 			 * uses oxu_stop to clean up the rest
 			 */
@@ -2708,6 +2715,7 @@ static int oxu_run(struct usb_hcd *hcd)
 	u32 temp, hcc_params;
 
 	hcd->uses_new_polling = 1;
+	hcd->poll_rh = 0;
 
 	/* EHCI spec section 4.1 */
 	retval = ehci_reset(oxu);
@@ -2882,7 +2890,7 @@ static int oxu_urb_enqueue(struct usb_hcd *hcd, struct urb *urb,
 	/* Ok, we have more job to do! :) */
 
 	for (i = 0; i < num - 1; i++) {
-		/* Get free micro URB poll till a free urb is received */
+		/* Get free micro URB poll till a free urb is recieved */
 
 		do {
 			murb = (struct urb *) oxu_murb_alloc(oxu);
@@ -2914,7 +2922,7 @@ static int oxu_urb_enqueue(struct usb_hcd *hcd, struct urb *urb,
 
 	/* Last urb requires special handling  */
 
-	/* Get free micro URB poll till a free urb is received */
+	/* Get free micro URB poll till a free urb is recieved */
 	do {
 		murb = (struct urb *) oxu_murb_alloc(oxu);
 		if (!murb)
@@ -3065,6 +3073,7 @@ nogood:
 	ep->hcpriv = NULL;
 done:
 	spin_unlock_irqrestore(&oxu->lock, flags);
+	return;
 }
 
 static int oxu_get_frame(struct usb_hcd *hcd)
@@ -3097,7 +3106,7 @@ static int oxu_hub_status_data(struct usb_hcd *hcd, char *buf)
 
 	/* Some boards (mostly VIA?) report bogus overcurrent indications,
 	 * causing massive log spam unless we completely ignore them.  It
-	 * may be relevant that VIA VT8235 controllers, where PORT_POWER is
+	 * may be relevant that VIA VT8235 controlers, where PORT_POWER is
 	 * always set, seem to clear PORT_OCC and PORT_CSC when writing to
 	 * PORT_POWER; that's surprising, but maybe within-spec.
 	 */
@@ -3690,7 +3699,7 @@ static void oxu_configuration(struct platform_device *pdev, void *base)
 static int oxu_verify_id(struct platform_device *pdev, void *base)
 {
 	u32 id;
-	static const char * const bo[] = {
+	char *bo[] = {
 		"reserved",
 		"128-pin LQFP",
 		"84-pin TFBGA",
@@ -3827,7 +3836,7 @@ static int oxu_drv_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 	memstart = res->start;
-	memlen = resource_size(res);
+	memlen = res->end - res->start + 1;
 	dev_dbg(&pdev->dev, "MEM resource %lx-%lx\n", memstart, memlen);
 	if (!request_mem_region(memstart, memlen,
 				oxu_hc_driver.description)) {
@@ -3835,7 +3844,7 @@ static int oxu_drv_probe(struct platform_device *pdev)
 		return -EBUSY;
 	}
 
-	ret = irq_set_irq_type(irq, IRQF_TRIGGER_FALLING);
+	ret = set_irq_type(irq, IRQF_TRIGGER_FALLING);
 	if (ret) {
 		dev_err(&pdev->dev, "error setting irq type\n");
 		ret = -EFAULT;
@@ -3950,7 +3959,24 @@ static struct platform_driver oxu_driver = {
 	}
 };
 
-module_platform_driver(oxu_driver);
+static int __init oxu_module_init(void)
+{
+	int retval = 0;
+
+	retval = platform_driver_register(&oxu_driver);
+	if (retval < 0)
+		return retval;
+
+	return retval;
+}
+
+static void __exit oxu_module_cleanup(void)
+{
+	platform_driver_unregister(&oxu_driver);
+}
+
+module_init(oxu_module_init);
+module_exit(oxu_module_cleanup);
 
 MODULE_DESCRIPTION("Oxford OXU210HP HCD driver - ver. " DRIVER_VERSION);
 MODULE_AUTHOR("Rodolfo Giometti <giometti@linux.it>");

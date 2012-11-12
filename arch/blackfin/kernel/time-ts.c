@@ -23,6 +23,29 @@
 #include <asm/gptimers.h>
 #include <asm/nmi.h>
 
+/* Accelerators for sched_clock()
+ * convert from cycles(64bits) => nanoseconds (64bits)
+ *  basic equation:
+ *		ns = cycles / (freq / ns_per_sec)
+ *		ns = cycles * (ns_per_sec / freq)
+ *		ns = cycles * (10^9 / (cpu_khz * 10^3))
+ *		ns = cycles * (10^6 / cpu_khz)
+ *
+ *	Then we use scaling math (suggested by george@mvista.com) to get:
+ *		ns = cycles * (10^6 * SC / cpu_khz) / SC
+ *		ns = cycles * cyc2ns_scale / SC
+ *
+ *	And since SC is a constant power of two, we can convert the div
+ *  into a shift.
+ *
+ *  We can use khz divisor instead of mhz to keep a better precision, since
+ *  cyc2ns_scale is limited to 10^6 * 2^10, which fits in 32 bits.
+ *  (mathieu.desnoyers@polymtl.ca)
+ *
+ *			-johnstul@us.ibm.com "math is hard, lets go shopping!"
+ */
+
+#define CYC2NS_SCALE_FACTOR 10 /* 2^10, carefully chosen */
 
 #if defined(CONFIG_CYCLES_CLOCKSOURCE)
 
@@ -40,6 +63,7 @@ static struct clocksource bfin_cs_cycles = {
 	.rating		= 400,
 	.read		= bfin_read_cycles,
 	.mask		= CLOCKSOURCE_MASK(64),
+	.shift		= CYC2NS_SCALE_FACTOR,
 	.flags		= CLOCK_SOURCE_IS_CONTINUOUS,
 };
 
@@ -51,7 +75,10 @@ static inline unsigned long long bfin_cs_cycles_sched_clock(void)
 
 static int __init bfin_cs_cycles_init(void)
 {
-	if (clocksource_register_hz(&bfin_cs_cycles, get_cclk()))
+	bfin_cs_cycles.mult = \
+		clocksource_hz2mult(get_cclk(), bfin_cs_cycles.shift);
+
+	if (clocksource_register(&bfin_cs_cycles))
 		panic("failed to register clocksource");
 
 	return 0;
@@ -84,6 +111,7 @@ static struct clocksource bfin_cs_gptimer0 = {
 	.rating		= 350,
 	.read		= bfin_read_gptimer0,
 	.mask		= CLOCKSOURCE_MASK(32),
+	.shift		= CYC2NS_SCALE_FACTOR,
 	.flags		= CLOCK_SOURCE_IS_CONTINUOUS,
 };
 
@@ -97,7 +125,10 @@ static int __init bfin_cs_gptimer0_init(void)
 {
 	setup_gptimer0();
 
-	if (clocksource_register_hz(&bfin_cs_gptimer0, get_sclk()))
+	bfin_cs_gptimer0.mult = \
+		clocksource_hz2mult(get_sclk(), bfin_cs_gptimer0.shift);
+
+	if (clocksource_register(&bfin_cs_gptimer0))
 		panic("failed to register clocksource");
 
 	return 0;
@@ -175,20 +206,15 @@ irqreturn_t bfin_gptmr0_interrupt(int irq, void *dev_id)
 {
 	struct clock_event_device *evt = dev_id;
 	smp_mb();
-	/*
-	 * We want to ACK before we handle so that we can handle smaller timer
-	 * intervals.  This way if the timer expires again while we're handling
-	 * things, we're more likely to see that 2nd int rather than swallowing
-	 * it by ACKing the int at the end of this handler.
-	 */
-	bfin_gptmr0_ack();
 	evt->event_handler(evt);
+	bfin_gptmr0_ack();
 	return IRQ_HANDLED;
 }
 
 static struct irqaction gptmr0_irq = {
 	.name		= "Blackfin GPTimer0",
-	.flags		= IRQF_TIMER | IRQF_IRQPOLL | IRQF_PERCPU,
+	.flags		= IRQF_DISABLED | IRQF_TIMER | \
+			  IRQF_IRQPOLL | IRQF_PERCPU,
 	.handler	= bfin_gptmr0_interrupt,
 };
 
@@ -219,7 +245,7 @@ static void __init bfin_gptmr0_clockevent_init(struct clock_event_device *evt)
 
 #if defined(CONFIG_TICKSOURCE_CORETMR)
 /* per-cpu local core timer */
-DEFINE_PER_CPU(struct clock_event_device, coretmr_events);
+static DEFINE_PER_CPU(struct clock_event_device, coretmr_events);
 
 static int bfin_coretmr_set_next_event(unsigned long cycles,
 				struct clock_event_device *evt)
@@ -281,7 +307,6 @@ void bfin_coretmr_init(void)
 #ifdef CONFIG_CORE_TIMER_IRQ_L1
 __attribute__((l1_text))
 #endif
-
 irqreturn_t bfin_coretmr_interrupt(int irq, void *dev_id)
 {
 	int cpu = smp_processor_id();
@@ -297,7 +322,8 @@ irqreturn_t bfin_coretmr_interrupt(int irq, void *dev_id)
 
 static struct irqaction coretmr_irq = {
 	.name		= "Blackfin CoreTimer",
-	.flags		= IRQF_TIMER | IRQF_IRQPOLL | IRQF_PERCPU,
+	.flags		= IRQF_DISABLED | IRQF_TIMER | \
+			  IRQF_IRQPOLL | IRQF_PERCPU,
 	.handler	= bfin_coretmr_interrupt,
 };
 
@@ -306,11 +332,6 @@ void bfin_coretmr_clockevent_init(void)
 	unsigned long clock_tick;
 	unsigned int cpu = smp_processor_id();
 	struct clock_event_device *evt = &per_cpu(coretmr_events, cpu);
-
-#ifdef CONFIG_SMP
-	evt->broadcast = smp_timer_broadcast;
-#endif
-
 
 	evt->name = "bfin_core_timer";
 	evt->rating = 350;

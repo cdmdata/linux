@@ -148,7 +148,7 @@ struct ubifs_scan_leb *ubifs_start_scan(const struct ubifs_info *c, int lnum,
 	INIT_LIST_HEAD(&sleb->nodes);
 	sleb->buf = sbuf;
 
-	err = ubifs_leb_read(c, lnum, sbuf + offs, offs, c->leb_size - offs, 0);
+	err = ubi_read(c->ubi, lnum, sbuf + offs, offs, c->leb_size - offs);
 	if (err && err != -EBADMSG) {
 		ubifs_err("cannot read %d bytes from LEB %d:%d,"
 			  " error %d", c->leb_size - offs, lnum, offs, err);
@@ -197,7 +197,7 @@ int ubifs_add_snod(const struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 	struct ubifs_ino_node *ino = buf;
 	struct ubifs_scan_node *snod;
 
-	snod = kmalloc(sizeof(struct ubifs_scan_node), GFP_NOFS);
+	snod = kzalloc(sizeof(struct ubifs_scan_node), GFP_NOFS);
 	if (!snod)
 		return -ENOMEM;
 
@@ -212,14 +212,12 @@ int ubifs_add_snod(const struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 	case UBIFS_DENT_NODE:
 	case UBIFS_XENT_NODE:
 	case UBIFS_DATA_NODE:
+	case UBIFS_TRUN_NODE:
 		/*
 		 * The key is in the same place in all keyed
 		 * nodes.
 		 */
 		key_read(c, &ino->key, &snod->key);
-		break;
-	default:
-		invalid_key_init(c, &snod->key);
 		break;
 	}
 	list_add_tail(&snod->list, &sleb->nodes);
@@ -240,7 +238,7 @@ void ubifs_scanned_corruption(const struct ubifs_info *c, int lnum, int offs,
 	int len;
 
 	ubifs_err("corruption at LEB %d:%d", lnum, offs);
-	if (dbg_is_tst_rcvry(c))
+	if (dbg_failure_mode)
 		return;
 	len = c->leb_size - offs;
 	if (len > 8192)
@@ -328,7 +326,7 @@ struct ubifs_scan_leb *ubifs_scan(const struct ubifs_info *c, int lnum,
 		if (!quiet)
 			ubifs_err("empty space starts at non-aligned offset %d",
 				  offs);
-		goto corrupted;
+		goto corrupted;;
 	}
 
 	ubifs_end_scan(c, sleb, lnum, offs);

@@ -28,7 +28,7 @@ static void gpiomux_set(const struct gpiomux *mux, unsigned val)
 	int i;
 
 	for (i = 0; i < mux->data.n_gpios; i++)
-		gpio_set_value(mux->data.gpios[i], val & (1 << i));
+		gpio_set_value(mux->data.gpios[i], (val >> i) & 1);
 }
 
 static int gpiomux_select(struct i2c_adapter *adap, void *data, u32 chan)
@@ -165,7 +165,18 @@ static struct platform_driver gpiomux_driver = {
 	},
 };
 
-module_platform_driver(gpiomux_driver);
+static int __init gpiomux_init(void)
+{
+	return platform_driver_register(&gpiomux_driver);
+}
+
+static void __exit gpiomux_exit(void)
+{
+	platform_driver_unregister(&gpiomux_driver);
+}
+
+subsys_initcall(gpiomux_init);
+module_exit(gpiomux_exit);
 
 MODULE_DESCRIPTION("GPIO-based I2C multiplexer driver");
 MODULE_AUTHOR("Peter Korsgaard <peter.korsgaard@barco.com>");

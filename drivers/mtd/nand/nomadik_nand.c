@@ -151,14 +151,19 @@ static int nomadik_nand_probe(struct platform_device *pdev)
 	nand->options = pdata->options;
 
 	/*
-	 * Scan to find existence of the device
+	 * Scan to find existance of the device
 	 */
 	if (nand_scan(&host->mtd, 1)) {
 		ret = -ENXIO;
 		goto err_unmap;
 	}
 
-	mtd_device_register(&host->mtd, pdata->parts, pdata->nparts);
+#ifdef CONFIG_MTD_PARTITIONS
+	add_mtd_partitions(&host->mtd, pdata->parts, pdata->nparts);
+#else
+	pr_info("Registering %s as whole device\n", mtd->name);
+	add_mtd_device(mtd);
+#endif
 
 	platform_set_drvdata(pdev, host);
 	return 0;
@@ -187,7 +192,6 @@ static int nomadik_nand_remove(struct platform_device *pdev)
 		pdata->exit();
 
 	if (host) {
-		nand_release(&host->mtd);
 		iounmap(host->cmd_va);
 		iounmap(host->data_va);
 		iounmap(host->addr_va);
@@ -201,7 +205,7 @@ static int nomadik_nand_suspend(struct device *dev)
 	struct nomadik_nand_host *host = dev_get_drvdata(dev);
 	int ret = 0;
 	if (host)
-		ret = mtd_suspend(&host->mtd);
+		ret = host->mtd.suspend(&host->mtd);
 	return ret;
 }
 
@@ -209,7 +213,7 @@ static int nomadik_nand_resume(struct device *dev)
 {
 	struct nomadik_nand_host *host = dev_get_drvdata(dev);
 	if (host)
-		mtd_resume(&host->mtd);
+		host->mtd.resume(&host->mtd);
 	return 0;
 }
 
@@ -228,7 +232,19 @@ static struct platform_driver nomadik_nand_driver = {
 	},
 };
 
-module_platform_driver(nomadik_nand_driver);
+static int __init nand_nomadik_init(void)
+{
+	pr_info("Nomadik NAND driver\n");
+	return platform_driver_register(&nomadik_nand_driver);
+}
+
+static void __exit nand_nomadik_exit(void)
+{
+	platform_driver_unregister(&nomadik_nand_driver);
+}
+
+module_init(nand_nomadik_init);
+module_exit(nand_nomadik_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("ST Microelectronics (sachin.verma@st.com)");

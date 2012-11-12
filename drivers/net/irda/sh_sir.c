@@ -12,8 +12,6 @@
  * published by the Free Software Foundation.
  */
 
-#include <linux/io.h>
-#include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
@@ -260,7 +258,7 @@ static int sh_sir_set_baudrate(struct sh_sir_self *self, u32 baudrate)
 
 	/* Baud Rate Error Correction x 10000 */
 	u32 rate_err_array[] = {
-		   0,  625, 1250, 1875,
+		0000, 0625, 1250, 1875,
 		2500, 3125, 3750, 4375,
 		5000, 5625, 6250, 6875,
 		7500, 8125, 8750, 9375,
@@ -513,7 +511,7 @@ static void sh_sir_tx(struct sh_sir_self *self, int phase)
 
 static int sh_sir_read_data(struct sh_sir_self *self)
 {
-	u16 val = 0;
+	u16 val;
 	int timeout = 1024;
 
 	while (timeout--) {
@@ -711,7 +709,7 @@ static int __devinit sh_sir_probe(struct platform_device *pdev)
 	struct sh_sir_self *self;
 	struct resource *res;
 	char clk_name[8];
-	int irq;
+	unsigned int irq;
 	int err = -ENOMEM;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -808,7 +806,18 @@ static struct platform_driver sh_sir_driver = {
 	},
 };
 
-module_platform_driver(sh_sir_driver);
+static int __init sh_sir_init(void)
+{
+	return platform_driver_register(&sh_sir_driver);
+}
+
+static void __exit sh_sir_exit(void)
+{
+	platform_driver_unregister(&sh_sir_driver);
+}
+
+module_init(sh_sir_init);
+module_exit(sh_sir_exit);
 
 MODULE_AUTHOR("Kuninori Morimoto <morimoto.kuninori@renesas.com>");
 MODULE_DESCRIPTION("SuperH IrDA driver");

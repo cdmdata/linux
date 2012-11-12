@@ -23,7 +23,6 @@
 #include <linux/slab.h>
 #include <linux/time.h>
 #include <linux/math64.h>
-#include <linux/export.h>
 #include <sound/core.h>
 #include <sound/control.h>
 #include <sound/info.h>
@@ -68,8 +67,6 @@ void snd_pcm_playback_silence(struct snd_pcm_substream *substream, snd_pcm_ufram
 	} else {
 		if (new_hw_ptr == ULONG_MAX) {	/* initialization */
 			snd_pcm_sframes_t avail = snd_pcm_playback_hw_avail(runtime);
-			if (avail > runtime->buffer_size)
-				avail = runtime->buffer_size;
 			runtime->silence_filled = avail > 0 ? avail : 0;
 			runtime->silence_start = (runtime->status->hw_ptr +
 						  runtime->silence_filled) %
@@ -129,8 +126,7 @@ void snd_pcm_playback_silence(struct snd_pcm_substream *substream, snd_pcm_ufram
 	}
 }
 
-#ifdef CONFIG_SND_DEBUG
-void snd_pcm_debug_name(struct snd_pcm_substream *substream,
+static void pcm_debug_name(struct snd_pcm_substream *substream,
 			   char *name, size_t len)
 {
 	snprintf(name, len, "pcmC%dD%d%c:%d",
@@ -139,8 +135,6 @@ void snd_pcm_debug_name(struct snd_pcm_substream *substream,
 		 substream->stream ? 'c' : 'p',
 		 substream->number);
 }
-EXPORT_SYMBOL(snd_pcm_debug_name);
-#endif
 
 #define XRUN_DEBUG_BASIC	(1<<0)
 #define XRUN_DEBUG_STACK	(1<<1)	/* dump also stack */
@@ -172,7 +166,7 @@ static void xrun(struct snd_pcm_substream *substream)
 	snd_pcm_stop(substream, SNDRV_PCM_STATE_XRUN);
 	if (xrun_debug(substream, XRUN_DEBUG_BASIC)) {
 		char name[16];
-		snd_pcm_debug_name(substream, name, sizeof(name));
+		pcm_debug_name(substream, name, sizeof(name));
 		snd_printd(KERN_DEBUG "XRUN: %s\n", name);
 		dump_stack_on_xrun(substream);
 	}
@@ -193,7 +187,6 @@ static void xrun(struct snd_pcm_substream *substream)
 #define XRUN_LOG_CNT	10
 
 struct hwptr_log_entry {
-	unsigned int in_interrupt;
 	unsigned long jiffies;
 	snd_pcm_uframes_t pos;
 	snd_pcm_uframes_t period_size;
@@ -209,7 +202,7 @@ struct snd_pcm_hwptr_log {
 };
 
 static void xrun_log(struct snd_pcm_substream *substream,
-		     snd_pcm_uframes_t pos, int in_interrupt)
+		     snd_pcm_uframes_t pos)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct snd_pcm_hwptr_log *log = runtime->hwptr_log;
@@ -225,11 +218,10 @@ static void xrun_log(struct snd_pcm_substream *substream,
 			return;
 	}
 	entry = &log->entries[log->idx];
-	entry->in_interrupt = in_interrupt;
 	entry->jiffies = jiffies;
 	entry->pos = pos;
 	entry->period_size = runtime->period_size;
-	entry->buffer_size = runtime->buffer_size;
+	entry->buffer_size = runtime->buffer_size;;
 	entry->old_hw_ptr = runtime->status->hw_ptr;
 	entry->hw_ptr_base = runtime->hw_ptr_base;
 	log->idx = (log->idx + 1) % XRUN_LOG_CNT;
@@ -247,16 +239,14 @@ static void xrun_log_show(struct snd_pcm_substream *substream)
 		return;
 	if (xrun_debug(substream, XRUN_DEBUG_LOGONCE) && log->hit)
 		return;
-	snd_pcm_debug_name(substream, name, sizeof(name));
+	pcm_debug_name(substream, name, sizeof(name));
 	for (cnt = 0, idx = log->idx; cnt < XRUN_LOG_CNT; cnt++) {
 		entry = &log->entries[idx];
 		if (entry->period_size == 0)
 			break;
-		snd_printd("hwptr log: %s: %sj=%lu, pos=%ld/%ld/%ld, "
+		snd_printd("hwptr log: %s: j=%lu, pos=%ld/%ld/%ld, "
 			   "hwptr=%ld/%ld\n",
-			   name, entry->in_interrupt ? "[Q] " : "",
-			   entry->jiffies,
-			   (unsigned long)entry->pos,
+			   name, entry->jiffies, (unsigned long)entry->pos,
 			   (unsigned long)entry->period_size,
 			   (unsigned long)entry->buffer_size,
 			   (unsigned long)entry->old_hw_ptr,
@@ -270,7 +260,7 @@ static void xrun_log_show(struct snd_pcm_substream *substream)
 #else /* ! CONFIG_SND_PCM_XRUN_DEBUG */
 
 #define hw_ptr_error(substream, fmt, args...) do { } while (0)
-#define xrun_log(substream, pos, in_interrupt)	do { } while (0)
+#define xrun_log(substream, pos)	do { } while (0)
 #define xrun_log_show(substream)	do { } while (0)
 
 #endif
@@ -297,11 +287,8 @@ int snd_pcm_update_state(struct snd_pcm_substream *substream,
 			return -EPIPE;
 		}
 	}
-	if (runtime->twake) {
-		if (avail >= runtime->twake)
-			wake_up(&runtime->tsleep);
-	} else if (avail >= runtime->control->avail_min)
-		wake_up(&runtime->sleep);
+	if (avail >= runtime->control->avail_min)
+		wake_up(runtime->twake ? &runtime->tsleep : &runtime->sleep);
 	return 0;
 }
 
@@ -323,7 +310,7 @@ static int snd_pcm_update_hw_ptr0(struct snd_pcm_substream *substream,
 	if (pos >= runtime->buffer_size) {
 		if (printk_ratelimit()) {
 			char name[16];
-			snd_pcm_debug_name(substream, name, sizeof(name));
+			pcm_debug_name(substream, name, sizeof(name));
 			xrun_log_show(substream);
 			snd_printd(KERN_ERR  "BUG: %s, pos = %ld, "
 				   "buffer size = %ld, period size = %ld\n",
@@ -334,7 +321,7 @@ static int snd_pcm_update_hw_ptr0(struct snd_pcm_substream *substream,
 	}
 	pos -= pos % runtime->min_align;
 	if (xrun_debug(substream, XRUN_DEBUG_LOG))
-		xrun_log(substream, pos, in_interrupt);
+		xrun_log(substream, pos);
 	hw_base = runtime->hw_ptr_base;
 	new_hw_ptr = hw_base + pos;
 	if (in_interrupt) {
@@ -342,15 +329,11 @@ static int snd_pcm_update_hw_ptr0(struct snd_pcm_substream *substream,
 		/* delta = "expected next hw_ptr" for in_interrupt != 0 */
 		delta = runtime->hw_ptr_interrupt + runtime->period_size;
 		if (delta > new_hw_ptr) {
-			/* check for double acknowledged interrupts */
-			hdelta = jiffies - runtime->hw_ptr_jiffies;
-			if (hdelta > runtime->hw_ptr_buffer_jiffies/2) {
-				hw_base += runtime->buffer_size;
-				if (hw_base >= runtime->boundary)
-					hw_base = 0;
-				new_hw_ptr = hw_base + pos;
-				goto __delta;
-			}
+			hw_base += runtime->buffer_size;
+			if (hw_base >= runtime->boundary)
+				hw_base = 0;
+			new_hw_ptr = hw_base + pos;
+			goto __delta;
 		}
 	}
 	/* new_hw_ptr might be lower than old_hw_ptr in case when */
@@ -368,7 +351,7 @@ static int snd_pcm_update_hw_ptr0(struct snd_pcm_substream *substream,
 	if (xrun_debug(substream, in_interrupt ?
 			XRUN_DEBUG_PERIODUPDATE : XRUN_DEBUG_HWPTRUPDATE)) {
 		char name[16];
-		snd_pcm_debug_name(substream, name, sizeof(name));
+		pcm_debug_name(substream, name, sizeof(name));
 		snd_printd("%s_update: %s: pos=%u/%u/%u, "
 			   "hwptr=%ld/%ld/%ld/%ld\n",
 			   in_interrupt ? "period" : "hwptr",
@@ -381,29 +364,6 @@ static int snd_pcm_update_hw_ptr0(struct snd_pcm_substream *substream,
 			   (unsigned long)new_hw_ptr,
 			   (unsigned long)runtime->hw_ptr_base);
 	}
-
-	if (runtime->no_period_wakeup) {
-		snd_pcm_sframes_t xrun_threshold;
-		/*
-		 * Without regular period interrupts, we have to check
-		 * the elapsed time to detect xruns.
-		 */
-		jdelta = jiffies - runtime->hw_ptr_jiffies;
-		if (jdelta < runtime->hw_ptr_buffer_jiffies / 2)
-			goto no_delta_check;
-		hdelta = jdelta - delta * HZ / runtime->rate;
-		xrun_threshold = runtime->hw_ptr_buffer_jiffies / 2 + 1;
-		while (hdelta > xrun_threshold) {
-			delta += runtime->buffer_size;
-			hw_base += runtime->buffer_size;
-			if (hw_base >= runtime->boundary)
-				hw_base = 0;
-			new_hw_ptr = hw_base + pos;
-			hdelta -= runtime->hw_ptr_buffer_jiffies;
-		}
-		goto no_delta_check;
-	}
-
 	/* something must be really wrong */
 	if (delta >= runtime->buffer_size + runtime->period_size) {
 		hw_ptr_error(substream,
@@ -473,7 +433,6 @@ static int snd_pcm_update_hw_ptr0(struct snd_pcm_substream *substream,
 			     (long)old_hw_ptr);
 	}
 
- no_delta_check:
 	if (runtime->status->hw_ptr == new_hw_ptr)
 		return 0;
 
@@ -1029,8 +988,7 @@ static int snd_interval_ratden(struct snd_interval *i,
  *
  * Returns non-zero if the value is changed, zero if not changed.
  */
-int snd_interval_list(struct snd_interval *i, unsigned int count,
-		      const unsigned int *list, unsigned int mask)
+int snd_interval_list(struct snd_interval *i, unsigned int count, unsigned int *list, unsigned int mask)
 {
         unsigned int k;
 	struct snd_interval list_range;
@@ -1103,10 +1061,8 @@ int snd_pcm_hw_rule_add(struct snd_pcm_runtime *runtime, unsigned int cond,
 		struct snd_pcm_hw_rule *new;
 		unsigned int new_rules = constrs->rules_all + 16;
 		new = kcalloc(new_rules, sizeof(*c), GFP_KERNEL);
-		if (!new) {
-			va_end(args);
+		if (!new)
 			return -ENOMEM;
-		}
 		if (constrs->rules) {
 			memcpy(new, constrs->rules,
 			       constrs->rules_num * sizeof(*c));
@@ -1122,10 +1078,8 @@ int snd_pcm_hw_rule_add(struct snd_pcm_runtime *runtime, unsigned int cond,
 	c->private = private;
 	k = 0;
 	while (1) {
-		if (snd_BUG_ON(k >= ARRAY_SIZE(c->deps))) {
-			va_end(args);
+		if (snd_BUG_ON(k >= ARRAY_SIZE(c->deps)))
 			return -EINVAL;
-		}
 		c->deps[k++] = dep;
 		if (dep < 0)
 			break;
@@ -1134,7 +1088,7 @@ int snd_pcm_hw_rule_add(struct snd_pcm_runtime *runtime, unsigned int cond,
 	constrs->rules_num++;
 	va_end(args);
 	return 0;
-}
+}				    
 
 EXPORT_SYMBOL(snd_pcm_hw_rule_add);
 
@@ -1400,32 +1354,6 @@ int snd_pcm_hw_constraint_pow2(struct snd_pcm_runtime *runtime,
 }
 
 EXPORT_SYMBOL(snd_pcm_hw_constraint_pow2);
-
-static int snd_pcm_hw_rule_noresample_func(struct snd_pcm_hw_params *params,
-					   struct snd_pcm_hw_rule *rule)
-{
-	unsigned int base_rate = (unsigned int)(uintptr_t)rule->private;
-	struct snd_interval *rate;
-
-	rate = hw_param_interval(params, SNDRV_PCM_HW_PARAM_RATE);
-	return snd_interval_list(rate, 1, &base_rate, 0);
-}
-
-/**
- * snd_pcm_hw_rule_noresample - add a rule to allow disabling hw resampling
- * @runtime: PCM runtime instance
- * @base_rate: the rate at which the hardware does not resample
- */
-int snd_pcm_hw_rule_noresample(struct snd_pcm_runtime *runtime,
-			       unsigned int base_rate)
-{
-	return snd_pcm_hw_rule_add(runtime, SNDRV_PCM_HW_PARAMS_NORESAMPLE,
-				   SNDRV_PCM_HW_PARAM_RATE,
-				   snd_pcm_hw_rule_noresample_func,
-				   (void *)(uintptr_t)base_rate,
-				   SNDRV_PCM_HW_PARAM_RATE, -1);
-}
-EXPORT_SYMBOL(snd_pcm_hw_rule_noresample);
 
 static void _snd_pcm_hw_param_any(struct snd_pcm_hw_params *params,
 				  snd_pcm_hw_param_t var)
@@ -1779,7 +1707,7 @@ EXPORT_SYMBOL(snd_pcm_period_elapsed);
  * The available space is stored on availp.  When err = 0 and avail = 0
  * on the capture stream, it indicates the stream is in DRAINING state.
  */
-static int wait_for_avail(struct snd_pcm_substream *substream,
+static int wait_for_avail_min(struct snd_pcm_substream *substream,
 			      snd_pcm_uframes_t *availp)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
@@ -1787,48 +1715,19 @@ static int wait_for_avail(struct snd_pcm_substream *substream,
 	wait_queue_t wait;
 	int err = 0;
 	snd_pcm_uframes_t avail = 0;
-	long wait_time, tout;
+	long tout;
 
 	init_waitqueue_entry(&wait, current);
-	set_current_state(TASK_INTERRUPTIBLE);
 	add_wait_queue(&runtime->tsleep, &wait);
-
-	if (runtime->no_period_wakeup)
-		wait_time = MAX_SCHEDULE_TIMEOUT;
-	else {
-		wait_time = 10;
-		if (runtime->rate) {
-			long t = runtime->period_size * 2 / runtime->rate;
-			wait_time = max(t, wait_time);
-		}
-		wait_time = msecs_to_jiffies(wait_time * 1000);
-	}
-
 	for (;;) {
 		if (signal_pending(current)) {
 			err = -ERESTARTSYS;
 			break;
 		}
-
-		/*
-		 * We need to check if space became available already
-		 * (and thus the wakeup happened already) first to close
-		 * the race of space already having become available.
-		 * This check must happen after been added to the waitqueue
-		 * and having current state be INTERRUPTIBLE.
-		 */
-		if (is_playback)
-			avail = snd_pcm_playback_avail(runtime);
-		else
-			avail = snd_pcm_capture_avail(runtime);
-		if (avail >= runtime->twake)
-			break;
-		snd_pcm_stream_unlock_irq(substream);
-
-		tout = schedule_timeout(wait_time);
-
-		snd_pcm_stream_lock_irq(substream);
 		set_current_state(TASK_INTERRUPTIBLE);
+		snd_pcm_stream_unlock_irq(substream);
+		tout = schedule_timeout(msecs_to_jiffies(10000));
+		snd_pcm_stream_lock_irq(substream);
 		switch (runtime->status->state) {
 		case SNDRV_PCM_STATE_SUSPENDED:
 			err = -ESTRPIPE;
@@ -1854,9 +1753,14 @@ static int wait_for_avail(struct snd_pcm_substream *substream,
 			err = -EIO;
 			break;
 		}
+		if (is_playback)
+			avail = snd_pcm_playback_avail(runtime);
+		else
+			avail = snd_pcm_capture_avail(runtime);
+		if (avail >= runtime->control->avail_min)
+			break;
 	}
  _endloop:
-	set_current_state(TASK_RUNNING);
 	remove_wait_queue(&runtime->tsleep, &wait);
 	*availp = avail;
 	return err;
@@ -1916,7 +1820,7 @@ static snd_pcm_sframes_t snd_pcm_lib_write1(struct snd_pcm_substream *substream,
 		goto _end_unlock;
 	}
 
-	runtime->twake = runtime->control->avail_min ? : 1;
+	runtime->twake = 1;
 	while (size > 0) {
 		snd_pcm_uframes_t frames, appl_ptr, appl_ofs;
 		snd_pcm_uframes_t avail;
@@ -1929,9 +1833,7 @@ static snd_pcm_sframes_t snd_pcm_lib_write1(struct snd_pcm_substream *substream,
 				err = -EAGAIN;
 				goto _end_unlock;
 			}
-			runtime->twake = min_t(snd_pcm_uframes_t, size,
-					runtime->control->avail_min ? : 1);
-			err = wait_for_avail(substream, &avail);
+			err = wait_for_avail_min(substream, &avail);
 			if (err < 0)
 				goto _end_unlock;
 		}
@@ -2140,7 +2042,7 @@ static snd_pcm_sframes_t snd_pcm_lib_read1(struct snd_pcm_substream *substream,
 		goto _end_unlock;
 	}
 
-	runtime->twake = runtime->control->avail_min ? : 1;
+	runtime->twake = 1;
 	while (size > 0) {
 		snd_pcm_uframes_t frames, appl_ptr, appl_ofs;
 		snd_pcm_uframes_t avail;
@@ -2158,9 +2060,7 @@ static snd_pcm_sframes_t snd_pcm_lib_read1(struct snd_pcm_substream *substream,
 				err = -EAGAIN;
 				goto _end_unlock;
 			}
-			runtime->twake = min_t(snd_pcm_uframes_t, size,
-					runtime->control->avail_min ? : 1);
-			err = wait_for_avail(substream, &avail);
+			err = wait_for_avail_min(substream, &avail);
 			if (err < 0)
 				goto _end_unlock;
 			if (!avail)

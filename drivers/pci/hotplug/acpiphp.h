@@ -36,6 +36,7 @@
 #define _ACPIPHP_H
 
 #include <linux/acpi.h>
+#include <linux/kobject.h>
 #include <linux/mutex.h>
 #include <linux/pci_hotplug.h>
 

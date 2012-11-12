@@ -113,6 +113,7 @@ void sysv_free_inode(struct inode * inode)
 		return;
 	}
 	raw_inode = sysv_raw_inode(sb, ino, &bh);
+	clear_inode(inode);
 	if (!raw_inode) {
 		printk("sysv_free_inode: unable to read inode block on device "
 		       "%s\n", inode->i_sb->s_id);
@@ -132,7 +133,7 @@ void sysv_free_inode(struct inode * inode)
 	brelse(bh);
 }
 
-struct inode * sysv_new_inode(const struct inode * dir, umode_t mode)
+struct inode * sysv_new_inode(const struct inode * dir, mode_t mode)
 {
 	struct super_block *sb = dir->i_sb;
 	struct sysv_sb_info *sbi = SYSV_SB(sb);

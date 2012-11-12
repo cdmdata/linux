@@ -80,8 +80,8 @@ static void i2c_pca_pf_writebyte32(void *pd, int reg, int val)
 static int i2c_pca_pf_waitforcompletion(void *pd)
 {
 	struct i2c_pca_pf_data *i2c = pd;
+	long ret = ~0;
 	unsigned long timeout;
-	long ret;
 
 	if (i2c->irq) {
 		ret = wait_event_timeout(i2c->wait,
@@ -90,13 +90,10 @@ static int i2c_pca_pf_waitforcompletion(void *pd)
 	} else {
 		/* Do polling */
 		timeout = jiffies + i2c->adap.timeout;
-		do {
-			ret = time_before(jiffies, timeout);
-			if (i2c->algo_data.read_byte(i2c, I2C_PCA_CON)
-					& I2C_PCA_CON_SI)
-				break;
+		while (((i2c->algo_data.read_byte(i2c, I2C_PCA_CON)
+				& I2C_PCA_CON_SI) == 0)
+				&& (ret = time_before(jiffies, timeout)))
 			udelay(100);
-		} while (ret);
 	}
 
 	return ret > 0;
@@ -224,7 +221,7 @@ static int __devinit i2c_pca_pf_probe(struct platform_device *pdev)
 
 	if (irq) {
 		ret = request_irq(irq, i2c_pca_pf_handler,
-			IRQF_TRIGGER_FALLING, pdev->name, i2c);
+			IRQF_TRIGGER_FALLING, i2c->adap.name, i2c);
 		if (ret)
 			goto e_reqirq;
 	}
@@ -286,8 +283,20 @@ static struct platform_driver i2c_pca_pf_driver = {
 	},
 };
 
-module_platform_driver(i2c_pca_pf_driver);
+static int __init i2c_pca_pf_init(void)
+{
+	return platform_driver_register(&i2c_pca_pf_driver);
+}
+
+static void __exit i2c_pca_pf_exit(void)
+{
+	platform_driver_unregister(&i2c_pca_pf_driver);
+}
 
 MODULE_AUTHOR("Wolfram Sang <w.sang@pengutronix.de>");
 MODULE_DESCRIPTION("I2C-PCA9564/PCA9665 platform driver");
 MODULE_LICENSE("GPL");
+
+module_init(i2c_pca_pf_init);
+module_exit(i2c_pca_pf_exit);
+

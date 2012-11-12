@@ -86,6 +86,7 @@ TODO:
 #include "../comedidev.h"
 #include <linux/delay.h>
 #include <linux/interrupt.h>
+#include <asm/system.h>
 
 #include "comedi_pci.h"
 #include "8253.h"
@@ -103,7 +104,7 @@ TODO:
 #endif
 
 #define TIMER_BASE 25		/*  40MHz master clock */
-#define PRESCALED_TIMER_BASE	10000	/*  100kHz 'prescaled' clock for slow acquisition, maybe I'll support this someday */
+#define PRESCALED_TIMER_BASE	10000	/*  100kHz 'prescaled' clock for slow aquisition, maybe I'll support this someday */
 #define DMA_BUFFER_SIZE 0x1000
 
 #define PCI_VENDOR_ID_COMPUTERBOARDS	0x1307
@@ -135,7 +136,7 @@ enum write_only_registers {
 	ADC_DELAY_INTERVAL_UPPER_REG = 0x1c,	/*  upper 8 bits of delay interval counter */
 	ADC_COUNT_LOWER_REG = 0x1e,	/*  lower 16 bits of hardware conversion/scan counter */
 	ADC_COUNT_UPPER_REG = 0x20,	/*  upper 8 bits of hardware conversion/scan counter */
-	ADC_START_REG = 0x22,	/*  software trigger to start acquisition */
+	ADC_START_REG = 0x22,	/*  software trigger to start aquisition */
 	ADC_CONVERT_REG = 0x24,	/*  initiates single conversion */
 	ADC_QUEUE_CLEAR_REG = 0x26,	/*  clears adc queue */
 	ADC_QUEUE_LOAD_REG = 0x28,	/*  loads adc queue */
@@ -198,7 +199,7 @@ enum intr_enable_contents {
 	ADC_INTR_EOSCAN_BITS = 0x2,	/*  interrupt end of scan */
 	ADC_INTR_EOSEQ_BITS = 0x3,	/*  interrupt end of sequence (probably wont use this it's pretty fancy) */
 	EN_ADC_INTR_SRC_BIT = 0x4,	/*  enable adc interrupt source */
-	EN_ADC_DONE_INTR_BIT = 0x8,	/*  enable adc acquisition done interrupt */
+	EN_ADC_DONE_INTR_BIT = 0x8,	/*  enable adc aquisition done interrupt */
 	DAC_INTR_SRC_MASK = 0x30,
 	DAC_INTR_QEMPTY_BITS = 0x0,
 	DAC_INTR_HIGH_CHAN_BITS = 0x10,
@@ -1027,26 +1028,46 @@ static const struct pcidas64_board pcidas64_boards[] = {
 };
 
 static DEFINE_PCI_DEVICE_TABLE(pcidas64_pci_table) = {
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x001d) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x001e) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x0035) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x0036) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x0037) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x0052) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x005d) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x005e) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x005f) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x0061) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x0062) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x0063) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x0064) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x0066) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x0067) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x0068) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x006f) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x0078) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_COMPUTERBOARDS, 0x0079) },
-	{ 0 }
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x001d, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x001e, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x0035, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x0036, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x0037, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x0052, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x005d, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x005e, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x005f, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x0061, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x0062, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x0063, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x0064, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x0066, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x0067, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x0068, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x006f, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x0078, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	PCI_VENDOR_ID_COMPUTERBOARDS, 0x0079, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{
+	0}
 };
 
 MODULE_DEVICE_TABLE(pci, pcidas64_pci_table);
@@ -1216,43 +1237,7 @@ static unsigned int get_ao_divisor(unsigned int ns, unsigned int flags);
 static void load_ao_dma(struct comedi_device *dev,
 			const struct comedi_cmd *cmd);
 
-static int __devinit driver_cb_pcidas_pci_probe(struct pci_dev *dev,
-						const struct pci_device_id *ent)
-{
-	return comedi_pci_auto_config(dev, driver_cb_pcidas.driver_name);
-}
-
-static void __devexit driver_cb_pcidas_pci_remove(struct pci_dev *dev)
-{
-	comedi_pci_auto_unconfig(dev);
-}
-
-static struct pci_driver driver_cb_pcidas_pci_driver = {
-	.id_table = pcidas64_pci_table,
-	.probe = &driver_cb_pcidas_pci_probe,
-	.remove = __devexit_p(&driver_cb_pcidas_pci_remove)
-};
-
-static int __init driver_cb_pcidas_init_module(void)
-{
-	int retval;
-
-	retval = comedi_driver_register(&driver_cb_pcidas);
-	if (retval < 0)
-		return retval;
-
-	driver_cb_pcidas_pci_driver.name = (char *)driver_cb_pcidas.driver_name;
-	return pci_register_driver(&driver_cb_pcidas_pci_driver);
-}
-
-static void __exit driver_cb_pcidas_cleanup_module(void)
-{
-	pci_unregister_driver(&driver_cb_pcidas_pci_driver);
-	comedi_driver_unregister(&driver_cb_pcidas);
-}
-
-module_init(driver_cb_pcidas_init_module);
-module_exit(driver_cb_pcidas_cleanup_module);
+COMEDI_PCI_INITCLEANUP(driver_cb_pcidas, pcidas64_pci_table);
 
 static unsigned int ai_range_bits_6xxx(const struct comedi_device *dev,
 				       unsigned int range_index)
@@ -1733,10 +1718,12 @@ static inline void warn_external_queue(struct comedi_device *dev)
  */
 static int attach(struct comedi_device *dev, struct comedi_devconfig *it)
 {
-	struct pci_dev *pcidev = NULL;
+	struct pci_dev *pcidev;
 	int index;
 	uint32_t local_range, local_decode;
 	int retval;
+
+	printk("comedi%d: cb_pcidas64\n", dev->minor);
 
 /*
  * Allocate the private structure area.
@@ -1748,7 +1735,9 @@ static int attach(struct comedi_device *dev, struct comedi_devconfig *it)
  * Probe the device to determine what device in the series it is.
  */
 
-	for_each_pci_dev(pcidev) {
+	for (pcidev = pci_get_device(PCI_ANY_ID, PCI_ANY_ID, NULL);
+	     pcidev != NULL;
+	     pcidev = pci_get_device(PCI_ANY_ID, PCI_ANY_ID, pcidev)) {
 		/*  is it not a computer boards card? */
 		if (pcidev->vendor != PCI_VENDOR_ID_COMPUTERBOARDS)
 			continue;
@@ -1778,11 +1767,12 @@ static int attach(struct comedi_device *dev, struct comedi_devconfig *it)
 		return -EIO;
 	}
 
-	dev_dbg(dev->hw_dev, "Found %s on bus %i, slot %i\n", board(dev)->name,
-		pcidev->bus->number, PCI_SLOT(pcidev->devfn));
+	printk("Found %s on bus %i, slot %i\n", board(dev)->name,
+	       pcidev->bus->number, PCI_SLOT(pcidev->devfn));
 
 	if (comedi_pci_enable(pcidev, driver_cb_pcidas.driver_name)) {
-		dev_warn(dev->hw_dev, "failed to enable PCI device and request regions\n");
+		printk(KERN_WARNING
+		       " failed to enable PCI device and request regions\n");
 		return -EIO;
 	}
 	pci_set_master(pcidev);
@@ -1810,7 +1800,7 @@ static int attach(struct comedi_device *dev, struct comedi_devconfig *it)
 
 	if (!priv(dev)->plx9080_iobase || !priv(dev)->main_iobase
 	    || !priv(dev)->dio_counter_iobase) {
-		dev_warn(dev->hw_dev, "failed to remap io memory\n");
+		printk(" failed to remap io memory\n");
 		return -ENOMEM;
 	}
 
@@ -1846,19 +1836,17 @@ static int attach(struct comedi_device *dev, struct comedi_devconfig *it)
 
 	priv(dev)->hw_revision =
 	    hw_revision(dev, readw(priv(dev)->main_iobase + HW_STATUS_REG));
-	dev_dbg(dev->hw_dev, "stc hardware revision %i\n",
-		priv(dev)->hw_revision);
+	printk(" stc hardware revision %i\n", priv(dev)->hw_revision);
 	init_plx9080(dev);
 	init_stc_registers(dev);
 	/*  get irq */
 	if (request_irq(pcidev->irq, handle_interrupt, IRQF_SHARED,
 			"cb_pcidas64", dev)) {
-		dev_dbg(dev->hw_dev, "unable to allocate irq %u\n",
-			pcidev->irq);
+		printk(" unable to allocate irq %u\n", pcidev->irq);
 		return -EINVAL;
 	}
 	dev->irq = pcidev->irq;
-	dev_dbg(dev->hw_dev, "irq %u\n", dev->irq);
+	printk(" irq %u\n", dev->irq);
 
 	retval = setup_subdevices(dev);
 	if (retval < 0)
@@ -1879,6 +1867,8 @@ static int attach(struct comedi_device *dev, struct comedi_devconfig *it)
 static int detach(struct comedi_device *dev)
 {
 	unsigned int i;
+
+	printk("comedi%d: cb_pcidas: remove\n", dev->minor);
 
 	if (dev->irq)
 		free_irq(dev->irq, dev);
@@ -2089,8 +2079,7 @@ static int ai_config_calibration_source(struct comedi_device *dev,
 	else
 		num_calibration_sources = 8;
 	if (source >= num_calibration_sources) {
-		dev_dbg(dev->hw_dev, "invalid calibration source: %i\n",
-			source);
+		printk("invalid calibration source: %i\n", source);
 		return -EINVAL;
 	}
 
@@ -2864,7 +2853,7 @@ static int ai_cmd(struct comedi_device *dev, struct comedi_subdevice *s)
 
 	spin_unlock_irqrestore(&dev->spinlock, flags);
 
-	/*  start acquisition */
+	/*  start aquisition */
 	if (cmd->start_src == TRIG_NOW) {
 		writew(0, priv(dev)->main_iobase + ADC_START_REG);
 		DEBUG_PRINT("soft trig\n");
@@ -2921,7 +2910,7 @@ static void pio_drain_ai_fifo_16(struct comedi_device *dev)
 		}
 
 		if (num_samples < 0) {
-			dev_err(dev->hw_dev, "cb_pcidas64: bug! num_samples < 0\n");
+			printk(" cb_pcidas64: bug! num_samples < 0\n");
 			break;
 		}
 
@@ -2939,7 +2928,7 @@ static void pio_drain_ai_fifo_16(struct comedi_device *dev)
 /* Read from 32 bit wide ai fifo of 4020 - deal with insane grey coding of pointers.
  * The pci-4020 hardware only supports
  * dma transfers (it only supports the use of pio for draining the last remaining
- * points from the fifo when a data acquisition operation has completed).
+ * points from the fifo when a data aquisition operation has completed).
  */
 static void pio_drain_ai_fifo_32(struct comedi_device *dev)
 {
@@ -3043,7 +3032,7 @@ static void handle_ai_interrupt(struct comedi_device *dev,
 		comedi_error(dev, "fifo overrun");
 		async->events |= COMEDI_CB_EOA | COMEDI_CB_ERROR;
 	}
-	/*  spin lock makes sure no one else changes plx dma control reg */
+	/*  spin lock makes sure noone else changes plx dma control reg */
 	spin_lock_irqsave(&dev->spinlock, flags);
 	dma1_status = readb(priv(dev)->plx9080_iobase + PLX_DMA1_CS_REG);
 	if (plx_status & ICS_DMA1_A) {	/*  dma chan 1 interrupt */
@@ -3075,7 +3064,7 @@ static void handle_ai_interrupt(struct comedi_device *dev,
 			spin_unlock_irqrestore(&dev->spinlock, flags);
 	}
 	/*  if we are have all the data, then quit */
-	if ((cmd->stop_src == TRIG_COUNT && (int)priv(dev)->ai_count <= 0) ||
+	if ((cmd->stop_src == TRIG_COUNT && priv(dev)->ai_count <= 0) ||
 	    (cmd->stop_src == TRIG_EXT && (status & ADC_STOP_BIT))) {
 		async->events |= COMEDI_CB_EOA;
 	}
@@ -3167,7 +3156,7 @@ static void handle_ao_interrupt(struct comedi_device *dev,
 	async = s->async;
 	cmd = &async->cmd;
 
-	/*  spin lock makes sure no one else changes plx dma control reg */
+	/*  spin lock makes sure noone else changes plx dma control reg */
 	spin_lock_irqsave(&dev->spinlock, flags);
 	dma0_status = readb(priv(dev)->plx9080_iobase + PLX_DMA0_CS_REG);
 	if (plx_status & ICS_DMA0_A) {	/*  dma chan 0 interrupt */
@@ -4314,7 +4303,3 @@ static void i2c_write(struct comedi_device *dev, unsigned int address,
 	}
 	i2c_stop(dev);
 }
-
-MODULE_AUTHOR("Comedi http://www.comedi.org");
-MODULE_DESCRIPTION("Comedi low-level driver");
-MODULE_LICENSE("GPL");

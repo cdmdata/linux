@@ -105,12 +105,19 @@ err_out:
  * 	mask: contains the permission mask
  *	fsmagic: hex value
  *
- * Return 0 to measure. For matching a DONT_MEASURE policy, no policy,
- * or other error, return an error code.
+ * Must be called with iint->mutex held.
+ *
+ * Return 0 to measure. Return 1 if already measured.
+ * For matching a DONT_MEASURE policy, no policy, or other
+ * error, return an error code.
 */
-int ima_must_measure(struct inode *inode, int mask, int function)
+int ima_must_measure(struct ima_iint_cache *iint, struct inode *inode,
+		     int mask, int function)
 {
 	int must_measure;
+
+	if (iint->flags & IMA_MEASURED)
+		return 1;
 
 	must_measure = ima_match_policy(inode, function, mask);
 	return must_measure ? 0 : -EACCES;
@@ -126,8 +133,7 @@ int ima_must_measure(struct inode *inode, int mask, int function)
  *
  * Return 0 on success, error code otherwise
  */
-int ima_collect_measurement(struct integrity_iint_cache *iint,
-			    struct file *file)
+int ima_collect_measurement(struct ima_iint_cache *iint, struct file *file)
 {
 	int result = -EEXIST;
 
@@ -157,8 +163,8 @@ int ima_collect_measurement(struct integrity_iint_cache *iint,
  *
  * Must be called with iint->mutex held.
  */
-void ima_store_measurement(struct integrity_iint_cache *iint,
-			   struct file *file, const unsigned char *filename)
+void ima_store_measurement(struct ima_iint_cache *iint, struct file *file,
+			   const unsigned char *filename)
 {
 	const char *op = "add_template_measure";
 	const char *audit_cause = "ENOMEM";
@@ -178,8 +184,8 @@ void ima_store_measurement(struct integrity_iint_cache *iint,
 	strncpy(entry->template.file_name, filename, IMA_EVENT_NAME_LEN_MAX);
 
 	result = ima_store_template(entry, violation, inode);
-	if (!result || result == -EEXIST)
+	if (!result)
 		iint->flags |= IMA_MEASURED;
-	if (result < 0)
+	else
 		kfree(entry);
 }

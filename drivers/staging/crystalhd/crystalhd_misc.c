@@ -24,9 +24,10 @@
  * along with this driver.  If not, see <http://www.gnu.org/licenses/>.
  **********************************************************************/
 
-#include "crystalhd.h"
-
 #include <linux/slab.h>
+
+#include "crystalhd_misc.h"
+#include "crystalhd_lnx.h"
 
 uint32_t g_linklog_level;
 
@@ -310,7 +311,7 @@ enum BC_STATUS crystalhd_pci_cfg_rd(struct crystalhd_adp *adp, uint32_t off,
 		rc = -EINVAL;
 		sts = BC_STS_INV_ARG;
 		BCMLOG_ERR("Invalid len:%d\n", len);
-	}
+	};
 
 	if (rc && (sts == BC_STS_SUCCESS))
 		sts = BC_STS_ERROR;
@@ -355,7 +356,7 @@ enum BC_STATUS crystalhd_pci_cfg_wr(struct crystalhd_adp *adp, uint32_t off,
 		rc = -EINVAL;
 		sts = BC_STS_INV_ARG;
 		BCMLOG_ERR("Invalid len:%d\n", len);
-	}
+	};
 
 	if (rc && (sts == BC_STS_SUCCESS))
 		sts = BC_STS_ERROR;

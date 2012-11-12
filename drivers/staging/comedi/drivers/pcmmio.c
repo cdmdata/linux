@@ -145,6 +145,10 @@ Configuration Options:
 #define PAGE_ENAB 2
 #define PAGE_INT_ID 3
 
+typedef int (*comedi_insn_fn_t) (struct comedi_device *,
+				 struct comedi_subdevice *,
+				 struct comedi_insn *, unsigned int *);
+
 static int ai_rinsn(struct comedi_device *, struct comedi_subdevice *,
 		    struct comedi_insn *, unsigned int *);
 static int ao_rinsn(struct comedi_device *, struct comedi_subdevice *,
@@ -167,18 +171,7 @@ struct pcmmio_board {
 	const int n_ai_chans;
 	const int n_ao_chans;
 	const struct comedi_lrange *ai_range_table, *ao_range_table;
-	int (*ai_rinsn) (struct comedi_device *dev,
-			struct comedi_subdevice *s,
-			struct comedi_insn *insn,
-			unsigned int *data);
-	int (*ao_rinsn) (struct comedi_device *dev,
-			struct comedi_subdevice *s,
-			struct comedi_insn *insn,
-			unsigned int *data);
-	int (*ao_winsn) (struct comedi_device *dev,
-			struct comedi_subdevice *s,
-			struct comedi_insn *insn,
-			unsigned int *data);
+	comedi_insn_fn_t ai_rinsn, ao_rinsn, ao_winsn;
 };
 
 static const struct comedi_lrange ranges_ai = {
@@ -371,15 +364,15 @@ static int pcmmio_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	iobase = it->options[0];
 	irq[0] = it->options[1];
 
-	printk(KERN_INFO "comedi%d: %s: io: %lx attaching...\n", dev->minor,
-			driver.driver_name, iobase);
+	printk("comedi%d: %s: io: %lx ", dev->minor, driver.driver_name,
+	       iobase);
 
 	dev->iobase = iobase;
 
 	if (!iobase || !request_region(iobase,
 				       thisboard->total_iosize,
 				       driver.driver_name)) {
-		printk(KERN_ERR "comedi%d: I/O port conflict\n", dev->minor);
+		printk("I/O port conflict\n");
 		return -EIO;
 	}
 
@@ -394,8 +387,7 @@ static int pcmmio_attach(struct comedi_device *dev, struct comedi_devconfig *it)
  * convenient macro defined in comedidev.h.
  */
 	if (alloc_private(dev, sizeof(struct pcmmio_private)) < 0) {
-		printk(KERN_ERR "comedi%d: cannot allocate private data structure\n",
-				dev->minor);
+		printk("cannot allocate private data structure\n");
 		return -ENOMEM;
 	}
 
@@ -418,8 +410,7 @@ static int pcmmio_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	    kcalloc(n_subdevs, sizeof(struct pcmmio_subdev_private),
 		    GFP_KERNEL);
 	if (!devpriv->sprivs) {
-		printk(KERN_ERR "comedi%d: cannot allocate subdevice private data structures\n",
-				dev->minor);
+		printk("cannot allocate subdevice private data structures\n");
 		return -ENOMEM;
 	}
 	/*
@@ -429,8 +420,7 @@ static int pcmmio_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	 * Allocate 1 AI + 1 AO + 2 DIO subdevs (24 lines per DIO)
 	 */
 	if (alloc_subdevices(dev, n_subdevs) < 0) {
-		printk(KERN_ERR "comedi%d: cannot allocate subdevice data structures\n",
-				dev->minor);
+		printk("cannot allocate subdevice data structures\n");
 		return -ENOMEM;
 	}
 
@@ -560,15 +550,14 @@ static int pcmmio_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 				 */
 
 	if (irq[0]) {
-		printk(KERN_DEBUG "comedi%d: irq: %u\n", dev->minor, irq[0]);
+		printk("irq: %u ", irq[0]);
 		if (thisboard->dio_num_asics == 2 && irq[1])
-			printk(KERN_DEBUG "comedi%d: second ASIC irq: %u\n",
-					dev->minor, irq[1]);
+			printk("second ASIC irq: %u ", irq[1]);
 	} else {
-		printk(KERN_INFO "comedi%d: (IRQ mode disabled)\n", dev->minor);
+		printk("(IRQ mode disabled) ");
 	}
 
-	printk(KERN_INFO "comedi%d: attached\n", dev->minor);
+	printk("attached\n");
 
 	return 1;
 }
@@ -585,7 +574,7 @@ static int pcmmio_detach(struct comedi_device *dev)
 {
 	int i;
 
-	printk(KERN_INFO "comedi%d: %s: remove\n", dev->minor, driver.driver_name);
+	printk("comedi%d: %s: remove\n", dev->minor, driver.driver_name);
 	if (dev->iobase)
 		release_region(dev->iobase, thisboard->total_iosize);
 
@@ -626,7 +615,7 @@ static int pcmmio_dio_insn_bits(struct comedi_device *dev,
 
 #ifdef DAMMIT_ITS_BROKEN
 	/* DEBUG */
-	printk(KERN_DEBUG "write mask: %08x  data: %08x\n", data[0], data[1]);
+	printk("write mask: %08x  data: %08x\n", data[0], data[1]);
 #endif
 
 	s->state = 0;
@@ -648,9 +637,9 @@ static int pcmmio_dio_insn_bits(struct comedi_device *dev,
 #ifdef DAMMIT_ITS_BROKEN
 		/* DEBUG */
 		printk
-		    (KERN_DEBUG "byte %d wmb %02x db %02x offset %02d io %04x,"
-		     " data_in %02x ", byte_no, (unsigned)write_mask_byte,
-		     (unsigned)data_byte, offset, ioaddr, (unsigned)byte);
+		    ("byte %d wmb %02x db %02x offset %02d io %04x, data_in %02x ",
+		     byte_no, (unsigned)write_mask_byte, (unsigned)data_byte,
+		     offset, ioaddr, (unsigned)byte);
 #endif
 
 		if (write_mask_byte) {
@@ -678,7 +667,7 @@ static int pcmmio_dio_insn_bits(struct comedi_device *dev,
 
 #ifdef DAMMIT_ITS_BROKEN
 	/* DEBUG */
-	printk(KERN_DEBUG "s->state %08x data_out %08x\n", s->state, data[1]);
+	printk("s->state %08x data_out %08x\n", s->state, data[1]);
 #endif
 
 	return 2;
@@ -737,7 +726,7 @@ static int pcmmio_dio_insn_config(struct comedi_device *dev,
 		break;
 
 	case INSN_CONFIG_DIO_QUERY:
-		/* retrieve from shadow register */
+		/* retreive from shadow register */
 		data[1] =
 		    (s->io_bits & (1 << chan)) ? COMEDI_OUTPUT : COMEDI_INPUT;
 		return insn->n;
@@ -890,7 +879,7 @@ static irqreturn_t interrupt_pcmmio(int irq, void *d)
 				 * with commands..
 				 */
 				printk
-				    (KERN_DEBUG "got edge detect interrupt %d asic %d which_chans: %06x\n",
+				    ("PCMMIO DEBUG: got edge detect interrupt %d asic %d which_chans: %06x\n",
 				     irq, asic, triggered);
 				for (s = dev->subdevices + 2;
 				     s < dev->subdevices + dev->n_subdevices;
@@ -1283,7 +1272,7 @@ static int wait_dac_ready(unsigned long iobase)
 	   "no busy waiting" policy. The fact is that the hardware is
 	   normally so fast that we usually only need one time through the loop
 	   anyway. The longer timeout is for rare occasions and for detecting
-	   non-existent hardware.  */
+	   non-existant hardware.  */
 
 	while (retry--) {
 		if (inb(iobase + 3) & 0x80)
@@ -1344,19 +1333,4 @@ static int ao_winsn(struct comedi_device *dev, struct comedi_subdevice *s,
  * A convenient macro that defines init_module() and cleanup_module(),
  * as necessary.
  */
-static int __init driver_init_module(void)
-{
-	return comedi_driver_register(&driver);
-}
-
-static void __exit driver_cleanup_module(void)
-{
-	comedi_driver_unregister(&driver);
-}
-
-module_init(driver_init_module);
-module_exit(driver_cleanup_module);
-
-MODULE_AUTHOR("Comedi http://www.comedi.org");
-MODULE_DESCRIPTION("Comedi low-level driver");
-MODULE_LICENSE("GPL");
+COMEDI_INITCLEANUP(driver);

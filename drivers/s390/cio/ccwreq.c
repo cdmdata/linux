@@ -1,12 +1,9 @@
 /*
  *  Handling of internal CCW device requests.
  *
- *    Copyright IBM Corp. 2009, 2011
+ *    Copyright IBM Corp. 2009
  *    Author(s): Peter Oberparleiter <peter.oberparleiter@de.ibm.com>
  */
-
-#define KMSG_COMPONENT "cio"
-#define pr_fmt(fmt) KMSG_COMPONENT ": " fmt
 
 #include <linux/types.h>
 #include <linux/err.h>
@@ -41,13 +38,9 @@ static u16 ccwreq_next_path(struct ccw_device *cdev)
 {
 	struct ccw_request *req = &cdev->private->req;
 
-	if (!req->singlepath) {
-		req->mask = 0;
-		goto out;
-	}
 	req->retries	= req->maxretries;
 	req->mask	= lpm_adjust(req->mask >>= 1, req->lpm);
-out:
+
 	return req->mask;
 }
 
@@ -120,12 +113,8 @@ void ccw_request_start(struct ccw_device *cdev)
 {
 	struct ccw_request *req = &cdev->private->req;
 
-	if (req->singlepath) {
-		/* Try all paths twice to counter link flapping. */
-		req->mask = 0x8080;
-	} else
-		req->mask = req->lpm;
-
+	/* Try all paths twice to counter link flapping. */
+	req->mask	= 0x8080;
 	req->retries	= req->maxretries;
 	req->mask	= lpm_adjust(req->mask, req->lpm);
 	req->drc	= 0;
@@ -193,8 +182,6 @@ static enum io_status ccwreq_status(struct ccw_device *cdev, struct irb *lcirb)
 		/* Ask the driver what to do */
 		if (cdev->drv && cdev->drv->uc_handler) {
 			todo = cdev->drv->uc_handler(cdev, lcirb);
-			CIO_TRACE_EVENT(2, "uc_response");
-			CIO_HEX_EVENT(2, &todo, sizeof(todo));
 			switch (todo) {
 			case UC_TODO_RETRY:
 				return IO_STATUS_ERROR;
@@ -326,21 +313,7 @@ void ccw_request_timeout(struct ccw_device *cdev)
 {
 	struct subchannel *sch = to_subchannel(cdev->dev.parent);
 	struct ccw_request *req = &cdev->private->req;
-	int rc = -ENODEV, chp;
-
-	if (cio_update_schib(sch))
-		goto err;
-
-	for (chp = 0; chp < 8; chp++) {
-		if ((0x80 >> chp) & sch->schib.pmcw.lpum)
-			pr_warning("%s: No interrupt was received within %lus "
-				   "(CS=%02x, DS=%02x, CHPID=%x.%02x)\n",
-				   dev_name(&cdev->dev), req->timeout / HZ,
-				   scsw_cstat(&sch->schib.scsw),
-				   scsw_dstat(&sch->schib.scsw),
-				   sch->schid.cssid,
-				   sch->schib.pmcw.chpid[chp]);
-	}
+	int rc;
 
 	if (!ccwreq_next_path(cdev)) {
 		/* set the final return code for this request */
@@ -359,7 +332,7 @@ err:
  * ccw_request_notoper - notoper handler for I/O request procedure
  * @cdev: ccw device
  *
- * Handle notoper during I/O request procedure.
+ * Handle timeout during I/O request procedure.
  */
 void ccw_request_notoper(struct ccw_device *cdev)
 {

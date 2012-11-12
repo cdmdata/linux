@@ -8,9 +8,7 @@
 
 #include <linux/module.h>
 #include <linux/of_device.h>
-#include <linux/dma-mapping.h>
 #include <linux/slab.h>
-#include <linux/of_platform.h>
 
 #include <sound/soc.h>
 
@@ -109,7 +107,7 @@ static int psc_dma_hw_free(struct snd_pcm_substream *substream)
 static int psc_dma_trigger(struct snd_pcm_substream *substream, int cmd)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct psc_dma *psc_dma = snd_soc_dai_get_drvdata(rtd->cpu_dai);
+	struct psc_dma *psc_dma = rtd->dai->cpu_dai->private_data;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct psc_dma_stream *s = to_psc_dma_stream(substream, psc_dma);
 	struct mpc52xx_psc __iomem *regs = psc_dma->psc_regs;
@@ -214,7 +212,7 @@ static int psc_dma_open(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct psc_dma *psc_dma = snd_soc_dai_get_drvdata(rtd->cpu_dai);
+	struct psc_dma *psc_dma = rtd->dai->cpu_dai->private_data;
 	struct psc_dma_stream *s;
 	int rc;
 
@@ -241,7 +239,7 @@ static int psc_dma_open(struct snd_pcm_substream *substream)
 static int psc_dma_close(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct psc_dma *psc_dma = snd_soc_dai_get_drvdata(rtd->cpu_dai);
+	struct psc_dma *psc_dma = rtd->dai->cpu_dai->private_data;
 	struct psc_dma_stream *s;
 
 	dev_dbg(psc_dma->dev, "psc_dma_close(substream=%p)\n", substream);
@@ -266,7 +264,7 @@ static snd_pcm_uframes_t
 psc_dma_pointer(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct psc_dma *psc_dma = snd_soc_dai_get_drvdata(rtd->cpu_dai);
+	struct psc_dma *psc_dma = rtd->dai->cpu_dai->private_data;
 	struct psc_dma_stream *s;
 	dma_addr_t count;
 
@@ -299,46 +297,45 @@ static struct snd_pcm_ops psc_dma_ops = {
 	.hw_params	= psc_dma_hw_params,
 };
 
-static u64 psc_dma_dmamask = DMA_BIT_MASK(32);
-static int psc_dma_new(struct snd_soc_pcm_runtime *rtd)
+static u64 psc_dma_dmamask = 0xffffffff;
+static int psc_dma_new(struct snd_card *card, struct snd_soc_dai *dai,
+			   struct snd_pcm *pcm)
 {
-	struct snd_card *card = rtd->card->snd_card;
-	struct snd_soc_dai *dai = rtd->cpu_dai;
-	struct snd_pcm *pcm = rtd->pcm;
-	struct psc_dma *psc_dma = snd_soc_dai_get_drvdata(rtd->cpu_dai);
+	struct snd_soc_pcm_runtime *rtd = pcm->private_data;
+	struct psc_dma *psc_dma = rtd->dai->cpu_dai->private_data;
 	size_t size = psc_dma_hardware.buffer_bytes_max;
 	int rc = 0;
 
-	dev_dbg(rtd->platform->dev, "psc_dma_new(card=%p, dai=%p, pcm=%p)\n",
+	dev_dbg(rtd->socdev->dev, "psc_dma_new(card=%p, dai=%p, pcm=%p)\n",
 		card, dai, pcm);
 
 	if (!card->dev->dma_mask)
 		card->dev->dma_mask = &psc_dma_dmamask;
 	if (!card->dev->coherent_dma_mask)
-		card->dev->coherent_dma_mask = DMA_BIT_MASK(32);
+		card->dev->coherent_dma_mask = 0xffffffff;
 
-	if (pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream) {
+	if (pcm->streams[0].substream) {
 		rc = snd_dma_alloc_pages(SNDRV_DMA_TYPE_DEV, pcm->card->dev,
-				size, &pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream->dma_buffer);
+				size, &pcm->streams[0].substream->dma_buffer);
 		if (rc)
 			goto playback_alloc_err;
 	}
 
-	if (pcm->streams[SNDRV_PCM_STREAM_CAPTURE].substream) {
+	if (pcm->streams[1].substream) {
 		rc = snd_dma_alloc_pages(SNDRV_DMA_TYPE_DEV, pcm->card->dev,
-				size, &pcm->streams[SNDRV_PCM_STREAM_CAPTURE].substream->dma_buffer);
+				size, &pcm->streams[1].substream->dma_buffer);
 		if (rc)
 			goto capture_alloc_err;
 	}
 
-	if (rtd->codec->ac97)
-		rtd->codec->ac97->private_data = psc_dma;
+	if (rtd->socdev->card->codec->ac97)
+		rtd->socdev->card->codec->ac97->private_data = psc_dma;
 
 	return 0;
 
  capture_alloc_err:
-	if (pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream)
-		snd_dma_free_pages(&pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream->dma_buffer);
+	if (pcm->streams[0].substream)
+		snd_dma_free_pages(&pcm->streams[0].substream->dma_buffer);
 
  playback_alloc_err:
 	dev_err(card->dev, "Cannot allocate buffer(s)\n");
@@ -352,7 +349,7 @@ static void psc_dma_free(struct snd_pcm *pcm)
 	struct snd_pcm_substream *substream;
 	int stream;
 
-	dev_dbg(rtd->platform->dev, "psc_dma_free(pcm=%p)\n", pcm);
+	dev_dbg(rtd->socdev->dev, "psc_dma_free(pcm=%p)\n", pcm);
 
 	for (stream = 0; stream < 2; stream++) {
 		substream = pcm->streams[stream].substream;
@@ -364,13 +361,15 @@ static void psc_dma_free(struct snd_pcm *pcm)
 	}
 }
 
-static struct snd_soc_platform_driver mpc5200_audio_dma_platform = {
-	.ops		= &psc_dma_ops,
+struct snd_soc_platform mpc5200_audio_dma_platform = {
+	.name		= "mpc5200-psc-audio",
+	.pcm_ops	= &psc_dma_ops,
 	.pcm_new	= &psc_dma_new,
 	.pcm_free	= &psc_dma_free,
 };
+EXPORT_SYMBOL_GPL(mpc5200_audio_dma_platform);
 
-static int mpc5200_hpcd_probe(struct platform_device *op)
+int mpc5200_audio_dma_create(struct of_device *op)
 {
 	phys_addr_t fifo;
 	struct psc_dma *psc_dma;
@@ -386,7 +385,7 @@ static int mpc5200_hpcd_probe(struct platform_device *op)
 		dev_err(&op->dev, "Missing reg property\n");
 		return -ENODEV;
 	}
-	regs = ioremap(res.start, resource_size(&res));
+	regs = ioremap(res.start, 1 + res.end - res.start);
 	if (!regs) {
 		dev_err(&op->dev, "Could not map registers\n");
 		return -ENODEV;
@@ -476,7 +475,7 @@ static int mpc5200_hpcd_probe(struct platform_device *op)
 	dev_set_drvdata(&op->dev, psc_dma);
 
 	/* Tell the ASoC OF helpers about it */
-	return snd_soc_register_platform(&op->dev, &mpc5200_audio_dma_platform);
+	return snd_soc_register_platform(&mpc5200_audio_dma_platform);
 out_irq:
 	free_irq(psc_dma->irq, psc_dma);
 	free_irq(psc_dma->capture.irq, &psc_dma->capture);
@@ -487,14 +486,15 @@ out_unmap:
 	iounmap(regs);
 	return ret;
 }
+EXPORT_SYMBOL_GPL(mpc5200_audio_dma_create);
 
-static int mpc5200_hpcd_remove(struct platform_device *op)
+int mpc5200_audio_dma_destroy(struct of_device *op)
 {
 	struct psc_dma *psc_dma = dev_get_drvdata(&op->dev);
 
 	dev_dbg(&op->dev, "mpc5200_audio_dma_destroy()\n");
 
-	snd_soc_unregister_platform(&op->dev);
+	snd_soc_unregister_platform(&mpc5200_audio_dma_platform);
 
 	bcom_gen_bd_rx_release(psc_dma->capture.bcom_task);
 	bcom_gen_bd_tx_release(psc_dma->playback.bcom_task);
@@ -510,24 +510,7 @@ static int mpc5200_hpcd_remove(struct platform_device *op)
 
 	return 0;
 }
-
-static struct of_device_id mpc5200_hpcd_match[] = {
-	{ .compatible = "fsl,mpc5200-pcm", },
-	{}
-};
-MODULE_DEVICE_TABLE(of, mpc5200_hpcd_match);
-
-static struct platform_driver mpc5200_hpcd_of_driver = {
-	.probe		= mpc5200_hpcd_probe,
-	.remove		= mpc5200_hpcd_remove,
-	.driver = {
-		.owner		= THIS_MODULE,
-		.name		= "mpc5200-pcm-audio",
-		.of_match_table    = mpc5200_hpcd_match,
-	}
-};
-
-module_platform_driver(mpc5200_hpcd_of_driver);
+EXPORT_SYMBOL_GPL(mpc5200_audio_dma_destroy);
 
 MODULE_AUTHOR("Grant Likely <grant.likely@secretlab.ca>");
 MODULE_DESCRIPTION("Freescale MPC5200 PSC in DMA mode ASoC Driver");

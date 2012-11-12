@@ -1,6 +1,7 @@
 #ifndef __ASM_SPINLOCK_H
 #define __ASM_SPINLOCK_H
 
+#include <asm/system.h>
 #include <asm/processor.h>
 #include <asm/spinlock_types.h>
 

@@ -28,6 +28,7 @@
 #include <linux/hw_breakpoint.h>
 #include <asm/uaccess.h>
 #include <asm/pgtable.h>
+#include <asm/system.h>
 #include <asm/processor.h>
 #include <asm/mmu_context.h>
 #include <asm/syscalls.h>
@@ -62,7 +63,7 @@ static inline int put_stack_long(struct task_struct *task, int offset,
 	return 0;
 }
 
-void ptrace_triggered(struct perf_event *bp,
+void ptrace_triggered(struct perf_event *bp, int nmi,
 		      struct perf_sample_data *data, struct pt_regs *regs)
 {
 	struct perf_event_attr attr;
@@ -90,8 +91,7 @@ static int set_single_step(struct task_struct *tsk, unsigned long addr)
 		attr.bp_len = HW_BREAKPOINT_LEN_2;
 		attr.bp_type = HW_BREAKPOINT_R;
 
-		bp = register_user_hw_breakpoint(&attr, ptrace_triggered,
-						 NULL, tsk);
+		bp = register_user_hw_breakpoint(&attr, ptrace_triggered, tsk);
 		if (IS_ERR(bp))
 			return PTR_ERR(bp);
 
@@ -101,8 +101,6 @@ static int set_single_step(struct task_struct *tsk, unsigned long addr)
 
 		attr = bp->attr;
 		attr.bp_addr = addr;
-		/* reenable breakpoint */
-		attr.disabled = false;
 		err = modify_user_hw_breakpoint(bp, &attr);
 		if (unlikely(err))
 			return err;
@@ -117,11 +115,7 @@ void user_enable_single_step(struct task_struct *child)
 
 	set_tsk_thread_flag(child, TIF_SINGLESTEP);
 
-	if (ptrace_get_breakpoints(child) < 0)
-		return;
-
 	set_single_step(child, pc);
-	ptrace_put_breakpoints(child);
 }
 
 void user_disable_single_step(struct task_struct *child)
@@ -280,33 +274,6 @@ static int dspregs_active(struct task_struct *target,
 }
 #endif
 
-const struct pt_regs_offset regoffset_table[] = {
-	REGS_OFFSET_NAME(0),
-	REGS_OFFSET_NAME(1),
-	REGS_OFFSET_NAME(2),
-	REGS_OFFSET_NAME(3),
-	REGS_OFFSET_NAME(4),
-	REGS_OFFSET_NAME(5),
-	REGS_OFFSET_NAME(6),
-	REGS_OFFSET_NAME(7),
-	REGS_OFFSET_NAME(8),
-	REGS_OFFSET_NAME(9),
-	REGS_OFFSET_NAME(10),
-	REGS_OFFSET_NAME(11),
-	REGS_OFFSET_NAME(12),
-	REGS_OFFSET_NAME(13),
-	REGS_OFFSET_NAME(14),
-	REGS_OFFSET_NAME(15),
-	REG_OFFSET_NAME(pc),
-	REG_OFFSET_NAME(pr),
-	REG_OFFSET_NAME(sr),
-	REG_OFFSET_NAME(gbr),
-	REG_OFFSET_NAME(mach),
-	REG_OFFSET_NAME(macl),
-	REG_OFFSET_NAME(tra),
-	REG_OFFSET_END,
-};
-
 /*
  * These are our native regset flavours.
  */
@@ -371,9 +338,9 @@ const struct user_regset_view *task_user_regset_view(struct task_struct *task)
 	return &user_sh_native_view;
 }
 
-long arch_ptrace(struct task_struct *child, long request,
-		 unsigned long addr, unsigned long data)
+long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 {
+	struct user * dummy = NULL;
 	unsigned long __user *datap = (unsigned long __user *)data;
 	int ret;
 
@@ -389,23 +356,17 @@ long arch_ptrace(struct task_struct *child, long request,
 
 		if (addr < sizeof(struct pt_regs))
 			tmp = get_stack_long(child, addr);
-		else if (addr >= offsetof(struct user, fpu) &&
-			 addr < offsetof(struct user, u_fpvalid)) {
+		else if (addr >= (long) &dummy->fpu &&
+			 addr < (long) &dummy->u_fpvalid) {
 			if (!tsk_used_math(child)) {
-				if (addr == offsetof(struct user, fpu.fpscr))
+				if (addr == (long)&dummy->fpu.fpscr)
 					tmp = FPSCR_INIT;
 				else
 					tmp = 0;
-			} else {
-				unsigned long index;
-				ret = init_fpu(child);
-				if (ret)
-					break;
-				index = addr - offsetof(struct user, fpu);
-				tmp = ((unsigned long *)child->thread.xstate)
-					[index >> 2];
-			}
-		} else if (addr == offsetof(struct user, u_fpvalid))
+			} else
+				tmp = ((long *)child->thread.xstate)
+					[(addr - (long)&dummy->fpu) >> 2];
+		} else if (addr == (long) &dummy->u_fpvalid)
 			tmp = !!tsk_used_math(child);
 		else if (addr == PT_TEXT_ADDR)
 			tmp = child->mm->start_code;
@@ -429,18 +390,13 @@ long arch_ptrace(struct task_struct *child, long request,
 
 		if (addr < sizeof(struct pt_regs))
 			ret = put_stack_long(child, addr, data);
-		else if (addr >= offsetof(struct user, fpu) &&
-			 addr < offsetof(struct user, u_fpvalid)) {
-			unsigned long index;
-			ret = init_fpu(child);
-			if (ret)
-				break;
-			index = addr - offsetof(struct user, fpu);
+		else if (addr >= (long) &dummy->fpu &&
+			 addr < (long) &dummy->u_fpvalid) {
 			set_stopped_child_used_math(child);
-			((unsigned long *)child->thread.xstate)
-				[index >> 2] = data;
+			((long *)child->thread.xstate)
+				[(addr - (long)&dummy->fpu) >> 2] = data;
 			ret = 0;
-		} else if (addr == offsetof(struct user, u_fpvalid)) {
+		} else if (addr == (long) &dummy->u_fpvalid) {
 			conditional_stopped_child_used_math(data, child);
 			ret = 0;
 		}
@@ -450,35 +406,35 @@ long arch_ptrace(struct task_struct *child, long request,
 		return copy_regset_to_user(child, &user_sh_native_view,
 					   REGSET_GENERAL,
 					   0, sizeof(struct pt_regs),
-					   datap);
+					   (void __user *)data);
 	case PTRACE_SETREGS:
 		return copy_regset_from_user(child, &user_sh_native_view,
 					     REGSET_GENERAL,
 					     0, sizeof(struct pt_regs),
-					     datap);
+					     (const void __user *)data);
 #ifdef CONFIG_SH_FPU
 	case PTRACE_GETFPREGS:
 		return copy_regset_to_user(child, &user_sh_native_view,
 					   REGSET_FPU,
 					   0, sizeof(struct user_fpu_struct),
-					   datap);
+					   (void __user *)data);
 	case PTRACE_SETFPREGS:
 		return copy_regset_from_user(child, &user_sh_native_view,
 					     REGSET_FPU,
 					     0, sizeof(struct user_fpu_struct),
-					     datap);
+					     (const void __user *)data);
 #endif
 #ifdef CONFIG_SH_DSP
 	case PTRACE_GETDSPREGS:
 		return copy_regset_to_user(child, &user_sh_native_view,
 					   REGSET_DSP,
 					   0, sizeof(struct pt_dspregs),
-					   datap);
+					   (void __user *)data);
 	case PTRACE_SETDSPREGS:
 		return copy_regset_from_user(child, &user_sh_native_view,
 					     REGSET_DSP,
 					     0, sizeof(struct pt_dspregs),
-					     datap);
+					     (const void __user *)data);
 #endif
 	default:
 		ret = ptrace_request(child, request, addr, data);
@@ -517,9 +473,10 @@ asmlinkage long do_syscall_trace_enter(struct pt_regs *regs)
 	if (unlikely(test_thread_flag(TIF_SYSCALL_TRACEPOINT)))
 		trace_sys_enter(regs, regs->regs[0]);
 
-	audit_syscall_entry(audit_arch(), regs->regs[3],
-			    regs->regs[4], regs->regs[5],
-			    regs->regs[6], regs->regs[7]);
+	if (unlikely(current->audit_context))
+		audit_syscall_entry(audit_arch(), regs->regs[3],
+				    regs->regs[4], regs->regs[5],
+				    regs->regs[6], regs->regs[7]);
 
 	return ret ?: regs->regs[0];
 }
@@ -528,7 +485,9 @@ asmlinkage void do_syscall_trace_leave(struct pt_regs *regs)
 {
 	int step;
 
-	audit_syscall_exit(regs);
+	if (unlikely(current->audit_context))
+		audit_syscall_exit(AUDITSC_RESULT(regs->regs[0]),
+				   regs->regs[0]);
 
 	if (unlikely(test_thread_flag(TIF_SYSCALL_TRACEPOINT)))
 		trace_sys_exit(regs, regs->regs[0]);

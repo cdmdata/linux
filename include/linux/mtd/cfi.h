@@ -1,20 +1,6 @@
-/*
- * Copyright © 2000-2010 David Woodhouse <dwmw2@infradead.org> et al.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- *
+
+/* Common Flash Interface structures
+ * See http://support.intel.com/design/flash/technote/index.htm
  */
 
 #ifndef __MTD_CFI_H__
@@ -22,7 +8,6 @@
 
 #include <linux/delay.h>
 #include <linux/types.h>
-#include <linux/bug.h>
 #include <linux/interrupt.h>
 #include <linux/mtd/flashchip.h>
 #include <linux/mtd/map.h>
@@ -290,7 +275,6 @@ struct cfi_private {
 				  must be of the same type. */
 	int mfr, id;
 	int numchips;
-	map_word sector_erase_cmd;
 	unsigned long chipshift; /* Because they're of the same type */
 	const char *im_name;	 /* inter_module name for cmdset_setup */
 	struct flchip chips[0];  /* per-chip data structure for each chip */
@@ -309,7 +293,7 @@ static inline uint32_t cfi_build_cmd_addr(uint32_t cmd_ofs,
 	
 	addr = (cmd_ofs * type) * interleave;
 
-	/* Modify the unlock address if we are in compatibility mode.
+	/* Modify the unlock address if we are in compatiblity mode.
 	 * For 16bit devices on 8 bit busses
 	 * and 32bit devices on 16 bit busses
 	 * set the low bit of the alternating bit sequence of the address.
@@ -355,10 +339,10 @@ static inline map_word cfi_build_cmd(u_long cmd, struct map_info *map, struct cf
 		onecmd = cmd;
 		break;
 	case 2:
-		onecmd = cpu_to_cfi16(map, cmd);
+		onecmd = cpu_to_cfi16(cmd);
 		break;
 	case 4:
-		onecmd = cpu_to_cfi32(map, cmd);
+		onecmd = cpu_to_cfi32(cmd);
 		break;
 	}
 
@@ -438,10 +422,10 @@ static inline unsigned long cfi_merge_status(map_word val, struct map_info *map,
 	case 1:
 		break;
 	case 2:
-		res = cfi16_to_cpu(map, res);
+		res = cfi16_to_cpu(res);
 		break;
 	case 4:
-		res = cfi32_to_cpu(map, res);
+		res = cfi32_to_cpu(res);
 		break;
 	default: BUG();
 	}
@@ -481,12 +465,12 @@ static inline uint8_t cfi_read_query(struct map_info *map, uint32_t addr)
 	if (map_bankwidth_is_1(map)) {
 		return val.x[0];
 	} else if (map_bankwidth_is_2(map)) {
-		return cfi16_to_cpu(map, val.x[0]);
+		return cfi16_to_cpu(val.x[0]);
 	} else {
 		/* No point in a 64-bit byteswap since that would just be
 		   swapping the responses from different chips, and we are
 		   only interested in one chip (a representative sample) */
-		return cfi32_to_cpu(map, val.x[0]);
+		return cfi32_to_cpu(val.x[0]);
 	}
 }
 
@@ -497,12 +481,12 @@ static inline uint16_t cfi_read_query16(struct map_info *map, uint32_t addr)
 	if (map_bankwidth_is_1(map)) {
 		return val.x[0] & 0xff;
 	} else if (map_bankwidth_is_2(map)) {
-		return cfi16_to_cpu(map, val.x[0]);
+		return cfi16_to_cpu(val.x[0]);
 	} else {
 		/* No point in a 64-bit byteswap since that would just be
 		   swapping the responses from different chips, and we are
 		   only interested in one chip (a representative sample) */
-		return cfi32_to_cpu(map, val.x[0]);
+		return cfi32_to_cpu(val.x[0]);
 	}
 }
 
@@ -528,7 +512,8 @@ struct cfi_extquery *cfi_read_pri(struct map_info *map, uint16_t adr, uint16_t s
 struct cfi_fixup {
 	uint16_t mfr;
 	uint16_t id;
-	void (*fixup)(struct mtd_info *mtd);
+	void (*fixup)(struct mtd_info *mtd, void* param);
+	void* param;
 };
 
 #define CFI_MFR_ANY		0xFFFF
@@ -536,7 +521,6 @@ struct cfi_fixup {
 #define CFI_MFR_CONTINUATION	0x007F
 
 #define CFI_MFR_AMD		0x0001
-#define CFI_MFR_AMIC		0x0037
 #define CFI_MFR_ATMEL		0x001F
 #define CFI_MFR_EON		0x001C
 #define CFI_MFR_FUJITSU		0x0004

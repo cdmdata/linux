@@ -251,7 +251,7 @@ void sp_work_handle_request(void)
  		memset(&tz, 0, sizeof(tz));
  		if ((ret.retval = sp_syscall(__NR_gettimeofday, (int)&tv,
 					     (int)&tz, 0, 0)) == 0)
-			ret.retval = tv.tv_sec;
+		ret.retval = tv.tv_sec;
 		break;
 
  	case MTSP_SYSCALL_EXIT:
@@ -326,7 +326,7 @@ static void sp_cleanup(void)
 		i = j * __NFDBITS;
 		if (i >= fdt->max_fds)
 			break;
-		set = fdt->open_fds[j++];
+		set = fdt->open_fds->fds_bits[j++];
 		while (set) {
 			if (set & 1) {
 				struct file * file = xchg(&fdt->fd[i], NULL);

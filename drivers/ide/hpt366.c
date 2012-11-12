@@ -12,7 +12,7 @@
  *
  *
  * HighPoint has its own drivers (open source except for the RAID part)
- * available from http://www.highpoint-tech.com/USA_new/service_support.htm 
+ * available from http://www.highpoint-tech.com/BIOS%20+%20Driver/.
  * This may be useful to anyone wanting to work on this driver, however  do not
  * trust  them too much since the code tends to become less and less meaningful
  * as the time passes... :-/
@@ -838,7 +838,7 @@ static void hpt3xxn_set_clock(ide_hwif_t *hwif, u8 mode)
 
 static void hpt3xxn_rw_disk(ide_drive_t *drive, struct request *rq)
 {
-	hpt3xxn_set_clock(drive->hwif, rq_data_dir(rq) ? 0x21 : 0x23);
+	hpt3xxn_set_clock(drive->hwif, rq_data_dir(rq) ? 0x23 : 0x21);
 }
 
 /**
@@ -1173,9 +1173,8 @@ static u8 hpt3xx_cable_detect(ide_hwif_t *hwif)
 		u16 mcr;
 
 		pci_read_config_word(dev, mcr_addr, &mcr);
-		pci_write_config_word(dev, mcr_addr, mcr | 0x8000);
-		/* Debounce, then read cable ID register */
-		udelay(10);
+		pci_write_config_word(dev, mcr_addr, (mcr | 0x8000));
+		/* now read cable id register */
 		pci_read_config_byte(dev, 0x5a, &scr1);
 		pci_write_config_word(dev, mcr_addr, mcr);
 	} else if (chip_type >= HPT370) {
@@ -1186,11 +1185,10 @@ static u8 hpt3xx_cable_detect(ide_hwif_t *hwif)
 		u8 scr2 = 0;
 
 		pci_read_config_byte(dev, 0x5b, &scr2);
-		pci_write_config_byte(dev, 0x5b, scr2 & ~1);
-		/* Debounce, then read cable ID register */
-		udelay(10);
+		pci_write_config_byte(dev, 0x5b, (scr2 & ~1));
+		/* now read cable id register */
 		pci_read_config_byte(dev, 0x5a, &scr1);
-		pci_write_config_byte(dev, 0x5b, scr2);
+		pci_write_config_byte(dev, 0x5b,  scr2);
 	} else
 		pci_read_config_byte(dev, 0x5a, &scr1);
 

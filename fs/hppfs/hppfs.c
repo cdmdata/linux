@@ -15,8 +15,6 @@
 #include <linux/slab.h>
 #include <linux/statfs.h>
 #include <linux/types.h>
-#include <linux/pid_namespace.h>
-#include <linux/namei.h>
 #include <asm/uaccess.h>
 #include "os.h"
 
@@ -140,8 +138,7 @@ static int file_removed(struct dentry *dentry, const char *file)
 static struct dentry *hppfs_lookup(struct inode *ino, struct dentry *dentry,
 				   struct nameidata *nd)
 {
-	struct dentry *proc_dentry, *parent;
-	struct qstr *name = &dentry->d_name;
+	struct dentry *proc_dentry, *new, *parent;
 	struct inode *inode;
 	int err, deleted;
 
@@ -151,9 +148,23 @@ static struct dentry *hppfs_lookup(struct inode *ino, struct dentry *dentry,
 	else if (deleted)
 		return ERR_PTR(-ENOENT);
 
+	err = -ENOMEM;
 	parent = HPPFS_I(ino)->proc_dentry;
 	mutex_lock(&parent->d_inode->i_mutex);
-	proc_dentry = lookup_one_len(name->name, parent, name->len);
+	proc_dentry = d_lookup(parent, &dentry->d_name);
+	if (proc_dentry == NULL) {
+		proc_dentry = d_alloc(parent, &dentry->d_name);
+		if (proc_dentry == NULL) {
+			mutex_unlock(&parent->d_inode->i_mutex);
+			goto out;
+		}
+		new = (*parent->d_inode->i_op->lookup)(parent->d_inode,
+						       proc_dentry, NULL);
+		if (new) {
+			dput(proc_dentry);
+			proc_dentry = new;
+		}
+	}
 	mutex_unlock(&parent->d_inode->i_mutex);
 
 	if (IS_ERR(proc_dentry))
@@ -162,11 +173,13 @@ static struct dentry *hppfs_lookup(struct inode *ino, struct dentry *dentry,
 	err = -ENOMEM;
 	inode = get_inode(ino->i_sb, proc_dentry);
 	if (!inode)
-		goto out;
+		goto out_dput;
 
  	d_add(dentry, inode);
 	return NULL;
 
+ out_dput:
+	dput(proc_dentry);
  out:
 	return ERR_PTR(err);
 }
@@ -574,10 +587,9 @@ static int hppfs_readdir(struct file *file, void *ent, filldir_t filldir)
 	return err;
 }
 
-static int hppfs_fsync(struct file *file, loff_t start, loff_t end,
-		       int datasync)
+static int hppfs_fsync(struct file *file, int datasync)
 {
-	return filemap_write_and_wait_range(file->f_mapping, start, end);
+	return 0;
 }
 
 static const struct file_operations hppfs_dir_fops = {
@@ -585,7 +597,6 @@ static const struct file_operations hppfs_dir_fops = {
 	.readdir	= hppfs_readdir,
 	.open		= hppfs_dir_open,
 	.fsync		= hppfs_fsync,
-	.llseek		= default_llseek,
 };
 
 static int hppfs_statfs(struct dentry *dentry, struct kstatfs *sf)
@@ -612,28 +623,23 @@ static struct inode *hppfs_alloc_inode(struct super_block *sb)
 	return &hi->vfs_inode;
 }
 
-void hppfs_evict_inode(struct inode *ino)
+void hppfs_delete_inode(struct inode *ino)
 {
-	end_writeback(ino);
 	dput(HPPFS_I(ino)->proc_dentry);
 	mntput(ino->i_sb->s_fs_info);
-}
 
-static void hppfs_i_callback(struct rcu_head *head)
-{
-	struct inode *inode = container_of(head, struct inode, i_rcu);
-	kfree(HPPFS_I(inode));
+	clear_inode(ino);
 }
 
 static void hppfs_destroy_inode(struct inode *inode)
 {
-	call_rcu(&inode->i_rcu, hppfs_i_callback);
+	kfree(HPPFS_I(inode));
 }
 
 static const struct super_operations hppfs_sbops = {
 	.alloc_inode	= hppfs_alloc_inode,
 	.destroy_inode	= hppfs_destroy_inode,
-	.evict_inode	= hppfs_evict_inode,
+	.delete_inode	= hppfs_delete_inode,
 	.statfs		= hppfs_statfs,
 };
 
@@ -676,10 +682,8 @@ static struct inode *get_inode(struct super_block *sb, struct dentry *dentry)
 	struct inode *proc_ino = dentry->d_inode;
 	struct inode *inode = new_inode(sb);
 
-	if (!inode) {
-		dput(dentry);
+	if (!inode)
 		return ERR_PTR(-ENOMEM);
-	}
 
 	if (S_ISDIR(dentry->d_inode->i_mode)) {
 		inode->i_op = &hppfs_dir_iops;
@@ -692,7 +696,7 @@ static struct inode *get_inode(struct super_block *sb, struct dentry *dentry)
 		inode->i_fop = &hppfs_file_fops;
 	}
 
-	HPPFS_I(inode)->proc_dentry = dentry;
+	HPPFS_I(inode)->proc_dentry = dget(dentry);
 
 	inode->i_uid = proc_ino->i_uid;
 	inode->i_gid = proc_ino->i_gid;
@@ -701,7 +705,7 @@ static struct inode *get_inode(struct super_block *sb, struct dentry *dentry)
 	inode->i_ctime = proc_ino->i_ctime;
 	inode->i_ino = proc_ino->i_ino;
 	inode->i_mode = proc_ino->i_mode;
-	set_nlink(inode, proc_ino->i_nlink);
+	inode->i_nlink = proc_ino->i_nlink;
 	inode->i_size = proc_ino->i_size;
 	inode->i_blocks = proc_ino->i_blocks;
 
@@ -725,30 +729,35 @@ static int hppfs_fill_super(struct super_block *sb, void *d, int silent)
 	sb->s_fs_info = proc_mnt;
 
 	err = -ENOMEM;
-	root_inode = get_inode(sb, dget(proc_mnt->mnt_root));
-	sb->s_root = d_make_root(root_inode);
-	if (!sb->s_root)
+	root_inode = get_inode(sb, proc_mnt->mnt_sb->s_root);
+	if (!root_inode)
 		goto out_mntput;
+
+	sb->s_root = d_alloc_root(root_inode);
+	if (!sb->s_root)
+		goto out_iput;
 
 	return 0;
 
+ out_iput:
+	iput(root_inode);
  out_mntput:
 	mntput(proc_mnt);
  out:
 	return(err);
 }
 
-static struct dentry *hppfs_read_super(struct file_system_type *type,
+static int hppfs_read_super(struct file_system_type *type,
 			    int flags, const char *dev_name,
-			    void *data)
+			    void *data, struct vfsmount *mnt)
 {
-	return mount_nodev(type, flags, data, hppfs_fill_super);
+	return get_sb_nodev(type, flags, data, hppfs_fill_super, mnt);
 }
 
 static struct file_system_type hppfs_type = {
 	.owner 		= THIS_MODULE,
 	.name 		= "hppfs",
-	.mount 		= hppfs_read_super,
+	.get_sb 	= hppfs_read_super,
 	.kill_sb	= kill_anon_super,
 	.fs_flags 	= 0,
 };

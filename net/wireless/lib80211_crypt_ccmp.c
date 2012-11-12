@@ -77,6 +77,8 @@ static void *lib80211_ccmp_init(int key_idx)
 
 	priv->tfm = crypto_alloc_cipher("aes", 0, CRYPTO_ALG_ASYNC);
 	if (IS_ERR(priv->tfm)) {
+		printk(KERN_DEBUG "lib80211_crypt_ccmp: could not allocate "
+		       "crypto API aes\n");
 		priv->tfm = NULL;
 		goto fail;
 	}
@@ -465,6 +467,7 @@ static struct lib80211_crypto_ops lib80211_crypt_ccmp = {
 	.name = "CCMP",
 	.init = lib80211_ccmp_init,
 	.deinit = lib80211_ccmp_deinit,
+	.build_iv = lib80211_ccmp_hdr,
 	.encrypt_mpdu = lib80211_ccmp_encrypt,
 	.decrypt_mpdu = lib80211_ccmp_decrypt,
 	.encrypt_msdu = NULL,

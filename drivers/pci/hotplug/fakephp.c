@@ -40,7 +40,7 @@ static ssize_t legacy_show(struct kobject *kobj, struct attribute *attr,
 
 static void remove_callback(void *data)
 {
-	pci_stop_and_remove_bus_device((struct pci_dev *)data);
+	pci_remove_bus_device((struct pci_dev *)data);
 }
 
 static ssize_t legacy_store(struct kobject *kobj, struct attribute *attr,
@@ -135,7 +135,7 @@ static int __init init_legacy(void)
 	struct pci_dev *pdev = NULL;
 
 	/* Add existing devices */
-	for_each_pci_dev(pdev)
+	while ((pdev = pci_get_device(PCI_ANY_ID, PCI_ANY_ID, pdev)))
 		legacy_add_slot(pdev);
 
 	/* Be alerted of any new ones */

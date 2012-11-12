@@ -3,7 +3,7 @@
  * PCMCIA-Hostbus related functions
  *
  * Copyright 2006 Johannes Berg <johannes@sipsolutions.net>
- * Copyright 2007-2008 Michael Buesch <m@bues.ch>
+ * Copyright 2007-2008 Michael Buesch <mb@bu3sch.de>
  *
  * Licensed under the GNU/GPL. See COPYING for details.
  */
@@ -13,6 +13,8 @@
 #include <linux/io.h>
 #include <linux/etherdevice.h>
 
+#include <pcmcia/cs_types.h>
+#include <pcmcia/cs.h>
 #include <pcmcia/cistpl.h>
 #include <pcmcia/ciscode.h>
 #include <pcmcia/ds.h>
@@ -70,9 +72,14 @@
 /* Write to a PCMCIA configuration register. */
 static int ssb_pcmcia_cfg_write(struct ssb_bus *bus, u8 offset, u8 value)
 {
+	conf_reg_t reg;
 	int res;
 
-	res = pcmcia_write_config_byte(bus->host_pcmcia, offset, value);
+	memset(&reg, 0, sizeof(reg));
+	reg.Offset = offset;
+	reg.Action = CS_WRITE;
+	reg.Value = value;
+	res = pcmcia_access_configuration_register(bus->host_pcmcia, &reg);
 	if (unlikely(res != 0))
 		return -EBUSY;
 
@@ -82,11 +89,16 @@ static int ssb_pcmcia_cfg_write(struct ssb_bus *bus, u8 offset, u8 value)
 /* Read from a PCMCIA configuration register. */
 static int ssb_pcmcia_cfg_read(struct ssb_bus *bus, u8 offset, u8 *value)
 {
+	conf_reg_t reg;
 	int res;
 
-	res = pcmcia_read_config_byte(bus->host_pcmcia, offset, value);
+	memset(&reg, 0, sizeof(reg));
+	reg.Offset = offset;
+	reg.Action = CS_READ;
+	res = pcmcia_access_configuration_register(bus->host_pcmcia, &reg);
 	if (unlikely(res != 0))
 		return -EBUSY;
+	*value = reg.Value;
 
 	return 0;
 }
@@ -676,10 +688,14 @@ static int ssb_pcmcia_do_get_invariants(struct pcmcia_device *p_dev,
 	case SSB_PCMCIA_CIS_ANTGAIN:
 		GOTO_ERROR_ON(tuple->TupleDataLen != 2,
 			"antg tpl size");
-		sprom->antenna_gain.a0 = tuple->TupleData[1];
-		sprom->antenna_gain.a1 = tuple->TupleData[1];
-		sprom->antenna_gain.a2 = tuple->TupleData[1];
-		sprom->antenna_gain.a3 = tuple->TupleData[1];
+		sprom->antenna_gain.ghz24.a0 = tuple->TupleData[1];
+		sprom->antenna_gain.ghz24.a1 = tuple->TupleData[1];
+		sprom->antenna_gain.ghz24.a2 = tuple->TupleData[1];
+		sprom->antenna_gain.ghz24.a3 = tuple->TupleData[1];
+		sprom->antenna_gain.ghz5.a0 = tuple->TupleData[1];
+		sprom->antenna_gain.ghz5.a1 = tuple->TupleData[1];
+		sprom->antenna_gain.ghz5.a2 = tuple->TupleData[1];
+		sprom->antenna_gain.ghz5.a3 = tuple->TupleData[1];
 		break;
 	case SSB_PCMCIA_CIS_BFLAGS:
 		GOTO_ERROR_ON((tuple->TupleDataLen != 3) &&
@@ -729,7 +745,7 @@ int ssb_pcmcia_get_invariants(struct ssb_bus *bus,
 
 	/* Fetch the vendor specific tuples. */
 	res = pcmcia_loop_tuple(bus->host_pcmcia, SSB_PCMCIA_CIS,
-				ssb_pcmcia_do_get_invariants, iv);
+				ssb_pcmcia_do_get_invariants, sprom);
 	if ((res == 0) || (res == -ENOSPC))
 		return 0;
 

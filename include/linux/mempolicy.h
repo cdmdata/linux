@@ -164,11 +164,11 @@ static inline void mpol_get(struct mempolicy *pol)
 		atomic_inc(&pol->refcnt);
 }
 
-extern bool __mpol_equal(struct mempolicy *a, struct mempolicy *b);
-static inline bool mpol_equal(struct mempolicy *a, struct mempolicy *b)
+extern int __mpol_equal(struct mempolicy *a, struct mempolicy *b);
+static inline int mpol_equal(struct mempolicy *a, struct mempolicy *b)
 {
 	if (a == b)
-		return true;
+		return 1;
 	return __mpol_equal(a, b);
 }
 
@@ -199,9 +199,6 @@ void mpol_free_shared_policy(struct shared_policy *p);
 struct mempolicy *mpol_shared_policy_lookup(struct shared_policy *sp,
 					    unsigned long idx);
 
-struct mempolicy *get_vma_policy(struct task_struct *tsk,
-		struct vm_area_struct *vma, unsigned long addr);
-
 extern void numa_default_policy(void);
 extern void numa_policy_init(void);
 extern void mpol_rebind_task(struct task_struct *tsk, const nodemask_t *new,
@@ -213,8 +210,6 @@ extern struct zonelist *huge_zonelist(struct vm_area_struct *vma,
 				unsigned long addr, gfp_t gfp_flags,
 				struct mempolicy **mpol, nodemask_t **nodemask);
 extern bool init_nodemask_of_mempolicy(nodemask_t *mask);
-extern bool mempolicy_nodemask_intersects(struct task_struct *tsk,
-				const nodemask_t *mask);
 extern unsigned slab_node(struct mempolicy *policy);
 
 extern enum zone_type policy_zone;
@@ -231,10 +226,10 @@ int do_migrate_pages(struct mm_struct *mm,
 
 #ifdef CONFIG_TMPFS
 extern int mpol_parse_str(char *str, struct mempolicy **mpol, int no_context);
-#endif
 
 extern int mpol_to_str(char *buffer, int maxlen, struct mempolicy *pol,
 			int no_context);
+#endif
 
 /* Check if a vma is migratable */
 static inline int vma_migratable(struct vm_area_struct *vma)
@@ -257,9 +252,9 @@ static inline int vma_migratable(struct vm_area_struct *vma)
 
 struct mempolicy {};
 
-static inline bool mpol_equal(struct mempolicy *a, struct mempolicy *b)
+static inline int mpol_equal(struct mempolicy *a, struct mempolicy *b)
 {
-	return true;
+	return 1;
 }
 
 static inline void mpol_put(struct mempolicy *p)
@@ -343,16 +338,7 @@ static inline struct zonelist *huge_zonelist(struct vm_area_struct *vma,
 	return node_zonelist(0, gfp_flags);
 }
 
-static inline bool init_nodemask_of_mempolicy(nodemask_t *m)
-{
-	return false;
-}
-
-static inline bool mempolicy_nodemask_intersects(struct task_struct *tsk,
-			const nodemask_t *mask)
-{
-	return false;
-}
+static inline bool init_nodemask_of_mempolicy(nodemask_t *m) { return false; }
 
 static inline int do_migrate_pages(struct mm_struct *mm,
 			const nodemask_t *from_nodes,
@@ -371,13 +357,13 @@ static inline int mpol_parse_str(char *str, struct mempolicy **mpol,
 {
 	return 1;	/* error */
 }
-#endif
 
 static inline int mpol_to_str(char *buffer, int maxlen, struct mempolicy *pol,
 				int no_context)
 {
 	return 0;
 }
+#endif
 
 #endif /* CONFIG_NUMA */
 #endif /* __KERNEL__ */

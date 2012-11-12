@@ -10,29 +10,76 @@
  * published by the Free Software Foundation.
  *
  */
-#include <mach/hardware.h>
+#define IMX_NEEDS_DEPRECATED_SYMBOLS
 
-#ifdef CONFIG_DEBUG_IMX1_UART
-#define UART_PADDR	MX1_UART1_BASE_ADDR
-#elif defined (CONFIG_DEBUG_IMX25_UART)
-#define UART_PADDR	MX25_UART1_BASE_ADDR
-#elif defined (CONFIG_DEBUG_IMX21_IMX27_UART)
-#define UART_PADDR	MX2x_UART1_BASE_ADDR
-#elif defined (CONFIG_DEBUG_IMX31_IMX35_UART)
-#define UART_PADDR	MX3x_UART1_BASE_ADDR
-#elif defined (CONFIG_DEBUG_IMX51_UART)
-#define UART_PADDR	MX51_UART1_BASE_ADDR
-#elif defined (CONFIG_DEBUG_IMX50_IMX53_UART)
-#define UART_PADDR	MX53_UART1_BASE_ADDR
-#elif defined (CONFIG_DEBUG_IMX6Q_UART4)
-#define UART_PADDR	MX6Q_UART4_BASE_ADDR
+#ifdef CONFIG_ARCH_MX1
+#include <mach/mx1.h>
+#define UART_PADDR	UART1_BASE_ADDR
+#define UART_VADDR	IO_ADDRESS(UART1_BASE_ADDR)
 #endif
 
-#define UART_VADDR	IMX_IO_ADDRESS(UART_PADDR)
+#ifdef CONFIG_ARCH_MX25
+#ifdef UART_PADDR
+#error "CONFIG_DEBUG_LL is incompatible with multiple archs"
+#endif
+#include <mach/mx25.h>
+#define UART_PADDR	UART1_BASE_ADDR
+#define UART_VADDR	MX25_AIPS1_IO_ADDRESS(UART1_BASE_ADDR)
+#endif
 
-		.macro	addruart, rp, rv, tmp
-		ldr	\rp, =UART_PADDR	@ physical
-		ldr	\rv, =UART_VADDR	@ virtual
+#ifdef CONFIG_ARCH_MX2
+#ifdef UART_PADDR
+#error "CONFIG_DEBUG_LL is incompatible with multiple archs"
+#endif
+#include <mach/mx2x.h>
+#define UART_PADDR	UART1_BASE_ADDR
+#define UART_VADDR	AIPI_IO_ADDRESS(UART1_BASE_ADDR)
+#endif
+
+#ifdef CONFIG_ARCH_MX3
+#ifdef UART_PADDR
+#error "CONFIG_DEBUG_LL is incompatible with multiple archs"
+#endif
+#include <mach/mx3x.h>
+#define UART_PADDR	UART1_BASE_ADDR
+#define UART_VADDR	AIPS1_IO_ADDRESS(UART1_BASE_ADDR)
+#endif
+
+#ifdef CONFIG_ARCH_MX5
+#ifdef UART_PADDR
+#error "CONFIG_DEBUG_LL is incompatible with multiple archs"
+#endif
+#include <mach/hardware.h>
+#if (0 == CONFIG_LL_DEBUG_UART)
+#define UART_PADDR	UART1_BASE_ADDR
+#define UART_VADDR	AIPS1_IO_ADDRESS(UART1_BASE_ADDR)
+#elif (1 == CONFIG_LL_DEBUG_UART)
+#define UART_PADDR	UART2_BASE_ADDR
+#define UART_VADDR	AIPS1_IO_ADDRESS(UART2_BASE_ADDR)
+#elif (2 == CONFIG_LL_DEBUG_UART)
+#define UART_PADDR	UART3_BASE_ADDR
+#define UART_VADDR	SPBA0_IO_ADDRESS(UART3_BASE_ADDR)
+#else
+#error no LL_DEBUG_UART defined
+#endif
+#endif
+
+#ifdef CONFIG_ARCH_MXC91231
+#ifdef UART_PADDR
+#error "CONFIG_DEBUG_LL is incompatible with multiple archs"
+#endif
+#include <mach/mxc91231.h>
+#define UART_PADDR	MXC91231_UART2_BASE_ADDR
+#define UART_VADDR	MXC91231_IO_ADDRESS(MXC91231_UART2_BASE_ADDR)
+#endif
+		.macro	addruart, rx, tmp
+		mrc	p15, 0, \rx, c1, c0
+		tst	\rx, #1			@ MMU enabled?
+		ldreq	\rx, =UART_PADDR	@ physical
+#ifdef CONFIG_ARCH_MX53
+		subeq	\rx,\rx,#0x20000000
+#endif
+		ldrne	\rx, =UART_VADDR	@ virtual
 		.endm
 
 		.macro	senduart,rd,rx

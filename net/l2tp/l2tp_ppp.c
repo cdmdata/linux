@@ -82,7 +82,7 @@
 #include <net/sock.h>
 #include <linux/ppp_channel.h>
 #include <linux/ppp_defs.h>
-#include <linux/ppp-ioctl.h>
+#include <linux/if_ppp.h>
 #include <linux/file.h>
 #include <linux/hash.h>
 #include <linux/sort.h>
@@ -97,7 +97,7 @@
 #include <net/xfrm.h>
 
 #include <asm/byteorder.h>
-#include <linux/atomic.h>
+#include <asm/atomic.h>
 
 #include "l2tp_core.h"
 
@@ -135,10 +135,7 @@ struct pppol2tp_session {
 
 static int pppol2tp_xmit(struct ppp_channel *chan, struct sk_buff *skb);
 
-static const struct ppp_channel_ops pppol2tp_chan_ops = {
-	.start_xmit =  pppol2tp_xmit,
-};
-
+static struct ppp_channel_ops pppol2tp_chan_ops = { pppol2tp_xmit , NULL };
 static const struct proto_ops pppol2tp_ops;
 
 /* Helpers to obtain tunnel/session contexts from sockets.
@@ -395,7 +392,6 @@ static int pppol2tp_xmit(struct ppp_channel *chan, struct sk_buff *skb)
 	struct pppol2tp_session *ps;
 	int old_headroom;
 	int new_headroom;
-	int uhlen, headroom;
 
 	if (sock_flag(sk, SOCK_DEAD) || !(sk->sk_state & PPPOX_CONNECTED))
 		goto abort;
@@ -414,13 +410,7 @@ static int pppol2tp_xmit(struct ppp_channel *chan, struct sk_buff *skb)
 		goto abort_put_sess;
 
 	old_headroom = skb_headroom(skb);
-	uhlen = (tunnel->encap == L2TP_ENCAPTYPE_UDP) ? sizeof(struct udphdr) : 0;
-	headroom = NET_SKB_PAD +
-		   sizeof(struct iphdr) + /* IP header */
-		   uhlen +		/* UDP header (if L2TP_ENCAPTYPE_UDP) */
-		   session->hdr_len +	/* L2TP header */
-		   sizeof(ppph);	/* PPP header */
-	if (skb_cow_head(skb, headroom))
+	if (skb_cow_head(skb, sizeof(ppph)))
 		goto abort_put_sess_tun;
 
 	new_headroom = skb_headroom(skb);
@@ -915,7 +905,7 @@ static int pppol2tp_getname(struct socket *sock, struct sockaddr *uaddr,
 		goto end_put_sess;
 	}
 
-	inet = inet_sk(tunnel->sock);
+	inet = inet_sk(sk);
 	if (tunnel->version == 2) {
 		struct sockaddr_pppol2tp sp;
 		len = sizeof(sp);
@@ -1775,7 +1765,7 @@ static const struct proto_ops pppol2tp_ops = {
 	.ioctl		= pppox_ioctl,
 };
 
-static const struct pppox_proto pppol2tp_proto = {
+static struct pppox_proto pppol2tp_proto = {
 	.create		= pppol2tp_create,
 	.ioctl		= pppol2tp_ioctl
 };
@@ -1845,4 +1835,3 @@ MODULE_AUTHOR("James Chapman <jchapman@katalix.com>");
 MODULE_DESCRIPTION("PPP over L2TP over UDP");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(PPPOL2TP_DRV_VERSION);
-MODULE_ALIAS("pppox-proto-" __stringify(PX_PROTO_OL2TP));

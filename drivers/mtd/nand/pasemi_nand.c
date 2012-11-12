@@ -89,7 +89,8 @@ int pasemi_device_ready(struct mtd_info *mtd)
 	return !!(inl(lpcctl) & LBICTRL_LPCCTL_NR);
 }
 
-static int __devinit pasemi_nand_probe(struct platform_device *ofdev)
+static int __devinit pasemi_nand_probe(struct of_device *ofdev,
+				      const struct of_device_id *match)
 {
 	struct pci_dev *pdev;
 	struct device_node *np = ofdev->dev.of_node;
@@ -106,7 +107,7 @@ static int __devinit pasemi_nand_probe(struct platform_device *ofdev)
 	if (pasemi_nand_mtd)
 		return -ENODEV;
 
-	pr_debug("pasemi_nand at %pR\n", &res);
+	pr_debug("pasemi_nand at %llx-%llx\n", res.start, res.end);
 
 	/* Allocate memory for MTD device structure and private data */
 	pasemi_nand_mtd = kzalloc(sizeof(struct mtd_info) +
@@ -155,16 +156,15 @@ static int __devinit pasemi_nand_probe(struct platform_device *ofdev)
 	chip->ecc.mode = NAND_ECC_SOFT;
 
 	/* Enable the following for a flash based bad block table */
-	chip->options = NAND_NO_AUTOINCR;
-	chip->bbt_options = NAND_BBT_USE_FLASH;
+	chip->options = NAND_USE_FLASH_BBT | NAND_NO_AUTOINCR;
 
-	/* Scan to find existence of the device */
+	/* Scan to find existance of the device */
 	if (nand_scan(pasemi_nand_mtd, 1)) {
 		err = -ENXIO;
 		goto out_lpc;
 	}
 
-	if (mtd_device_register(pasemi_nand_mtd, NULL, 0)) {
+	if (add_mtd_device(pasemi_nand_mtd)) {
 		printk(KERN_ERR "pasemi_nand: Unable to register MTD device\n");
 		err = -ENODEV;
 		goto out_lpc;
@@ -185,7 +185,7 @@ static int __devinit pasemi_nand_probe(struct platform_device *ofdev)
 	return err;
 }
 
-static int __devexit pasemi_nand_remove(struct platform_device *ofdev)
+static int __devexit pasemi_nand_remove(struct of_device *ofdev)
 {
 	struct nand_chip *chip;
 
@@ -219,7 +219,7 @@ static const struct of_device_id pasemi_nand_match[] =
 
 MODULE_DEVICE_TABLE(of, pasemi_nand_match);
 
-static struct platform_driver pasemi_nand_driver =
+static struct of_platform_driver pasemi_nand_driver =
 {
 	.driver = {
 		.name = (char*)driver_name,
@@ -230,7 +230,17 @@ static struct platform_driver pasemi_nand_driver =
 	.remove		= pasemi_nand_remove,
 };
 
-module_platform_driver(pasemi_nand_driver);
+static int __init pasemi_nand_init(void)
+{
+	return of_register_platform_driver(&pasemi_nand_driver);
+}
+module_init(pasemi_nand_init);
+
+static void __exit pasemi_nand_exit(void)
+{
+	of_unregister_platform_driver(&pasemi_nand_driver);
+}
+module_exit(pasemi_nand_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Egor Martovetsky <egor@pasemi.com>");

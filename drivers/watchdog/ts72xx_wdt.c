@@ -34,8 +34,8 @@ MODULE_PARM_DESC(timeout, "Watchdog timeout in seconds. "
 			  __MODULE_STRING(TS72XX_WDT_DEFAULT_TIMEOUT)
 			  ")");
 
-static bool nowayout = WATCHDOG_NOWAYOUT;
-module_param(nowayout, bool, 0);
+static int nowayout = WATCHDOG_NOWAYOUT;
+module_param(nowayout, int, 0);
 MODULE_PARM_DESC(nowayout, "Disable watchdog shutdown on close");
 
 /**
@@ -68,7 +68,7 @@ struct platform_device *ts72xx_wdt_pdev;
  * to control register):
  *	value	description
  *	-------------------------
- *	0x00	watchdog disabled
+ * 	0x00	watchdog disabled
  *	0x01	250ms
  *	0x02	500ms
  *	0x03	1s
@@ -449,9 +449,6 @@ static __devinit int ts72xx_wdt_probe(struct platform_device *pdev)
 	wdt->pdev = pdev;
 	mutex_init(&wdt->lock);
 
-	/* make sure that the watchdog is disabled */
-	ts72xx_wdt_stop(wdt);
-
 	error = misc_register(&ts72xx_wdt_miscdev);
 	if (error) {
 		dev_err(&pdev->dev, "failed to register miscdev\n");
@@ -506,7 +503,17 @@ static struct platform_driver ts72xx_wdt_driver = {
 	},
 };
 
-module_platform_driver(ts72xx_wdt_driver);
+static __init int ts72xx_wdt_init(void)
+{
+	return platform_driver_register(&ts72xx_wdt_driver);
+}
+module_init(ts72xx_wdt_init);
+
+static __exit void ts72xx_wdt_exit(void)
+{
+	platform_driver_unregister(&ts72xx_wdt_driver);
+}
+module_exit(ts72xx_wdt_exit);
 
 MODULE_AUTHOR("Mika Westerberg <mika.westerberg@iki.fi>");
 MODULE_DESCRIPTION("TS-72xx SBC Watchdog");

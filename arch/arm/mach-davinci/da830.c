@@ -8,7 +8,6 @@
  * is licensed "as is" without any warranty of any kind, whether express
  * or implied.
  */
-#include <linux/gpio.h>
 #include <linux/init.h>
 #include <linux/clk.h>
 
@@ -20,7 +19,7 @@
 #include <mach/common.h>
 #include <mach/time.h>
 #include <mach/da8xx.h>
-#include <mach/gpio-davinci.h>
+#include <mach/gpio.h>
 
 #include "clock.h"
 #include "mux.h"
@@ -149,7 +148,7 @@ static struct clk scr2_ss_clk = {
 static struct clk dmax_clk = {
 	.name		= "dmax",
 	.parent		= &pll0_sysclk2,
-	.lpsc		= DA8XX_LPSC0_PRUSS,
+	.lpsc		= DA8XX_LPSC0_DMAX,
 	.flags		= ALWAYS_ENABLED,
 };
 
@@ -398,8 +397,8 @@ static struct clk_lookup da830_clks[] = {
 	CLK(NULL,		"uart0",	&uart0_clk),
 	CLK(NULL,		"uart1",	&uart1_clk),
 	CLK(NULL,		"uart2",	&uart2_clk),
-	CLK("spi_davinci.0",	NULL,		&spi0_clk),
-	CLK("spi_davinci.1",	NULL,		&spi1_clk),
+	CLK("dm_spi.0",		NULL,		&spi0_clk),
+	CLK("dm_spi.1",		NULL,		&spi1_clk),
 	CLK(NULL,		"ecap0",	&ecap0_clk),
 	CLK(NULL,		"ecap1",	&ecap1_clk),
 	CLK(NULL,		"ecap2",	&ecap2_clk),
@@ -1025,6 +1024,7 @@ static u8 da830_default_priorities[DA830_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_EVTOUT4]		= 7,
 	[IRQ_DA8XX_EVTOUT5]		= 7,
 	[IRQ_DA8XX_EVTOUT6]		= 7,
+	[IRQ_DA8XX_EVTOUT6]		= 7,
 	[IRQ_DA8XX_EVTOUT7]		= 7,
 	[IRQ_DA8XX_CCINT0]		= 7,
 	[IRQ_DA8XX_CCERRINT]		= 7,
@@ -1042,7 +1042,11 @@ static u8 da830_default_priorities[DA830_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_TINT34_1]		= 7,
 	[IRQ_DA8XX_UARTINT0]		= 7,
 	[IRQ_DA8XX_KEYMGRINT]		= 7,
+	[IRQ_DA8XX_SECINT]		= 7,
+	[IRQ_DA8XX_SECKEYERR]		= 7,
 	[IRQ_DA830_MPUERR]		= 7,
+	[IRQ_DA830_IOPUERR]		= 7,
+	[IRQ_DA830_BOOTCFGERR]		= 7,
 	[IRQ_DA8XX_CHIPINT0]		= 7,
 	[IRQ_DA8XX_CHIPINT1]		= 7,
 	[IRQ_DA8XX_CHIPINT2]		= 7,
@@ -1201,6 +1205,7 @@ static struct davinci_soc_info davinci_soc_info_da830 = {
 	.gpio_irq		= IRQ_DA8XX_GPIO0,
 	.serial_dev		= &da8xx_serial_device,
 	.emac_pdata		= &da8xx_emac_pdata,
+	.reset_device		= &da8xx_wdt_device,
 };
 
 void __init da830_init(void)

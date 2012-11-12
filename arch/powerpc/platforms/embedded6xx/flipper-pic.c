@@ -46,10 +46,10 @@
  *
  */
 
-static void flipper_pic_mask_and_ack(struct irq_data *d)
+static void flipper_pic_mask_and_ack(unsigned int virq)
 {
-	int irq = irqd_to_hwirq(d);
-	void __iomem *io_base = irq_data_get_irq_chip_data(d);
+	int irq = virq_to_hw(virq);
+	void __iomem *io_base = get_irq_chip_data(virq);
 	u32 mask = 1 << irq;
 
 	clrbits32(io_base + FLIPPER_IMR, mask);
@@ -57,27 +57,27 @@ static void flipper_pic_mask_and_ack(struct irq_data *d)
 	out_be32(io_base + FLIPPER_ICR, mask);
 }
 
-static void flipper_pic_ack(struct irq_data *d)
+static void flipper_pic_ack(unsigned int virq)
 {
-	int irq = irqd_to_hwirq(d);
-	void __iomem *io_base = irq_data_get_irq_chip_data(d);
+	int irq = virq_to_hw(virq);
+	void __iomem *io_base = get_irq_chip_data(virq);
 
 	/* this is at least needed for RSW */
 	out_be32(io_base + FLIPPER_ICR, 1 << irq);
 }
 
-static void flipper_pic_mask(struct irq_data *d)
+static void flipper_pic_mask(unsigned int virq)
 {
-	int irq = irqd_to_hwirq(d);
-	void __iomem *io_base = irq_data_get_irq_chip_data(d);
+	int irq = virq_to_hw(virq);
+	void __iomem *io_base = get_irq_chip_data(virq);
 
 	clrbits32(io_base + FLIPPER_IMR, 1 << irq);
 }
 
-static void flipper_pic_unmask(struct irq_data *d)
+static void flipper_pic_unmask(unsigned int virq)
 {
-	int irq = irqd_to_hwirq(d);
-	void __iomem *io_base = irq_data_get_irq_chip_data(d);
+	int irq = virq_to_hw(virq);
+	void __iomem *io_base = get_irq_chip_data(virq);
 
 	setbits32(io_base + FLIPPER_IMR, 1 << irq);
 }
@@ -85,10 +85,10 @@ static void flipper_pic_unmask(struct irq_data *d)
 
 static struct irq_chip flipper_pic = {
 	.name		= "flipper-pic",
-	.irq_ack	= flipper_pic_ack,
-	.irq_mask_ack	= flipper_pic_mask_and_ack,
-	.irq_mask	= flipper_pic_mask,
-	.irq_unmask	= flipper_pic_unmask,
+	.ack		= flipper_pic_ack,
+	.mask_ack	= flipper_pic_mask_and_ack,
+	.mask		= flipper_pic_mask,
+	.unmask		= flipper_pic_unmask,
 };
 
 /*
@@ -96,25 +96,32 @@ static struct irq_chip flipper_pic = {
  *
  */
 
-static struct irq_domain *flipper_irq_host;
+static struct irq_host *flipper_irq_host;
 
-static int flipper_pic_map(struct irq_domain *h, unsigned int virq,
+static int flipper_pic_map(struct irq_host *h, unsigned int virq,
 			   irq_hw_number_t hwirq)
 {
-	irq_set_chip_data(virq, h->host_data);
-	irq_set_status_flags(virq, IRQ_LEVEL);
-	irq_set_chip_and_handler(virq, &flipper_pic, handle_level_irq);
+	set_irq_chip_data(virq, h->host_data);
+	irq_to_desc(virq)->status |= IRQ_LEVEL;
+	set_irq_chip_and_handler(virq, &flipper_pic, handle_level_irq);
 	return 0;
 }
 
-static int flipper_pic_match(struct irq_domain *h, struct device_node *np)
+static void flipper_pic_unmap(struct irq_host *h, unsigned int irq)
+{
+	set_irq_chip_data(irq, NULL);
+	set_irq_chip(irq, NULL);
+}
+
+static int flipper_pic_match(struct irq_host *h, struct device_node *np)
 {
 	return 1;
 }
 
 
-static const struct irq_domain_ops flipper_irq_domain_ops = {
+static struct irq_host_ops flipper_irq_host_ops = {
 	.map = flipper_pic_map,
+	.unmap = flipper_pic_unmap,
 	.match = flipper_pic_match,
 };
 
@@ -130,10 +137,10 @@ static void __flipper_quiesce(void __iomem *io_base)
 	out_be32(io_base + FLIPPER_ICR, 0xffffffff);
 }
 
-struct irq_domain * __init flipper_pic_init(struct device_node *np)
+struct irq_host * __init flipper_pic_init(struct device_node *np)
 {
 	struct device_node *pi;
-	struct irq_domain *irq_domain = NULL;
+	struct irq_host *irq_host = NULL;
 	struct resource res;
 	void __iomem *io_base;
 	int retval;
@@ -159,15 +166,17 @@ struct irq_domain * __init flipper_pic_init(struct device_node *np)
 
 	__flipper_quiesce(io_base);
 
-	irq_domain = irq_domain_add_linear(np, FLIPPER_NR_IRQS,
-				  &flipper_irq_domain_ops, io_base);
-	if (!irq_domain) {
-		pr_err("failed to allocate irq_domain\n");
+	irq_host = irq_alloc_host(np, IRQ_HOST_MAP_LINEAR, FLIPPER_NR_IRQS,
+				  &flipper_irq_host_ops, -1);
+	if (!irq_host) {
+		pr_err("failed to allocate irq_host\n");
 		return NULL;
 	}
 
+	irq_host->host_data = io_base;
+
 out:
-	return irq_domain;
+	return irq_host;
 }
 
 unsigned int flipper_pic_get_irq(void)

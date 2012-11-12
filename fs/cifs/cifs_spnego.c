@@ -84,9 +84,6 @@ struct key_type cifs_spnego_key_type = {
 /* strlen of ";uid=0x" */
 #define UID_KEY_LEN		7
 
-/* strlen of ";creduid=0x" */
-#define CREDUID_KEY_LEN		11
-
 /* strlen of ";user=" */
 #define USER_KEY_LEN		6
 
@@ -95,11 +92,9 @@ struct key_type cifs_spnego_key_type = {
 
 /* get a key struct with a SPNEGO security blob, suitable for session setup */
 struct key *
-cifs_get_spnego_key(struct cifs_ses *sesInfo)
+cifs_get_spnego_key(struct cifsSesInfo *sesInfo)
 {
 	struct TCP_Server_Info *server = sesInfo->server;
-	struct sockaddr_in *sa = (struct sockaddr_in *) &server->dstaddr;
-	struct sockaddr_in6 *sa6 = (struct sockaddr_in6 *) &server->dstaddr;
 	char *description, *dp;
 	size_t desc_len;
 	struct key *spnego_key;
@@ -112,11 +107,8 @@ cifs_get_spnego_key(struct cifs_ses *sesInfo)
 		   IP_KEY_LEN + INET6_ADDRSTRLEN +
 		   MAX_MECH_STR_LEN +
 		   UID_KEY_LEN + (sizeof(uid_t) * 2) +
-		   CREDUID_KEY_LEN + (sizeof(uid_t) * 2) +
+		   USER_KEY_LEN + strlen(sesInfo->userName) +
 		   PID_KEY_LEN + (sizeof(pid_t) * 2) + 1;
-
-	if (sesInfo->user_name)
-		desc_len += USER_KEY_LEN + strlen(sesInfo->user_name);
 
 	spnego_key = ERR_PTR(-ENOMEM);
 	description = kzalloc(desc_len, GFP_KERNEL);
@@ -131,10 +123,10 @@ cifs_get_spnego_key(struct cifs_ses *sesInfo)
 	dp = description + strlen(description);
 
 	/* add the server address */
-	if (server->dstaddr.ss_family == AF_INET)
-		sprintf(dp, "ip4=%pI4", &sa->sin_addr);
-	else if (server->dstaddr.ss_family == AF_INET6)
-		sprintf(dp, "ip6=%pI6", &sa6->sin6_addr);
+	if (server->addr.sockAddr.sin_family == AF_INET)
+		sprintf(dp, "ip4=%pI4", &server->addr.sockAddr.sin_addr);
+	else if (server->addr.sockAddr.sin_family == AF_INET6)
+		sprintf(dp, "ip6=%pI6", &server->addr.sockAddr6.sin6_addr);
 	else
 		goto out;
 
@@ -152,12 +144,7 @@ cifs_get_spnego_key(struct cifs_ses *sesInfo)
 	sprintf(dp, ";uid=0x%x", sesInfo->linux_uid);
 
 	dp = description + strlen(description);
-	sprintf(dp, ";creduid=0x%x", sesInfo->cred_uid);
-
-	if (sesInfo->user_name) {
-		dp = description + strlen(description);
-		sprintf(dp, ";user=%s", sesInfo->user_name);
-	}
+	sprintf(dp, ";user=%s", sesInfo->userName);
 
 	dp = description + strlen(description);
 	sprintf(dp, ";pid=0x%x", current->pid);

@@ -219,6 +219,19 @@ config USB_NET_RNDIS_WLAN
 
 source "drivers/net/wireless/rtl818x/Kconfig"
 
+config RTL8712U
+	tristate "Realtek 8712 USB support"
+	depends on MAC80211 && USB && WLAN && EXPERIMENTAL
+	select WIRELESS_EXT
+	select WEXT_PRIV
+
+
+config RTL8712S
+	tristate "Realtek 8712 SDIO support"
+	depends on MAC80211 && MMC && WLAN && EXPERIMENTAL
+	select WIRELESS_EXT
+	select WEXT_PRIV
+
 config ADM8211
 	tristate "ADMtek ADM8211 support"
 	depends on MAC80211 && PCI && EXPERIMENTAL
@@ -271,20 +284,15 @@ config MWL8K
 source "drivers/net/wireless/ath/Kconfig"
 source "drivers/net/wireless/b43/Kconfig"
 source "drivers/net/wireless/b43legacy/Kconfig"
-source "drivers/net/wireless/brcm80211/Kconfig"
 source "drivers/net/wireless/hostap/Kconfig"
 source "drivers/net/wireless/ipw2x00/Kconfig"
 source "drivers/net/wireless/iwlwifi/Kconfig"
-source "drivers/net/wireless/iwlegacy/Kconfig"
 source "drivers/net/wireless/iwmc3200wifi/Kconfig"
 source "drivers/net/wireless/libertas/Kconfig"
 source "drivers/net/wireless/orinoco/Kconfig"
 source "drivers/net/wireless/p54/Kconfig"
 source "drivers/net/wireless/rt2x00/Kconfig"
-source "drivers/net/wireless/rtlwifi/Kconfig"
-source "drivers/net/wireless/wl1251/Kconfig"
 source "drivers/net/wireless/wl12xx/Kconfig"
 source "drivers/net/wireless/zd1211rw/Kconfig"
-source "drivers/net/wireless/mwifiex/Kconfig"
 
 endif # WLAN

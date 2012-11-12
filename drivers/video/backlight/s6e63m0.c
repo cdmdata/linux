@@ -30,7 +30,6 @@
 #include <linux/kernel.h>
 #include <linux/lcd.h>
 #include <linux/backlight.h>
-#include <linux/module.h>
 
 #include "s6e63m0_gamma.h"
 
@@ -690,7 +689,7 @@ static ssize_t s6e63m0_sysfs_store_gamma_mode(struct device *dev,
 	struct backlight_device *bd = NULL;
 	int brightness, rc;
 
-	rc = kstrtouint(buf, 0, &lcd->gamma_mode);
+	rc = strict_strtoul(buf, 0, (unsigned long *)&lcd->gamma_mode);
 	if (rc < 0)
 		return rc;
 
@@ -730,16 +729,15 @@ static ssize_t s6e63m0_sysfs_show_gamma_table(struct device *dev,
 
 	return strlen(buf);
 }
-static DEVICE_ATTR(gamma_table, 0444,
+static DEVICE_ATTR(gamma_table, 0644,
 		s6e63m0_sysfs_show_gamma_table, NULL);
 
-static int __devinit s6e63m0_probe(struct spi_device *spi)
+static int __init s6e63m0_probe(struct spi_device *spi)
 {
 	int ret = 0;
 	struct s6e63m0 *lcd = NULL;
 	struct lcd_device *ld = NULL;
 	struct backlight_device *bd = NULL;
-	struct backlight_properties props;
 
 	lcd = kzalloc(sizeof(struct s6e63m0), GFP_KERNEL);
 	if (!lcd)
@@ -771,17 +769,14 @@ static int __devinit s6e63m0_probe(struct spi_device *spi)
 
 	lcd->ld = ld;
 
-	memset(&props, 0, sizeof(struct backlight_properties));
-	props.type = BACKLIGHT_RAW;
-	props.max_brightness = MAX_BRIGHTNESS;
-
 	bd = backlight_device_register("s6e63m0bl-bl", &spi->dev, lcd,
-		&s6e63m0_backlight_ops, &props);
+		&s6e63m0_backlight_ops, NULL);
 	if (IS_ERR(bd)) {
 		ret =  PTR_ERR(bd);
 		goto out_lcd_unregister;
 	}
 
+	bd->props.max_brightness = MAX_BRIGHTNESS;
 	bd->props.brightness = MAX_BRIGHTNESS;
 	lcd->bd = bd;
 
@@ -834,9 +829,6 @@ static int __devexit s6e63m0_remove(struct spi_device *spi)
 	struct s6e63m0 *lcd = dev_get_drvdata(&spi->dev);
 
 	s6e63m0_power(lcd, FB_BLANK_POWERDOWN);
-	device_remove_file(&spi->dev, &dev_attr_gamma_table);
-	device_remove_file(&spi->dev, &dev_attr_gamma_mode);
-	backlight_device_unregister(lcd->bd);
 	lcd_device_unregister(lcd->ld);
 	kfree(lcd);
 
@@ -844,7 +836,7 @@ static int __devexit s6e63m0_remove(struct spi_device *spi)
 }
 
 #if defined(CONFIG_PM)
-static unsigned int before_power;
+unsigned int before_power;
 
 static int s6e63m0_suspend(struct spi_device *spi, pm_message_t mesg)
 {
@@ -909,7 +901,18 @@ static struct spi_driver s6e63m0_driver = {
 	.resume		= s6e63m0_resume,
 };
 
-module_spi_driver(s6e63m0_driver);
+static int __init s6e63m0_init(void)
+{
+	return spi_register_driver(&s6e63m0_driver);
+}
+
+static void __exit s6e63m0_exit(void)
+{
+	spi_unregister_driver(&s6e63m0_driver);
+}
+
+module_init(s6e63m0_init);
+module_exit(s6e63m0_exit);
 
 MODULE_AUTHOR("InKi Dae <inki.dae@samsung.com>");
 MODULE_DESCRIPTION("S6E63M0 LCD Driver");

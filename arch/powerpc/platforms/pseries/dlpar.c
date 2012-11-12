@@ -33,7 +33,7 @@ struct cc_workarea {
 	u32	prop_offset;
 };
 
-void dlpar_free_cc_property(struct property *prop)
+static void dlpar_free_cc_property(struct property *prop)
 {
 	kfree(prop->name);
 	kfree(prop->value);
@@ -55,12 +55,13 @@ static struct property *dlpar_parse_cc_property(struct cc_workarea *ccwa)
 
 	prop->length = ccwa->prop_length;
 	value = (char *)ccwa + ccwa->prop_offset;
-	prop->value = kmemdup(value, prop->length, GFP_KERNEL);
+	prop->value = kzalloc(prop->length, GFP_KERNEL);
 	if (!prop->value) {
 		dlpar_free_cc_property(prop);
 		return NULL;
 	}
 
+	memcpy(prop->value, value, prop->length);
 	return prop;
 }
 
@@ -74,7 +75,7 @@ static struct device_node *dlpar_parse_cc_node(struct cc_workarea *ccwa)
 		return NULL;
 
 	/* The configure connector reported name does not contain a
-	 * preceding '/', so we allocate a buffer large enough to
+	 * preceeding '/', so we allocate a buffer large enough to
 	 * prepend this to the full_name.
 	 */
 	name = (char *)ccwa + ccwa->name_offset;
@@ -101,7 +102,7 @@ static void dlpar_free_one_cc_node(struct device_node *dn)
 	kfree(dn);
 }
 
-void dlpar_free_cc_nodes(struct device_node *dn)
+static void dlpar_free_cc_nodes(struct device_node *dn)
 {
 	if (dn->child)
 		dlpar_free_cc_nodes(dn->child);
@@ -112,7 +113,6 @@ void dlpar_free_cc_nodes(struct device_node *dn)
 	dlpar_free_one_cc_node(dn);
 }
 
-#define COMPLETE	0
 #define NEXT_SIBLING    1
 #define NEXT_CHILD      2
 #define NEXT_PROPERTY   3
@@ -129,39 +129,21 @@ struct device_node *dlpar_configure_connector(u32 drc_index)
 	struct property *property;
 	struct property *last_property = NULL;
 	struct cc_workarea *ccwa;
-	char *data_buf;
 	int cc_token;
-	int rc = -1;
+	int rc;
 
 	cc_token = rtas_token("ibm,configure-connector");
 	if (cc_token == RTAS_UNKNOWN_SERVICE)
 		return NULL;
 
-	data_buf = kzalloc(RTAS_DATA_BUF_SIZE, GFP_KERNEL);
-	if (!data_buf)
-		return NULL;
-
-	ccwa = (struct cc_workarea *)&data_buf[0];
+	spin_lock(&rtas_data_buf_lock);
+	ccwa = (struct cc_workarea *)&rtas_data_buf[0];
 	ccwa->drc_index = drc_index;
 	ccwa->zero = 0;
 
-	do {
-		/* Since we release the rtas_data_buf lock between configure
-		 * connector calls we want to re-populate the rtas_data_buffer
-		 * with the contents of the previous call.
-		 */
-		spin_lock(&rtas_data_buf_lock);
-
-		memcpy(rtas_data_buf, data_buf, RTAS_DATA_BUF_SIZE);
-		rc = rtas_call(cc_token, 2, 1, NULL, rtas_data_buf, NULL);
-		memcpy(data_buf, rtas_data_buf, RTAS_DATA_BUF_SIZE);
-
-		spin_unlock(&rtas_data_buf_lock);
-
+	rc = rtas_call(cc_token, 2, 1, NULL, rtas_data_buf, NULL);
+	while (rc) {
 		switch (rc) {
-		case COMPLETE:
-			break;
-
 		case NEXT_SIBLING:
 			dn = dlpar_parse_cc_node(ccwa);
 			if (!dn)
@@ -215,19 +197,18 @@ struct device_node *dlpar_configure_connector(u32 drc_index)
 			       "returned from configure-connector\n", rc);
 			goto cc_error;
 		}
-	} while (rc);
 
-cc_error:
-	kfree(data_buf);
-
-	if (rc) {
-		if (first_dn)
-			dlpar_free_cc_nodes(first_dn);
-
-		return NULL;
+		rc = rtas_call(cc_token, 2, 1, NULL, rtas_data_buf, NULL);
 	}
 
+	spin_unlock(&rtas_data_buf_lock);
 	return first_dn;
+
+cc_error:
+	if (first_dn)
+		dlpar_free_cc_nodes(first_dn);
+	spin_unlock(&rtas_data_buf_lock);
+	return NULL;
 }
 
 static struct device_node *derive_parent(const char *path)
@@ -266,11 +247,12 @@ int dlpar_attach_node(struct device_node *dn)
 	if (!dn->parent)
 		return -ENOMEM;
 
-	rc = pSeries_reconfig_notify(PSERIES_RECONFIG_ADD, dn);
-	if (rc) {
+	rc = blocking_notifier_call_chain(&pSeries_reconfig_chain,
+					  PSERIES_RECONFIG_ADD, dn);
+	if (rc == NOTIFY_BAD) {
 		printk(KERN_ERR "Failed to add device node %s\n",
 		       dn->full_name);
-		return rc;
+		return -ENOMEM; /* For now, safe to assume kmalloc failure */
 	}
 
 	of_attach_node(dn);
@@ -300,7 +282,8 @@ int dlpar_detach_node(struct device_node *dn)
 		remove_proc_entry(dn->pde->name, parent->pde);
 #endif
 
-	pSeries_reconfig_notify(PSERIES_RECONFIG_REMOVE, dn);
+	blocking_notifier_call_chain(&pSeries_reconfig_chain,
+			    PSERIES_RECONFIG_REMOVE, dn);
 	of_detach_node(dn);
 	of_node_put(dn); /* Must decrement the refcount */
 
@@ -480,7 +463,6 @@ static int dlpar_offline_cpu(struct device_node *dn)
 				break;
 
 			if (get_cpu_current_state(cpu) == CPU_STATE_ONLINE) {
-				set_preferred_offline_state(cpu, CPU_STATE_OFFLINE);
 				cpu_maps_update_done();
 				rc = cpu_down(cpu);
 				if (rc)

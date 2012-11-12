@@ -44,7 +44,7 @@ static int fat_ioctl_set_attributes(struct file *file, u32 __user *user_attr)
 		goto out;
 
 	mutex_lock(&inode->i_mutex);
-	err = mnt_want_write_file(file);
+	err = mnt_want_write(file->f_path.mnt);
 	if (err)
 		goto out_unlock_inode;
 
@@ -102,13 +102,13 @@ static int fat_ioctl_set_attributes(struct file *file, u32 __user *user_attr)
 		if (attr & ATTR_SYS)
 			inode->i_flags |= S_IMMUTABLE;
 		else
-			inode->i_flags &= ~S_IMMUTABLE;
+			inode->i_flags &= S_IMMUTABLE;
 	}
 
 	fat_save_attrs(inode, attr);
 	mark_inode_dirty(inode);
 out_drop_write:
-	mnt_drop_write_file(file);
+	mnt_drop_write(file->f_path.mnt);
 out_unlock_inode:
 	mutex_unlock(&inode->i_mutex);
 out:
@@ -149,12 +149,12 @@ static int fat_file_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-int fat_file_fsync(struct file *filp, loff_t start, loff_t end, int datasync)
+int fat_file_fsync(struct file *filp, int datasync)
 {
 	struct inode *inode = filp->f_mapping->host;
 	int res, err;
 
-	res = generic_file_fsync(filp, start, end, datasync);
+	res = generic_file_fsync(filp, datasync);
 	err = sync_mapping_buffers(MSDOS_SB(inode->i_sb)->fat_inode->i_mapping);
 
 	return res ? res : err;
@@ -314,7 +314,7 @@ EXPORT_SYMBOL_GPL(fat_getattr);
 static int fat_sanitize_mode(const struct msdos_sb_info *sbi,
 			     struct inode *inode, umode_t *mode_ptr)
 {
-	umode_t mask, perm;
+	mode_t mask, perm;
 
 	/*
 	 * Note, the basic check is already done by a caller of
@@ -351,7 +351,7 @@ static int fat_sanitize_mode(const struct msdos_sb_info *sbi,
 
 static int fat_allow_set_time(struct msdos_sb_info *sbi, struct inode *inode)
 {
-	umode_t allow_utime = sbi->options.allow_utime;
+	mode_t allow_utime = sbi->options.allow_utime;
 
 	if (current_fsuid() != inode->i_uid) {
 		if (in_group_p(inode->i_gid))
@@ -364,6 +364,18 @@ static int fat_allow_set_time(struct msdos_sb_info *sbi, struct inode *inode)
 	return 0;
 }
 
+int fat_setsize(struct inode *inode, loff_t offset)
+{
+	int error;
+
+	error = simple_setsize(inode, offset);
+	if (error)
+		return error;
+	fat_truncate_blocks(inode, offset);
+
+	return error;
+}
+
 #define TIMES_SET_FLAGS	(ATTR_MTIME_SET | ATTR_ATIME_SET | ATTR_TIMES_SET)
 /* valid file mode bits */
 #define FAT_VALID_MODE	(S_IFREG | S_IFDIR | S_IRWXUGO)
@@ -374,6 +386,21 @@ int fat_setattr(struct dentry *dentry, struct iattr *attr)
 	struct inode *inode = dentry->d_inode;
 	unsigned int ia_valid;
 	int error;
+
+	/*
+	 * Expand the file. Since inode_setattr() updates ->i_size
+	 * before calling the ->truncate(), but FAT needs to fill the
+	 * hole before it. XXX: this is no longer true with new truncate
+	 * sequence.
+	 */
+	if (attr->ia_valid & ATTR_SIZE) {
+		if (attr->ia_size > inode->i_size) {
+			error = fat_cont_expand(inode, attr->ia_size);
+			if (error || attr->ia_valid == ATTR_SIZE)
+				goto out;
+			attr->ia_valid &= ~ATTR_SIZE;
+		}
+	}
 
 	/* Check for setting the inode time. */
 	ia_valid = attr->ia_valid;
@@ -388,23 +415,6 @@ int fat_setattr(struct dentry *dentry, struct iattr *attr)
 		if (sbi->options.quiet)
 			error = 0;
 		goto out;
-	}
-
-	/*
-	 * Expand the file. Since inode_setattr() updates ->i_size
-	 * before calling the ->truncate(), but FAT needs to fill the
-	 * hole before it. XXX: this is no longer true with new truncate
-	 * sequence.
-	 */
-	if (attr->ia_valid & ATTR_SIZE) {
-		inode_dio_wait(inode);
-
-		if (attr->ia_size > inode->i_size) {
-			error = fat_cont_expand(inode, attr->ia_size);
-			if (error || attr->ia_valid == ATTR_SIZE)
-				goto out;
-			attr->ia_valid &= ~ATTR_SIZE;
-		}
 	}
 
 	if (((attr->ia_valid & ATTR_UID) &&
@@ -431,13 +441,12 @@ int fat_setattr(struct dentry *dentry, struct iattr *attr)
 	}
 
 	if (attr->ia_valid & ATTR_SIZE) {
-		down_write(&MSDOS_I(inode)->truncate_lock);
-		truncate_setsize(inode, attr->ia_size);
-		fat_truncate_blocks(inode, attr->ia_size);
-		up_write(&MSDOS_I(inode)->truncate_lock);
+		error = fat_setsize(inode, attr->ia_size);
+		if (error)
+			goto out;
 	}
 
-	setattr_copy(inode, attr);
+	generic_setattr(inode, attr);
 	mark_inode_dirty(inode);
 out:
 	return error;

@@ -23,7 +23,6 @@
  */
 
 #include <linux/console.h>
-#include <linux/module.h>
 
 #include "drmP.h"
 #include "drm.h"
@@ -32,17 +31,20 @@
 #include "nouveau_hw.h"
 #include "nouveau_fb.h"
 #include "nouveau_fbcon.h"
-#include "nouveau_pm.h"
 #include "nv50_display.h"
 
 #include "drm_pciids.h"
 
-MODULE_PARM_DESC(agpmode, "AGP mode (0 to disable AGP)");
-int nouveau_agpmode = -1;
-module_param_named(agpmode, nouveau_agpmode, int, 0400);
+MODULE_PARM_DESC(ctxfw, "Use external firmware blob for grctx init (NV40)");
+int nouveau_ctxfw = 0;
+module_param_named(ctxfw, nouveau_ctxfw, int, 0400);
+
+MODULE_PARM_DESC(noagp, "Disable AGP");
+int nouveau_noagp;
+module_param_named(noagp, nouveau_noagp, int, 0400);
 
 MODULE_PARM_DESC(modeset, "Enable kernel modesetting");
-int nouveau_modeset = -1;
+static int nouveau_modeset = -1; /* kms */
 module_param_named(modeset, nouveau_modeset, int, 0400);
 
 MODULE_PARM_DESC(vbios, "Override default VBIOS location");
@@ -54,12 +56,8 @@ int nouveau_vram_pushbuf;
 module_param_named(vram_pushbuf, nouveau_vram_pushbuf, int, 0400);
 
 MODULE_PARM_DESC(vram_notify, "Force DMA notifiers to be in VRAM");
-int nouveau_vram_notify = 0;
+int nouveau_vram_notify = 1;
 module_param_named(vram_notify, nouveau_vram_notify, int, 0400);
-
-MODULE_PARM_DESC(vram_type, "Override detected VRAM type");
-char *nouveau_vram_type;
-module_param_named(vram_type, nouveau_vram_type, charp, 0400);
 
 MODULE_PARM_DESC(duallink, "Allow dual-link TMDS (>=GeForce 8)");
 int nouveau_duallink = 1;
@@ -78,22 +76,18 @@ int nouveau_ignorelid = 0;
 module_param_named(ignorelid, nouveau_ignorelid, int, 0400);
 
 MODULE_PARM_DESC(noaccel, "Disable all acceleration");
-int nouveau_noaccel = -1;
+int nouveau_noaccel = 0;
 module_param_named(noaccel, nouveau_noaccel, int, 0400);
 
 MODULE_PARM_DESC(nofbaccel, "Disable fbcon acceleration");
 int nouveau_nofbaccel = 0;
 module_param_named(nofbaccel, nouveau_nofbaccel, int, 0400);
 
-MODULE_PARM_DESC(force_post, "Force POST");
-int nouveau_force_post = 0;
-module_param_named(force_post, nouveau_force_post, int, 0400);
-
 MODULE_PARM_DESC(override_conntype, "Ignore DCB connector type");
 int nouveau_override_conntype = 0;
 module_param_named(override_conntype, nouveau_override_conntype, int, 0400);
 
-MODULE_PARM_DESC(tv_disable, "Disable TV-out detection");
+MODULE_PARM_DESC(tv_disable, "Disable TV-out detection\n");
 int nouveau_tv_disable = 0;
 module_param_named(tv_disable, nouveau_tv_disable, int, 0400);
 
@@ -108,29 +102,9 @@ module_param_named(tv_norm, nouveau_tv_norm, charp, 0400);
 MODULE_PARM_DESC(reg_debug, "Register access debug bitmask:\n"
 		"\t\t0x1 mc, 0x2 video, 0x4 fb, 0x8 extdev,\n"
 		"\t\t0x10 crtc, 0x20 ramdac, 0x40 vgacrtc, 0x80 rmvio,\n"
-		"\t\t0x100 vgaattr, 0x200 EVO (G80+)");
+		"\t\t0x100 vgaattr, 0x200 EVO (G80+). ");
 int nouveau_reg_debug;
 module_param_named(reg_debug, nouveau_reg_debug, int, 0600);
-
-MODULE_PARM_DESC(perflvl, "Performance level (default: boot)");
-char *nouveau_perflvl;
-module_param_named(perflvl, nouveau_perflvl, charp, 0400);
-
-MODULE_PARM_DESC(perflvl_wr, "Allow perflvl changes (warning: dangerous!)");
-int nouveau_perflvl_wr;
-module_param_named(perflvl_wr, nouveau_perflvl_wr, int, 0400);
-
-MODULE_PARM_DESC(msi, "Enable MSI (default: off)");
-int nouveau_msi;
-module_param_named(msi, nouveau_msi, int, 0400);
-
-MODULE_PARM_DESC(ctxfw, "Use external HUB/GPC ucode (fermi)");
-int nouveau_ctxfw;
-module_param_named(ctxfw, nouveau_ctxfw, int, 0400);
-
-MODULE_PARM_DESC(mxmdcb, "Santise DCB table according to MXM-SIS");
-int nouveau_mxmdcb = 1;
-module_param_named(mxmdcb, nouveau_mxmdcb, int, 0400);
 
 int nouveau_fbpercrtc;
 #if 0
@@ -158,7 +132,7 @@ static struct drm_driver driver;
 static int __devinit
 nouveau_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
-	return drm_get_pci_dev(pdev, ent, &driver);
+	return drm_get_dev(pdev, ent, &driver);
 }
 
 static void
@@ -175,22 +149,20 @@ nouveau_pci_suspend(struct pci_dev *pdev, pm_message_t pm_state)
 	struct drm_device *dev = pci_get_drvdata(pdev);
 	struct drm_nouveau_private *dev_priv = dev->dev_private;
 	struct nouveau_instmem_engine *pinstmem = &dev_priv->engine.instmem;
+	struct nouveau_pgraph_engine *pgraph = &dev_priv->engine.graph;
 	struct nouveau_fifo_engine *pfifo = &dev_priv->engine.fifo;
 	struct nouveau_channel *chan;
 	struct drm_crtc *crtc;
-	int ret, i, e;
+	int ret, i;
+
+	if (!drm_core_check_feature(dev, DRIVER_MODESET))
+		return -ENODEV;
 
 	if (pm_state.event == PM_EVENT_PRETHAW)
 		return 0;
 
-	if (dev->switch_power_state == DRM_SWITCH_POWER_OFF)
-		return 0;
-
-	NV_INFO(dev, "Disabling display...\n");
-	nouveau_display_fini(dev);
-
-	NV_INFO(dev, "Disabling fbcon...\n");
-	nouveau_fbcon_set_suspend(dev, 1);
+	NV_INFO(dev, "Disabling fbcon acceleration...\n");
+	nouveau_fbcon_save_disable_accel(dev);
 
 	NV_INFO(dev, "Unpinning framebuffer(s)...\n");
 	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
@@ -215,38 +187,43 @@ nouveau_pci_suspend(struct pci_dev *pdev, pm_message_t pm_state)
 
 	NV_INFO(dev, "Idling channels...\n");
 	for (i = 0; i < pfifo->channels; i++) {
-		chan = dev_priv->channels.ptr[i];
+		struct nouveau_fence *fence = NULL;
 
-		if (chan && chan->pushbuf_bo)
-			nouveau_channel_idle(chan);
-	}
-
-	pfifo->reassign(dev, false);
-	pfifo->disable(dev);
-	pfifo->unload_context(dev);
-
-	for (e = NVOBJ_ENGINE_NR - 1; e >= 0; e--) {
-		if (!dev_priv->eng[e])
+		chan = dev_priv->fifos[i];
+		if (!chan || (dev_priv->card_type >= NV_50 &&
+			      chan == dev_priv->fifos[0]))
 			continue;
 
-		ret = dev_priv->eng[e]->fini(dev, e, true);
+		ret = nouveau_fence_new(chan, &fence, true);
+		if (ret == 0) {
+			ret = nouveau_fence_wait(fence, NULL, false, false);
+			nouveau_fence_unref((void *)&fence);
+		}
+
 		if (ret) {
-			NV_ERROR(dev, "... engine %d failed: %d\n", e, ret);
-			goto out_abort;
+			NV_ERROR(dev, "Failed to idle channel %d for suspend\n",
+				 chan->id);
 		}
 	}
 
-	ret = pinstmem->suspend(dev);
-	if (ret) {
-		NV_ERROR(dev, "... failed: %d\n", ret);
-		goto out_abort;
-	}
+	pgraph->fifo_access(dev, false);
+	nouveau_wait_for_idle(dev);
+	pfifo->reassign(dev, false);
+	pfifo->disable(dev);
+	pfifo->unload_context(dev);
+	pgraph->unload_context(dev);
 
 	NV_INFO(dev, "Suspending GPU objects...\n");
 	ret = nouveau_gpuobj_suspend(dev);
 	if (ret) {
 		NV_ERROR(dev, "... failed: %d\n", ret);
-		pinstmem->resume(dev);
+		goto out_abort;
+	}
+
+	ret = pinstmem->suspend(dev);
+	if (ret) {
+		NV_ERROR(dev, "... failed: %d\n", ret);
+		nouveau_gpuobj_suspend_cleanup(dev);
 		goto out_abort;
 	}
 
@@ -257,16 +234,17 @@ nouveau_pci_suspend(struct pci_dev *pdev, pm_message_t pm_state)
 		pci_set_power_state(pdev, PCI_D3hot);
 	}
 
+	acquire_console_sem();
+	nouveau_fbcon_set_suspend(dev, 1);
+	release_console_sem();
+	nouveau_fbcon_restore_accel(dev);
 	return 0;
 
 out_abort:
 	NV_INFO(dev, "Re-enabling acceleration..\n");
-	for (e = e + 1; e < NVOBJ_ENGINE_NR; e++) {
-		if (dev_priv->eng[e])
-			dev_priv->eng[e]->init(dev, e);
-	}
 	pfifo->enable(dev);
 	pfifo->reassign(dev, true);
+	pgraph->fifo_access(dev, true);
 	return ret;
 }
 
@@ -279,8 +257,10 @@ nouveau_pci_resume(struct pci_dev *pdev)
 	struct drm_crtc *crtc;
 	int ret, i;
 
-	if (dev->switch_power_state == DRM_SWITCH_POWER_OFF)
-		return 0;
+	if (!drm_core_check_feature(dev, DRIVER_MODESET))
+		return -ENODEV;
+
+	nouveau_fbcon_save_disable_accel(dev);
 
 	NV_INFO(dev, "We're back, enabling device...\n");
 	pci_set_power_state(pdev, PCI_D0);
@@ -288,13 +268,6 @@ nouveau_pci_resume(struct pci_dev *pdev)
 	if (pci_enable_device(pdev))
 		return -1;
 	pci_set_master(dev->pdev);
-
-	/* Make sure the AGP controller is in a consistent state */
-	if (dev_priv->gart_info.type == NOUVEAU_GART_AGP)
-		nouveau_mem_reset_agp(dev);
-
-	/* Make the CRTCs accessible */
-	engine->display.early_init(dev);
 
 	NV_INFO(dev, "POSTing device...\n");
 	ret = nouveau_run_vbios_init(dev);
@@ -309,19 +282,16 @@ nouveau_pci_resume(struct pci_dev *pdev)
 		}
 	}
 
-	NV_INFO(dev, "Restoring GPU objects...\n");
-	nouveau_gpuobj_resume(dev);
-
 	NV_INFO(dev, "Reinitialising engines...\n");
 	engine->instmem.resume(dev);
 	engine->mc.init(dev);
 	engine->timer.init(dev);
 	engine->fb.init(dev);
-	for (i = 0; i < NVOBJ_ENGINE_NR; i++) {
-		if (dev_priv->eng[i])
-			dev_priv->eng[i]->init(dev, i);
-	}
+	engine->graph.init(dev);
 	engine->fifo.init(dev);
+
+	NV_INFO(dev, "Restoring GPU objects...\n");
+	nouveau_gpuobj_resume(dev);
 
 	nouveau_irq_postinstall(dev);
 
@@ -331,7 +301,7 @@ nouveau_pci_resume(struct pci_dev *pdev)
 		int j;
 
 		for (i = 0; i < dev_priv->engine.fifo.channels; i++) {
-			chan = dev_priv->channels.ptr[i];
+			chan = dev_priv->fifos[i];
 			if (!chan || !chan->pushbuf_bo)
 				continue;
 
@@ -339,8 +309,6 @@ nouveau_pci_resume(struct pci_dev *pdev)
 				nouveau_bo_wr32(chan->pushbuf_bo, i, 0);
 		}
 	}
-
-	nouveau_pm_resume(dev);
 
 	NV_INFO(dev, "Restoring mode...\n");
 	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
@@ -355,6 +323,7 @@ nouveau_pci_resume(struct pci_dev *pdev)
 
 	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
 		struct nouveau_crtc *nv_crtc = nouveau_crtc(crtc);
+		int ret;
 
 		ret = nouveau_bo_pin(nv_crtc->cursor.nvbo, TTM_PL_FLAG_VRAM);
 		if (!ret)
@@ -363,10 +332,22 @@ nouveau_pci_resume(struct pci_dev *pdev)
 			NV_ERROR(dev, "Could not pin/map cursor.\n");
 	}
 
-	nouveau_fbcon_set_suspend(dev, 0);
-	nouveau_fbcon_zfill_all(dev);
+	if (dev_priv->card_type < NV_50) {
+		nv04_display_restore(dev);
+		NVLockVgaCrtcs(dev, false);
+	} else
+		nv50_display_init(dev);
 
-	nouveau_display_init(dev);
+	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
+		struct nouveau_crtc *nv_crtc = nouveau_crtc(crtc);
+
+		nv_crtc->cursor.set_offset(nv_crtc,
+					nv_crtc->cursor.nvbo->bo.offset -
+					dev_priv->vm_vram_base);
+
+		nv_crtc->cursor.set_pos(nv_crtc, nv_crtc->cursor_saved_x,
+			nv_crtc->cursor_saved_y);
+	}
 
 	/* Force CLUT to get re-loaded during modeset */
 	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
@@ -375,47 +356,27 @@ nouveau_pci_resume(struct pci_dev *pdev)
 		nv_crtc->lut.depth = 0;
 	}
 
+	acquire_console_sem();
+	nouveau_fbcon_set_suspend(dev, 0);
+	release_console_sem();
+
+	nouveau_fbcon_zfill_all(dev);
+
 	drm_helper_resume_force_mode(dev);
 
-	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
-		struct nouveau_crtc *nv_crtc = nouveau_crtc(crtc);
-		u32 offset = nv_crtc->cursor.nvbo->bo.offset;
-
-		nv_crtc->cursor.set_offset(nv_crtc, offset);
-		nv_crtc->cursor.set_pos(nv_crtc, nv_crtc->cursor_saved_x,
-						 nv_crtc->cursor_saved_y);
-	}
-
+	nouveau_fbcon_restore_accel(dev);
 	return 0;
 }
-
-static const struct file_operations nouveau_driver_fops = {
-	.owner = THIS_MODULE,
-	.open = drm_open,
-	.release = drm_release,
-	.unlocked_ioctl = drm_ioctl,
-	.mmap = nouveau_ttm_mmap,
-	.poll = drm_poll,
-	.fasync = drm_fasync,
-	.read = drm_read,
-#if defined(CONFIG_COMPAT)
-	.compat_ioctl = nouveau_compat_ioctl,
-#endif
-	.llseek = noop_llseek,
-};
 
 static struct drm_driver driver = {
 	.driver_features =
 		DRIVER_USE_AGP | DRIVER_PCI_DMA | DRIVER_SG |
-		DRIVER_HAVE_IRQ | DRIVER_IRQ_SHARED | DRIVER_GEM |
-		DRIVER_MODESET,
+		DRIVER_HAVE_IRQ | DRIVER_IRQ_SHARED | DRIVER_GEM,
 	.load = nouveau_load,
 	.firstopen = nouveau_firstopen,
 	.lastclose = nouveau_lastclose,
 	.unload = nouveau_unload,
-	.open = nouveau_open,
 	.preclose = nouveau_preclose,
-	.postclose = nouveau_postclose,
 #if defined(CONFIG_DRM_NOUVEAU_DEBUG)
 	.debugfs_init = nouveau_debugfs_init,
 	.debugfs_cleanup = nouveau_debugfs_takedown,
@@ -424,20 +385,33 @@ static struct drm_driver driver = {
 	.irq_postinstall = nouveau_irq_postinstall,
 	.irq_uninstall = nouveau_irq_uninstall,
 	.irq_handler = nouveau_irq_handler,
-	.get_vblank_counter = drm_vblank_count,
-	.enable_vblank = nouveau_vblank_enable,
-	.disable_vblank = nouveau_vblank_disable,
 	.reclaim_buffers = drm_core_reclaim_buffers,
+	.get_map_ofs = drm_core_get_map_ofs,
+	.get_reg_ofs = drm_core_get_reg_ofs,
 	.ioctls = nouveau_ioctls,
-	.fops = &nouveau_driver_fops,
+	.fops = {
+		.owner = THIS_MODULE,
+		.open = drm_open,
+		.release = drm_release,
+		.unlocked_ioctl = drm_ioctl,
+		.mmap = nouveau_ttm_mmap,
+		.poll = drm_poll,
+		.fasync = drm_fasync,
+#if defined(CONFIG_COMPAT)
+		.compat_ioctl = nouveau_compat_ioctl,
+#endif
+	},
+	.pci_driver = {
+		.name = DRIVER_NAME,
+		.id_table = pciidlist,
+		.probe = nouveau_pci_probe,
+		.remove = nouveau_pci_remove,
+		.suspend = nouveau_pci_suspend,
+		.resume = nouveau_pci_resume
+	},
+
 	.gem_init_object = nouveau_gem_object_new,
 	.gem_free_object = nouveau_gem_object_del,
-	.gem_open_object = nouveau_gem_object_open,
-	.gem_close_object = nouveau_gem_object_close,
-
-	.dumb_create = nouveau_display_dumb_create,
-	.dumb_map_offset = nouveau_display_dumb_map_offset,
-	.dumb_destroy = nouveau_display_dumb_destroy,
 
 	.name = DRIVER_NAME,
 	.desc = DRIVER_DESC,
@@ -449,15 +423,6 @@ static struct drm_driver driver = {
 	.major = DRIVER_MAJOR,
 	.minor = DRIVER_MINOR,
 	.patchlevel = DRIVER_PATCHLEVEL,
-};
-
-static struct pci_driver nouveau_pci_driver = {
-		.name = DRIVER_NAME,
-		.id_table = pciidlist,
-		.probe = nouveau_pci_probe,
-		.remove = nouveau_pci_remove,
-		.suspend = nouveau_pci_suspend,
-		.resume = nouveau_pci_resume
 };
 
 static int __init nouveau_init(void)
@@ -473,19 +438,17 @@ static int __init nouveau_init(void)
 			nouveau_modeset = 1;
 	}
 
-	if (!nouveau_modeset)
-		return 0;
+	if (nouveau_modeset == 1) {
+		driver.driver_features |= DRIVER_MODESET;
+		nouveau_register_dsm_handler();
+	}
 
-	nouveau_register_dsm_handler();
-	return drm_pci_init(&driver, &nouveau_pci_driver);
+	return drm_init(&driver);
 }
 
 static void __exit nouveau_exit(void)
 {
-	if (!nouveau_modeset)
-		return;
-
-	drm_pci_exit(&driver, &nouveau_pci_driver);
+	drm_exit(&driver);
 	nouveau_unregister_dsm_handler();
 }
 

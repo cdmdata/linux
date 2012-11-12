@@ -67,7 +67,7 @@
 #include <linux/slab.h>
 #include <linux/major.h>
 #include <linux/ppdev.h>
-#include <linux/mutex.h>
+#include <linux/smp_lock.h>
 #include <linux/uaccess.h>
 
 #define PP_VERSION "ppdev: user-space parallel port driver"
@@ -97,7 +97,6 @@ struct pp_struct {
 /* ROUND_UP macro from fs/select.c */
 #define ROUND_UP(x,y) (((x)+(y)-1)/(y))
 
-static DEFINE_MUTEX(pp_do_mutex);
 static inline void pp_enable_irq (struct pp_struct *pp)
 {
 	struct parport *port = pp->pdev->port;
@@ -457,7 +456,6 @@ static int pp_do_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			return -ENODEV;
 
 		modes = port->modes;
-		parport_put_port(port);
 		if (copy_to_user (argp, &modes, sizeof (modes))) {
 			return -EFAULT;
 		}
@@ -614,7 +612,6 @@ static int pp_do_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	case PPGETTIME:
 		to_jiffies = pp->pdev->timeout;
-		memset(&par_timeout, 0, sizeof(par_timeout));
 		par_timeout.tv_sec = to_jiffies / HZ;
 		par_timeout.tv_usec = (to_jiffies % (long)HZ) * (1000000/HZ);
 		if (copy_to_user (argp, &par_timeout, sizeof(struct timeval)))
@@ -633,9 +630,9 @@ static int pp_do_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static long pp_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	long ret;
-	mutex_lock(&pp_do_mutex);
+	lock_kernel();
 	ret = pp_do_ioctl(file, cmd, arg);
-	mutex_unlock(&pp_do_mutex);
+	unlock_kernel();
 	return ret;
 }
 
@@ -644,6 +641,7 @@ static int pp_open (struct inode * inode, struct file * file)
 	unsigned int minor = iminor(inode);
 	struct pp_struct *pp;
 
+	cycle_kernel_lock();
 	if (minor >= PARPORT_MAX)
 		return -ENXIO;
 

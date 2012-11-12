@@ -13,6 +13,7 @@
 
 #include <asm/current.h>
 #include <asm/uaccess.h>
+#include <asm/system.h>
 
 #include <asm/blackfin.h>
 
@@ -49,7 +50,8 @@ void kgdb_l2_test(void)
 
 #endif
 
-noinline int kgdb_test(char *name, int len, int count, int z)
+
+int kgdb_test(char *name, int len, int count, int z)
 {
 	pr_alert("kgdb name(%d): %s, %d, %d\n", len, name, count, z);
 	count = z;
@@ -86,16 +88,11 @@ static const struct file_operations kgdb_test_proc_fops = {
 	.owner = THIS_MODULE,
 	.read  = kgdb_test_proc_read,
 	.write = kgdb_test_proc_write,
-	.llseek = noop_llseek,
 };
 
 static int __init kgdbtest_init(void)
 {
 	struct proc_dir_entry *entry;
-
-#if L2_LENGTH
-	num2 = 0;
-#endif
 
 	entry = proc_create("kgdbtest", 0, NULL, &kgdb_test_proc_fops);
 	if (entry == NULL)

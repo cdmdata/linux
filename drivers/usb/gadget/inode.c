@@ -8,6 +8,15 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 
@@ -24,6 +33,7 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/poll.h>
+#include <linux/smp_lock.h>
 
 #include <linux/device.h>
 #include <linux/moduleparam.h>
@@ -31,6 +41,8 @@
 #include <linux/usb/gadgetfs.h>
 #include <linux/usb/gadget.h>
 
+#include <linux/delay.h>
+#include <linux/time.h>
 
 /*
  * The gadgetfs API maps each endpoint to a file descriptor so that you
@@ -72,6 +84,9 @@ MODULE_DESCRIPTION (DRIVER_DESC);
 MODULE_AUTHOR ("David Brownell");
 MODULE_LICENSE ("GPL");
 
+/* Cancel IO, To store the bulkin and bulkout ep data. */
+static struct ep_data *gp_ep_bulkin_data;
+static struct ep_data *gp_ep_bulkout_data;
 
 /*----------------------------------------------------------------------*/
 
@@ -256,6 +271,10 @@ static const char *CHIP;
 #define INFO(dev,fmt,args...) \
 	xprintk(dev , KERN_INFO , fmt , ## args)
 
+/* Cancel IO */
+static int mtp_ctrl_cmd;
+static int gbCancelFlag;
+static unsigned long mtptimestamp;
 
 /*----------------------------------------------------------------------*/
 
@@ -265,6 +284,17 @@ static const char *CHIP;
  * stream read() and write() requests; and maybe ioctl() to get more
  * precise FIFO status when recovering from cancellation.
  */
+
+/* Cancel IO */
+static void cancel_io_process(struct work_struct *work)
+{
+	if (gp_ep_bulkout_data->req->status == -EINPROGRESS)
+		usb_ep_dequeue(gp_ep_bulkout_data->ep, gp_ep_bulkout_data->req);
+
+	if (gp_ep_bulkin_data->req->status == -EINPROGRESS)
+		usb_ep_dequeue(gp_ep_bulkin_data->ep, gp_ep_bulkin_data->req);
+}
+static DECLARE_DELAYED_WORK(cancel_work, cancel_io_process);
 
 static void epio_complete (struct usb_ep *ep, struct usb_request *req)
 {
@@ -377,10 +407,8 @@ ep_read (struct file *fd, char __user *buf, size_t len, loff_t *ptr)
 
 	/* halt any endpoint by doing a "wrong direction" i/o call */
 	if (usb_endpoint_dir_in(&data->desc)) {
-		if (usb_endpoint_xfer_isoc(&data->desc)) {
-			mutex_unlock(&data->lock);
+		if (usb_endpoint_xfer_isoc(&data->desc))
 			return -EINVAL;
-		}
 		DBG (data->dev, "%s halt\n", data->name);
 		spin_lock_irq (&data->dev->lock);
 		if (likely (data->ep != NULL))
@@ -422,10 +450,8 @@ ep_write (struct file *fd, const char __user *buf, size_t len, loff_t *ptr)
 
 	/* halt any endpoint by doing a "wrong direction" i/o call */
 	if (!usb_endpoint_dir_in(&data->desc)) {
-		if (usb_endpoint_xfer_isoc(&data->desc)) {
-			mutex_unlock(&data->lock);
+		if (usb_endpoint_xfer_isoc(&data->desc))
 			return -EINVAL;
-		}
 		DBG (data->dev, "%s halt\n", data->name);
 		spin_lock_irq (&data->dev->lock);
 		if (likely (data->ep != NULL))
@@ -823,16 +849,14 @@ ep_config (struct file *fd, const char __user *buf, size_t len, loff_t *ptr)
 	switch (data->dev->gadget->speed) {
 	case USB_SPEED_LOW:
 	case USB_SPEED_FULL:
-		ep->desc = &data->desc;
-		value = usb_ep_enable(ep);
+		value = usb_ep_enable (ep, &data->desc);
 		if (value == 0)
 			data->state = STATE_EP_ENABLED;
 		break;
 #ifdef	CONFIG_USB_GADGET_DUALSPEED
 	case USB_SPEED_HIGH:
 		/* fails if caller didn't provide that descriptor... */
-		ep->desc = &data->hs_desc;
-		value = usb_ep_enable(ep);
+		value = usb_ep_enable (ep, &data->hs_desc);
 		if (value == 0)
 			data->state = STATE_EP_ENABLED;
 		break;
@@ -868,6 +892,8 @@ ep_open (struct inode *inode, struct file *fd)
 {
 	struct ep_data		*data = inode->i_private;
 	int			value = -EBUSY;
+	char *epin = "ep1in";
+	char *epout = "ep1out";
 
 	if (mutex_lock_interruptible(&data->lock) != 0)
 		return -EINTR;
@@ -880,6 +906,12 @@ ep_open (struct inode *inode, struct file *fd)
 		get_ep (data);
 		fd->private_data = data;
 		VDEBUG (data->dev, "%s ready\n", data->name);
+		/* Cancel IO */
+		if (0 == strcmp(data->name, epin))
+			gp_ep_bulkin_data = fd->private_data;
+
+		if (0 == strcmp(data->name, epout))
+			gp_ep_bulkout_data = fd->private_data;
 	} else
 		DBG (data->dev, "%s state %d\n",
 			data->name, data->state);
@@ -1044,9 +1076,11 @@ ep0_read (struct file *fd, char __user *buf, size_t len, loff_t *ptr)
 				if (copy_to_user (buf, dev->req->buf, len))
 					retval = -EFAULT;
 				else
+					/* Bug of Cancel IO 6 bytes read. */
 					retval = len;
 				clean_req (dev->gadget->ep0, dev->req);
 				/* NOTE userspace can't yet choose to stall */
+				dev->state = STATE_DEV_CONNECTED;	/* Cancel IO */
 			}
 		}
 		goto done;
@@ -1059,6 +1093,12 @@ ep0_read (struct file *fd, char __user *buf, size_t len, loff_t *ptr)
 	}
 	len -= len % sizeof (struct usb_gadgetfs_event);
 	dev->usermode_setup = 1;
+
+    /* Cancel IO, signal abort blocked IO. */
+	if (mtp_ctrl_cmd == 1) {
+		mtp_ctrl_cmd = 0;
+		schedule_delayed_work(&cancel_work, HZ / 100);
+	}
 
 scan:
 	/* return queued events right away */
@@ -1297,9 +1337,11 @@ static long dev_ioctl (struct file *fd, unsigned code, unsigned long value)
 	struct usb_gadget	*gadget = dev->gadget;
 	long ret = -ENOTTY;
 
-	if (gadget->ops->ioctl)
+	if (gadget->ops->ioctl) {
+		lock_kernel();
 		ret = gadget->ops->ioctl (gadget, code, value);
-
+		unlock_kernel();
+	}
 	return ret;
 }
 
@@ -1340,7 +1382,7 @@ static void make_qualifier (struct dev_data *dev)
 	qual.bDeviceProtocol = desc->bDeviceProtocol;
 
 	/* assumes ep0 uses the same value for both speeds ... */
-	qual.bMaxPacketSize0 = dev->gadget->ep0->maxpacket;
+	qual.bMaxPacketSize0 = desc->bMaxPacketSize0;
 
 	qual.bNumConfigurations = 1;
 	qual.bRESERVED = 0;
@@ -1384,6 +1426,16 @@ gadgetfs_setup (struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 	struct usb_gadgetfs_event	*event;
 	u16				w_value = le16_to_cpu(ctrl->wValue);
 	u16				w_length = le16_to_cpu(ctrl->wLength);
+	struct timeval tv;
+
+    /* Cancel IO */
+	if (0x67 == ctrl->bRequest && 1 == gbCancelFlag
+	    && dev->state == STATE_DEV_SETUP)
+		dev->state = STATE_DEV_CONNECTED;
+
+	if (0x67 == ctrl->bRequest && 2 == mtp_ctrl_cmd
+	    && dev->state == STATE_DEV_SETUP)
+		dev->state = STATE_DEV_CONNECTED;
 
 	spin_lock (&dev->lock);
 	dev->setup_abort = 0;
@@ -1397,6 +1449,7 @@ gadgetfs_setup (struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 		}
 
 		dev->state = STATE_DEV_CONNECTED;
+		dev->dev->bMaxPacketSize0 = gadget->ep0->maxpacket;
 
 		INFO (dev, "connected\n");
 		event = next_event (dev, GADGETFS_CONNECT);
@@ -1410,6 +1463,11 @@ gadgetfs_setup (struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 	 */
 	} else if (dev->state == STATE_DEV_SETUP)
 		dev->setup_abort = 1;
+	/*Cancel IO */
+	if (mtp_ctrl_cmd == 1 && gbCancelFlag == 1 && dev->setup_abort == 1) {
+		INFO(dev, "0x64->setup\n");
+		dev->setup_abort = 0;
+	}
 
 	req->buf = dev->rbuf;
 	req->dma = DMA_ADDR_INVALID;
@@ -1424,7 +1482,6 @@ gadgetfs_setup (struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 
 		case USB_DT_DEVICE:
 			value = min (w_length, (u16) sizeof *dev->dev);
-			dev->dev->bMaxPacketSize0 = dev->gadget->ep0->maxpacket;
 			req->buf = dev->dev;
 			break;
 #ifdef	CONFIG_USB_GADGET_DUALSPEED
@@ -1543,11 +1600,63 @@ delegate:
 				/* we can't currently stall these */
 				dev->setup_can_stall = 0;
 			}
+			/* Cancel IO */
+			if (0x67 == ctrl->bRequest && 1 == gbCancelFlag) {
+				gbCancelFlag = 0;
+
+				setup_req(gadget->ep0, dev->req, 4);
+				*(unsigned long *)dev->req->buf = 0x20190004;
+				usb_ep_queue(gadget->ep0, dev->req, GFP_ATOMIC);
+
+				spin_unlock(&dev->lock);
+				return 0;
+			}
+			if (ctrl->bRequest == 0x67 && mtp_ctrl_cmd == 2) {
+				/* get status */
+				mtp_ctrl_cmd = 0;
+			}
 
 			/* state changes when reader collects event */
 			event = next_event (dev, GADGETFS_SETUP);
 			event->u.setup = *ctrl;
+			/*  Cancel IO */
+			if (0x64 == ctrl->bRequest) {
+				mtp_ctrl_cmd = 1;
+				gbCancelFlag = 1;
+
+				/* get the timestamp */
+				do_gettimeofday(&tv);
+				mtptimestamp = tv.tv_usec;
+				event->u.setup.wValue =
+				    (unsigned short)tv.tv_usec;
+			}
+			if (0x66 == ctrl->bRequest) {
+				/* get the timestamp */
+				do_gettimeofday(&tv);
+				mtptimestamp = tv.tv_usec;
+				event->u.setup.wValue =
+				    (unsigned short)tv.tv_usec;
+			}
+
 			ep0_readable (dev);
+			/* Reset request. */
+			if (ctrl->bRequest == 0x66) {	/* reset ,send ZLP */
+				mtp_ctrl_cmd = 2;
+
+				if (gp_ep_bulkout_data->req->status ==
+				    -EINPROGRESS) {
+					usb_ep_dequeue(gp_ep_bulkout_data->ep,
+						       gp_ep_bulkout_data->req);
+				}
+				if (gp_ep_bulkin_data->req->status ==
+				    -EINPROGRESS) {
+					usb_ep_dequeue(gp_ep_bulkin_data->ep,
+						       gp_ep_bulkin_data->req);
+				}
+			}
+			if (ctrl->bRequest == 0x65)
+				pr_debug("i:0x65,not supported\n");
+
 			spin_unlock (&dev->lock);
 			return 0;
 		}
@@ -1571,17 +1680,20 @@ delegate:
 
 static void destroy_ep_files (struct dev_data *dev)
 {
+	struct list_head	*entry, *tmp;
+
 	DBG (dev, "%s %d\n", __func__, dev->state);
 
 	/* dev->state must prevent interference */
+restart:
 	spin_lock_irq (&dev->lock);
-	while (!list_empty(&dev->epfiles)) {
+	list_for_each_safe (entry, tmp, &dev->epfiles) {
 		struct ep_data	*ep;
 		struct inode	*parent;
 		struct dentry	*dentry;
 
 		/* break link to FS */
-		ep = list_first_entry (&dev->epfiles, struct ep_data, epfiles);
+		ep = list_entry (entry, struct ep_data, epfiles);
 		list_del_init (&ep->epfiles);
 		dentry = ep->dentry;
 		ep->dentry = NULL;
@@ -1604,7 +1716,8 @@ static void destroy_ep_files (struct dev_data *dev)
 		dput (dentry);
 		mutex_unlock (&parent->i_mutex);
 
-		spin_lock_irq (&dev->lock);
+		/* fds may still be open */
+		goto restart;
 	}
 	spin_unlock_irq (&dev->lock);
 }
@@ -1701,6 +1814,7 @@ gadgetfs_bind (struct usb_gadget *gadget)
 	set_gadget_data (gadget, dev);
 	dev->gadget = gadget;
 	gadget->ep0->driver_data = dev;
+	dev->dev->bMaxPacketSize0 = gadget->ep0->maxpacket;
 
 	/* preallocate control response and buffer */
 	dev->req = usb_ep_alloc_request (gadget->ep0, GFP_KERNEL);
@@ -1728,9 +1842,8 @@ static void
 gadgetfs_disconnect (struct usb_gadget *gadget)
 {
 	struct dev_data		*dev = get_gadget_data (gadget);
-	unsigned long		flags;
 
-	spin_lock_irqsave (&dev->lock, flags);
+	spin_lock (&dev->lock);
 	if (dev->state == STATE_DEV_UNCONNECTED)
 		goto exit;
 	dev->state = STATE_DEV_UNCONNECTED;
@@ -1739,7 +1852,7 @@ gadgetfs_disconnect (struct usb_gadget *gadget)
 	next_event (dev, GADGETFS_DISCONNECT);
 	ep0_readable (dev);
 exit:
-	spin_unlock_irqrestore (&dev->lock, flags);
+	spin_unlock (&dev->lock);
 }
 
 static void
@@ -1764,11 +1877,12 @@ gadgetfs_suspend (struct usb_gadget *gadget)
 
 static struct usb_gadget_driver gadgetfs_driver = {
 #ifdef	CONFIG_USB_GADGET_DUALSPEED
-	.max_speed	= USB_SPEED_HIGH,
+	.speed		= USB_SPEED_HIGH,
 #else
-	.max_speed	= USB_SPEED_FULL,
+	.speed		= USB_SPEED_FULL,
 #endif
 	.function	= (char *) driver_desc,
+	.bind		= gadgetfs_bind,
 	.unbind		= gadgetfs_unbind,
 	.setup		= gadgetfs_setup,
 	.disconnect	= gadgetfs_disconnect,
@@ -1790,7 +1904,8 @@ static int gadgetfs_probe (struct usb_gadget *gadget)
 }
 
 static struct usb_gadget_driver probe_driver = {
-	.max_speed	= USB_SPEED_HIGH,
+	.speed		= USB_SPEED_HIGH,
+	.bind		= gadgetfs_probe,
 	.unbind		= gadgetfs_nop,
 	.setup		= (void *)gadgetfs_nop,
 	.disconnect	= gadgetfs_nop,
@@ -1857,9 +1972,13 @@ dev_config (struct file *fd, const char __user *buf, size_t len, loff_t *ptr)
 	buf += 4;
 	length -= 4;
 
-	kbuf = memdup_user(buf, length);
-	if (IS_ERR(kbuf))
-		return PTR_ERR(kbuf);
+	kbuf = kmalloc (length, GFP_KERNEL);
+	if (!kbuf)
+		return -ENOMEM;
+	if (copy_from_user (kbuf, buf, length)) {
+		kfree (kbuf);
+		return -EFAULT;
+	}
 
 	spin_lock_irq (&dev->lock);
 	value = -EINVAL;
@@ -1900,7 +2019,7 @@ dev_config (struct file *fd, const char __user *buf, size_t len, loff_t *ptr)
 
 	/* triggers gadgetfs_bind(); then we can enumerate. */
 	spin_unlock_irq (&dev->lock);
-	value = usb_gadget_probe_driver(&gadgetfs_driver, gadgetfs_bind);
+	value = usb_gadget_register_driver (&gadgetfs_driver);
 	if (value != 0) {
 		kfree (dev->buf);
 		dev->buf = NULL;
@@ -1986,7 +2105,6 @@ gadgetfs_make_inode (struct super_block *sb,
 	struct inode *inode = new_inode (sb);
 
 	if (inode) {
-		inode->i_ino = get_next_ino();
 		inode->i_mode = mode;
 		inode->i_uid = default_uid;
 		inode->i_gid = default_gid;
@@ -2033,13 +2151,14 @@ static int
 gadgetfs_fill_super (struct super_block *sb, void *opts, int silent)
 {
 	struct inode	*inode;
+	struct dentry	*d;
 	struct dev_data	*dev;
 
 	if (the_device)
 		return -ESRCH;
 
 	/* fake probe to determine $CHIP */
-	(void) usb_gadget_probe_driver(&probe_driver, gadgetfs_probe);
+	(void) usb_gadget_register_driver (&probe_driver);
 	if (!CHIP)
 		return -ENODEV;
 
@@ -2055,25 +2174,24 @@ gadgetfs_fill_super (struct super_block *sb, void *opts, int silent)
 			NULL, &simple_dir_operations,
 			S_IFDIR | S_IRUGO | S_IXUGO);
 	if (!inode)
-		goto Enomem;
+		goto enomem0;
 	inode->i_op = &simple_dir_inode_operations;
-	if (!(sb->s_root = d_make_root (inode)))
-		goto Enomem;
+	if (!(d = d_alloc_root (inode)))
+		goto enomem1;
+	sb->s_root = d;
 
 	/* the ep0 file is named after the controller we expect;
 	 * user mode code can use it for sanity checks, like we do.
 	 */
 	dev = dev_new ();
 	if (!dev)
-		goto Enomem;
+		goto enomem2;
 
 	dev->sb = sb;
 	if (!gadgetfs_create_file (sb, CHIP,
 				dev, &dev_init_operations,
-				&dev->dentry)) {
-		put_dev(dev);
-		goto Enomem;
-	}
+				&dev->dentry))
+		goto enomem3;
 
 	/* other endpoint files are available after hardware setup,
 	 * from binding to a controller.
@@ -2081,16 +2199,22 @@ gadgetfs_fill_super (struct super_block *sb, void *opts, int silent)
 	the_device = dev;
 	return 0;
 
-Enomem:
+enomem3:
+	put_dev (dev);
+enomem2:
+	dput (d);
+enomem1:
+	iput (inode);
+enomem0:
 	return -ENOMEM;
 }
 
 /* "mount -t gadgetfs path /dev/gadget" ends up here */
-static struct dentry *
-gadgetfs_mount (struct file_system_type *t, int flags,
-		const char *path, void *opts)
+static int
+gadgetfs_get_sb (struct file_system_type *t, int flags,
+		const char *path, void *opts, struct vfsmount *mnt)
 {
-	return mount_single (t, flags, opts, gadgetfs_fill_super);
+	return get_sb_single (t, flags, opts, gadgetfs_fill_super, mnt);
 }
 
 static void
@@ -2108,7 +2232,7 @@ gadgetfs_kill_sb (struct super_block *sb)
 static struct file_system_type gadgetfs_type = {
 	.owner		= THIS_MODULE,
 	.name		= shortname,
-	.mount		= gadgetfs_mount,
+	.get_sb		= gadgetfs_get_sb,
 	.kill_sb	= gadgetfs_kill_sb,
 };
 

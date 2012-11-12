@@ -14,15 +14,12 @@
 #include <linux/device.h>
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
-#include <linux/mmc/host.h>
-#include <linux/mmc/sh_mobile_sdhi.h>
 #include <linux/mtd/physmap.h>
 #include <linux/mtd/sh_flctl.h>
 #include <linux/delay.h>
 #include <linux/i2c.h>
 #include <linux/smsc911x.h>
 #include <linux/gpio.h>
-#include <linux/videodev2.h>
 #include <media/ov772x.h>
 #include <media/soc_camera.h>
 #include <media/soc_camera_platform.h>
@@ -157,73 +154,54 @@ static struct platform_device nand_flash_device = {
 #define PORT_DRVCRA	0xA405018A
 #define PORT_DRVCRB	0xA405018C
 
-static int ap320_wvga_set_brightness(int brightness)
-{
-	if (brightness) {
-		gpio_set_value(GPIO_PTS3, 0);
-		__raw_writew(0x100, FPGA_BKLREG);
-	} else {
-		__raw_writew(0, FPGA_BKLREG);
-		gpio_set_value(GPIO_PTS3, 1);
-	}
-	
-	return 0;
-}
-
-static int ap320_wvga_get_brightness(void)
-{
-	return gpio_get_value(GPIO_PTS3);
-}
-
-static void ap320_wvga_power_on(void)
+static void ap320_wvga_power_on(void *board_data)
 {
 	msleep(100);
 
 	/* ASD AP-320/325 LCD ON */
 	__raw_writew(FPGA_LCDREG_VAL, FPGA_LCDREG);
+
+	/* backlight */
+	gpio_set_value(GPIO_PTS3, 0);
+	__raw_writew(0x100, FPGA_BKLREG);
 }
 
-static void ap320_wvga_power_off(void)
+static void ap320_wvga_power_off(void *board_data)
 {
+	/* backlight */
+	__raw_writew(0, FPGA_BKLREG);
+	gpio_set_value(GPIO_PTS3, 1);
+
 	/* ASD AP-320/325 LCD OFF */
 	__raw_writew(0, FPGA_LCDREG);
 }
-
-static const struct fb_videomode ap325rxa_lcdc_modes[] = {
-	{
-		.name = "LB070WV1",
-		.xres = 800,
-		.yres = 480,
-		.left_margin = 32,
-		.right_margin = 160,
-		.hsync_len = 8,
-		.upper_margin = 63,
-		.lower_margin = 80,
-		.vsync_len = 1,
-		.sync = 0, /* hsync and vsync are active low */
-	},
-};
 
 static struct sh_mobile_lcdc_info lcdc_info = {
 	.clock_source = LCDC_CLK_EXTERNAL,
 	.ch[0] = {
 		.chan = LCDC_CHAN_MAINLCD,
-		.fourcc = V4L2_PIX_FMT_RGB565,
+		.bpp = 16,
 		.interface_type = RGB18,
 		.clock_divider = 1,
-		.lcd_modes = ap325rxa_lcdc_modes,
-		.num_modes = ARRAY_SIZE(ap325rxa_lcdc_modes),
-		.panel_cfg = {
-			.width = 152,	/* 7.0 inch */
+		.lcd_cfg = {
+			.name = "LB070WV1",
+			.xres = 800,
+			.yres = 480,
+			.left_margin = 32,
+			.right_margin = 160,
+			.hsync_len = 8,
+			.upper_margin = 63,
+			.lower_margin = 80,
+			.vsync_len = 1,
+			.sync = 0, /* hsync and vsync are active low */
+		},
+		.lcd_size_cfg = { /* 7.0 inch */
+			.width = 152,
 			.height = 91,
+		},
+		.board_cfg = {
 			.display_on = ap320_wvga_power_on,
 			.display_off = ap320_wvga_power_off,
-		},
-		.bl_info = {
-			.name = "sh_mobile_lcdc_bl",
-			.max_brightness = 1,
-			.set_brightness = ap320_wvga_set_brightness,
-			.get_brightness = ap320_wvga_get_brightness,
 		},
 	}
 };
@@ -247,6 +225,9 @@ static struct platform_device lcdc_device = {
 	.resource	= lcdc_resources,
 	.dev		= {
 		.platform_data	= &lcdc_info,
+	},
+	.archdata = {
+		.hwblk_id = HWBLK_LCDC,
 	},
 };
 
@@ -328,23 +309,22 @@ static int camera_set_capture(struct soc_camera_platform_info *info,
 	return ret;
 }
 
-static int ap325rxa_camera_add(struct soc_camera_device *icd);
-static void ap325rxa_camera_del(struct soc_camera_device *icd);
+static int ap325rxa_camera_add(struct soc_camera_link *icl, struct device *dev);
+static void ap325rxa_camera_del(struct soc_camera_link *icl);
 
 static struct soc_camera_platform_info camera_info = {
 	.format_name = "UYVY",
 	.format_depth = 16,
 	.format = {
-		.code = V4L2_MBUS_FMT_UYVY8_2X8,
+		.code = V4L2_MBUS_FMT_YUYV8_2X8_BE,
 		.colorspace = V4L2_COLORSPACE_SMPTE170M,
 		.field = V4L2_FIELD_NONE,
 		.width = 640,
 		.height = 480,
 	},
-	.mbus_param = V4L2_MBUS_PCLK_SAMPLE_RISING | V4L2_MBUS_MASTER |
-	V4L2_MBUS_VSYNC_ACTIVE_HIGH | V4L2_MBUS_HSYNC_ACTIVE_HIGH |
-	V4L2_MBUS_DATA_ACTIVE_HIGH,
-	.mbus_type = V4L2_MBUS_PARALLEL,
+	.bus_param = SOCAM_PCLK_SAMPLE_RISING | SOCAM_HSYNC_ACTIVE_HIGH |
+	SOCAM_VSYNC_ACTIVE_HIGH | SOCAM_MASTER | SOCAM_DATAWIDTH_8 |
+	SOCAM_DATA_ACTIVE_HIGH,
 	.set_capture = camera_set_capture,
 };
 
@@ -356,30 +336,37 @@ static struct soc_camera_link camera_link = {
 	.priv		= &camera_info,
 };
 
-static struct platform_device *camera_device;
-
-static void ap325rxa_camera_release(struct device *dev)
+static void dummy_release(struct device *dev)
 {
-	soc_camera_platform_release(&camera_device);
 }
 
-static int ap325rxa_camera_add(struct soc_camera_device *icd)
+static struct platform_device camera_device = {
+	.name		= "soc_camera_platform",
+	.dev		= {
+		.platform_data	= &camera_info,
+		.release	= dummy_release,
+	},
+};
+
+static int ap325rxa_camera_add(struct soc_camera_link *icl,
+			       struct device *dev)
 {
-	int ret = soc_camera_platform_add(icd, &camera_device, &camera_link,
-					  ap325rxa_camera_release, 0);
-	if (ret < 0)
-		return ret;
+	if (icl != &camera_link || camera_probe() <= 0)
+		return -ENODEV;
 
-	ret = camera_probe();
-	if (ret < 0)
-		soc_camera_platform_del(icd, camera_device, &camera_link);
+	camera_info.dev = dev;
 
-	return ret;
+	return platform_device_register(&camera_device);
 }
 
-static void ap325rxa_camera_del(struct soc_camera_device *icd)
+static void ap325rxa_camera_del(struct soc_camera_link *icl)
 {
-	soc_camera_platform_del(icd, camera_device, &camera_link);
+	if (icl != &camera_link)
+		return;
+
+	platform_device_unregister(&camera_device);
+	memset(&camera_device.dev.kobj, 0,
+	       sizeof(camera_device.dev.kobj));
 }
 #endif /* CONFIG_I2C */
 
@@ -420,13 +407,16 @@ static struct platform_device ceu_device = {
 	.dev		= {
 		.platform_data	= &sh_mobile_ceu_info,
 	},
+	.archdata = {
+		.hwblk_id = HWBLK_CEU,
+	},
 };
 
 static struct resource sdhi0_cn3_resources[] = {
 	[0] = {
 		.name	= "SDHI0",
 		.start	= 0x04ce0000,
-		.end	= 0x04ce00ff,
+		.end	= 0x04ce01ff,
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
@@ -435,17 +425,13 @@ static struct resource sdhi0_cn3_resources[] = {
 	},
 };
 
-static struct sh_mobile_sdhi_info sdhi0_cn3_data = {
-	.tmio_caps      = MMC_CAP_SDIO_IRQ,
-};
-
 static struct platform_device sdhi0_cn3_device = {
 	.name		= "sh_mobile_sdhi",
 	.id             = 0, /* "sdhi0" clock */
 	.num_resources	= ARRAY_SIZE(sdhi0_cn3_resources),
 	.resource	= sdhi0_cn3_resources,
-	.dev = {
-		.platform_data = &sdhi0_cn3_data,
+	.archdata = {
+		.hwblk_id = HWBLK_SDHI0,
 	},
 };
 
@@ -453,7 +439,7 @@ static struct resource sdhi1_cn7_resources[] = {
 	[0] = {
 		.name	= "SDHI1",
 		.start	= 0x04cf0000,
-		.end	= 0x04cf00ff,
+		.end	= 0x04cf01ff,
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
@@ -462,17 +448,13 @@ static struct resource sdhi1_cn7_resources[] = {
 	},
 };
 
-static struct sh_mobile_sdhi_info sdhi1_cn7_data = {
-	.tmio_caps      = MMC_CAP_SDIO_IRQ,
-};
-
 static struct platform_device sdhi1_cn7_device = {
 	.name		= "sh_mobile_sdhi",
 	.id             = 1, /* "sdhi1" clock */
 	.num_resources	= ARRAY_SIZE(sdhi1_cn7_resources),
 	.resource	= sdhi1_cn7_resources,
-	.dev = {
-		.platform_data = &sdhi1_cn7_data,
+	.archdata = {
+		.hwblk_id = HWBLK_SDHI1,
 	},
 };
 
@@ -489,7 +471,8 @@ static struct i2c_board_info ap325rxa_i2c_camera[] = {
 };
 
 static struct ov772x_camera_info ov7725_info = {
-	.flags		= OV772X_FLAG_VFLIP | OV772X_FLAG_HFLIP,
+	.flags		= OV772X_FLAG_VFLIP | OV772X_FLAG_HFLIP | \
+			  OV772X_FLAG_8BIT,
 	.edgectrl	= OV772X_AUTO_EDGECTRL(0xf, 0),
 };
 
@@ -498,6 +481,7 @@ static struct soc_camera_link ov7725_link = {
 	.power		= ov7725_power,
 	.board_info	= &ap325rxa_i2c_camera[0],
 	.i2c_adapter_id	= 0,
+	.module_name	= "ov772x",
 	.priv		= &ov7725_info,
 };
 

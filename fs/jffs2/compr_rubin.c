@@ -2,15 +2,12 @@
  * JFFS2 -- Journalling Flash File System, Version 2.
  *
  * Copyright © 2001-2007 Red Hat, Inc.
- * Copyright © 2004-2010 David Woodhouse <dwmw2@infradead.org>
  *
  * Created by Arjan van de Ven <arjanv@redhat.com>
  *
  * For licensing information, see the file 'LICENCE' in this directory.
  *
  */
-
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/string.h>
 #include <linux/types.h>
@@ -300,7 +297,7 @@ static int rubin_do_compress(int bit_divider, int *bits, unsigned char *data_in,
 #if 0
 /* _compress returns the compressed size, -1 if bigger */
 int jffs2_rubinmips_compress(unsigned char *data_in, unsigned char *cpage_out,
-		   uint32_t *sourcelen, uint32_t *dstlen)
+		   uint32_t *sourcelen, uint32_t *dstlen, void *model)
 {
 	return rubin_do_compress(BIT_DIVIDER_MIPS, bits_mips, data_in,
 				 cpage_out, sourcelen, dstlen);
@@ -308,7 +305,8 @@ int jffs2_rubinmips_compress(unsigned char *data_in, unsigned char *cpage_out,
 #endif
 static int jffs2_dynrubin_compress(unsigned char *data_in,
 				   unsigned char *cpage_out,
-				   uint32_t *sourcelen, uint32_t *dstlen)
+				   uint32_t *sourcelen, uint32_t *dstlen,
+				   void *model)
 {
 	int bits[8];
 	unsigned char histo[256];
@@ -388,7 +386,8 @@ static void rubin_do_decompress(int bit_divider, int *bits,
 
 static int jffs2_rubinmips_decompress(unsigned char *data_in,
 				      unsigned char *cpage_out,
-				      uint32_t sourcelen, uint32_t dstlen)
+				      uint32_t sourcelen, uint32_t dstlen,
+				      void *model)
 {
 	rubin_do_decompress(BIT_DIVIDER_MIPS, bits_mips, data_in,
 			    cpage_out, sourcelen, dstlen);
@@ -397,7 +396,8 @@ static int jffs2_rubinmips_decompress(unsigned char *data_in,
 
 static int jffs2_dynrubin_decompress(unsigned char *data_in,
 				     unsigned char *cpage_out,
-				     uint32_t sourcelen, uint32_t dstlen)
+				     uint32_t sourcelen, uint32_t dstlen,
+				     void *model)
 {
 	int bits[8];
 	int c;

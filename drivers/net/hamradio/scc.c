@@ -177,6 +177,7 @@
 #include <net/ax25.h>
 
 #include <asm/irq.h>
+#include <asm/system.h>
 #include <asm/io.h>
 #include <asm/uaccess.h>
 
@@ -1068,8 +1069,7 @@ static void scc_tx_done(struct scc_channel *scc)
 		case KISS_DUPLEX_LINK:
 			scc->stat.tx_state = TXS_IDLE2;
 			if (scc->kiss.idletime != TIMER_OFF)
-				scc_start_tx_timer(scc, t_idle,
-						   scc->kiss.idletime*100);
+			scc_start_tx_timer(scc, t_idle, scc->kiss.idletime*100);
 			break;
 		case KISS_DUPLEX_OPTIMA:
 			scc_notify(scc, HWEV_ALL_SENT);

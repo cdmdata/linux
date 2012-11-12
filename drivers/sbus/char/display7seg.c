@@ -13,10 +13,10 @@
 #include <linux/miscdevice.h>
 #include <linux/ioport.h>		/* request_region */
 #include <linux/slab.h>
-#include <linux/mutex.h>
+#include <linux/smp_lock.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
-#include <linux/atomic.h>
+#include <asm/atomic.h>
 #include <asm/uaccess.h>		/* put_/get_user			*/
 #include <asm/io.h>
 
@@ -26,7 +26,6 @@
 #define DRIVER_NAME	"d7s"
 #define PFX		DRIVER_NAME ": "
 
-static DEFINE_MUTEX(d7s_mutex);
 static int sol_compat = 0;		/* Solaris compatibility mode	*/
 
 /* Solaris compatibility flag -
@@ -75,6 +74,7 @@ static int d7s_open(struct inode *inode, struct file *f)
 {
 	if (D7S_MINOR != iminor(inode))
 		return -ENODEV;
+	cycle_kernel_lock();
 	atomic_inc(&d7s_users);
 	return 0;
 }
@@ -110,7 +110,7 @@ static long d7s_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	if (D7S_MINOR != iminor(file->f_path.dentry->d_inode))
 		return -ENODEV;
 
-	mutex_lock(&d7s_mutex);
+	lock_kernel();
 	switch (cmd) {
 	case D7SIOCWR:
 		/* assign device register values we mask-out D7S_FLIP
@@ -151,7 +151,7 @@ static long d7s_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		writeb(regs, p->regs);
 		break;
 	};
-	mutex_unlock(&d7s_mutex);
+	unlock_kernel();
 
 	return error;
 }
@@ -162,7 +162,6 @@ static const struct file_operations d7s_fops = {
 	.compat_ioctl =		d7s_ioctl,
 	.open =			d7s_open,
 	.release =		d7s_release,
-	.llseek = noop_llseek,
 };
 
 static struct miscdevice d7s_miscdev = {
@@ -171,7 +170,8 @@ static struct miscdevice d7s_miscdev = {
 	.fops		= &d7s_fops
 };
 
-static int __devinit d7s_probe(struct platform_device *op)
+static int __devinit d7s_probe(struct of_device *op,
+			       const struct of_device_id *match)
 {
 	struct device_node *opts;
 	int err = -EINVAL;
@@ -236,7 +236,7 @@ out_free:
 	goto out;
 }
 
-static int __devexit d7s_remove(struct platform_device *op)
+static int __devexit d7s_remove(struct of_device *op)
 {
 	struct d7s *p = dev_get_drvdata(&op->dev);
 	u8 regs = readb(p->regs);
@@ -265,7 +265,7 @@ static const struct of_device_id d7s_match[] = {
 };
 MODULE_DEVICE_TABLE(of, d7s_match);
 
-static struct platform_driver d7s_driver = {
+static struct of_platform_driver d7s_driver = {
 	.driver = {
 		.name = DRIVER_NAME,
 		.owner = THIS_MODULE,
@@ -275,4 +275,15 @@ static struct platform_driver d7s_driver = {
 	.remove		= __devexit_p(d7s_remove),
 };
 
-module_platform_driver(d7s_driver);
+static int __init d7s_init(void)
+{
+	return of_register_driver(&d7s_driver, &of_bus_type);
+}
+
+static void __exit d7s_exit(void)
+{
+	of_unregister_driver(&d7s_driver);
+}
+
+module_init(d7s_init);
+module_exit(d7s_exit);

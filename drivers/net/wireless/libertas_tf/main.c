@@ -9,11 +9,9 @@
  */
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-#include <linux/hardirq.h>
 #include <linux/slab.h>
 
 #include <linux/etherdevice.h>
-#include <linux/module.h>
 #include "libertas_tf.h"
 
 #define DRIVER_RELEASE_VERSION "004.p0"
@@ -227,7 +225,7 @@ static void lbtf_free_adapter(struct lbtf_private *priv)
 	lbtf_deb_leave(LBTF_DEB_MAIN);
 }
 
-static void lbtf_op_tx(struct ieee80211_hw *hw, struct sk_buff *skb)
+static int lbtf_op_tx(struct ieee80211_hw *hw, struct sk_buff *skb)
 {
 	struct lbtf_private *priv = hw->priv;
 
@@ -238,6 +236,7 @@ static void lbtf_op_tx(struct ieee80211_hw *hw, struct sk_buff *skb)
 	 * there are no buffered multicast frames to send
 	 */
 	ieee80211_stop_queues(priv->hw);
+	return NETDEV_TX_OK;
 }
 
 static void lbtf_tx_work(struct work_struct *work)
@@ -526,22 +525,6 @@ static void lbtf_op_bss_info_changed(struct ieee80211_hw *hw,
 	lbtf_deb_leave(LBTF_DEB_MACOPS);
 }
 
-static int lbtf_op_get_survey(struct ieee80211_hw *hw, int idx,
-				struct survey_info *survey)
-{
-	struct lbtf_private *priv = hw->priv;
-	struct ieee80211_conf *conf = &hw->conf;
-
-	if (idx != 0)
-		return -ENOENT;
-
-	survey->channel = conf->channel;
-	survey->filled = SURVEY_INFO_NOISE_DBM;
-	survey->noise = priv->noise;
-
-	return 0;
-}
-
 static const struct ieee80211_ops lbtf_ops = {
 	.tx			= lbtf_op_tx,
 	.start			= lbtf_op_start,
@@ -552,7 +535,6 @@ static const struct ieee80211_ops lbtf_ops = {
 	.prepare_multicast	= lbtf_op_prepare_multicast,
 	.configure_filter	= lbtf_op_configure_filter,
 	.bss_info_changed	= lbtf_op_bss_info_changed,
-	.get_survey		= lbtf_op_get_survey,
 };
 
 int lbtf_rx(struct lbtf_private *priv, struct sk_buff *skb)
@@ -573,7 +555,6 @@ int lbtf_rx(struct lbtf_private *priv, struct sk_buff *skb)
 	stats.freq = priv->cur_freq;
 	stats.band = IEEE80211_BAND_2GHZ;
 	stats.signal = prxpd->snr;
-	priv->noise = prxpd->nf;
 	/* Marvell rate index has a hole at value 4 */
 	if (prxpd->rx_rate > 4)
 		--prxpd->rx_rate;
@@ -587,7 +568,7 @@ int lbtf_rx(struct lbtf_private *priv, struct sk_buff *skb)
 	need_padding ^= ieee80211_has_a4(hdr->frame_control);
 	need_padding ^= ieee80211_is_data_qos(hdr->frame_control) &&
 			(*ieee80211_get_qos_ctl(hdr) &
-			 IEEE80211_QOS_CTL_A_MSDU_PRESENT);
+			 IEEE80211_QOS_CONTROL_A_MSDU_PRESENT);
 
 	if (need_padding) {
 		memmove(skb->data + 2, skb->data, skb->len);
@@ -719,11 +700,11 @@ void lbtf_bcn_sent(struct lbtf_private *priv)
 		return;
 
 	if (skb_queue_empty(&priv->bc_ps_buf)) {
-		bool tx_buff_bc = false;
+		bool tx_buff_bc = 0;
 
 		while ((skb = ieee80211_get_buffered_bc(priv->hw, priv->vif))) {
 			skb_queue_tail(&priv->bc_ps_buf, skb);
-			tx_buff_bc = true;
+			tx_buff_bc = 1;
 		}
 		if (tx_buff_bc) {
 			ieee80211_stop_queues(priv->hw);

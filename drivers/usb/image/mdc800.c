@@ -963,7 +963,6 @@ static const struct file_operations mdc800_device_ops =
 	.write =	mdc800_device_write,
 	.open =		mdc800_device_open,
 	.release =	mdc800_device_release,
-	.llseek =	noop_llseek,
 };
 
 

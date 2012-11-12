@@ -28,7 +28,7 @@
 #include <linux/init.h>
 #include <linux/prctl.h>
 #include <linux/init_task.h>
-#include <linux/export.h>
+#include <linux/module.h>
 #include <linux/kallsyms.h>
 #include <linux/mqueue.h>
 #include <linux/hardirq.h>
@@ -37,20 +37,17 @@
 #include <linux/kernel_stat.h>
 #include <linux/personality.h>
 #include <linux/random.h>
-#include <linux/hw_breakpoint.h>
 
 #include <asm/pgtable.h>
 #include <asm/uaccess.h>
+#include <asm/system.h>
 #include <asm/io.h>
 #include <asm/processor.h>
 #include <asm/mmu.h>
 #include <asm/prom.h>
 #include <asm/machdep.h>
 #include <asm/time.h>
-#include <asm/runlatch.h>
 #include <asm/syscalls.h>
-#include <asm/switch_to.h>
-#include <asm/debug.h>
 #ifdef CONFIG_PPC64
 #include <asm/firmware.h>
 #endif
@@ -98,7 +95,6 @@ void flush_fp_to_thread(struct task_struct *tsk)
 		preempt_enable();
 	}
 }
-EXPORT_SYMBOL_GPL(flush_fp_to_thread);
 
 void enable_kernel_fp(void)
 {
@@ -148,7 +144,6 @@ void flush_altivec_to_thread(struct task_struct *tsk)
 		preempt_enable();
 	}
 }
-EXPORT_SYMBOL_GPL(flush_altivec_to_thread);
 #endif /* CONFIG_ALTIVEC */
 
 #ifdef CONFIG_VSX
@@ -190,7 +185,6 @@ void flush_vsx_to_thread(struct task_struct *tsk)
 		preempt_enable();
 	}
 }
-EXPORT_SYMBOL_GPL(flush_vsx_to_thread);
 #endif /* CONFIG_VSX */
 
 #ifdef CONFIG_SPE
@@ -218,7 +212,6 @@ void flush_spe_to_thread(struct task_struct *tsk)
 #ifdef CONFIG_SMP
 			BUG_ON(tsk != current);
 #endif
-			tsk->thread.spefscr = mfspr(SPRN_SPEFSCR);
 			giveup_spe(tsk);
 		}
 		preempt_enable();
@@ -359,7 +352,6 @@ static void switch_booke_debug_regs(struct thread_struct *new_thread)
 			prime_debug_regs(new_thread);
 }
 #else	/* !CONFIG_PPC_ADV_DEBUG_REGS */
-#ifndef CONFIG_HAVE_HW_BREAKPOINT
 static void set_debug_reg_defaults(struct thread_struct *thread)
 {
 	if (thread->dabr) {
@@ -367,7 +359,6 @@ static void set_debug_reg_defaults(struct thread_struct *thread)
 		set_dabr(0);
 	}
 }
-#endif /* !CONFIG_HAVE_HW_BREAKPOINT */
 #endif	/* CONFIG_PPC_ADV_DEBUG_REGS */
 
 int set_dabr(unsigned long dabr)
@@ -401,9 +392,6 @@ struct task_struct *__switch_to(struct task_struct *prev,
 	struct thread_struct *new_thread, *old_thread;
 	unsigned long flags;
 	struct task_struct *last;
-#ifdef CONFIG_PPC_BOOK3S_64
-	struct ppc64_tlb_batch *batch;
-#endif
 
 #ifdef CONFIG_SMP
 	/* avoid complexity of lazy save/restore of fpu
@@ -474,14 +462,8 @@ struct task_struct *__switch_to(struct task_struct *prev,
 #ifdef CONFIG_PPC_ADV_DEBUG_REGS
 	switch_booke_debug_regs(&new->thread);
 #else
-/*
- * For PPC_BOOK3S_64, we use the hw-breakpoint interfaces that would
- * schedule DABR
- */
-#ifndef CONFIG_HAVE_HW_BREAKPOINT
 	if (unlikely(__get_cpu_var(current_dabr) != new->thread.dabr))
 		set_dabr(new->thread.dabr);
-#endif /* CONFIG_HAVE_HW_BREAKPOINT */
 #endif
 
 
@@ -500,22 +482,13 @@ struct task_struct *__switch_to(struct task_struct *prev,
 		old_thread->accum_tb += (current_tb - start_tb);
 		new_thread->start_tb = current_tb;
 	}
-#endif /* CONFIG_PPC64 */
-
-#ifdef CONFIG_PPC_BOOK3S_64
-	batch = &__get_cpu_var(ppc64_tlb_batch);
-	if (batch->active) {
-		current_thread_info()->local_flags |= _TLF_LAZY_MMU;
-		if (batch->index)
-			__flush_tlb_pending(batch);
-		batch->active = 0;
-	}
-#endif /* CONFIG_PPC_BOOK3S_64 */
+#endif
 
 	local_irq_save(flags);
 
 	account_system_vtime(current);
 	account_process_vtime(current);
+	calculate_steal_time();
 
 	/*
 	 * We can't take a PMU exception inside _switch() since there is a
@@ -524,14 +497,6 @@ struct task_struct *__switch_to(struct task_struct *prev,
 	 */
 	hard_irq_disable();
 	last = _switch(old_thread, new_thread);
-
-#ifdef CONFIG_PPC_BOOK3S_64
-	if (current_thread_info()->local_flags & _TLF_LAZY_MMU) {
-		current_thread_info()->local_flags &= ~_TLF_LAZY_MMU;
-		batch = &__get_cpu_var(ppc64_tlb_batch);
-		batch->active = 1;
-	}
-#endif /* CONFIG_PPC_BOOK3S_64 */
 
 	local_irq_restore(flags);
 
@@ -568,12 +533,12 @@ static void show_instructions(struct pt_regs *regs)
 		 */
 		if (!__kernel_text_address(pc) ||
 		     __get_user(instr, (unsigned int __user *)pc)) {
-			printk(KERN_CONT "XXXXXXXX ");
+			printk("XXXXXXXX ");
 		} else {
 			if (regs->nip == pc)
-				printk(KERN_CONT "<%08x> ", instr);
+				printk("<%08x> ", instr);
 			else
-				printk(KERN_CONT "%08x ", instr);
+				printk("%08x ", instr);
 		}
 
 		pc += sizeof(int);
@@ -586,32 +551,16 @@ static struct regbit {
 	unsigned long bit;
 	const char *name;
 } msr_bits[] = {
-#if defined(CONFIG_PPC64) && !defined(CONFIG_BOOKE)
-	{MSR_SF,	"SF"},
-	{MSR_HV,	"HV"},
-#endif
-	{MSR_VEC,	"VEC"},
-	{MSR_VSX,	"VSX"},
-#ifdef CONFIG_BOOKE
-	{MSR_CE,	"CE"},
-#endif
 	{MSR_EE,	"EE"},
 	{MSR_PR,	"PR"},
 	{MSR_FP,	"FP"},
+	{MSR_VEC,	"VEC"},
+	{MSR_VSX,	"VSX"},
 	{MSR_ME,	"ME"},
-#ifdef CONFIG_BOOKE
+	{MSR_CE,	"CE"},
 	{MSR_DE,	"DE"},
-#else
-	{MSR_SE,	"SE"},
-	{MSR_BE,	"BE"},
-#endif
 	{MSR_IR,	"IR"},
 	{MSR_DR,	"DR"},
-	{MSR_PMM,	"PMM"},
-#ifndef CONFIG_BOOKE
-	{MSR_RI,	"RI"},
-	{MSR_LE,	"LE"},
-#endif
 	{0,		NULL}
 };
 
@@ -649,17 +598,12 @@ void show_regs(struct pt_regs * regs)
 	printk("MSR: "REG" ", regs->msr);
 	printbits(regs->msr, msr_bits);
 	printk("  CR: %08lx  XER: %08lx\n", regs->ccr, regs->xer);
-#ifdef CONFIG_PPC64
-	printk("SOFTE: %ld\n", regs->softe);
-#endif
 	trap = TRAP(regs);
-	if ((regs->trap != 0xc00) && cpu_has_feature(CPU_FTR_CFAR))
-		printk("CFAR: "REG"\n", regs->orig_gpr3);
 	if (trap == 0x300 || trap == 0x600)
-#if defined(CONFIG_4xx) || defined(CONFIG_BOOKE)
+#ifdef CONFIG_PPC_ADV_DEBUG_REGS
 		printk("DEAR: "REG", ESR: "REG"\n", regs->dar, regs->dsisr);
 #else
-		printk("DAR: "REG", DSISR: %08lx\n", regs->dar, regs->dsisr);
+		printk("DAR: "REG", DSISR: "REG"\n", regs->dar, regs->dsisr);
 #endif
 	printk("TASK = %p[%d] '%s' THREAD: %p",
 	       current, task_pid_nr(current), current->comm, task_thread_info(current));
@@ -698,11 +642,7 @@ void flush_thread(void)
 {
 	discard_lazy_cpu_state();
 
-#ifdef CONFIG_HAVE_HW_BREAKPOINT
-	flush_ptrace_hw_breakpoint(current);
-#else /* CONFIG_HAVE_HW_BREAKPOINT */
 	set_debug_reg_defaults(&current->thread);
-#endif /* CONFIG_HAVE_HW_BREAKPOINT */
 }
 
 void
@@ -720,16 +660,11 @@ void prepare_to_copy(struct task_struct *tsk)
 	flush_altivec_to_thread(current);
 	flush_vsx_to_thread(current);
 	flush_spe_to_thread(current);
-#ifdef CONFIG_HAVE_HW_BREAKPOINT
-	flush_ptrace_hw_breakpoint(tsk);
-#endif /* CONFIG_HAVE_HW_BREAKPOINT */
 }
 
 /*
  * Copy a thread..
  */
-extern unsigned long dscr_default; /* defined in arch/powerpc/kernel/sysfs.c */
-
 int copy_thread(unsigned long clone_flags, unsigned long usp,
 		unsigned long unused, struct task_struct *p,
 		struct pt_regs *regs)
@@ -757,7 +692,7 @@ int copy_thread(unsigned long clone_flags, unsigned long usp,
 		p->thread.regs = childregs;
 		if (clone_flags & CLONE_SETTLS) {
 #ifdef CONFIG_PPC64
-			if (!is_32bit_task())
+			if (!test_thread_flag(TIF_32BIT))
 				childregs->gpr[13] = childregs->gpr[6];
 			else
 #endif
@@ -783,11 +718,11 @@ int copy_thread(unsigned long clone_flags, unsigned long usp,
 				_ALIGN_UP(sizeof(struct thread_info), 16);
 
 #ifdef CONFIG_PPC_STD_MMU_64
-	if (mmu_has_feature(MMU_FTR_SLB)) {
+	if (cpu_has_feature(CPU_FTR_SLB)) {
 		unsigned long sp_vsid;
 		unsigned long llp = mmu_psize_defs[mmu_linear_psize].sllp;
 
-		if (mmu_has_feature(MMU_FTR_1T_SEGMENT))
+		if (cpu_has_feature(CPU_FTR_1T_SEGMENT))
 			sp_vsid = get_kernel_vsid(sp, MMU_SEGSIZE_1T)
 				<< SLB_VSID_SHIFT_1T;
 		else
@@ -797,20 +732,6 @@ int copy_thread(unsigned long clone_flags, unsigned long usp,
 		p->thread.ksp_vsid = sp_vsid;
 	}
 #endif /* CONFIG_PPC_STD_MMU_64 */
-#ifdef CONFIG_PPC64 
-	if (cpu_has_feature(CPU_FTR_DSCR)) {
-		if (current->thread.dscr_inherit) {
-			p->thread.dscr_inherit = 1;
-			p->thread.dscr = current->thread.dscr;
-		} else if (0 != dscr_default) {
-			p->thread.dscr_inherit = 1;
-			p->thread.dscr = dscr_default;
-		} else {
-			p->thread.dscr_inherit = 0;
-			p->thread.dscr = 0;
-		}
-	}
-#endif
 
 	/*
 	 * The PPC64 ABI makes use of a TOC to contain function 
@@ -835,6 +756,8 @@ void start_thread(struct pt_regs *regs, unsigned long start, unsigned long sp)
 #ifdef CONFIG_PPC64
 	unsigned long load_addr = regs->gpr[2];	/* saved by ELF_PLAT_INIT */
 #endif
+
+	set_fs(USER_DS);
 
 	/*
 	 * If we exec out of a kernel thread then thread.regs will not be
@@ -864,7 +787,7 @@ void start_thread(struct pt_regs *regs, unsigned long start, unsigned long sp)
 	regs->nip = start;
 	regs->msr = MSR_USER;
 #else
-	if (!is_32bit_task()) {
+	if (!test_thread_flag(TIF_32BIT)) {
 		unsigned long entry, toc;
 
 		/* start is a relocated pointer to the function descriptor for
@@ -1036,7 +959,7 @@ int sys_clone(unsigned long clone_flags, unsigned long usp,
 	if (usp == 0)
 		usp = regs->gpr[1];	/* stack pointer for child */
 #ifdef CONFIG_PPC64
-	if (is_32bit_task()) {
+	if (test_thread_flag(TIF_32BIT)) {
 		parent_tidp = TRUNC_PTR(parent_tidp);
 		child_tidp = TRUNC_PTR(child_tidp);
 	}
@@ -1068,16 +991,15 @@ int sys_execve(unsigned long a0, unsigned long a1, unsigned long a2,
 	int error;
 	char *filename;
 
-	filename = getname((const char __user *) a0);
+	filename = getname((char __user *) a0);
 	error = PTR_ERR(filename);
 	if (IS_ERR(filename))
 		goto out;
 	flush_fp_to_thread(current);
 	flush_altivec_to_thread(current);
 	flush_spe_to_thread(current);
-	error = do_execve(filename,
-			  (const char __user *const __user *) a1,
-			  (const char __user *const __user *) a2, regs);
+	error = do_execve(filename, (char __user * __user *) a1,
+			  (char __user * __user *) a2, regs);
 	putname(filename);
 out:
 	return error;
@@ -1225,42 +1147,46 @@ void dump_stack(void)
 EXPORT_SYMBOL(dump_stack);
 
 #ifdef CONFIG_PPC64
-/* Called with hard IRQs off */
-void __ppc64_runlatch_on(void)
+void ppc64_runlatch_on(void)
 {
-	struct thread_info *ti = current_thread_info();
 	unsigned long ctrl;
 
-	ctrl = mfspr(SPRN_CTRLF);
-	ctrl |= CTRL_RUNLATCH;
-	mtspr(SPRN_CTRLT, ctrl);
+	if (cpu_has_feature(CPU_FTR_CTRL) && !test_thread_flag(TIF_RUNLATCH)) {
+		HMT_medium();
 
-	ti->local_flags |= _TLF_RUNLATCH;
+		ctrl = mfspr(SPRN_CTRLF);
+		ctrl |= CTRL_RUNLATCH;
+		mtspr(SPRN_CTRLT, ctrl);
+
+		set_thread_flag(TIF_RUNLATCH);
+	}
 }
 
-/* Called with hard IRQs off */
-void __ppc64_runlatch_off(void)
+void ppc64_runlatch_off(void)
 {
-	struct thread_info *ti = current_thread_info();
 	unsigned long ctrl;
 
-	ti->local_flags &= ~_TLF_RUNLATCH;
+	if (cpu_has_feature(CPU_FTR_CTRL) && test_thread_flag(TIF_RUNLATCH)) {
+		HMT_medium();
 
-	ctrl = mfspr(SPRN_CTRLF);
-	ctrl &= ~CTRL_RUNLATCH;
-	mtspr(SPRN_CTRLT, ctrl);
+		clear_thread_flag(TIF_RUNLATCH);
+
+		ctrl = mfspr(SPRN_CTRLF);
+		ctrl &= ~CTRL_RUNLATCH;
+		mtspr(SPRN_CTRLT, ctrl);
+	}
 }
-#endif /* CONFIG_PPC64 */
+#endif
 
 #if THREAD_SHIFT < PAGE_SHIFT
 
 static struct kmem_cache *thread_info_cache;
 
-struct thread_info *alloc_thread_info_node(struct task_struct *tsk, int node)
+struct thread_info *alloc_thread_info(struct task_struct *tsk)
 {
 	struct thread_info *ti;
 
-	ti = kmem_cache_alloc_node(thread_info_cache, GFP_KERNEL, node);
+	ti = kmem_cache_alloc(thread_info_cache, GFP_KERNEL);
 	if (unlikely(ti == NULL))
 		return NULL;
 #ifdef CONFIG_DEBUG_STACK_USAGE

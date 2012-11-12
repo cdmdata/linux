@@ -28,6 +28,7 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/version.h>
 
 #include <linux/init.h>
 #include <linux/slab.h>
@@ -51,32 +52,32 @@ struct ath_struct {
 
 static int ath_wakeup_ar3k(struct tty_struct *tty)
 {
-	struct ktermios ktermios;
-	int status = tty->driver->ops->tiocmget(tty);
+	struct termios settings;
+	int status = tty->driver->ops->tiocmget(tty, NULL);
 
 	if (status & TIOCM_CTS)
 		return status;
 
 	/* Disable Automatic RTSCTS */
-	memcpy(&ktermios, tty->termios, sizeof(ktermios));
-	ktermios.c_cflag &= ~CRTSCTS;
-	tty_set_termios(tty, &ktermios);
+	n_tty_ioctl_helper(tty, NULL, TCGETS, (unsigned long)&settings);
+	settings.c_cflag &= ~CRTSCTS;
+	n_tty_ioctl_helper(tty, NULL, TCSETS, (unsigned long)&settings);
 
 	/* Clear RTS first */
-	status = tty->driver->ops->tiocmget(tty);
-	tty->driver->ops->tiocmset(tty, 0x00, TIOCM_RTS);
+	status = tty->driver->ops->tiocmget(tty, NULL);
+	tty->driver->ops->tiocmset(tty, NULL, 0x00, TIOCM_RTS);
 	mdelay(20);
 
 	/* Set RTS, wake up board */
-	status = tty->driver->ops->tiocmget(tty);
-	tty->driver->ops->tiocmset(tty, TIOCM_RTS, 0x00);
+	status = tty->driver->ops->tiocmget(tty, NULL);
+	tty->driver->ops->tiocmset(tty, NULL, TIOCM_RTS, 0x00);
 	mdelay(20);
 
-	status = tty->driver->ops->tiocmget(tty);
+	status = tty->driver->ops->tiocmget(tty, NULL);
 
-	/* Disable Automatic RTSCTS */
-	ktermios.c_cflag |= CRTSCTS;
-	status = tty_set_termios(tty, &ktermios);
+	n_tty_ioctl_helper(tty, NULL, TCGETS, (unsigned long)&settings);
+	settings.c_cflag |= CRTSCTS;
+	n_tty_ioctl_helper(tty, NULL, TCSETS, (unsigned long)&settings);
 
 	return status;
 }
@@ -112,7 +113,7 @@ static int ath_open(struct hci_uart *hu)
 
 	BT_DBG("hu %p", hu);
 
-	ath = kzalloc(sizeof(*ath), GFP_KERNEL);
+	ath = kzalloc(sizeof(*ath), GFP_ATOMIC);
 	if (!ath)
 		return -ENOMEM;
 
@@ -198,16 +199,170 @@ static struct sk_buff *ath_dequeue(struct hci_uart *hu)
 	return skb_dequeue(&ath->txq);
 }
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 35)
+#define NUM_REASSEMBLY 4
+
+/* Skb helpers */
+struct ath_bt_skb_cb {
+	__u8 pkt_type;
+	__u8 incoming;
+	__u16 expect;
+	__u8 tx_seq;
+	__u8 retries;
+	__u8 sar;
+};
+
+
+static int hci_reassembly(struct hci_dev *hdev, int type, void *data,
+			  int count, __u8 index, gfp_t gfp_mask)
+{
+	int len = 0;
+	int hlen = 0;
+	int remain = count;
+	struct sk_buff *skb;
+	struct ath_bt_skb_cb *scb;
+
+	if ((type < HCI_ACLDATA_PKT || type > HCI_EVENT_PKT) ||
+				index >= NUM_REASSEMBLY)
+		return -EILSEQ;
+
+	skb = hdev->reassembly[index];
+
+	if (!skb) {
+		switch (type) {
+		case HCI_ACLDATA_PKT:
+			len = HCI_MAX_FRAME_SIZE;
+			hlen = HCI_ACL_HDR_SIZE;
+			break;
+		case HCI_EVENT_PKT:
+			len = HCI_MAX_EVENT_SIZE;
+			hlen = HCI_EVENT_HDR_SIZE;
+			break;
+		case HCI_SCODATA_PKT:
+			len = HCI_MAX_SCO_SIZE;
+			hlen = HCI_SCO_HDR_SIZE;
+			break;
+		}
+
+		skb = bt_skb_alloc(len, gfp_mask);
+		if (!skb)
+			return -ENOMEM;
+
+		scb = (void *) skb->cb;
+		scb->expect = hlen;
+		scb->pkt_type = type;
+		skb->dev = (void *) hdev;
+		hdev->reassembly[index] = skb;
+	}
+
+	while (count) {
+		scb = (void *) skb->cb;
+		len = min(scb->expect, (__u16)count);
+
+		memcpy(skb_put(skb, len), data, len);
+
+		count -= len;
+		data += len;
+		scb->expect -= len;
+		remain = count;
+
+		switch (type) {
+		case HCI_EVENT_PKT:
+			if (skb->len == HCI_EVENT_HDR_SIZE) {
+				struct hci_event_hdr *h = hci_event_hdr(skb);
+				scb->expect = h->plen;
+
+				if (skb_tailroom(skb) < scb->expect) {
+					kfree_skb(skb);
+					hdev->reassembly[index] = NULL;
+					return -ENOMEM;
+				}
+			}
+			break;
+
+		case HCI_ACLDATA_PKT:
+			if (skb->len  == HCI_ACL_HDR_SIZE) {
+				struct hci_acl_hdr *h = hci_acl_hdr(skb);
+				scb->expect = __le16_to_cpu(h->dlen);
+
+				if (skb_tailroom(skb) < scb->expect) {
+					kfree_skb(skb);
+					hdev->reassembly[index] = NULL;
+					return -ENOMEM;
+				}
+			}
+			break;
+
+		case HCI_SCODATA_PKT:
+			if (skb->len == HCI_SCO_HDR_SIZE) {
+				struct hci_sco_hdr *h = hci_sco_hdr(skb);
+				scb->expect = h->dlen;
+
+				if (skb_tailroom(skb) < scb->expect) {
+					kfree_skb(skb);
+					hdev->reassembly[index] = NULL;
+					return -ENOMEM;
+				}
+			}
+			break;
+		}
+
+		if (scb->expect == 0) {
+			/* Complete frame */
+
+			bt_cb(skb)->pkt_type = type;
+			hci_recv_frame(skb);
+
+			hdev->reassembly[index] = NULL;
+			return remain;
+		}
+	}
+
+	return remain;
+}
+
+#define STREAM_REASSEMBLY 0
+
+static int hci_recv_stream_fragment(struct hci_dev *hdev, void *data, int count)
+{
+	int type;
+	int rem = 0;
+
+	while (count) {
+		struct sk_buff *skb = hdev->reassembly[STREAM_REASSEMBLY];
+
+		if (!skb) {
+			struct { char type; } *pkt;
+
+			/* Start of the frame */
+			pkt = data;
+			type = pkt->type;
+
+			data++;
+			count--;
+		} else
+			type = bt_cb(skb)->pkt_type;
+
+		rem = hci_reassembly(hdev, type, data,
+					count, STREAM_REASSEMBLY, GFP_KERNEL);
+		if (rem < 0)
+			return rem;
+
+		data += (count - rem);
+		count = rem;
+	};
+
+	return rem;
+}
+#endif
+
 /* Recv data */
 static int ath_recv(struct hci_uart *hu, void *data, int count)
 {
 	int ret;
-
 	ret = hci_recv_stream_fragment(hu->hdev, data, count);
-	if (ret < 0) {
-		BT_ERR("Frame Reassembly Failed");
-		return ret;
-	}
+	if (ret < 0)
+		BT_ERR("Frame Reassembly Failed: %d", ret);
 
 	return count;
 }

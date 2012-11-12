@@ -10,43 +10,44 @@
  *  option) any later version.
  */
 
+#include <linux/interrupt.h>
 #include <linux/platform_device.h>
-#include <linux/module.h>
+#include <linux/io.h>
+#include <linux/i2c.h>
+#include <sound/core.h>
+#include <sound/pcm.h>
+#include <sound/pcm_params.h>
+#include <sound/soc.h>
+#include <sound/soc-dapm.h>
+
 #include <sound/sh_fsi.h>
+#include "../codecs/da7210.h"
 
-static int fsi_da7210_init(struct snd_soc_pcm_runtime *rtd)
+static int fsi_da7210_init(struct snd_soc_codec *codec)
 {
-	struct snd_soc_dai *codec = rtd->codec_dai;
-	struct snd_soc_dai *cpu = rtd->cpu_dai;
-	int ret;
-
-	ret = snd_soc_dai_set_fmt(codec,
-				   SND_SOC_DAIFMT_I2S |
+	return snd_soc_dai_set_fmt(&da7210_dai,
+				   SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
 				   SND_SOC_DAIFMT_CBM_CFM);
-	if (ret < 0)
-		return ret;
-
-	ret = snd_soc_dai_set_fmt(cpu, SND_SOC_DAIFMT_I2S |
-				       SND_SOC_DAIFMT_CBS_CFS);
-
-	return ret;
 }
 
 static struct snd_soc_dai_link fsi_da7210_dai = {
 	.name		= "DA7210",
 	.stream_name	= "DA7210",
-	.cpu_dai_name	= "fsib-dai", /* FSI B */
-	.codec_dai_name	= "da7210-hifi",
-	.platform_name	= "sh_fsi.0",
-	.codec_name	= "da7210-codec.0-001a",
+	.cpu_dai	= &fsi_soc_dai[1], /* FSI B */
+	.codec_dai	= &da7210_dai,
 	.init		= fsi_da7210_init,
 };
 
 static struct snd_soc_card fsi_soc_card = {
-	.name		= "FSI-DA7210",
-	.owner		= THIS_MODULE,
+	.name		= "FSI",
+	.platform	= &fsi_soc_platform,
 	.dai_link	= &fsi_da7210_dai,
 	.num_links	= 1,
+};
+
+static struct snd_soc_device fsi_da7210_snd_devdata = {
+	.card		= &fsi_soc_card,
+	.codec_dev	= &soc_codec_dev_da7210,
 };
 
 static struct platform_device *fsi_da7210_snd_device;
@@ -55,11 +56,12 @@ static int __init fsi_da7210_sound_init(void)
 {
 	int ret;
 
-	fsi_da7210_snd_device = platform_device_alloc("soc-audio", FSI_PORT_B);
+	fsi_da7210_snd_device = platform_device_alloc("soc-audio", -1);
 	if (!fsi_da7210_snd_device)
 		return -ENOMEM;
 
-	platform_set_drvdata(fsi_da7210_snd_device, &fsi_soc_card);
+	platform_set_drvdata(fsi_da7210_snd_device, &fsi_da7210_snd_devdata);
+	fsi_da7210_snd_devdata.dev = &fsi_da7210_snd_device->dev;
 	ret = platform_device_add(fsi_da7210_snd_device);
 	if (ret)
 		platform_device_put(fsi_da7210_snd_device);

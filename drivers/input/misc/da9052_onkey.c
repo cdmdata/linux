@@ -1,170 +1,153 @@
-/*
- * ON pin driver for Dialog DA9052 PMICs
- *
- * Copyright(c) 2012 Dialog Semiconductor Ltd.
- *
- * Author: David Dajun Chen <dchen@diasemi.com>
- *
- * This program is free software; you can redistribute  it and/or modify it
- * under  the terms of  the GNU General  Public License as published by the
- * Free Software Foundation;  either version 2 of the  License, or (at your
- * option) any later version.
- */
-
+#include <linux/module.h>
 #include <linux/init.h>
 #include <linux/input.h>
-#include <linux/module.h>
+#include <linux/delay.h>
 #include <linux/platform_device.h>
-#include <linux/workqueue.h>
 
 #include <linux/mfd/da9052/da9052.h>
 #include <linux/mfd/da9052/reg.h>
 
-struct da9052_onkey {
+#define DRIVER_NAME "da9052-onkey"
+
+struct da9052_onkey_data {
 	struct da9052 *da9052;
+	struct da9052_eh_nb eh_data;
 	struct input_dev *input;
-	struct delayed_work work;
-	unsigned int irq;
+	struct delayed_work polling_work;
 };
 
-static void da9052_onkey_query(struct da9052_onkey *onkey)
+static void da9052_onkey_work_func(struct work_struct *work)
 {
-	int key_stat;
+	struct da9052_onkey_data *da9052_onkey =
+		container_of(work, struct da9052_onkey_data, polling_work.work);
+	struct da9052_ssc_msg msg;
+	unsigned int ret;
+	int value;
 
-	key_stat = da9052_reg_read(onkey->da9052, DA9052_EVENT_B_REG);
-	if (key_stat < 0) {
-		dev_err(onkey->da9052->dev,
-			"Failed to read onkey event %d\n", key_stat);
-	} else {
-		/*
-		 * Since interrupt for deassertion of ONKEY pin is not
-		 * generated, onkey event state determines the onkey
-		 * button state.
-		 */
-		key_stat &= DA9052_EVENTB_ENONKEY;
-		input_report_key(onkey->input, KEY_POWER, key_stat);
-		input_sync(onkey->input);
+	da9052_lock(da9052_onkey->da9052);
+	msg.addr = DA9052_STATUSA_REG;
+	ret = da9052_onkey->da9052->read(da9052_onkey->da9052, &msg);
+	if (ret) {
+		da9052_unlock(da9052_onkey->da9052);
+		return;
 	}
+	da9052_unlock(da9052_onkey->da9052);
+	value = (msg.data & DA9052_STATUSA_NONKEY) ? 0 : 1;
 
-	/*
-	 * Interrupt is generated only when the ONKEY pin is asserted.
-	 * Hence the deassertion of the pin is simulated through work queue.
-	 */
-	if (key_stat)
-		schedule_delayed_work(&onkey->work, msecs_to_jiffies(50));
+	input_report_key(da9052_onkey->input, KEY_POWER, value);
+	input_sync(da9052_onkey->input);
+
+	/* if key down, polling for up */
+	if (value)
+		schedule_delayed_work(&da9052_onkey->polling_work, HZ/10);
 }
 
-static void da9052_onkey_work(struct work_struct *work)
+static void da9052_onkey_report_event(struct da9052_eh_nb *eh_data,
+				unsigned int event)
 {
-	struct da9052_onkey *onkey = container_of(work, struct da9052_onkey,
-						  work.work);
+	struct da9052_onkey_data *da9052_onkey =
+		container_of(eh_data, struct da9052_onkey_data, eh_data);
+	cancel_delayed_work(&da9052_onkey->polling_work);
+	schedule_delayed_work(&da9052_onkey->polling_work, 0);
 
-	da9052_onkey_query(onkey);
-}
-
-static irqreturn_t da9052_onkey_irq(int irq, void *data)
-{
-	struct da9052_onkey *onkey = data;
-
-	da9052_onkey_query(onkey);
-
-	return IRQ_HANDLED;
 }
 
 static int __devinit da9052_onkey_probe(struct platform_device *pdev)
 {
-	struct da9052 *da9052 = dev_get_drvdata(pdev->dev.parent);
-	struct da9052_onkey *onkey;
-	struct input_dev *input_dev;
-	int irq;
+	struct da9052_onkey_data *da9052_onkey;
 	int error;
 
-	if (!da9052) {
-		dev_err(&pdev->dev, "Failed to get the driver's data\n");
-		return -EINVAL;
-	}
-
-	irq = platform_get_irq_byname(pdev, "ONKEY");
-	if (irq < 0) {
-		dev_err(&pdev->dev,
-			"Failed to get an IRQ for input device, %d\n", irq);
-		return -EINVAL;
-	}
-
-	onkey = kzalloc(sizeof(*onkey), GFP_KERNEL);
-	input_dev = input_allocate_device();
-	if (!onkey || !input_dev) {
-		dev_err(&pdev->dev, "Failed to allocate memory\n");
+	da9052_onkey = kzalloc(sizeof(*da9052_onkey), GFP_KERNEL);
+	da9052_onkey->input = input_allocate_device();
+	if (!da9052_onkey->input) {
+		dev_err(&pdev->dev, "failed to allocate data device\n");
 		error = -ENOMEM;
-		goto err_free_mem;
+		goto fail1;
+	}
+	da9052_onkey->da9052 = dev_get_drvdata(pdev->dev.parent);
+
+	if (!da9052_onkey->input) {
+		dev_err(&pdev->dev, "failed to allocate input device\n");
+		error = -ENOMEM;
+		goto fail2;
 	}
 
-	onkey->input = input_dev;
-	onkey->da9052 = da9052;
-	onkey->irq = irq;
-	INIT_DELAYED_WORK(&onkey->work, da9052_onkey_work);
+	da9052_onkey->input->evbit[0] = BIT_MASK(EV_KEY);
+	da9052_onkey->input->keybit[BIT_WORD(KEY_POWER)] = BIT_MASK(KEY_POWER);
+	da9052_onkey->input->name = "da9052-onkey";
+	da9052_onkey->input->phys = "da9052-onkey/input0";
+	da9052_onkey->input->dev.parent = &pdev->dev;
+	INIT_DELAYED_WORK(&da9052_onkey->polling_work, da9052_onkey_work_func);
 
-	input_dev->name = "da9052-onkey";
-	input_dev->phys = "da9052-onkey/input0";
-	input_dev->dev.parent = &pdev->dev;
+	/* Set the EH structure */
+	da9052_onkey->eh_data.eve_type = ONKEY_EVE;
+	da9052_onkey->eh_data.call_back = &da9052_onkey_report_event;
+	error = da9052_onkey->da9052->register_event_notifier(
+				da9052_onkey->da9052,
+				&da9052_onkey->eh_data);
+	if (error)
+		goto fail2;
 
-	input_dev->evbit[0] = BIT_MASK(EV_KEY);
-	__set_bit(KEY_POWER, input_dev->keybit);
-
-	error = request_threaded_irq(onkey->irq, NULL, da9052_onkey_irq,
-				     IRQF_TRIGGER_LOW | IRQF_ONESHOT,
-				     "ONKEY", onkey);
-	if (error < 0) {
-		dev_err(onkey->da9052->dev,
-			"Failed to register ONKEY IRQ %d, error = %d\n",
-			onkey->irq, error);
-		goto err_free_mem;
-	}
-
-	error = input_register_device(onkey->input);
+	error = da9052_onkey->da9052->event_enable(da9052_onkey->da9052,ONKEY_EVE);
 	if (error) {
-		dev_err(&pdev->dev, "Unable to register input device, %d\n",
-			error);
-		goto err_free_irq;
+		dev_err (&pdev->dev,"Error enabling onkey event\n");
+	}
+	error = input_register_device(da9052_onkey->input);
+	if (error) {
+		dev_err(&pdev->dev, "Unable to register input\
+				device,error: %d\n", error);
+		goto fail3;
 	}
 
-	platform_set_drvdata(pdev, onkey);
+	platform_set_drvdata(pdev, da9052_onkey);
+
 	return 0;
 
-err_free_irq:
-	free_irq(onkey->irq, onkey);
-	cancel_delayed_work_sync(&onkey->work);
-err_free_mem:
-	input_free_device(input_dev);
-	kfree(onkey);
-
+fail3:
+	da9052_onkey->da9052->unregister_event_notifier(da9052_onkey->da9052,
+					&da9052_onkey->eh_data);
+fail2:
+	input_free_device(da9052_onkey->input);
+fail1:
+	kfree(da9052_onkey);
 	return error;
 }
 
 static int __devexit da9052_onkey_remove(struct platform_device *pdev)
 {
-	struct da9052_onkey *onkey = platform_get_drvdata(pdev);
-
-	free_irq(onkey->irq, onkey);
-	cancel_delayed_work_sync(&onkey->work);
-
-	input_unregister_device(onkey->input);
-	kfree(onkey);
+	struct da9052_onkey_data *da9052_onkey = pdev->dev.platform_data;
+	da9052_onkey->da9052->event_disable(da9052_onkey->da9052,ONKEY_EVE);
+	da9052_onkey->da9052->unregister_event_notifier(da9052_onkey->da9052,
+					&da9052_onkey->eh_data);
+	input_unregister_device(da9052_onkey->input);
+	kfree(da9052_onkey);
 
 	return 0;
 }
 
 static struct platform_driver da9052_onkey_driver = {
-	.probe	= da9052_onkey_probe,
-	.remove	= __devexit_p(da9052_onkey_remove),
-	.driver = {
+	.probe		= da9052_onkey_probe,
+	.remove		= __devexit_p(da9052_onkey_remove),
+	.driver		= {
 		.name	= "da9052-onkey",
 		.owner	= THIS_MODULE,
-	},
+	}
 };
-module_platform_driver(da9052_onkey_driver);
 
+static int __init da9052_onkey_init(void)
+{
+	return platform_driver_register(&da9052_onkey_driver);
+}
+
+static void __exit da9052_onkey_exit(void)
+{
+	platform_driver_unregister(&da9052_onkey_driver);
+}
+
+module_init(da9052_onkey_init);
+module_exit(da9052_onkey_exit);
+
+MODULE_LICENSE("GPL");
 MODULE_AUTHOR("David Dajun Chen <dchen@diasemi.com>");
 MODULE_DESCRIPTION("Onkey driver for DA9052");
-MODULE_LICENSE("GPL");
-MODULE_ALIAS("platform:da9052-onkey");
+MODULE_ALIAS("platform:" DRIVER_NAME);

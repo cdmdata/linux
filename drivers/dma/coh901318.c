@@ -11,7 +11,6 @@
 #include <linux/module.h>
 #include <linux/kernel.h> /* printk() */
 #include <linux/fs.h> /* everything... */
-#include <linux/scatterlist.h>
 #include <linux/slab.h> /* kmalloc() */
 #include <linux/dmaengine.h>
 #include <linux/platform_device.h>
@@ -24,7 +23,6 @@
 #include <mach/coh901318.h>
 
 #include "coh901318_lli.h"
-#include "dmaengine.h"
 
 #define COHC_2_DEV(cohc) (&cohc->chan.dev->device)
 
@@ -40,10 +38,8 @@ struct coh901318_desc {
 	struct scatterlist *sg;
 	unsigned int sg_len;
 	struct coh901318_lli *lli;
-	enum dma_transfer_direction dir;
+	enum dma_data_direction dir;
 	unsigned long flags;
-	u32 head_config;
-	u32 head_ctrl;
 };
 
 struct coh901318_base {
@@ -60,6 +56,7 @@ struct coh901318_base {
 struct coh901318_chan {
 	spinlock_t lock;
 	int allocated;
+	int completed;
 	int id;
 	int stopped;
 
@@ -74,9 +71,6 @@ struct coh901318_chan {
 
 	unsigned long nbr_active_done;
 	unsigned long busy;
-
-	u32 runtime_addr;
-	u32 runtime_ctrl;
 
 	struct coh901318_base *base;
 };
@@ -103,6 +97,13 @@ static void coh901318_list_print(struct coh901318_chan *cohc,
 
 static struct coh901318_base *debugfs_dma_base;
 static struct dentry *dma_dentry;
+
+static int coh901318_debugfs_open(struct inode *inode, struct file *file)
+{
+
+	file->private_data = inode->i_private;
+	return 0;
+}
 
 static int coh901318_debugfs_read(struct file *file, char __user *buf,
 				  size_t count, loff_t *f_pos)
@@ -151,9 +152,8 @@ static int coh901318_debugfs_read(struct file *file, char __user *buf,
 
 static const struct file_operations coh901318_debugfs_status_operations = {
 	.owner		= THIS_MODULE,
-	.open		= simple_open,
+	.open		= coh901318_debugfs_open,
 	.read		= coh901318_debugfs_read,
-	.llseek		= default_llseek,
 };
 
 
@@ -190,9 +190,6 @@ static inline struct coh901318_chan *to_coh901318_chan(struct dma_chan *chan)
 static inline dma_addr_t
 cohc_dev_addr(struct coh901318_chan *cohc)
 {
-	/* Runtime supplied address will take precedence */
-	if (cohc->runtime_addr)
-		return cohc->runtime_addr;
 	return cohc->base->platform->chan_conf[cohc->id].dev_addr;
 }
 
@@ -310,6 +307,20 @@ static int coh901318_prep_linked_list(struct coh901318_chan *cohc,
 	       COH901318_CX_CTRL_SPACING * channel);
 
 	return 0;
+}
+static dma_cookie_t
+coh901318_assign_cookie(struct coh901318_chan *cohc,
+			struct coh901318_desc *cohd)
+{
+	dma_cookie_t cookie = cohc->chan.cookie;
+
+	if (++cookie < 0)
+		cookie = 1;
+
+	cohc->chan.cookie = cookie;
+	cohd->desc.cookie = cookie;
+
+	return cookie;
 }
 
 static struct coh901318_desc *
@@ -511,7 +522,7 @@ static void coh901318_pause(struct dma_chan *chan)
 	val = readl(virtbase + COH901318_CX_CFG +
 		    COH901318_CX_CFG_SPACING * channel);
 
-	/* Stopping infinite transfer */
+	/* Stopping infinit transfer */
 	if ((val & COH901318_CX_CTRL_TC_ENABLE) == 0 &&
 	    (val & COH901318_CX_CFG_CH_ENABLE))
 		cohc->stopped = 1;
@@ -642,9 +653,6 @@ static struct coh901318_desc *coh901318_queue_start(struct coh901318_chan *cohc)
 
 		coh901318_desc_submit(cohc, cohd);
 
-		/* Program the transaction head */
-		coh901318_set_conf(cohc, cohd->head_config);
-		coh901318_set_ctrl(cohc, cohd->head_ctrl);
 		coh901318_prep_linked_list(cohc, cohd->lli);
 
 		/* start dma job on this channel */
@@ -684,7 +692,7 @@ static void dma_tasklet(unsigned long data)
 	callback_param = cohd_fin->desc.callback_param;
 
 	/* sign this job as completed on the channel */
-	dma_cookie_complete(&cohd_fin->desc);
+	cohc->completed = cohd_fin->desc.cookie;
 
 	/* release the lli allocation and remove the descriptor */
 	coh901318_lli_free(&cohc->base->pool, &cohd_fin->lli);
@@ -834,7 +842,7 @@ static irqreturn_t dma_irq_handler(int irq, void *dev_id)
 
 				/* Must clear TC interrupt before calling
 				 * dma_tc_handle
-				 * in case tc_handle initiate a new dma job
+				 * in case tc_handle initate a new dma job
 				 */
 				__set_bit(i, virtbase + COH901318_TC_INT_CLEAR1);
 
@@ -879,7 +887,7 @@ static irqreturn_t dma_irq_handler(int irq, void *dev_id)
 				}
 				/* Must clear TC interrupt before calling
 				 * dma_tc_handle
-				 * in case tc_handle initiate a new dma job
+				 * in case tc_handle initate a new dma job
 				 */
 				__set_bit(i, virtbase + COH901318_TC_INT_CLEAR2);
 
@@ -908,7 +916,7 @@ static int coh901318_alloc_chan_resources(struct dma_chan *chan)
 	coh901318_config(cohc, NULL);
 
 	cohc->allocated = 1;
-	dma_cookie_init(chan);
+	cohc->completed = chan->cookie = 1;
 
 	spin_unlock_irqrestore(&cohc->lock, flags);
 
@@ -945,16 +953,16 @@ coh901318_tx_submit(struct dma_async_tx_descriptor *tx)
 						   desc);
 	struct coh901318_chan *cohc = to_coh901318_chan(tx->chan);
 	unsigned long flags;
-	dma_cookie_t cookie;
 
 	spin_lock_irqsave(&cohc->lock, flags);
-	cookie = dma_cookie_assign(tx);
+
+	tx->cookie = coh901318_assign_cookie(cohc, cohd);
 
 	coh901318_desc_queue(cohc, cohd);
 
 	spin_unlock_irqrestore(&cohc->lock, flags);
 
-	return cookie;
+	return tx->cookie;
 }
 
 static struct dma_async_tx_descriptor *
@@ -1013,8 +1021,8 @@ coh901318_prep_memcpy(struct dma_chan *chan, dma_addr_t dest, dma_addr_t src,
 
 static struct dma_async_tx_descriptor *
 coh901318_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
-			unsigned int sg_len, enum dma_transfer_direction direction,
-			unsigned long flags, void *context)
+			unsigned int sg_len, enum dma_data_direction direction,
+			unsigned long flags)
 {
 	struct coh901318_chan *cohc = to_coh901318_chan(chan);
 	struct coh901318_lli *lli;
@@ -1047,16 +1055,8 @@ coh901318_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
 
 	params = cohc_chan_param(cohc);
 	config = params->config;
-	/*
-	 * Add runtime-specific control on top, make
-	 * sure the bits you set per peripheral channel are
-	 * cleared in the default config from the platform.
-	 */
-	ctrl_chained |= cohc->runtime_ctrl;
-	ctrl_last |= cohc->runtime_ctrl;
-	ctrl |= cohc->runtime_ctrl;
 
-	if (direction == DMA_MEM_TO_DEV) {
+	if (direction == DMA_TO_DEVICE) {
 		u32 tx_flags = COH901318_CX_CTRL_PRDD_SOURCE |
 			COH901318_CX_CTRL_SRC_ADDR_INC_ENABLE;
 
@@ -1064,7 +1064,7 @@ coh901318_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
 		ctrl_chained |= tx_flags;
 		ctrl_last |= tx_flags;
 		ctrl |= tx_flags;
-	} else if (direction == DMA_DEV_TO_MEM) {
+	} else if (direction == DMA_FROM_DEVICE) {
 		u32 rx_flags = COH901318_CX_CTRL_PRDD_DEST |
 			COH901318_CX_CTRL_DST_ADDR_INC_ENABLE;
 
@@ -1074,6 +1074,8 @@ coh901318_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
 		ctrl |= rx_flags;
 	} else
 		goto err_direction;
+
+	coh901318_set_conf(cohc, config);
 
 	/* The dma only supports transmitting packages up to
 	 * MAX_DMA_PACKET_SIZE. Calculate to total number of
@@ -1111,18 +1113,10 @@ coh901318_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
 	if (ret)
 		goto err_lli_fill;
 
-
 	COH_DBG(coh901318_list_print(cohc, lli));
 
 	/* Pick a descriptor to handle this transfer */
 	cohd = coh901318_desc_get(cohc);
-	cohd->head_config = config;
-	/*
-	 * Set the default head ctrl for the channel to the one from the
-	 * lli, things may have changed due to odd buffer alignment
-	 * etc.
-	 */
-	cohd->head_ctrl = lli->control;
 	cohd->dir = direction;
 	cohd->flags = flags;
 	cohd->desc.tx_submit = coh901318_tx_submit;
@@ -1144,12 +1138,17 @@ coh901318_tx_status(struct dma_chan *chan, dma_cookie_t cookie,
 		 struct dma_tx_state *txstate)
 {
 	struct coh901318_chan *cohc = to_coh901318_chan(chan);
-	enum dma_status ret;
+	dma_cookie_t last_used;
+	dma_cookie_t last_complete;
+	int ret;
 
-	ret = dma_cookie_status(chan, cookie, txstate);
-	/* FIXME: should be conditional on ret != DMA_SUCCESS? */
-	dma_set_residue(txstate, coh901318_get_bytes_left(chan));
+	last_complete = cohc->completed;
+	last_used = chan->cookie;
 
+	ret = dma_async_is_complete(cookie, last_complete, last_used);
+
+	dma_set_tx_state(txstate, last_complete, last_used,
+			 coh901318_get_bytes_left(chan));
 	if (ret == DMA_IN_PROGRESS && cohc->stopped)
 		ret = DMA_PAUSED;
 
@@ -1176,146 +1175,6 @@ coh901318_issue_pending(struct dma_chan *chan)
 	spin_unlock_irqrestore(&cohc->lock, flags);
 }
 
-/*
- * Here we wrap in the runtime dma control interface
- */
-struct burst_table {
-	int burst_8bit;
-	int burst_16bit;
-	int burst_32bit;
-	u32 reg;
-};
-
-static const struct burst_table burst_sizes[] = {
-	{
-		.burst_8bit = 64,
-		.burst_16bit = 32,
-		.burst_32bit = 16,
-		.reg = COH901318_CX_CTRL_BURST_COUNT_64_BYTES,
-	},
-	{
-		.burst_8bit = 48,
-		.burst_16bit = 24,
-		.burst_32bit = 12,
-		.reg = COH901318_CX_CTRL_BURST_COUNT_48_BYTES,
-	},
-	{
-		.burst_8bit = 32,
-		.burst_16bit = 16,
-		.burst_32bit = 8,
-		.reg = COH901318_CX_CTRL_BURST_COUNT_32_BYTES,
-	},
-	{
-		.burst_8bit = 16,
-		.burst_16bit = 8,
-		.burst_32bit = 4,
-		.reg = COH901318_CX_CTRL_BURST_COUNT_16_BYTES,
-	},
-	{
-		.burst_8bit = 8,
-		.burst_16bit = 4,
-		.burst_32bit = 2,
-		.reg = COH901318_CX_CTRL_BURST_COUNT_8_BYTES,
-	},
-	{
-		.burst_8bit = 4,
-		.burst_16bit = 2,
-		.burst_32bit = 1,
-		.reg = COH901318_CX_CTRL_BURST_COUNT_4_BYTES,
-	},
-	{
-		.burst_8bit = 2,
-		.burst_16bit = 1,
-		.burst_32bit = 0,
-		.reg = COH901318_CX_CTRL_BURST_COUNT_2_BYTES,
-	},
-	{
-		.burst_8bit = 1,
-		.burst_16bit = 0,
-		.burst_32bit = 0,
-		.reg = COH901318_CX_CTRL_BURST_COUNT_1_BYTE,
-	},
-};
-
-static void coh901318_dma_set_runtimeconfig(struct dma_chan *chan,
-			struct dma_slave_config *config)
-{
-	struct coh901318_chan *cohc = to_coh901318_chan(chan);
-	dma_addr_t addr;
-	enum dma_slave_buswidth addr_width;
-	u32 maxburst;
-	u32 runtime_ctrl = 0;
-	int i = 0;
-
-	/* We only support mem to per or per to mem transfers */
-	if (config->direction == DMA_DEV_TO_MEM) {
-		addr = config->src_addr;
-		addr_width = config->src_addr_width;
-		maxburst = config->src_maxburst;
-	} else if (config->direction == DMA_MEM_TO_DEV) {
-		addr = config->dst_addr;
-		addr_width = config->dst_addr_width;
-		maxburst = config->dst_maxburst;
-	} else {
-		dev_err(COHC_2_DEV(cohc), "illegal channel mode\n");
-		return;
-	}
-
-	dev_dbg(COHC_2_DEV(cohc), "configure channel for %d byte transfers\n",
-		addr_width);
-	switch (addr_width)  {
-	case DMA_SLAVE_BUSWIDTH_1_BYTE:
-		runtime_ctrl |=
-			COH901318_CX_CTRL_SRC_BUS_SIZE_8_BITS |
-			COH901318_CX_CTRL_DST_BUS_SIZE_8_BITS;
-
-		while (i < ARRAY_SIZE(burst_sizes)) {
-			if (burst_sizes[i].burst_8bit <= maxburst)
-				break;
-			i++;
-		}
-
-		break;
-	case DMA_SLAVE_BUSWIDTH_2_BYTES:
-		runtime_ctrl |=
-			COH901318_CX_CTRL_SRC_BUS_SIZE_16_BITS |
-			COH901318_CX_CTRL_DST_BUS_SIZE_16_BITS;
-
-		while (i < ARRAY_SIZE(burst_sizes)) {
-			if (burst_sizes[i].burst_16bit <= maxburst)
-				break;
-			i++;
-		}
-
-		break;
-	case DMA_SLAVE_BUSWIDTH_4_BYTES:
-		/* Direction doesn't matter here, it's 32/32 bits */
-		runtime_ctrl |=
-			COH901318_CX_CTRL_SRC_BUS_SIZE_32_BITS |
-			COH901318_CX_CTRL_DST_BUS_SIZE_32_BITS;
-
-		while (i < ARRAY_SIZE(burst_sizes)) {
-			if (burst_sizes[i].burst_32bit <= maxburst)
-				break;
-			i++;
-		}
-
-		break;
-	default:
-		dev_err(COHC_2_DEV(cohc),
-			"bad runtimeconfig: alien address width\n");
-		return;
-	}
-
-	runtime_ctrl |= burst_sizes[i].reg;
-	dev_dbg(COHC_2_DEV(cohc),
-		"selected burst size %d bytes for address width %d bytes, maxburst %d\n",
-		burst_sizes[i].burst_8bit, addr_width, maxburst);
-
-	cohc->runtime_addr = addr;
-	cohc->runtime_ctrl = runtime_ctrl;
-}
-
 static int
 coh901318_control(struct dma_chan *chan, enum dma_ctrl_cmd cmd,
 		  unsigned long arg)
@@ -1324,14 +1183,6 @@ coh901318_control(struct dma_chan *chan, enum dma_ctrl_cmd cmd,
 	struct coh901318_chan *cohc = to_coh901318_chan(chan);
 	struct coh901318_desc *cohd;
 	void __iomem *virtbase = cohc->base->virtbase;
-
-	if (cmd == DMA_SLAVE_CONFIG) {
-		struct dma_slave_config *config =
-			(struct dma_slave_config *) arg;
-
-		coh901318_dma_set_runtimeconfig(chan, config);
-		return 0;
-	  }
 
 	if (cmd == DMA_PAUSE) {
 		coh901318_pause(chan);
@@ -1389,7 +1240,6 @@ coh901318_control(struct dma_chan *chan, enum dma_ctrl_cmd cmd,
 
 	return 0;
 }
-
 void coh901318_base_init(struct dma_device *dma, const int *pick_chans,
 			 struct coh901318_base *base)
 {

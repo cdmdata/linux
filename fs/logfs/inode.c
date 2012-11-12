@@ -93,7 +93,7 @@ static struct inode *__logfs_iget(struct super_block *sb, ino_t ino)
 		/* inode->i_nlink == 0 can be true when called from
 		 * block validator */
 		/* set i_nlink to 0 to prevent caching */
-		clear_nlink(inode);
+		inode->i_nlink = 0;
 		logfs_inode(inode)->li_flags |= LOGFS_IF_ZOMBIE;
 		iget_failed(inode);
 		if (!err)
@@ -141,19 +141,13 @@ struct inode *logfs_safe_iget(struct super_block *sb, ino_t ino, int *is_cached)
 	return __logfs_iget(sb, ino);
 }
 
-static void logfs_i_callback(struct rcu_head *head)
-{
-	struct inode *inode = container_of(head, struct inode, i_rcu);
-	kmem_cache_free(logfs_inode_cache, logfs_inode(inode));
-}
-
 static void __logfs_destroy_inode(struct inode *inode)
 {
 	struct logfs_inode *li = logfs_inode(inode);
 
 	BUG_ON(li->li_block);
 	list_del(&li->li_freeing_list);
-	call_rcu(&inode->i_rcu, logfs_i_callback);
+	kmem_cache_free(logfs_inode_cache, li);
 }
 
 static void logfs_destroy_inode(struct inode *inode)
@@ -198,6 +192,7 @@ static void logfs_init_inode(struct super_block *sb, struct inode *inode)
 	inode->i_blocks	= 0;
 	inode->i_ctime	= CURRENT_TIME;
 	inode->i_mtime	= CURRENT_TIME;
+	inode->i_nlink	= 1;
 	li->li_refcount = 1;
 	INIT_LIST_HEAD(&li->li_freeing_list);
 
@@ -240,21 +235,33 @@ static struct inode *logfs_alloc_inode(struct super_block *sb)
  * purpose is to create a new inode that will not trigger the warning if such
  * an inode is still in use.  An ugly hack, no doubt.  Suggections for
  * improvement are welcome.
- *
- * AV: that's what ->put_super() is for...
  */
 struct inode *logfs_new_meta_inode(struct super_block *sb, u64 ino)
 {
 	struct inode *inode;
 
-	inode = new_inode(sb);
+	inode = logfs_alloc_inode(sb);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 
 	inode->i_mode = S_IFREG;
 	inode->i_ino = ino;
-	inode->i_data.a_ops = &logfs_reg_aops;
-	mapping_set_gfp_mask(&inode->i_data, GFP_NOFS);
+	inode->i_sb = sb;
+
+	/* This is a blatant copy of alloc_inode code.  We'd need alloc_inode
+	 * to be nonstatic, alas. */
+	{
+		struct address_space * const mapping = &inode->i_data;
+
+		mapping->a_ops = &logfs_reg_aops;
+		mapping->host = inode;
+		mapping->flags = 0;
+		mapping_set_gfp_mask(mapping, GFP_NOFS);
+		mapping->assoc_mapping = NULL;
+		mapping->backing_dev_info = &default_backing_dev_info;
+		inode->i_mapping = mapping;
+		inode->i_nlink = 1;
+	}
 
 	return inode;
 }
@@ -270,7 +277,7 @@ struct inode *logfs_read_meta_inode(struct super_block *sb, u64 ino)
 
 	err = logfs_read_inode(inode);
 	if (err) {
-		iput(inode);
+		destroy_meta_inode(inode);
 		return ERR_PTR(err);
 	}
 	logfs_inode_setops(inode);
@@ -286,13 +293,23 @@ static int logfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 	if (logfs_inode(inode)->li_flags & LOGFS_IF_STILLBORN)
 		return 0;
 
-	ret = __logfs_write_inode(inode, NULL, flags);
+	ret = __logfs_write_inode(inode, flags);
 	LOGFS_BUG_ON(ret, inode->i_sb);
 	return ret;
 }
 
-/* called with inode->i_lock held */
-static int logfs_drop_inode(struct inode *inode)
+void destroy_meta_inode(struct inode *inode)
+{
+	if (inode) {
+		if (inode->i_data.nrpages)
+			truncate_inode_pages(&inode->i_data, 0);
+		logfs_clear_inode(inode);
+		kmem_cache_free(logfs_inode_cache, logfs_inode(inode));
+	}
+}
+
+/* called with inode_lock held */
+static void logfs_drop_inode(struct inode *inode)
 {
 	struct logfs_super *super = logfs_super(inode->i_sb);
 	struct logfs_inode *li = logfs_inode(inode);
@@ -300,7 +317,7 @@ static int logfs_drop_inode(struct inode *inode)
 	spin_lock(&logfs_inode_lock);
 	list_move(&li->li_freeing_list, &super->s_freeing_list);
 	spin_unlock(&logfs_inode_lock);
-	return generic_drop_inode(inode);
+	generic_drop_inode(inode);
 }
 
 static void logfs_set_ino_generation(struct super_block *sb,
@@ -323,7 +340,7 @@ static void logfs_set_ino_generation(struct super_block *sb,
 	mutex_unlock(&super->s_journal_mutex);
 }
 
-struct inode *logfs_new_inode(struct inode *dir, umode_t mode)
+struct inode *logfs_new_inode(struct inode *dir, int mode)
 {
 	struct super_block *sb = dir->i_sb;
 	struct inode *inode;
@@ -363,27 +380,16 @@ static void logfs_init_once(void *_li)
 
 static int logfs_sync_fs(struct super_block *sb, int wait)
 {
-	logfs_get_wblocks(sb, NULL, WF_LOCK);
 	logfs_write_anchor(sb);
-	logfs_put_wblocks(sb, NULL, WF_LOCK);
 	return 0;
-}
-
-static void logfs_put_super(struct super_block *sb)
-{
-	struct logfs_super *super = logfs_super(sb);
-	/* kill the meta-inodes */
-	iput(super->s_master_inode);
-	iput(super->s_segfile_inode);
-	iput(super->s_mapping_inode);
 }
 
 const struct super_operations logfs_super_operations = {
 	.alloc_inode	= logfs_alloc_inode,
+	.clear_inode	= logfs_clear_inode,
+	.delete_inode	= logfs_delete_inode,
 	.destroy_inode	= logfs_destroy_inode,
-	.evict_inode	= logfs_evict_inode,
 	.drop_inode	= logfs_drop_inode,
-	.put_super	= logfs_put_super,
 	.write_inode	= logfs_write_inode,
 	.statfs		= logfs_statfs,
 	.sync_fs	= logfs_sync_fs,

@@ -32,20 +32,11 @@
 #include <linux/gpio.h>
 #include <linux/input.h>
 #include <linux/input/sh_keysc.h>
-#include <linux/dma-mapping.h>
-#include <mach/irqs.h>
 #include <mach/sh7367.h>
 #include <mach/common.h>
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
-
-/*
- * IrDA
- *
- * S67: 5bit : ON  power
- *    : 6bit : ON  remote control
- *             OFF IrDA
- */
+#include <asm/mach/map.h>
 
 static struct mtd_partition nor_flash_partitions[] = {
 	{
@@ -100,7 +91,7 @@ static struct platform_device nor_flash_device = {
 };
 
 /* USBHS */
-static void usb_host_port_power(int port, int power)
+void usb_host_port_power(int port, int power)
 {
 	if (!power) /* only power-on supported for now */
 		return;
@@ -122,7 +113,7 @@ static struct resource usb_host_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= evt2irq(0xa20), /* USBHS_USHI0 */
+		.start	= 65,
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -162,7 +153,7 @@ static struct resource keysc_resources[] = {
 		.flags  = IORESOURCE_MEM,
 	},
 	[1] = {
-		.start  = evt2irq(0xbe0), /* KEYSC_KEY */
+		.start  = 79,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
@@ -218,32 +209,34 @@ static struct platform_device nand_flash_device = {
 	},
 };
 
-static struct resource irda_resources[] = {
-	[0] = {
-		.start	= 0xE6D00000,
-		.end	= 0xE6D01FD4 - 1,
-		.flags	= IORESOURCE_MEM,
-	},
-	[1] = {
-		.start  = evt2irq(0x480), /* IRDA */
-		.flags  = IORESOURCE_IRQ,
-	},
-};
-
-static struct platform_device irda_device = {
-	.name		= "sh_irda",
-	.id		= -1,
-	.resource	= irda_resources,
-	.num_resources	= ARRAY_SIZE(irda_resources),
-};
-
 static struct platform_device *g3evm_devices[] __initdata = {
 	&nor_flash_device,
 	&usb_host_device,
 	&keysc_device,
 	&nand_flash_device,
-	&irda_device,
 };
+
+static struct map_desc g3evm_io_desc[] __initdata = {
+	/* create a 1:1 entity map for 0xe6xxxxxx
+	 * used by CPGA, INTC and PFC.
+	 */
+	{
+		.virtual	= 0xe6000000,
+		.pfn		= __phys_to_pfn(0xe6000000),
+		.length		= 256 << 20,
+		.type		= MT_DEVICE_NONSHARED
+	},
+};
+
+static void __init g3evm_map_io(void)
+{
+	iotable_init(g3evm_io_desc, ARRAY_SIZE(g3evm_io_desc));
+
+	/* setup early devices, clocks and console here as well */
+	sh7367_add_early_devices();
+	sh7367_clock_init();
+	shmobile_setup_console();
+}
 
 static void __init g3evm_init(void)
 {
@@ -277,6 +270,9 @@ static void __init g3evm_init(void)
 	gpio_request(GPIO_FN_OVCN2, NULL);
 	gpio_request(GPIO_FN_EXTLP, NULL);
 	gpio_request(GPIO_FN_IDIN, NULL);
+
+	/* enable clock in SYMSTPCR2 */
+	__raw_writel(__raw_readl(0xe6158048) & ~(1 << 22), 0xe6158048);
 
 	/* setup USB phy */
 	__raw_writew(0x0300, 0xe605810a);	/* USBCR1 */
@@ -322,21 +318,16 @@ static void __init g3evm_init(void)
 	/* FOE, FCDE, FSC on dedicated pins */
 	__raw_writel(__raw_readl(0xe6158048) & ~(1 << 15), 0xe6158048);
 
-	/* IrDA */
-	gpio_request(GPIO_FN_IRDA_OUT, NULL);
-	gpio_request(GPIO_FN_IRDA_IN, NULL);
-	gpio_request(GPIO_FN_IRDA_FIRSEL, NULL);
-
 	sh7367_add_standard_devices();
 
 	platform_add_devices(g3evm_devices, ARRAY_SIZE(g3evm_devices));
 }
 
 MACHINE_START(G3EVM, "g3evm")
-	.map_io		= sh7367_map_io,
-	.init_early	= sh7367_add_early_devices,
+	.phys_io	= 0xe6000000,
+	.io_pg_offst	= ((0xe6000000) >> 18) & 0xfffc,
+	.map_io		= g3evm_map_io,
 	.init_irq	= sh7367_init_irq,
-	.handle_irq	= shmobile_handle_irq_intc,
 	.init_machine	= g3evm_init,
 	.timer		= &shmobile_timer,
 MACHINE_END

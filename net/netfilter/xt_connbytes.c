@@ -40,46 +40,46 @@ connbytes_mt(const struct sk_buff *skb, struct xt_action_param *par)
 	case XT_CONNBYTES_PKTS:
 		switch (sinfo->direction) {
 		case XT_CONNBYTES_DIR_ORIGINAL:
-			what = atomic64_read(&counters[IP_CT_DIR_ORIGINAL].packets);
+			what = counters[IP_CT_DIR_ORIGINAL].packets;
 			break;
 		case XT_CONNBYTES_DIR_REPLY:
-			what = atomic64_read(&counters[IP_CT_DIR_REPLY].packets);
+			what = counters[IP_CT_DIR_REPLY].packets;
 			break;
 		case XT_CONNBYTES_DIR_BOTH:
-			what = atomic64_read(&counters[IP_CT_DIR_ORIGINAL].packets);
-			what += atomic64_read(&counters[IP_CT_DIR_REPLY].packets);
+			what = counters[IP_CT_DIR_ORIGINAL].packets;
+			what += counters[IP_CT_DIR_REPLY].packets;
 			break;
 		}
 		break;
 	case XT_CONNBYTES_BYTES:
 		switch (sinfo->direction) {
 		case XT_CONNBYTES_DIR_ORIGINAL:
-			what = atomic64_read(&counters[IP_CT_DIR_ORIGINAL].bytes);
+			what = counters[IP_CT_DIR_ORIGINAL].bytes;
 			break;
 		case XT_CONNBYTES_DIR_REPLY:
-			what = atomic64_read(&counters[IP_CT_DIR_REPLY].bytes);
+			what = counters[IP_CT_DIR_REPLY].bytes;
 			break;
 		case XT_CONNBYTES_DIR_BOTH:
-			what = atomic64_read(&counters[IP_CT_DIR_ORIGINAL].bytes);
-			what += atomic64_read(&counters[IP_CT_DIR_REPLY].bytes);
+			what = counters[IP_CT_DIR_ORIGINAL].bytes;
+			what += counters[IP_CT_DIR_REPLY].bytes;
 			break;
 		}
 		break;
 	case XT_CONNBYTES_AVGPKT:
 		switch (sinfo->direction) {
 		case XT_CONNBYTES_DIR_ORIGINAL:
-			bytes = atomic64_read(&counters[IP_CT_DIR_ORIGINAL].bytes);
-			pkts  = atomic64_read(&counters[IP_CT_DIR_ORIGINAL].packets);
+			bytes = counters[IP_CT_DIR_ORIGINAL].bytes;
+			pkts  = counters[IP_CT_DIR_ORIGINAL].packets;
 			break;
 		case XT_CONNBYTES_DIR_REPLY:
-			bytes = atomic64_read(&counters[IP_CT_DIR_REPLY].bytes);
-			pkts  = atomic64_read(&counters[IP_CT_DIR_REPLY].packets);
+			bytes = counters[IP_CT_DIR_REPLY].bytes;
+			pkts  = counters[IP_CT_DIR_REPLY].packets;
 			break;
 		case XT_CONNBYTES_DIR_BOTH:
-			bytes = atomic64_read(&counters[IP_CT_DIR_ORIGINAL].bytes) +
-				atomic64_read(&counters[IP_CT_DIR_REPLY].bytes);
-			pkts  = atomic64_read(&counters[IP_CT_DIR_ORIGINAL].packets) +
-				atomic64_read(&counters[IP_CT_DIR_REPLY].packets);
+			bytes = counters[IP_CT_DIR_ORIGINAL].bytes +
+				counters[IP_CT_DIR_REPLY].bytes;
+			pkts  = counters[IP_CT_DIR_ORIGINAL].packets +
+				counters[IP_CT_DIR_REPLY].packets;
 			break;
 		}
 		if (pkts != 0)
@@ -87,10 +87,10 @@ connbytes_mt(const struct sk_buff *skb, struct xt_action_param *par)
 		break;
 	}
 
-	if (sinfo->count.to >= sinfo->count.from)
+	if (sinfo->count.to)
 		return what <= sinfo->count.to && what >= sinfo->count.from;
-	else /* inverted */
-		return what < sinfo->count.to || what > sinfo->count.from;
+	else
+		return what >= sinfo->count.from;
 }
 
 static int connbytes_mt_check(const struct xt_mtchk_param *par)
@@ -112,16 +112,6 @@ static int connbytes_mt_check(const struct xt_mtchk_param *par)
 	if (ret < 0)
 		pr_info("cannot load conntrack support for proto=%u\n",
 			par->family);
-
-	/*
-	 * This filter cannot function correctly unless connection tracking
-	 * accounting is enabled, so complain in the hope that someone notices.
-	 */
-	if (!nf_ct_acct_enabled(par->net)) {
-		pr_warning("Forcing CT accounting to be enabled\n");
-		nf_ct_set_acct(par->net, true);
-	}
-
 	return ret;
 }
 

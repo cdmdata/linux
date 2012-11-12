@@ -34,7 +34,8 @@ static int fwh_xxlock_oneblock(struct map_info *map, struct flchip *chip,
 
 	/* Refuse the operation if the we cannot look behind the chip */
 	if (chip->start < 0x400000) {
-		pr_debug( "MTD %s(): chip->start: %lx wanted >= 0x400000\n",
+		DEBUG( MTD_DEBUG_LEVEL3,
+			"MTD %s(): chip->start: %lx wanted >= 0x400000\n",
 			__func__, chip->start );
 		return -EIO;
 	}
@@ -97,11 +98,11 @@ static int fwh_unlock_varsize(struct mtd_info *mtd, loff_t ofs, uint64_t len)
 	return ret;
 }
 
-static void fixup_use_fwh_lock(struct mtd_info *mtd)
+static void fixup_use_fwh_lock(struct mtd_info *mtd, void *param)
 {
 	printk(KERN_NOTICE "using fwh lock/unlock method\n");
 	/* Setup for the chips with the fwh lock method */
-	mtd->_lock   = fwh_lock_varsize;
-	mtd->_unlock = fwh_unlock_varsize;
+	mtd->lock   = fwh_lock_varsize;
+	mtd->unlock = fwh_unlock_varsize;
 }
 #endif /* FWH_LOCK_H */

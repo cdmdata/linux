@@ -2,7 +2,7 @@
  * Driver for One Laptop Per Child ‘CAFÉ’ controller, aka Marvell 88ALP01
  *
  * The data sheet for this device can be found at:
- *    http://wiki.laptop.org/go/Datasheets 
+ *    http://www.marvell.com/products/pcconn/88ALP01.jsp
  *
  * Copyright © 2006 Red Hat, Inc.
  * Copyright © 2006 David Woodhouse <dwmw2@infradead.org>
@@ -21,7 +21,6 @@
 #include <linux/interrupt.h>
 #include <linux/dma-mapping.h>
 #include <linux/slab.h>
-#include <linux/module.h>
 #include <asm/io.h>
 
 #define CAFE_NAND_CTRL1		0x00
@@ -58,6 +57,7 @@
 
 struct cafe_priv {
 	struct nand_chip nand;
+	struct mtd_partition *parts;
 	struct pci_dev *pdev;
 	void __iomem *mmio;
 	struct rs_control *rs;
@@ -90,7 +90,9 @@ static unsigned int numtimings;
 static int timing[3];
 module_param_array(timing, int, &numtimings, 0644);
 
+#ifdef CONFIG_MTD_PARTITIONS
 static const char *part_probes[] = { "cmdlinepart", "RedBoot", NULL };
+#endif
 
 /* Hrm. Why isn't this already conditional on something in the struct device? */
 #define cafe_dev_dbg(dev, args...) do { if (debug) dev_dbg(dev, ##args); } while(0)
@@ -371,7 +373,7 @@ static int cafe_nand_read_oob(struct mtd_info *mtd, struct nand_chip *chip,
 	return 1;
 }
 /**
- * cafe_nand_read_page_syndrome - [REPLACEABLE] hardware ecc syndrome based page read
+ * cafe_nand_read_page_syndrome - {REPLACABLE] hardware ecc syndrom based page read
  * @mtd:	mtd info structure
  * @chip:	nand chip info structure
  * @buf:	buffer to store read data
@@ -630,6 +632,10 @@ static int __devinit cafe_nand_probe(struct pci_dev *pdev,
 	struct cafe_priv *cafe;
 	uint32_t ctrl;
 	int err = 0;
+#ifdef CONFIG_MTD_PARTITIONS
+	struct mtd_partition *parts;
+	int nr_parts;
+#endif
 
 	/* Very old versions shared the same PCI ident for all three
 	   functions on the chip. Verify the class too... */
@@ -684,8 +690,7 @@ static int __devinit cafe_nand_probe(struct pci_dev *pdev,
 	cafe->nand.chip_delay = 0;
 
 	/* Enable the following for a flash based bad block table */
-	cafe->nand.bbt_options = NAND_BBT_USE_FLASH;
-	cafe->nand.options = NAND_NO_AUTOINCR | NAND_OWN_BUFFERS;
+	cafe->nand.options = NAND_USE_FLASH_BBT | NAND_NO_AUTOINCR | NAND_OWN_BUFFERS;
 
 	if (skipbbt) {
 		cafe->nand.options |= NAND_SKIP_BBTSCAN;
@@ -783,7 +788,6 @@ static int __devinit cafe_nand_probe(struct pci_dev *pdev,
 	cafe->nand.ecc.mode = NAND_ECC_HW_SYNDROME;
 	cafe->nand.ecc.size = mtd->writesize;
 	cafe->nand.ecc.bytes = 14;
-	cafe->nand.ecc.strength = 4;
 	cafe->nand.ecc.hwctl  = (void *)cafe_nand_bug;
 	cafe->nand.ecc.calculate = (void *)cafe_nand_bug;
 	cafe->nand.ecc.correct  = (void *)cafe_nand_bug;
@@ -799,9 +803,20 @@ static int __devinit cafe_nand_probe(struct pci_dev *pdev,
 
 	pci_set_drvdata(pdev, mtd);
 
-	mtd->name = "cafe_nand";
-	mtd_device_parse_register(mtd, part_probes, NULL, NULL, 0);
+	/* We register the whole device first, separate from the partitions */
+	add_mtd_device(mtd);
 
+#ifdef CONFIG_MTD_PARTITIONS
+#ifdef CONFIG_MTD_CMDLINE_PARTS
+	mtd->name = "cafe_nand";
+#endif
+	nr_parts = parse_mtd_partitions(mtd, part_probes, &parts, 0);
+	if (nr_parts > 0) {
+		cafe->parts = parts;
+		dev_info(&cafe->pdev->dev, "%d partitions found\n", nr_parts);
+		add_mtd_partitions(mtd, parts, nr_parts);
+	}
+#endif
 	goto out;
 
  out_irq:
@@ -823,6 +838,7 @@ static void __devexit cafe_nand_remove(struct pci_dev *pdev)
 	struct mtd_info *mtd = pci_get_drvdata(pdev);
 	struct cafe_priv *cafe = mtd->priv;
 
+	del_mtd_device(mtd);
 	/* Disable NAND IRQ in global IRQ mask register */
 	cafe_writel(cafe, ~1 & cafe_readl(cafe, GLOBAL_IRQ_MASK), GLOBAL_IRQ_MASK);
 	free_irq(pdev->irq, mtd);

@@ -32,7 +32,6 @@
 
 #include <linux/sched.h>
 #include <linux/slab.h>
-#include <net/cfg80211-wext.h>
 #include "ipw2200.h"
 
 
@@ -97,7 +96,7 @@ static int network_mode = 0;
 static u32 ipw_debug_level;
 static int associate;
 static int auto_create = 1;
-static int led_support = 1;
+static int led_support = 0;
 static int disable = 0;
 static int bt_coexist = 0;
 static int hwcrypto = 0;
@@ -130,14 +129,6 @@ static struct ieee80211_rate ipw2200_rates[] = {
 #define ipw2200_num_a_rates	8
 #define ipw2200_bg_rates	(ipw2200_rates + 0)
 #define ipw2200_num_bg_rates	12
-
-/* Ugly macro to convert literal channel numbers into their mhz equivalents
- * There are certianly some conditions that will break this (like feeding it '30')
- * but they shouldn't arise since nothing talks on channel 30. */
-#define ieee80211chan2mhz(x) \
-	(((x) <= 14) ? \
-	(((x) == 14) ? 2484 : ((x) * 5) + 2407) : \
-	((x) + 1000) * 5)
 
 #ifdef CONFIG_IPW2200_QOS
 static int qos_enable = 0;
@@ -903,8 +894,9 @@ static void ipw_led_link_on(struct ipw_priv *priv)
 
 		/* If we aren't associated, schedule turning the LED off */
 		if (!(priv->status & STATUS_ASSOCIATED))
-			schedule_delayed_work(&priv->led_link_off,
-					      LD_TIME_LINK_ON);
+			queue_delayed_work(priv->workqueue,
+					   &priv->led_link_off,
+					   LD_TIME_LINK_ON);
 	}
 
 	spin_unlock_irqrestore(&priv->lock, flags);
@@ -947,8 +939,8 @@ static void ipw_led_link_off(struct ipw_priv *priv)
 		 * turning the LED on (blink while unassociated) */
 		if (!(priv->status & STATUS_RF_KILL_MASK) &&
 		    !(priv->status & STATUS_ASSOCIATED))
-			schedule_delayed_work(&priv->led_link_on,
-					      LD_TIME_LINK_OFF);
+			queue_delayed_work(priv->workqueue, &priv->led_link_on,
+					   LD_TIME_LINK_OFF);
 
 	}
 
@@ -988,11 +980,13 @@ static void __ipw_led_activity_on(struct ipw_priv *priv)
 		priv->status |= STATUS_LED_ACT_ON;
 
 		cancel_delayed_work(&priv->led_act_off);
-		schedule_delayed_work(&priv->led_act_off, LD_TIME_ACT_ON);
+		queue_delayed_work(priv->workqueue, &priv->led_act_off,
+				   LD_TIME_ACT_ON);
 	} else {
 		/* Reschedule LED off for full time period */
 		cancel_delayed_work(&priv->led_act_off);
-		schedule_delayed_work(&priv->led_act_off, LD_TIME_ACT_ON);
+		queue_delayed_work(priv->workqueue, &priv->led_act_off,
+				   LD_TIME_ACT_ON);
 	}
 }
 
@@ -1190,7 +1184,7 @@ static void ipw_led_shutdown(struct ipw_priv *priv)
 /*
  * The following adds a new attribute to the sysfs representation
  * of this device driver (i.e. a new file in /sys/bus/pci/drivers/ipw/)
- * used for controlling the debug level.
+ * used for controling the debug level.
  *
  * See the level definitions in ipw for details.
  */
@@ -1801,11 +1795,13 @@ static int ipw_radio_kill_sw(struct ipw_priv *priv, int disable_radio)
 	if (disable_radio) {
 		priv->status |= STATUS_RF_KILL_SW;
 
-		cancel_delayed_work(&priv->request_scan);
-		cancel_delayed_work(&priv->request_direct_scan);
-		cancel_delayed_work(&priv->request_passive_scan);
-		cancel_delayed_work(&priv->scan_event);
-		schedule_work(&priv->down);
+		if (priv->workqueue) {
+			cancel_delayed_work(&priv->request_scan);
+			cancel_delayed_work(&priv->request_direct_scan);
+			cancel_delayed_work(&priv->request_passive_scan);
+			cancel_delayed_work(&priv->scan_event);
+		}
+		queue_work(priv->workqueue, &priv->down);
 	} else {
 		priv->status &= ~STATUS_RF_KILL_SW;
 		if (rf_kill_active(priv)) {
@@ -1813,10 +1809,10 @@ static int ipw_radio_kill_sw(struct ipw_priv *priv, int disable_radio)
 					  "disabled by HW switch\n");
 			/* Make sure the RF_KILL check timer is running */
 			cancel_delayed_work(&priv->rf_kill);
-			schedule_delayed_work(&priv->rf_kill,
-					      round_jiffies_relative(2 * HZ));
+			queue_delayed_work(priv->workqueue, &priv->rf_kill,
+					   round_jiffies_relative(2 * HZ));
 		} else
-			schedule_work(&priv->up);
+			queue_work(priv->workqueue, &priv->up);
 	}
 
 	return 1;
@@ -1977,13 +1973,6 @@ static void ipw_irq_tasklet(struct ipw_priv *priv)
 
 	inta = ipw_read32(priv, IPW_INTA_RW);
 	inta_mask = ipw_read32(priv, IPW_INTA_MASK_R);
-
-	if (inta == 0xFFFFFFFF) {
-		/* Hardware disappeared */
-		IPW_WARNING("TASKLET INTA == 0xFFFFFFFF\n");
-		/* Only handle the cached INTA values */
-		inta = 0;
-	}
 	inta &= (IPW_INTA_MASK_ALL & inta_mask);
 
 	/* Add any cached INTA values that need to be handled */
@@ -2067,7 +2056,7 @@ static void ipw_irq_tasklet(struct ipw_priv *priv)
 		cancel_delayed_work(&priv->request_passive_scan);
 		cancel_delayed_work(&priv->scan_event);
 		schedule_work(&priv->link_down);
-		schedule_delayed_work(&priv->rf_kill, 2 * HZ);
+		queue_delayed_work(priv->workqueue, &priv->rf_kill, 2 * HZ);
 		handled |= IPW_INTA_BIT_RF_KILL_DONE;
 	}
 
@@ -2107,7 +2096,7 @@ static void ipw_irq_tasklet(struct ipw_priv *priv)
 		priv->status &= ~STATUS_HCMD_ACTIVE;
 		wake_up_interruptible(&priv->wait_command_queue);
 
-		schedule_work(&priv->adapter_restart);
+		queue_work(priv->workqueue, &priv->adapter_restart);
 		handled |= IPW_INTA_BIT_FATAL_ERROR;
 	}
 
@@ -2191,7 +2180,6 @@ static int __ipw_send_cmd(struct ipw_priv *priv, struct host_cmd *cmd)
 {
 	int rc = 0;
 	unsigned long flags;
-	unsigned long now, end;
 
 	spin_lock_irqsave(&priv->lock, flags);
 	if (priv->status & STATUS_HCMD_ACTIVE) {
@@ -2233,20 +2221,10 @@ static int __ipw_send_cmd(struct ipw_priv *priv, struct host_cmd *cmd)
 	}
 	spin_unlock_irqrestore(&priv->lock, flags);
 
-	now = jiffies;
-	end = now + HOST_COMPLETE_TIMEOUT;
-again:
 	rc = wait_event_interruptible_timeout(priv->wait_command_queue,
 					      !(priv->
 						status & STATUS_HCMD_ACTIVE),
-					      end - now);
-	if (rc < 0) {
-		now = jiffies;
-		if (time_before(now, end))
-			goto again;
-		rc = 0;
-	}
-
+					      HOST_COMPLETE_TIMEOUT);
 	if (rc == 0) {
 		spin_lock_irqsave(&priv->lock, flags);
 		if (priv->status & STATUS_HCMD_ACTIVE) {
@@ -2338,6 +2316,11 @@ static int ipw_send_adapter_address(struct ipw_priv *priv, u8 * mac)
 	return ipw_send_cmd_pdu(priv, IPW_CMD_ADAPTER_ADDRESS, ETH_ALEN, mac);
 }
 
+/*
+ * NOTE: This must be executed from our workqueue as it results in udelay
+ * being called which may corrupt the keyboard if executed on default
+ * workqueue
+ */
 static void ipw_adapter_restart(void *adapter)
 {
 	struct ipw_priv *priv = adapter;
@@ -2378,13 +2361,13 @@ static void ipw_scan_check(void *data)
 		IPW_DEBUG_SCAN("Scan completion watchdog resetting "
 			       "adapter after (%dms).\n",
 			       jiffies_to_msecs(IPW_SCAN_CHECK_WATCHDOG));
-		schedule_work(&priv->adapter_restart);
+		queue_work(priv->workqueue, &priv->adapter_restart);
 	} else if (priv->status & STATUS_SCANNING) {
 		IPW_DEBUG_SCAN("Scan completion watchdog aborting scan "
 			       "after (%dms).\n",
 			       jiffies_to_msecs(IPW_SCAN_CHECK_WATCHDOG));
 		ipw_abort_scan(priv);
-		schedule_delayed_work(&priv->scan_check, HZ);
+		queue_delayed_work(priv->workqueue, &priv->scan_check, HZ);
 	}
 }
 
@@ -3783,7 +3766,7 @@ static int ipw_queue_tx_init(struct ipw_priv *priv,
 
 	q->txb = kmalloc(sizeof(q->txb[0]) * count, GFP_KERNEL);
 	if (!q->txb) {
-		IPW_ERROR("vmalloc for auxiliary BD structures failed\n");
+		IPW_ERROR("vmalloc for auxilary BD structures failed\n");
 		return -ENOMEM;
 	}
 
@@ -3953,7 +3936,7 @@ static void ipw_send_disassociate(struct ipw_priv *priv, int quiet)
 
 	if (priv->status & STATUS_ASSOCIATING) {
 		IPW_DEBUG_ASSOC("Disassociating while associating.\n");
-		schedule_work(&priv->disassociate);
+		queue_work(priv->workqueue, &priv->disassociate);
 		return;
 	}
 
@@ -4370,7 +4353,8 @@ static void ipw_gather_stats(struct ipw_priv *priv)
 
 	priv->quality = quality;
 
-	schedule_delayed_work(&priv->gather_stats, IPW_STATS_INTERVAL);
+	queue_delayed_work(priv->workqueue, &priv->gather_stats,
+			   IPW_STATS_INTERVAL);
 }
 
 static void ipw_bg_gather_stats(struct work_struct *work)
@@ -4405,10 +4389,10 @@ static void ipw_handle_missed_beacon(struct ipw_priv *priv,
 			IPW_DEBUG(IPW_DL_INFO | IPW_DL_NOTIF |
 				  IPW_DL_STATE,
 				  "Aborting scan with missed beacon.\n");
-			schedule_work(&priv->abort_scan);
+			queue_work(priv->workqueue, &priv->abort_scan);
 		}
 
-		schedule_work(&priv->disassociate);
+		queue_work(priv->workqueue, &priv->disassociate);
 		return;
 	}
 
@@ -4434,7 +4418,8 @@ static void ipw_handle_missed_beacon(struct ipw_priv *priv,
 		if (!(priv->status & STATUS_ROAMING)) {
 			priv->status |= STATUS_ROAMING;
 			if (!(priv->status & STATUS_SCANNING))
-				schedule_delayed_work(&priv->request_scan, 0);
+				queue_delayed_work(priv->workqueue,
+						   &priv->request_scan, 0);
 		}
 		return;
 	}
@@ -4447,7 +4432,7 @@ static void ipw_handle_missed_beacon(struct ipw_priv *priv,
 		 * channels..) */
 		IPW_DEBUG(IPW_DL_INFO | IPW_DL_NOTIF | IPW_DL_STATE,
 			  "Aborting scan with missed beacon.\n");
-		schedule_work(&priv->abort_scan);
+		queue_work(priv->workqueue, &priv->abort_scan);
 	}
 
 	IPW_DEBUG_NOTIF("Missed beacon: %d\n", missed_count);
@@ -4470,8 +4455,8 @@ static void handle_scan_event(struct ipw_priv *priv)
 	/* Only userspace-requested scan completion events go out immediately */
 	if (!priv->user_requested_scan) {
 		if (!delayed_work_pending(&priv->scan_event))
-			schedule_delayed_work(&priv->scan_event,
-					      round_jiffies_relative(msecs_to_jiffies(4000)));
+			queue_delayed_work(priv->workqueue, &priv->scan_event,
+					 round_jiffies_relative(msecs_to_jiffies(4000)));
 	} else {
 		union iwreq_data wrqu;
 
@@ -4524,17 +4509,20 @@ static void ipw_rx_notification(struct ipw_priv *priv,
 
 						IPW_DEBUG_ASSOC
 						    ("queueing adhoc check\n");
-						schedule_delayed_work(
-							&priv->adhoc_check,
-							le16_to_cpu(priv->
-							assoc_request.
-							beacon_interval));
+						queue_delayed_work(priv->
+								   workqueue,
+								   &priv->
+								   adhoc_check,
+								   le16_to_cpu(priv->
+								   assoc_request.
+								   beacon_interval));
 						break;
 					}
 
 					priv->status &= ~STATUS_ASSOCIATING;
 					priv->status |= STATUS_ASSOCIATED;
-					schedule_work(&priv->system_config);
+					queue_work(priv->workqueue,
+						   &priv->system_config);
 
 #ifdef CONFIG_IPW2200_QOS
 #define IPW_GET_PACKET_STYPE(x) WLAN_FC_GET_STYPE( \
@@ -4797,37 +4785,43 @@ static void ipw_rx_notification(struct ipw_priv *priv,
 #ifdef CONFIG_IPW2200_MONITOR
 			if (priv->ieee->iw_mode == IW_MODE_MONITOR) {
 				priv->status |= STATUS_SCAN_FORCED;
-				schedule_delayed_work(&priv->request_scan, 0);
+				queue_delayed_work(priv->workqueue,
+						   &priv->request_scan, 0);
 				break;
 			}
 			priv->status &= ~STATUS_SCAN_FORCED;
 #endif				/* CONFIG_IPW2200_MONITOR */
 
 			/* Do queued direct scans first */
-			if (priv->status & STATUS_DIRECT_SCAN_PENDING)
-				schedule_delayed_work(&priv->request_direct_scan, 0);
+			if (priv->status & STATUS_DIRECT_SCAN_PENDING) {
+				queue_delayed_work(priv->workqueue,
+						   &priv->request_direct_scan, 0);
+			}
 
 			if (!(priv->status & (STATUS_ASSOCIATED |
 					      STATUS_ASSOCIATING |
 					      STATUS_ROAMING |
 					      STATUS_DISASSOCIATING)))
-				schedule_work(&priv->associate);
+				queue_work(priv->workqueue, &priv->associate);
 			else if (priv->status & STATUS_ROAMING) {
 				if (x->status == SCAN_COMPLETED_STATUS_COMPLETE)
 					/* If a scan completed and we are in roam mode, then
 					 * the scan that completed was the one requested as a
 					 * result of entering roam... so, schedule the
 					 * roam work */
-					schedule_work(&priv->roam);
+					queue_work(priv->workqueue,
+						   &priv->roam);
 				else
 					/* Don't schedule if we aborted the scan */
 					priv->status &= ~STATUS_ROAMING;
 			} else if (priv->status & STATUS_SCAN_PENDING)
-				schedule_delayed_work(&priv->request_scan, 0);
+				queue_delayed_work(priv->workqueue,
+						   &priv->request_scan, 0);
 			else if (priv->config & CFG_BACKGROUND_SCAN
 				 && priv->status & STATUS_ASSOCIATED)
-				schedule_delayed_work(&priv->request_scan,
-						      round_jiffies_relative(HZ));
+				queue_delayed_work(priv->workqueue,
+						   &priv->request_scan,
+						   round_jiffies_relative(HZ));
 
 			/* Send an empty event to user space.
 			 * We don't send the received data on the event because
@@ -5191,7 +5185,7 @@ static void ipw_rx_queue_restock(struct ipw_priv *priv)
 	/* If the pre-allocated buffer pool is dropping low, schedule to
 	 * refill it */
 	if (rxq->free_count <= RX_LOW_WATERMARK)
-		schedule_work(&priv->rx_replenish);
+		queue_work(priv->workqueue, &priv->rx_replenish);
 
 	/* If we've added more space for the firmware to place data, tell it */
 	if (write != rxq->write)
@@ -5601,7 +5595,7 @@ static int ipw_find_adhoc_network(struct ipw_priv *priv,
 		return 0;
 	}
 
-	/* Verify privacy compatibility */
+	/* Verify privacy compatability */
 	if (((priv->capability & CAP_PRIVACY_ON) ? 1 : 0) !=
 	    ((network->capability & WLAN_CAPABILITY_PRIVACY) ? 1 : 0)) {
 		IPW_DEBUG_MERGE("Network '%s (%pM)' excluded "
@@ -5828,7 +5822,7 @@ static int ipw_best_network(struct ipw_priv *priv,
 		return 0;
 	}
 
-	/* Verify privacy compatibility */
+	/* Verify privacy compatability */
 	if (((priv->capability & CAP_PRIVACY_ON) ? 1 : 0) !=
 	    ((network->capability & WLAN_CAPABILITY_PRIVACY) ? 1 : 0)) {
 		IPW_DEBUG_ASSOC("Network '%s (%pM)' excluded "
@@ -6132,8 +6126,8 @@ static void ipw_adhoc_check(void *data)
 		return;
 	}
 
-	schedule_delayed_work(&priv->adhoc_check,
-			      le16_to_cpu(priv->assoc_request.beacon_interval));
+	queue_delayed_work(priv->workqueue, &priv->adhoc_check,
+			   le16_to_cpu(priv->assoc_request.beacon_interval));
 }
 
 static void ipw_bg_adhoc_check(struct work_struct *work)
@@ -6522,7 +6516,8 @@ send_request:
 	} else
 		priv->status &= ~STATUS_SCAN_PENDING;
 
-	schedule_delayed_work(&priv->scan_check, IPW_SCAN_CHECK_WATCHDOG);
+	queue_delayed_work(priv->workqueue, &priv->scan_check,
+			   IPW_SCAN_CHECK_WATCHDOG);
 done:
 	mutex_unlock(&priv->mutex);
 	return err;
@@ -6629,12 +6624,13 @@ static int ipw_wx_set_genie(struct net_device *dev,
 		return -EINVAL;
 
 	if (wrqu->data.length) {
-		buf = kmemdup(extra, wrqu->data.length, GFP_KERNEL);
+		buf = kmalloc(wrqu->data.length, GFP_KERNEL);
 		if (buf == NULL) {
 			err = -ENOMEM;
 			goto out;
 		}
 
+		memcpy(buf, extra, wrqu->data.length);
 		kfree(ieee->wpa_ie);
 		ieee->wpa_ie = buf;
 		ieee->wpa_ie_len = wrqu->data.length;
@@ -6992,7 +6988,8 @@ static int ipw_qos_handle_probe_response(struct ipw_priv *priv,
 				    !memcmp(network->ssid,
 					    priv->assoc_network->ssid,
 					    network->ssid_len)) {
-					schedule_work(&priv->merge_networks);
+					queue_work(priv->workqueue,
+						   &priv->merge_networks);
 				}
 	}
 
@@ -7450,7 +7447,7 @@ static int ipw_associate_network(struct ipw_priv *priv,
 		priv->assoc_request.capability &=
 		    ~cpu_to_le16(WLAN_CAPABILITY_SHORT_SLOT_TIME);
 
-	IPW_DEBUG_ASSOC("%ssociation attempt: '%s', channel %d, "
+	IPW_DEBUG_ASSOC("%sssocation attempt: '%s', channel %d, "
 			"802.11%c [%d], %s[:%s], enc=%s%s%s%c%c\n",
 			roaming ? "Rea" : "A",
 			print_ssid(ssid, priv->essid, priv->essid_len),
@@ -7660,7 +7657,7 @@ static int ipw_associate(void *data)
 	if (priv->status & STATUS_DISASSOCIATING) {
 		IPW_DEBUG_ASSOC("Not attempting association (in "
 				"disassociating)\n ");
-		schedule_work(&priv->associate);
+		queue_work(priv->workqueue, &priv->associate);
 		return 0;
 	}
 
@@ -7728,10 +7725,12 @@ static int ipw_associate(void *data)
 
 		if (!(priv->status & STATUS_SCANNING)) {
 			if (!(priv->config & CFG_SPEED_SCAN))
-				schedule_delayed_work(&priv->request_scan,
-						      SCAN_INTERVAL);
+				queue_delayed_work(priv->workqueue,
+						   &priv->request_scan,
+						   SCAN_INTERVAL);
 			else
-				schedule_delayed_work(&priv->request_scan, 0);
+				queue_delayed_work(priv->workqueue,
+						   &priv->request_scan, 0);
 		}
 
 		return 0;
@@ -7859,7 +7858,7 @@ static void ipw_handle_data_packet_monitor(struct ipw_priv *priv,
 	 * more efficiently than we can parse it. ORDER MATTERS HERE */
 	struct ipw_rt_hdr *ipw_rt;
 
-	unsigned short len = le16_to_cpu(pkt->u.frame.length);
+	short len = le16_to_cpu(pkt->u.frame.length);
 
 	/* We received data from the HW, so stop the watchdog */
 	dev->trans_start = jiffies;
@@ -8034,7 +8033,7 @@ static void ipw_handle_promiscuous_rx(struct ipw_priv *priv,
 	s8 signal = frame->rssi_dbm - IPW_RSSI_TO_DBM;
 	s8 noise = (s8) le16_to_cpu(frame->noise);
 	u8 rate = frame->rate;
-	unsigned short len = le16_to_cpu(pkt->u.frame.length);
+	short len = le16_to_cpu(pkt->u.frame.length);
 	struct sk_buff *skb;
 	int hdr_only = 0;
 	u16 filter = priv->prom_priv->filter;
@@ -8204,7 +8203,7 @@ static void ipw_handle_promiscuous_rx(struct ipw_priv *priv,
 static int is_network_packet(struct ipw_priv *priv,
 				    struct libipw_hdr_4addr *header)
 {
-	/* Filter incoming packets to determine if they are targeted toward
+	/* Filter incoming packets to determine if they are targetted toward
 	 * this network, discarding packets coming from ourselves */
 	switch (priv->ieee->iw_mode) {
 	case IW_MODE_ADHOC:	/* Header: Dest. | Source    | BSSID */
@@ -8360,9 +8359,9 @@ static void ipw_handle_mgmt_packet(struct ipw_priv *priv,
 }
 
 /*
- * Main entry function for receiving a packet with 80211 headers.  This
+ * Main entry function for recieving a packet with 80211 headers.  This
  * should be called when ever the FW has notified us that there is a new
- * skb in the receive queue.
+ * skb in the recieve queue.
  */
 static void ipw_rx(struct ipw_priv *priv)
 {
@@ -8703,7 +8702,7 @@ static int ipw_sw_reset(struct ipw_priv *priv, int option)
  * functions defined in ipw_main to provide the HW interaction.
  *
  * The exception to this is the use of the ipw_get_ordinal()
- * function used to poll the hardware vs. making unnecessary calls.
+ * function used to poll the hardware vs. making unecessary calls.
  *
  */
 
@@ -8894,7 +8893,7 @@ static int ipw_wx_set_mode(struct net_device *dev,
 
 	priv->ieee->iw_mode = wrqu->mode;
 
-	schedule_work(&priv->adapter_restart);
+	queue_work(priv->workqueue, &priv->adapter_restart);
 	mutex_unlock(&priv->mutex);
 	return err;
 }
@@ -9593,7 +9592,7 @@ static int ipw_wx_set_scan(struct net_device *dev,
 
 	IPW_DEBUG_WX("Start scan\n");
 
-	schedule_delayed_work(work, 0);
+	queue_delayed_work(priv->workqueue, work, 0);
 
 	return 0;
 }
@@ -9932,7 +9931,7 @@ static int ipw_wx_set_monitor(struct net_device *dev,
 #else
 			priv->net_dev->type = ARPHRD_IEEE80211;
 #endif
-			schedule_work(&priv->adapter_restart);
+			queue_work(priv->workqueue, &priv->adapter_restart);
 		}
 
 		ipw_set_channel(priv, parms[1]);
@@ -9942,7 +9941,7 @@ static int ipw_wx_set_monitor(struct net_device *dev,
 			return 0;
 		}
 		priv->net_dev->type = ARPHRD_ETHER;
-		schedule_work(&priv->adapter_restart);
+		queue_work(priv->workqueue, &priv->adapter_restart);
 	}
 	mutex_unlock(&priv->mutex);
 	return 0;
@@ -9956,7 +9955,7 @@ static int ipw_wx_reset(struct net_device *dev,
 {
 	struct ipw_priv *priv = libipw_priv(dev);
 	IPW_DEBUG_WX("RESET\n");
-	schedule_work(&priv->adapter_restart);
+	queue_work(priv->workqueue, &priv->adapter_restart);
 	return 0;
 }
 
@@ -10439,7 +10438,7 @@ static void ipw_handle_promiscuous_tx(struct ipw_priv *priv,
 
 	memset(&dummystats, 0, sizeof(dummystats));
 
-	/* Filtering of fragment chains is done against the first fragment */
+	/* Filtering of fragment chains is done agains the first fragment */
 	hdr = (void *)txb->fragments[0]->data;
 	if (libipw_is_management(le16_to_cpu(hdr->frame_control))) {
 		if (filter & IPW_PROM_NO_MGMT)
@@ -10546,7 +10545,7 @@ static int ipw_net_set_mac_address(struct net_device *dev, void *p)
 	memcpy(priv->mac_addr, addr->sa_data, ETH_ALEN);
 	printk(KERN_INFO "%s: Setting MAC to %pM\n",
 	       priv->net_dev->name, priv->mac_addr);
-	schedule_work(&priv->adapter_restart);
+	queue_work(priv->workqueue, &priv->adapter_restart);
 	mutex_unlock(&priv->mutex);
 	return 0;
 }
@@ -10559,8 +10558,8 @@ static void ipw_ethtool_get_drvinfo(struct net_device *dev,
 	char date[32];
 	u32 len;
 
-	strlcpy(info->driver, DRV_NAME, sizeof(info->driver));
-	strlcpy(info->version, DRV_VERSION, sizeof(info->version));
+	strcpy(info->driver, DRV_NAME);
+	strcpy(info->version, DRV_VERSION);
 
 	len = sizeof(vers);
 	ipw_get_ordinal(p, IPW_ORD_STAT_FW_VERSION, vers, &len);
@@ -10569,8 +10568,7 @@ static void ipw_ethtool_get_drvinfo(struct net_device *dev,
 
 	snprintf(info->fw_version, sizeof(info->fw_version), "%s (%s)",
 		 vers, date);
-	strlcpy(info->bus_info, pci_name(p->pci_dev),
-		sizeof(info->bus_info));
+	strcpy(info->bus_info, pci_name(p->pci_dev));
 	info->eedump_len = IPW_EEPROM_IMAGE_SIZE;
 }
 
@@ -10680,7 +10678,9 @@ static void ipw_rf_kill(void *adapter)
 
 	if (rf_kill_active(priv)) {
 		IPW_DEBUG_RF_KILL("RF Kill active, rescheduling GPIO check\n");
-		schedule_delayed_work(&priv->rf_kill, 2 * HZ);
+		if (priv->workqueue)
+			queue_delayed_work(priv->workqueue,
+					   &priv->rf_kill, 2 * HZ);
 		goto exit_unlock;
 	}
 
@@ -10691,7 +10691,7 @@ static void ipw_rf_kill(void *adapter)
 				  "device\n");
 
 		/* we can not do an adapter restart while inside an irq lock */
-		schedule_work(&priv->adapter_restart);
+		queue_work(priv->workqueue, &priv->adapter_restart);
 	} else
 		IPW_DEBUG_RF_KILL("HW RF Kill deactivated.  SW RF Kill still "
 				  "enabled\n");
@@ -10729,7 +10729,7 @@ static void ipw_link_up(struct ipw_priv *priv)
 	notify_wx_assoc_event(priv);
 
 	if (priv->config & CFG_BACKGROUND_SCAN)
-		schedule_delayed_work(&priv->request_scan, HZ);
+		queue_delayed_work(priv->workqueue, &priv->request_scan, HZ);
 }
 
 static void ipw_bg_link_up(struct work_struct *work)
@@ -10758,7 +10758,7 @@ static void ipw_link_down(struct ipw_priv *priv)
 
 	if (!(priv->status & STATUS_EXIT_PENDING)) {
 		/* Queue up another scan... */
-		schedule_delayed_work(&priv->request_scan, 0);
+		queue_delayed_work(priv->workqueue, &priv->request_scan, 0);
 	} else
 		cancel_delayed_work(&priv->scan_event);
 }
@@ -10776,6 +10776,7 @@ static int __devinit ipw_setup_deferred_work(struct ipw_priv *priv)
 {
 	int ret = 0;
 
+	priv->workqueue = create_workqueue(DRV_NAME);
 	init_waitqueue_head(&priv->wait_command_queue);
 	init_waitqueue_head(&priv->wait_state);
 
@@ -11332,7 +11333,8 @@ static int ipw_up(struct ipw_priv *priv)
 			IPW_WARNING("Radio Frequency Kill Switch is On:\n"
 				    "Kill switch must be turned off for "
 				    "wireless networking to work.\n");
-			schedule_delayed_work(&priv->rf_kill, 2 * HZ);
+			queue_delayed_work(priv->workqueue, &priv->rf_kill,
+					   2 * HZ);
 			return 0;
 		}
 
@@ -11342,7 +11344,8 @@ static int ipw_up(struct ipw_priv *priv)
 
 			/* If configure to try and auto-associate, kick
 			 * off a scan. */
-			schedule_delayed_work(&priv->request_scan, 0);
+			queue_delayed_work(priv->workqueue,
+					   &priv->request_scan, 0);
 
 			return 0;
 		}
@@ -11446,23 +11449,16 @@ static void ipw_bg_down(struct work_struct *work)
 /* Called by register_netdev() */
 static int ipw_net_init(struct net_device *dev)
 {
-	int rc = 0;
-	struct ipw_priv *priv = libipw_priv(dev);
-
-	mutex_lock(&priv->mutex);
-	if (ipw_up(priv))
-		rc = -EIO;
-	mutex_unlock(&priv->mutex);
-
-	return rc;
-}
-
-static int ipw_wdev_init(struct net_device *dev)
-{
 	int i, rc = 0;
 	struct ipw_priv *priv = libipw_priv(dev);
 	const struct libipw_geo *geo = libipw_get_geo(priv->ieee);
 	struct wireless_dev *wdev = &priv->ieee->wdev;
+	mutex_lock(&priv->mutex);
+
+	if (ipw_up(priv)) {
+		rc = -EIO;
+		goto out;
+	}
 
 	memcpy(wdev->wiphy->perm_addr, priv->mac_addr, ETH_ALEN);
 
@@ -11472,13 +11468,9 @@ static int ipw_wdev_init(struct net_device *dev)
 
 		bg_band->band = IEEE80211_BAND_2GHZ;
 		bg_band->n_channels = geo->bg_channels;
-		bg_band->channels = kcalloc(geo->bg_channels,
-					    sizeof(struct ieee80211_channel),
-					    GFP_KERNEL);
-		if (!bg_band->channels) {
-			rc = -ENOMEM;
-			goto out;
-		}
+		bg_band->channels =
+			kzalloc(geo->bg_channels *
+				sizeof(struct ieee80211_channel), GFP_KERNEL);
 		/* translate geo->bg to bg_band.channels */
 		for (i = 0; i < geo->bg_channels; i++) {
 			bg_band->channels[i].band = IEEE80211_BAND_2GHZ;
@@ -11511,16 +11503,12 @@ static int ipw_wdev_init(struct net_device *dev)
 
 		a_band->band = IEEE80211_BAND_5GHZ;
 		a_band->n_channels = geo->a_channels;
-		a_band->channels = kcalloc(geo->a_channels,
-					   sizeof(struct ieee80211_channel),
-					   GFP_KERNEL);
-		if (!a_band->channels) {
-			rc = -ENOMEM;
-			goto out;
-		}
-		/* translate geo->a to a_band.channels */
+		a_band->channels =
+			kzalloc(geo->a_channels *
+				sizeof(struct ieee80211_channel), GFP_KERNEL);
+		/* translate geo->bg to a_band.channels */
 		for (i = 0; i < geo->a_channels; i++) {
-			a_band->channels[i].band = IEEE80211_BAND_5GHZ;
+			a_band->channels[i].band = IEEE80211_BAND_2GHZ;
 			a_band->channels[i].center_freq = geo->a[i].freq;
 			a_band->channels[i].hw_value = geo->a[i].channel;
 			a_band->channels[i].max_power = geo->a[i].max_power;
@@ -11547,9 +11535,13 @@ static int ipw_wdev_init(struct net_device *dev)
 	set_wiphy_dev(wdev->wiphy, &priv->pci_dev->dev);
 
 	/* With that information in place, we can now register the wiphy... */
-	if (wiphy_register(wdev->wiphy))
+	if (wiphy_register(wdev->wiphy)) {
 		rc = -EIO;
+		goto out;
+	}
+
 out:
+	mutex_unlock(&priv->mutex);
 	return rc;
 }
 
@@ -11725,7 +11717,7 @@ static const struct net_device_ops ipw_netdev_ops = {
 	.ndo_init		= ipw_net_init,
 	.ndo_open		= ipw_net_open,
 	.ndo_stop		= ipw_net_stop,
-	.ndo_set_rx_mode	= ipw_net_set_multicast_list,
+	.ndo_set_multicast_list	= ipw_net_set_multicast_list,
 	.ndo_set_mac_address	= ipw_net_set_mac_address,
 	.ndo_start_xmit		= libipw_xmit,
 	.ndo_change_mtu		= libipw_change_mtu,
@@ -11811,7 +11803,7 @@ static int __devinit ipw_pci_probe(struct pci_dev *pdev,
 	err = request_irq(pdev->irq, ipw_isr, IRQF_SHARED, DRV_NAME, priv);
 	if (err) {
 		IPW_ERROR("Error allocating IRQ %d\n", pdev->irq);
-		goto out_iounmap;
+		goto out_destroy_workqueue;
 	}
 
 	SET_NETDEV_DEV(net_dev, &pdev->dev);
@@ -11856,22 +11848,14 @@ static int __devinit ipw_pci_probe(struct pci_dev *pdev,
 		goto out_remove_sysfs;
 	}
 
-	err = ipw_wdev_init(net_dev);
-	if (err) {
-		IPW_ERROR("failed to register wireless device\n");
-		goto out_unregister_netdev;
-	}
-
 #ifdef CONFIG_IPW2200_PROMISCUOUS
 	if (rtap_iface) {
 	        err = ipw_prom_alloc(priv);
 		if (err) {
 			IPW_ERROR("Failed to register promiscuous network "
 				  "device (error %d).\n", err);
-			wiphy_unregister(priv->ieee->wdev.wiphy);
-			kfree(priv->ieee->a_band.channels);
-			kfree(priv->ieee->bg_band.channels);
-			goto out_unregister_netdev;
+			unregister_netdev(priv->net_dev);
+			goto out_remove_sysfs;
 		}
 	}
 #endif
@@ -11883,12 +11867,13 @@ static int __devinit ipw_pci_probe(struct pci_dev *pdev,
 
 	return 0;
 
-      out_unregister_netdev:
-	unregister_netdev(priv->net_dev);
       out_remove_sysfs:
 	sysfs_remove_group(&pdev->dev.kobj, &ipw_attribute_group);
       out_release_irq:
 	free_irq(pdev->irq, priv);
+      out_destroy_workqueue:
+	destroy_workqueue(priv->workqueue);
+	priv->workqueue = NULL;
       out_iounmap:
 	iounmap(priv->hw_base);
       out_pci_release_regions:
@@ -11931,31 +11916,18 @@ static void __devexit ipw_pci_remove(struct pci_dev *pdev)
 		kfree(priv->cmdlog);
 		priv->cmdlog = NULL;
 	}
-
-	/* make sure all works are inactive */
-	cancel_delayed_work_sync(&priv->adhoc_check);
-	cancel_work_sync(&priv->associate);
-	cancel_work_sync(&priv->disassociate);
-	cancel_work_sync(&priv->system_config);
-	cancel_work_sync(&priv->rx_replenish);
-	cancel_work_sync(&priv->adapter_restart);
-	cancel_delayed_work_sync(&priv->rf_kill);
-	cancel_work_sync(&priv->up);
-	cancel_work_sync(&priv->down);
-	cancel_delayed_work_sync(&priv->request_scan);
-	cancel_delayed_work_sync(&priv->request_direct_scan);
-	cancel_delayed_work_sync(&priv->request_passive_scan);
-	cancel_delayed_work_sync(&priv->scan_event);
-	cancel_delayed_work_sync(&priv->gather_stats);
-	cancel_work_sync(&priv->abort_scan);
-	cancel_work_sync(&priv->roam);
-	cancel_delayed_work_sync(&priv->scan_check);
-	cancel_work_sync(&priv->link_up);
-	cancel_work_sync(&priv->link_down);
-	cancel_delayed_work_sync(&priv->led_link_on);
-	cancel_delayed_work_sync(&priv->led_link_off);
-	cancel_delayed_work_sync(&priv->led_act_off);
-	cancel_work_sync(&priv->merge_networks);
+	/* ipw_down will ensure that there is no more pending work
+	 * in the workqueue's, so we can safely remove them now. */
+	cancel_delayed_work(&priv->adhoc_check);
+	cancel_delayed_work(&priv->gather_stats);
+	cancel_delayed_work(&priv->request_scan);
+	cancel_delayed_work(&priv->request_direct_scan);
+	cancel_delayed_work(&priv->request_passive_scan);
+	cancel_delayed_work(&priv->scan_event);
+	cancel_delayed_work(&priv->rf_kill);
+	cancel_delayed_work(&priv->scan_check);
+	destroy_workqueue(priv->workqueue);
+	priv->workqueue = NULL;
 
 	/* Free MAC hash list for ADHOC */
 	for (i = 0; i < IPW_IBSS_MAC_HASH_SIZE; i++) {
@@ -12043,7 +12015,7 @@ static int ipw_pci_resume(struct pci_dev *pdev)
 	priv->suspend_time = get_seconds() - priv->suspend_at;
 
 	/* Bring the device back up */
-	schedule_work(&priv->up);
+	queue_work(priv->workqueue, &priv->up);
 
 	return 0;
 }
@@ -12111,7 +12083,7 @@ module_param(auto_create, int, 0444);
 MODULE_PARM_DESC(auto_create, "auto create adhoc network (default on)");
 
 module_param_named(led, led_support, int, 0444);
-MODULE_PARM_DESC(led, "enable led control on some systems (default 1 on)");
+MODULE_PARM_DESC(led, "enable led control on some systems (default 0 off)");
 
 module_param(debug, int, 0444);
 MODULE_PARM_DESC(debug, "debug output mask");

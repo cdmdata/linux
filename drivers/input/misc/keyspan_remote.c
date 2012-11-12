@@ -312,7 +312,7 @@ static void keyspan_check_data(struct usb_keyspan *remote)
 			remote->data.tester = remote->data.tester >> 5;
 			remote->data.bits_left -= 5;
 		} else {
-			err("Bad message received, no stop bit found.\n");
+			err("Bad message recieved, no stop bit found.\n");
 		}
 
 		dev_dbg(&remote->udev->dev,
@@ -580,7 +580,26 @@ static struct usb_driver keyspan_driver =
 	.id_table =	keyspan_table
 };
 
-module_usb_driver(keyspan_driver);
+static int __init usb_keyspan_init(void)
+{
+	int result;
+
+	/* register this driver with the USB subsystem */
+	result = usb_register(&keyspan_driver);
+	if (result)
+		err("usb_register failed. Error number %d\n", result);
+
+	return result;
+}
+
+static void __exit usb_keyspan_exit(void)
+{
+	/* deregister this driver with the USB subsystem */
+	usb_deregister(&keyspan_driver);
+}
+
+module_init(usb_keyspan_init);
+module_exit(usb_keyspan_exit);
 
 MODULE_DEVICE_TABLE(usb, keyspan_table);
 MODULE_AUTHOR(DRIVER_AUTHOR);

@@ -20,7 +20,6 @@
 #include <linux/etherdevice.h>
 #include <linux/delay.h>
 #include <linux/completion.h>
-#include <linux/module.h>
 #include <net/mac80211.h>
 
 #include "p54.h"
@@ -200,7 +199,6 @@ static void p54p_check_rx_ring(struct ieee80211_hw *dev, u32 *index,
 	while (i != idx) {
 		u16 len;
 		struct sk_buff *skb;
-		dma_addr_t dma_addr;
 		desc = &ring[i];
 		len = le16_to_cpu(desc->len);
 		skb = rx_buf[i];
@@ -218,20 +216,17 @@ static void p54p_check_rx_ring(struct ieee80211_hw *dev, u32 *index,
 
 			len = priv->common.rx_mtu;
 		}
-		dma_addr = le32_to_cpu(desc->host_addr);
-		pci_dma_sync_single_for_cpu(priv->pdev, dma_addr,
-			priv->common.rx_mtu + 32, PCI_DMA_FROMDEVICE);
 		skb_put(skb, len);
 
 		if (p54_rx(dev, skb)) {
-			pci_unmap_single(priv->pdev, dma_addr,
-				priv->common.rx_mtu + 32, PCI_DMA_FROMDEVICE);
+			pci_unmap_single(priv->pdev,
+					 le32_to_cpu(desc->host_addr),
+					 priv->common.rx_mtu + 32,
+					 PCI_DMA_FROMDEVICE);
 			rx_buf[i] = NULL;
-			desc->host_addr = cpu_to_le32(0);
+			desc->host_addr = 0;
 		} else {
 			skb_trim(skb, 0);
-			pci_dma_sync_single_for_device(priv->pdev, dma_addr,
-				priv->common.rx_mtu + 32, PCI_DMA_FROMDEVICE);
 			desc->len = cpu_to_le16(priv->common.rx_mtu + 32);
 		}
 
@@ -332,9 +327,10 @@ static void p54p_tx(struct ieee80211_hw *dev, struct sk_buff *skb)
 	struct p54p_ring_control *ring_control = priv->ring_control;
 	struct p54p_desc *desc;
 	dma_addr_t mapping;
-	u32 idx, i;
+	u32 device_idx, idx, i;
 
 	spin_lock_irqsave(&priv->lock, flags);
+	device_idx = le32_to_cpu(ring_control->device_idx[1]);
 	idx = le32_to_cpu(ring_control->host_idx[1]);
 	i = idx % ARRAY_SIZE(ring_control->tx_data);
 
@@ -470,7 +466,8 @@ static int p54p_open(struct ieee80211_hw *dev)
 	P54P_READ(dev_int);
 
 	if (!wait_for_completion_interruptible_timeout(&priv->boot_comp, HZ)) {
-		wiphy_err(dev->wiphy, "Cannot boot firmware!\n");
+		printk(KERN_ERR "%s: Cannot boot firmware!\n",
+		       wiphy_name(dev->wiphy));
 		p54p_stop(dev);
 		return -ETIMEDOUT;
 	}
@@ -624,39 +621,36 @@ static void __devexit p54p_remove(struct pci_dev *pdev)
 }
 
 #ifdef CONFIG_PM
-static int p54p_suspend(struct device *device)
+static int p54p_suspend(struct pci_dev *pdev, pm_message_t state)
 {
-	struct pci_dev *pdev = to_pci_dev(device);
+	struct ieee80211_hw *dev = pci_get_drvdata(pdev);
+	struct p54p_priv *priv = dev->priv;
+
+	if (priv->common.mode != NL80211_IFTYPE_UNSPECIFIED) {
+		ieee80211_stop_queues(dev);
+		p54p_stop(dev);
+	}
 
 	pci_save_state(pdev);
-	pci_set_power_state(pdev, PCI_D3hot);
-	pci_disable_device(pdev);
+	pci_set_power_state(pdev, pci_choose_state(pdev, state));
 	return 0;
 }
 
-static int p54p_resume(struct device *device)
+static int p54p_resume(struct pci_dev *pdev)
 {
-	struct pci_dev *pdev = to_pci_dev(device);
-	int err;
+	struct ieee80211_hw *dev = pci_get_drvdata(pdev);
+	struct p54p_priv *priv = dev->priv;
 
-	err = pci_reenable_device(pdev);
-	if (err)
-		return err;
-	return pci_set_power_state(pdev, PCI_D0);
+	pci_set_power_state(pdev, PCI_D0);
+	pci_restore_state(pdev);
+
+	if (priv->common.mode != NL80211_IFTYPE_UNSPECIFIED) {
+		p54p_open(dev);
+		ieee80211_wake_queues(dev);
+	}
+
+	return 0;
 }
-
-static const struct dev_pm_ops p54pci_pm_ops = {
-	.suspend = p54p_suspend,
-	.resume = p54p_resume,
-	.freeze = p54p_suspend,
-	.thaw = p54p_resume,
-	.poweroff = p54p_suspend,
-	.restore = p54p_resume,
-};
-
-#define P54P_PM_OPS (&p54pci_pm_ops)
-#else
-#define P54P_PM_OPS (NULL)
 #endif /* CONFIG_PM */
 
 static struct pci_driver p54p_driver = {
@@ -664,7 +658,10 @@ static struct pci_driver p54p_driver = {
 	.id_table	= p54p_table,
 	.probe		= p54p_probe,
 	.remove		= __devexit_p(p54p_remove),
-	.driver.pm	= P54P_PM_OPS,
+#ifdef CONFIG_PM
+	.suspend	= p54p_suspend,
+	.resume		= p54p_resume,
+#endif /* CONFIG_PM */
 };
 
 static int __init p54p_init(void)

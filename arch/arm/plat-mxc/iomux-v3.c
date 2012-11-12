@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2006 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2004-2011 Freescale Semiconductor, Inc.
  * Copyright (C) 2008 by Sascha Hauer <kernel@pengutronix.de>
  * Copyright (C) 2009 by Jan Weitzel Phytec Messtechnik GmbH,
  *                       <armlinux@phytec.de>
@@ -30,6 +30,61 @@
 #include <mach/iomux-v3.h>
 
 static void __iomem *base;
+
+void mxc_iomux_set_pad_groups(iomux_grp_cfg_t pad_grp, int value)
+{
+	u32 pad_ctrl_ofs = (pad_grp & MUX_PAD_GRP_CTRL_MASK) >> MUX_PAD_GRP_CTRL_SHIFT;
+	u32 pad_ctrl_shift = (pad_grp & MUX_PAD_GRP_SHIFT_MASK) >> MUX_PAD_GRP_SHIFT_SHIFT;
+	u32 pad_ctrl_val;
+
+	pad_ctrl_val = (value << pad_ctrl_shift);
+	__raw_writel(pad_ctrl_val, base + pad_ctrl_ofs);
+}
+EXPORT_SYMBOL(mxc_iomux_set_pad_groups);
+
+/*
+ * Read a single pad in the iomuxer
+ */
+int mxc_iomux_v3_get_pad(iomux_v3_cfg_t *pad)
+{
+	u32 mux_ctrl_ofs = (*pad & MUX_CTRL_OFS_MASK) >> MUX_CTRL_OFS_SHIFT;
+	u32 pad_ctrl_ofs = (*pad & MUX_PAD_CTRL_OFS_MASK) >> MUX_PAD_CTRL_OFS_SHIFT;
+	u32 sel_input_ofs = (*pad & MUX_SEL_INPUT_OFS_MASK) >> MUX_SEL_INPUT_OFS_SHIFT;
+	u32 mux_mode = 0;
+	u32 sel_input = 0;
+	u32 pad_ctrl = 0;
+	iomux_v3_cfg_t pad_info = 0;
+
+	mux_mode = __raw_readl(base + mux_ctrl_ofs) & 0xFF;
+	pad_ctrl = __raw_readl(base + pad_ctrl_ofs) & 0x1FFFF;
+	sel_input = __raw_readl(base + sel_input_ofs) & 0x7;
+
+	pad_info = (((iomux_v3_cfg_t)mux_mode << MUX_MODE_SHIFT) | \
+		((iomux_v3_cfg_t)pad_ctrl << MUX_PAD_CTRL_SHIFT) | \
+		((iomux_v3_cfg_t)sel_input << MUX_SEL_INPUT_SHIFT));
+
+	*pad &= ~(MUX_MODE_MASK | MUX_PAD_CTRL_MASK | MUX_SEL_INPUT_MASK);
+	*pad |= pad_info;
+
+	return 0;
+}
+EXPORT_SYMBOL(mxc_iomux_v3_get_pad);
+
+/*
+ * Read multiple pads in the iomuxer
+ */
+int mxc_iomux_v3_get_multiple_pads(iomux_v3_cfg_t *pad_list, unsigned count)
+{
+	iomux_v3_cfg_t *p = pad_list;
+	int i;
+
+	for (i = 0; i < count; i++) {
+		mxc_iomux_v3_get_pad(p);
+		p++;
+	}
+	return 0;
+}
+EXPORT_SYMBOL(mxc_iomux_v3_get_multiple_pads);
 
 /*
  * configures a single pad in the iomuxer

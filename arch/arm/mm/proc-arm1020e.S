@@ -64,7 +64,7 @@
 /*
  * This is the size at which it becomes more efficient to
  * clean the whole cache, rather than using the individual
- * cache line maintenance instructions.
+ * cache line maintainence instructions.
  */
 #define CACHE_DLIMIT	32768
 
@@ -79,11 +79,15 @@ ENTRY(cpu_arm1020e_proc_init)
  * cpu_arm1020e_proc_fin()
  */
 ENTRY(cpu_arm1020e_proc_fin)
+	stmfd	sp!, {lr}
+	mov	ip, #PSR_F_BIT | PSR_I_BIT | SVC_MODE
+	msr	cpsr_c, ip
+	bl	arm1020e_flush_kern_cache_all
 	mrc	p15, 0, r0, c1, c0, 0		@ ctrl register
 	bic	r0, r0, #0x1000 		@ ...i............
 	bic	r0, r0, #0x000e 		@ ............wca.
 	mcr	p15, 0, r0, c1, c0, 0		@ disable caches
-	mov	pc, lr
+	ldmfd	sp!, {pc}
 
 /*
  * cpu_arm1020e_reset(loc)
@@ -95,7 +99,6 @@ ENTRY(cpu_arm1020e_proc_fin)
  * loc: location to jump to for soft reset
  */
 	.align	5
-	.pushsection	.idmap.text, "ax"
 ENTRY(cpu_arm1020e_reset)
 	mov	ip, #0
 	mcr	p15, 0, ip, c7, c7, 0		@ invalidate I,D caches
@@ -108,8 +111,6 @@ ENTRY(cpu_arm1020e_reset)
 	bic	ip, ip, #0x1100 		@ ...i...s........
 	mcr	p15, 0, ip, c1, c0, 0		@ ctrl register
 	mov	pc, r0
-ENDPROC(cpu_arm1020e_reset)
-	.popsection
 
 /*
  * cpu_arm1020e_do_idle()
@@ -122,20 +123,6 @@ ENTRY(cpu_arm1020e_do_idle)
 /* ================================= CACHE ================================ */
 
 	.align	5
-
-/*
- *	flush_icache_all()
- *
- *	Unconditionally clean and invalidate the entire icache.
- */
-ENTRY(arm1020e_flush_icache_all)
-#ifndef CONFIG_CPU_ICACHE_DISABLE
-	mov	r0, #0
-	mcr	p15, 0, r0, c7, c5, 0		@ invalidate I cache
-#endif
-	mov	pc, lr
-ENDPROC(arm1020e_flush_icache_all)
-
 /*
  *	flush_user_cache_all()
  *
@@ -353,8 +340,16 @@ ENTRY(arm1020e_dma_unmap_area)
 	mov	pc, lr
 ENDPROC(arm1020e_dma_unmap_area)
 
-	@ define struct cpu_cache_fns (see <asm/cacheflush.h> and proc-macros.S)
-	define_cache_functions arm1020e
+ENTRY(arm1020e_cache_fns)
+	.long	arm1020e_flush_kern_cache_all
+	.long	arm1020e_flush_user_cache_all
+	.long	arm1020e_flush_user_cache_range
+	.long	arm1020e_coherent_kern_range
+	.long	arm1020e_coherent_user_range
+	.long	arm1020e_flush_kern_dcache_area
+	.long	arm1020e_dma_map_area
+	.long	arm1020e_dma_unmap_area
+	.long	arm1020e_dma_flush_range
 
 	.align	5
 ENTRY(cpu_arm1020e_dcache_clean_area)
@@ -421,7 +416,7 @@ ENTRY(cpu_arm1020e_set_pte_ext)
 #endif /* CONFIG_MMU */
 	mov	pc, lr
 
-	__CPUINIT
+	__INIT
 
 	.type	__arm1020e_setup, #function
 __arm1020e_setup:
@@ -452,14 +447,40 @@ arm1020e_crval:
 	crval	clear=0x00007f3f, mmuset=0x00003935, ucset=0x00001930
 
 	__INITDATA
-	@ define struct processor (see <asm/proc-fns.h> and proc-macros.S)
-	define_processor_functions arm1020e, dabort=v4t_early_abort, pabort=legacy_pabort
+
+/*
+ * Purpose : Function pointers used to access above functions - all calls
+ *	     come through these
+ */
+	.type	arm1020e_processor_functions, #object
+arm1020e_processor_functions:
+	.word	v4t_early_abort
+	.word	legacy_pabort
+	.word	cpu_arm1020e_proc_init
+	.word	cpu_arm1020e_proc_fin
+	.word	cpu_arm1020e_reset
+	.word	cpu_arm1020e_do_idle
+	.word	cpu_arm1020e_dcache_clean_area
+	.word	cpu_arm1020e_switch_mm
+	.word	cpu_arm1020e_set_pte_ext
+	.size	arm1020e_processor_functions, . - arm1020e_processor_functions
 
 	.section ".rodata"
 
-	string	cpu_arch_name, "armv5te"
-	string	cpu_elf_name, "v5"
-	string	cpu_arm1020e_name, "ARM1020E"
+	.type	cpu_arch_name, #object
+cpu_arch_name:
+	.asciz	"armv5te"
+	.size	cpu_arch_name, . - cpu_arch_name
+
+	.type	cpu_elf_name, #object
+cpu_elf_name:
+	.asciz	"v5"
+	.size	cpu_elf_name, . - cpu_elf_name
+
+	.type	cpu_arm1020e_name, #object
+cpu_arm1020e_name:
+	.asciz	"ARM1020E"
+	.size	cpu_arm1020e_name, . - cpu_arm1020e_name
 
 	.align
 

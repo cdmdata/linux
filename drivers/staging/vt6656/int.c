@@ -82,7 +82,7 @@ static int msglevel = MSG_LEVEL_INFO;
 void INTvWorkItem(void *Context)
 {
 	PSDevice pDevice = (PSDevice) Context;
-	int ntStatus;
+	NTSTATUS ntStatus;
 
 	DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO"---->Interrupt Polling Thread\n");
 
@@ -92,8 +92,10 @@ void INTvWorkItem(void *Context)
 	spin_unlock_irq(&pDevice->lock);
 }
 
-void INTnsProcessData(PSDevice pDevice)
+NTSTATUS
+INTnsProcessData(PSDevice pDevice)
 {
+	NTSTATUS	status = STATUS_SUCCESS;
 	PSINTData	pINTData;
 	PSMgmtObject	pMgmt = &(pDevice->sMgmtObj);
 	struct net_device_stats *pStats = &pDevice->stats;
@@ -217,4 +219,6 @@ void INTnsProcessData(PSDevice pDevice)
 			pDevice->scStatistic.ullTxBroadcastBytes;
 	pStats->tx_errors = pDevice->scStatistic.dwTsrErr;
 	pStats->tx_dropped = pDevice->scStatistic.dwTsrErr;
+
+	return status;
 }

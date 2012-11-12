@@ -42,7 +42,7 @@ static ssize_t show_tallies(struct device *d, struct device_attribute *attr,
     CFG_HERMES_TALLIES_STRCT tallies;
     ssize_t ret = -EINVAL;
 
-    rcu_read_lock();
+    read_lock(&dev_base_lock);
     if (dev_isalive(dev)) {
 	wl_lock(lp, &flags);
 
@@ -102,7 +102,7 @@ static ssize_t show_tallies(struct device *d, struct device_attribute *attr,
 	    }
     }
 
-    rcu_read_unlock();
+    read_unlock(&dev_base_lock);
     return ret;
 }
 
@@ -120,19 +120,17 @@ static struct attribute_group wlags_group = {
 
 void register_wlags_sysfs(struct net_device *net)
 {
-	struct device *dev = &(net->dev);
-	struct wl_private *lp = wl_priv(net);
-	int err;
-	err = sysfs_create_group(&dev->kobj, &wlags_group);
-	if (!err)
-		lp->sysfsCreated = true;
+    struct device *dev = &(net->dev);
+    struct wl_private *lp = wl_priv(net);
+
+    lp->sysfsCreated = sysfs_create_group(&dev->kobj, &wlags_group);
 }
 
 void unregister_wlags_sysfs(struct net_device *net)
 {
-	struct device *dev = &(net->dev);
-	struct wl_private *lp = wl_priv(net);
+    struct device *dev = &(net->dev);
+    struct wl_private *lp = wl_priv(net);
 
-	if (lp->sysfsCreated)
-		sysfs_remove_group(&dev->kobj, &wlags_group);
+    if (lp->sysfsCreated)
+	sysfs_remove_group(&dev->kobj, &wlags_group);
 }

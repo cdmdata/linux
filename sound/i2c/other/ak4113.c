@@ -23,7 +23,6 @@
 
 #include <linux/slab.h>
 #include <linux/delay.h>
-#include <linux/module.h>
 #include <sound/core.h>
 #include <sound/control.h>
 #include <sound/pcm.h>
@@ -58,7 +57,8 @@ static void snd_ak4113_free(struct ak4113 *chip)
 {
 	chip->init = 1;	/* don't schedule new work */
 	mb();
-	cancel_delayed_work_sync(&chip->work);
+	cancel_delayed_work(&chip->work);
+	flush_scheduled_work();
 	kfree(chip);
 }
 
@@ -141,7 +141,7 @@ void snd_ak4113_reinit(struct ak4113 *chip)
 {
 	chip->init = 1;
 	mb();
-	flush_delayed_work_sync(&chip->work);
+	flush_scheduled_work();
 	ak4113_init_regs(chip);
 	/* bring up statistics / event queing */
 	chip->init = 0;

@@ -102,7 +102,7 @@ extern char * SVCFH_fmt(struct svc_fh *fhp);
 /*
  * Function prototypes
  */
-__be32	fh_verify(struct svc_rqst *, struct svc_fh *, umode_t, int);
+__be32	fh_verify(struct svc_rqst *, struct svc_fh *, int, int);
 __be32	fh_compose(struct svc_fh *, struct svc_export *, struct dentry *, struct svc_fh *);
 __be32	fh_update(struct svc_fh *);
 void	fh_put(struct svc_fh *);
@@ -196,6 +196,8 @@ fh_lock(struct svc_fh *fhp)
 static inline void
 fh_unlock(struct svc_fh *fhp)
 {
+	BUG_ON(!fhp->fh_dentry);
+
 	if (fhp->fh_locked) {
 		fill_post_wcc(fhp);
 		mutex_unlock(&fhp->fh_dentry->d_inode->i_mutex);

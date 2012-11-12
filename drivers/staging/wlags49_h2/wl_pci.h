@@ -22,7 +22,7 @@
  * software indicates your acceptance of these terms and conditions.  If you do
  * not agree with these terms and conditions, do not use the software.
  *
- * Copyright Â© 2003 Agere Systems Inc.
+ * Copyright © 2003 Agere Systems Inc.
  * All rights reserved.
  *
  * Redistribution and use in source or binary forms, with or without
@@ -43,7 +43,7 @@
  *
  * Disclaimer
  *
- * THIS SOFTWARE IS PROVIDED Â“AS ISÂ” AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * THIS SOFTWARE IS PROVIDED “AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES,
  * INCLUDING, BUT NOT LIMITED TO, INFRINGEMENT AND THE IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  ANY
  * USE, MODIFICATION OR DISTRIBUTION OF THIS SOFTWARE IS SOLELY AT THE USERS OWN
@@ -67,10 +67,10 @@
 /*******************************************************************************
  *  constant definitions
  ******************************************************************************/
-#define PCI_VENDOR_IDWL_LKM     0x11C1  /* Lucent Microelectronics */
-#define PCI_DEVICE_ID_WL_LKM_0  0xAB30  /* Mini PCI */
-#define PCI_DEVICE_ID_WL_LKM_1  0xAB34  /* Mini PCI */
-#define PCI_DEVICE_ID_WL_LKM_2  0xAB11  /* WARP CardBus */
+#define WL_LKM_PCI_VENDOR_ID    0x11C1  // Lucent Microelectronics
+#define WL_LKM_PCI_DEVICE_ID_0  0xAB30  // Mini PCI
+#define WL_LKM_PCI_DEVICE_ID_1  0xAB34  // Mini PCI
+#define WL_LKM_PCI_DEVICE_ID_2  0xAB11  // WARP CardBus
 
 
 

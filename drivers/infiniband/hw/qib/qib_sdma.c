@@ -32,7 +32,6 @@
 
 #include <linux/spinlock.h>
 #include <linux/netdevice.h>
-#include <linux/moduleparam.h>
 
 #include "qib.h"
 #include "qib_common.h"
@@ -657,7 +656,6 @@ unmap:
 	}
 	qp = tx->qp;
 	qib_put_txreq(tx);
-	spin_lock(&qp->r_lock);
 	spin_lock(&qp->s_lock);
 	if (qp->ibqp.qp_type == IB_QPT_RC) {
 		/* XXX what about error sending RDMA read responses? */
@@ -666,7 +664,6 @@ unmap:
 	} else if (qp->s_wqe)
 		qib_send_complete(qp, qp->s_wqe, IB_WC_GENERAL_ERR);
 	spin_unlock(&qp->s_lock);
-	spin_unlock(&qp->r_lock);
 	/* return zero to process the next send work request */
 	goto unlock;
 

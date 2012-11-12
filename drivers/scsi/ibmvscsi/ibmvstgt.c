@@ -918,7 +918,10 @@ static struct vio_driver ibmvstgt_driver = {
 	.id_table = ibmvstgt_device_table,
 	.probe = ibmvstgt_probe,
 	.remove = ibmvstgt_remove,
-	.name = "ibmvscsis",
+	.driver = {
+		.name = "ibmvscsis",
+		.owner = THIS_MODULE,
+	}
 };
 
 static int get_system_info(void)
@@ -953,7 +956,7 @@ static struct srp_function_template ibmvstgt_transport_functions = {
 	.it_nexus_response = ibmvstgt_it_nexus_response,
 };
 
-static int __init ibmvstgt_init(void)
+static int ibmvstgt_init(void)
 {
 	int err = -ENOMEM;
 
@@ -984,7 +987,7 @@ release_transport:
 	return err;
 }
 
-static void __exit ibmvstgt_exit(void)
+static void ibmvstgt_exit(void)
 {
 	printk("Unregister IBM virtual SCSI driver\n");
 

@@ -4,7 +4,7 @@
  * adaptors, with Lucent/Agere, Intersil or Symbol firmware.
  *
  * Current maintainers (as of 29 September 2003) are:
- *	Pavel Roskin <proski AT gnu.org>
+ * 	Pavel Roskin <proski AT gnu.org>
  * and	David Gibson <hermes AT gibson.dropbear.id.au>
  *
  * (C) Copyright David Gibson, IBM Corporation 2001-2003.
@@ -121,7 +121,7 @@ module_param(orinoco_debug, int, 0644);
 MODULE_PARM_DESC(orinoco_debug, "Debug level");
 #endif
 
-static bool suppress_linkstatus; /* = 0 */
+static int suppress_linkstatus; /* = 0 */
 module_param(suppress_linkstatus, bool, 0644);
 MODULE_PARM_DESC(suppress_linkstatus, "Don't log link status changes");
 
@@ -146,10 +146,10 @@ static const u8 encaps_hdr[] = {0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00};
 #define ORINOCO_MAX_MTU		(IEEE80211_MAX_DATA_LEN - ENCAPS_OVERHEAD)
 
 #define MAX_IRQLOOPS_PER_IRQ	10
-#define MAX_IRQLOOPS_PER_JIFFY	(20000 / HZ)	/* Based on a guestimate of
-						 * how many events the
-						 * device could
-						 * legitimately generate */
+#define MAX_IRQLOOPS_PER_JIFFY	(20000/HZ) /* Based on a guestimate of
+					    * how many events the
+					    * device could
+					    * legitimately generate */
 
 #define DUMMY_FID		0xFFFF
 
@@ -157,7 +157,7 @@ static const u8 encaps_hdr[] = {0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00};
   HERMES_MAX_MULTICAST : 0)*/
 #define MAX_MULTICAST(priv)	(HERMES_MAX_MULTICAST)
 
-#define ORINOCO_INTEN		(HERMES_EV_RX | HERMES_EV_ALLOC \
+#define ORINOCO_INTEN	 	(HERMES_EV_RX | HERMES_EV_ALLOC \
 				 | HERMES_EV_TX | HERMES_EV_TXEXC \
 				 | HERMES_EV_WTERR | HERMES_EV_INFO \
 				 | HERMES_EV_INFDROP)
@@ -172,7 +172,7 @@ struct hermes_txexc_data {
 	__le16 frame_ctl;
 	__le16 duration_id;
 	u8 addr1[ETH_ALEN];
-} __packed;
+} __attribute__ ((packed));
 
 /* Rx frame header except compatibility 802.3 header */
 struct hermes_rx_descriptor {
@@ -196,7 +196,7 @@ struct hermes_rx_descriptor {
 
 	/* Data length */
 	__le16 data_len;
-} __packed;
+} __attribute__ ((packed));
 
 struct orinoco_rx_data {
 	struct hermes_rx_descriptor *desc;
@@ -390,7 +390,7 @@ int orinoco_process_xmit_skb(struct sk_buff *skb,
 		struct header_struct {
 			struct ethhdr eth;	/* 802.3 header */
 			u8 encap[6];		/* 802.2 header */
-		} __packed hdr;
+		} __attribute__ ((packed)) hdr;
 		int len = skb->len + sizeof(encaps_hdr) - (2 * ETH_ALEN);
 
 		if (skb_headroom(skb) < ENCAPS_OVERHEAD) {
@@ -437,12 +437,12 @@ static netdev_tx_t orinoco_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct orinoco_private *priv = ndev_priv(dev);
 	struct net_device_stats *stats = &priv->stats;
-	struct hermes *hw = &priv->hw;
+	hermes_t *hw = &priv->hw;
 	int err = 0;
 	u16 txfid = priv->txfid;
 	int tx_control;
 	unsigned long flags;
-	u8 mic_buf[MICHAEL_MIC_LEN + 1];
+	u8 mic_buf[MICHAEL_MIC_LEN+1];
 
 	if (!netif_running(dev)) {
 		printk(KERN_ERR "%s: Tx on stopped device!\n",
@@ -579,7 +579,7 @@ static netdev_tx_t orinoco_xmit(struct sk_buff *skb, struct net_device *dev)
 	return NETDEV_TX_BUSY;
 }
 
-static void __orinoco_ev_alloc(struct net_device *dev, struct hermes *hw)
+static void __orinoco_ev_alloc(struct net_device *dev, hermes_t *hw)
 {
 	struct orinoco_private *priv = ndev_priv(dev);
 	u16 fid = hermes_read_regn(hw, ALLOCFID);
@@ -594,7 +594,7 @@ static void __orinoco_ev_alloc(struct net_device *dev, struct hermes *hw)
 	hermes_write_regn(hw, ALLOCFID, DUMMY_FID);
 }
 
-static void __orinoco_ev_tx(struct net_device *dev, struct hermes *hw)
+static void __orinoco_ev_tx(struct net_device *dev, hermes_t *hw)
 {
 	struct orinoco_private *priv = ndev_priv(dev);
 	struct net_device_stats *stats = &priv->stats;
@@ -606,7 +606,7 @@ static void __orinoco_ev_tx(struct net_device *dev, struct hermes *hw)
 	hermes_write_regn(hw, TXCOMPLFID, DUMMY_FID);
 }
 
-static void __orinoco_ev_txexc(struct net_device *dev, struct hermes *hw)
+static void __orinoco_ev_txexc(struct net_device *dev, hermes_t *hw)
 {
 	struct orinoco_private *priv = ndev_priv(dev);
 	struct net_device_stats *stats = &priv->stats;
@@ -753,7 +753,7 @@ static void orinoco_rx_monitor(struct net_device *dev, u16 rxfid,
 	struct sk_buff *skb;
 	struct orinoco_private *priv = ndev_priv(dev);
 	struct net_device_stats *stats = &priv->stats;
-	struct hermes *hw = &priv->hw;
+	hermes_t *hw = &priv->hw;
 
 	len = le16_to_cpu(desc->data_len);
 
@@ -840,7 +840,7 @@ static void orinoco_rx_monitor(struct net_device *dev, u16 rxfid,
 	stats->rx_dropped++;
 }
 
-void __orinoco_ev_rx(struct net_device *dev, struct hermes *hw)
+void __orinoco_ev_rx(struct net_device *dev, hermes_t *hw)
 {
 	struct orinoco_private *priv = ndev_priv(dev);
 	struct net_device_stats *stats = &priv->stats;
@@ -918,7 +918,7 @@ void __orinoco_ev_rx(struct net_device *dev, struct hermes *hw)
 	   32bit boundary, plus 1 byte so we can read in odd length
 	   packets from the card, which has an IO granularity of 16
 	   bits */
-	skb = dev_alloc_skb(length + ETH_HLEN + 2 + 1);
+	skb = dev_alloc_skb(length+ETH_HLEN+2+1);
 	if (!skb) {
 		printk(KERN_WARNING "%s: Can't allocate skb for Rx\n",
 		       dev->name);
@@ -941,9 +941,11 @@ void __orinoco_ev_rx(struct net_device *dev, struct hermes *hw)
 
 	/* Add desc and skb to rx queue */
 	rx_data = kzalloc(sizeof(*rx_data), GFP_ATOMIC);
-	if (!rx_data)
+	if (!rx_data) {
+		printk(KERN_WARNING "%s: Can't allocate RX packet\n",
+			dev->name);
 		goto drop;
-
+	}
 	rx_data->desc = desc;
 	rx_data->skb = skb;
 	list_add_tail(&rx_data->list, &priv->rx_list);
@@ -1168,7 +1170,7 @@ static void orinoco_join_ap(struct work_struct *work)
 	struct join_req {
 		u8 bssid[ETH_ALEN];
 		__le16 channel;
-	} __packed req;
+	} __attribute__ ((packed)) req;
 	const int atom_len = offsetof(struct prism2_scan_apinfo, atim);
 	struct prism2_scan_apinfo *atom = NULL;
 	int offset = 4;
@@ -1336,10 +1338,6 @@ static void qbuf_scan(struct orinoco_private *priv, void *buf,
 	unsigned long flags;
 
 	sd = kmalloc(sizeof(*sd), GFP_ATOMIC);
-	if (!sd) {
-		printk(KERN_ERR "%s: failed to alloc memory\n", __func__);
-		return;
-	}
 	sd->buf = buf;
 	sd->len = len;
 	sd->type = type;
@@ -1357,10 +1355,6 @@ static void qabort_scan(struct orinoco_private *priv)
 	unsigned long flags;
 
 	sd = kmalloc(sizeof(*sd), GFP_ATOMIC);
-	if (!sd) {
-		printk(KERN_ERR "%s: failed to alloc memory\n", __func__);
-		return;
-	}
 	sd->len = -1; /* Abort */
 
 	spin_lock_irqsave(&priv->scan_lock, flags);
@@ -1382,13 +1376,13 @@ static void orinoco_process_scan_results(struct work_struct *work)
 
 	spin_lock_irqsave(&priv->scan_lock, flags);
 	list_for_each_entry_safe(sd, temp, &priv->scan_list, list) {
+		spin_unlock_irqrestore(&priv->scan_lock, flags);
 
 		buf = sd->buf;
 		len = sd->len;
 		type = sd->type;
 
 		list_del(&sd->list);
-		spin_unlock_irqrestore(&priv->scan_lock, flags);
 		kfree(sd);
 
 		if (len > 0) {
@@ -1398,9 +1392,10 @@ static void orinoco_process_scan_results(struct work_struct *work)
 				orinoco_add_hostscan_results(priv, buf, len);
 
 			kfree(buf);
-		} else {
+		} else if (priv->scan_request) {
 			/* Either abort or complete the scan */
-			orinoco_scan_done(priv, (len < 0));
+			cfg80211_scan_done(priv->scan_request, (len < 0));
+			priv->scan_request = NULL;
 		}
 
 		spin_lock_irqsave(&priv->scan_lock, flags);
@@ -1408,14 +1403,14 @@ static void orinoco_process_scan_results(struct work_struct *work)
 	spin_unlock_irqrestore(&priv->scan_lock, flags);
 }
 
-void __orinoco_ev_info(struct net_device *dev, struct hermes *hw)
+void __orinoco_ev_info(struct net_device *dev, hermes_t *hw)
 {
 	struct orinoco_private *priv = ndev_priv(dev);
 	u16 infofid;
 	struct {
 		__le16 len;
 		__le16 type;
-	} __packed info;
+	} __attribute__ ((packed)) info;
 	int len, type;
 	int err;
 
@@ -1626,7 +1621,7 @@ void __orinoco_ev_info(struct net_device *dev, struct hermes *hw)
 }
 EXPORT_SYMBOL(__orinoco_ev_info);
 
-static void __orinoco_ev_infdrop(struct net_device *dev, struct hermes *hw)
+static void __orinoco_ev_infdrop(struct net_device *dev, hermes_t *hw)
 {
 	if (net_ratelimit())
 		printk(KERN_DEBUG "%s: Information frame lost.\n", dev->name);
@@ -1688,8 +1683,6 @@ static int __orinoco_down(struct orinoco_private *priv)
 		hermes_set_irqmask(hw, 0);
 		hermes_write_regn(hw, EVACK, 0xffff);
 	}
-
-	orinoco_scan_done(priv, true);
 
 	/* firmware will have to reassociate */
 	netif_carrier_off(dev);
@@ -1769,7 +1762,10 @@ void orinoco_reset(struct work_struct *work)
 	orinoco_unlock(priv, &flags);
 
 	/* Scanning support: Notify scan cancellation */
-	orinoco_scan_done(priv, true);
+	if (priv->scan_request) {
+		cfg80211_scan_done(priv->scan_request, 1);
+		priv->scan_request = NULL;
+	}
 
 	if (priv->hard_reset) {
 		err = (*priv->hard_reset)(priv);
@@ -1817,12 +1813,6 @@ static int __orinoco_commit(struct orinoco_private *priv)
 	struct net_device *dev = priv->ndev;
 	int err = 0;
 
-	/* If we've called commit, we are reconfiguring or bringing the
-	 * interface up. Maintaining countermeasures across this would
-	 * be confusing, so note that we've disabled them. The port will
-	 * be enabled later in orinoco_commit or __orinoco_up. */
-	priv->tkip_cm_active = 0;
-
 	err = orinoco_hw_program_rids(priv);
 
 	/* FIXME: what about netif_tx_lock */
@@ -1837,7 +1827,7 @@ static int __orinoco_commit(struct orinoco_private *priv)
 int orinoco_commit(struct orinoco_private *priv)
 {
 	struct net_device *dev = priv->ndev;
-	struct hermes *hw = &priv->hw;
+	hermes_t *hw = &priv->hw;
 	int err;
 
 	if (priv->broken_disableport) {
@@ -1880,12 +1870,12 @@ int orinoco_commit(struct orinoco_private *priv)
 /* Interrupt handler                                                */
 /********************************************************************/
 
-static void __orinoco_ev_tick(struct net_device *dev, struct hermes *hw)
+static void __orinoco_ev_tick(struct net_device *dev, hermes_t *hw)
 {
 	printk(KERN_DEBUG "%s: TICK\n", dev->name);
 }
 
-static void __orinoco_ev_wterr(struct net_device *dev, struct hermes *hw)
+static void __orinoco_ev_wterr(struct net_device *dev, hermes_t *hw)
 {
 	/* This seems to happen a fair bit under load, but ignoring it
 	   seems to work fine...*/
@@ -1897,7 +1887,7 @@ irqreturn_t orinoco_interrupt(int irq, void *dev_id)
 {
 	struct orinoco_private *priv = dev_id;
 	struct net_device *dev = priv->ndev;
-	struct hermes *hw = &priv->hw;
+	hermes_t *hw = &priv->hw;
 	int count = MAX_IRQLOOPS_PER_IRQ;
 	u16 evstat, events;
 	/* These are used to detect a runaway interrupt situation.
@@ -1964,7 +1954,7 @@ irqreturn_t orinoco_interrupt(int irq, void *dev_id)
 
 		evstat = hermes_read_regn(hw, EVSTAT);
 		events = evstat & hw->inten;
-	}
+	};
 
 	orinoco_unlock(priv, &flags);
 	return IRQ_HANDLED;
@@ -2023,8 +2013,8 @@ static void orinoco_unregister_pm_notifier(struct orinoco_private *priv)
 	unregister_pm_notifier(&priv->pm_notifier);
 }
 #else /* !PM_SLEEP || HERMES_CACHE_FW_ON_INIT */
-#define orinoco_register_pm_notifier(priv) do { } while (0)
-#define orinoco_unregister_pm_notifier(priv) do { } while (0)
+#define orinoco_register_pm_notifier(priv) do { } while(0)
+#define orinoco_unregister_pm_notifier(priv) do { } while(0)
 #endif
 
 /********************************************************************/
@@ -2035,7 +2025,7 @@ int orinoco_init(struct orinoco_private *priv)
 {
 	struct device *dev = priv->dev;
 	struct wiphy *wiphy = priv_to_wiphy(priv);
-	struct hermes *hw = &priv->hw;
+	hermes_t *hw = &priv->hw;
 	int err = 0;
 
 	/* No need to lock, the hw_unavailable flag is already set in
@@ -2141,7 +2131,7 @@ static const struct net_device_ops orinoco_netdev_ops = {
 	.ndo_open		= orinoco_open,
 	.ndo_stop		= orinoco_stop,
 	.ndo_start_xmit		= orinoco_xmit,
-	.ndo_set_rx_mode	= orinoco_set_multicast_list,
+	.ndo_set_multicast_list	= orinoco_set_multicast_list,
 	.ndo_change_mtu		= orinoco_change_mtu,
 	.ndo_set_mac_address	= eth_mac_addr,
 	.ndo_validate_addr	= eth_validate_addr,

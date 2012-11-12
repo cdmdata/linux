@@ -19,14 +19,11 @@
 #include <linux/err.h>
 #include <linux/platform_device.h>
 
-#include <asm/sched_clock.h>
+#include <mach/hardware.h>
 #include <asm/mach/irq.h>
 #include <asm/mach/time.h>
-
 #include <mach/cputype.h>
-#include <mach/hardware.h>
 #include <mach/time.h>
-
 #include "clock.h"
 
 static struct clock_event_device clockevent_davinci;
@@ -279,16 +276,9 @@ static struct clocksource clocksource_davinci = {
 	.rating		= 300,
 	.read		= read_cycles,
 	.mask		= CLOCKSOURCE_MASK(32),
+	.shift		= 24,
 	.flags		= CLOCK_SOURCE_IS_CONTINUOUS,
 };
-
-/*
- * Overwrite weak default sched_clock with something more precise
- */
-static u32 notrace davinci_read_sched_clock(void)
-{
-	return timer32_read(&timers[TID_CLOCKSOURCE]);
-}
 
 /*
  * clockevent
@@ -388,12 +378,11 @@ static void __init davinci_timer_init(void)
 
 	/* setup clocksource */
 	clocksource_davinci.name = id_to_name[clocksource_id];
-	if (clocksource_register_hz(&clocksource_davinci,
-				    davinci_clock_tick_rate))
+	clocksource_davinci.mult =
+		clocksource_khz2mult(davinci_clock_tick_rate/1000,
+				     clocksource_davinci.shift);
+	if (clocksource_register(&clocksource_davinci))
 		printk(err, clocksource_davinci.name);
-
-	setup_sched_clock(davinci_read_sched_clock, 32,
-			  davinci_clock_tick_rate);
 
 	/* setup clockevent */
 	clockevent_davinci.name = id_to_name[timers[TID_CLOCKEVENT].id];

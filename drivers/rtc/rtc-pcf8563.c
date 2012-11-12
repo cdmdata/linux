@@ -18,7 +18,6 @@
 #include <linux/bcd.h>
 #include <linux/rtc.h>
 #include <linux/slab.h>
-#include <linux/module.h>
 
 #define DRV_VERSION "0.4.3"
 
@@ -173,6 +172,14 @@ static int pcf8563_set_datetime(struct i2c_client *client, struct rtc_time *tm)
 	return 0;
 }
 
+struct pcf8563_limit
+{
+	unsigned char reg;
+	unsigned char mask;
+	unsigned char min;
+	unsigned char max;
+};
+
 static int pcf8563_rtc_read_time(struct device *dev, struct rtc_time *tm)
 {
 	return pcf8563_get_datetime(to_i2c_client(dev), tm);
@@ -252,9 +259,20 @@ static struct i2c_driver pcf8563_driver = {
 	.id_table	= pcf8563_id,
 };
 
-module_i2c_driver(pcf8563_driver);
+static int __init pcf8563_init(void)
+{
+	return i2c_add_driver(&pcf8563_driver);
+}
+
+static void __exit pcf8563_exit(void)
+{
+	i2c_del_driver(&pcf8563_driver);
+}
 
 MODULE_AUTHOR("Alessandro Zummo <a.zummo@towertech.it>");
 MODULE_DESCRIPTION("Philips PCF8563/Epson RTC8564 RTC driver");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(DRV_VERSION);
+
+module_init(pcf8563_init);
+module_exit(pcf8563_exit);

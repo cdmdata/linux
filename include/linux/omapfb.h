@@ -85,9 +85,6 @@
 #define OMAPFB_MEMTYPE_SRAM		1
 #define OMAPFB_MEMTYPE_MAX		1
 
-#define OMAPFB_MEM_IDX_ENABLED	0x80
-#define OMAPFB_MEM_IDX_MASK	0x7f
-
 enum omapfb_color_format {
 	OMAPFB_COLOR_RGB565 = 0,
 	OMAPFB_COLOR_YUV422,
@@ -139,7 +136,7 @@ struct omapfb_plane_info {
 	__u8  enabled;
 	__u8  channel_out;
 	__u8  mirror;
-	__u8  mem_idx;
+	__u8  reserved1;
 	__u32 out_width;
 	__u32 out_height;
 	__u32 reserved2[12];
@@ -222,11 +219,41 @@ struct omapfb_display_info {
 
 #include <plat/board.h>
 
-struct omapfb_platform_data {
-	struct omap_lcd_config		lcd;
+#ifdef CONFIG_ARCH_OMAP1
+#define OMAPFB_PLANE_NUM		1
+#else
+#define OMAPFB_PLANE_NUM		3
+#endif
+
+struct omapfb_mem_region {
+	u32		paddr;
+	void __iomem	*vaddr;
+	unsigned long	size;
+	u8		type;		/* OMAPFB_PLANE_MEM_* */
+	enum omapfb_color_format format;/* OMAPFB_COLOR_* */
+	unsigned	format_used:1;	/* Must be set when format is set.
+					 * Needed b/c of the badly chosen 0
+					 * base for OMAPFB_COLOR_* values
+					 */
+	unsigned	alloc:1;	/* allocated by the driver */
+	unsigned	map:1;		/* kernel mapped by the driver */
 };
 
-void __init omapfb_set_lcd_config(const struct omap_lcd_config *config);
+struct omapfb_mem_desc {
+	int				region_cnt;
+	struct omapfb_mem_region	region[OMAPFB_PLANE_NUM];
+};
+
+struct omapfb_platform_data {
+	struct omap_lcd_config		lcd;
+	struct omapfb_mem_desc		mem_desc;
+	void				*ctrl_platform_data;
+};
+
+/* in arch/arm/plat-omap/fb.c */
+extern void omapfb_set_platform_data(struct omapfb_platform_data *data);
+extern void omapfb_set_ctrl_platform_data(void *pdata);
+extern void omapfb_reserve_sdram(void);
 
 #endif
 

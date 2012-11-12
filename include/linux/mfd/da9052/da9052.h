@@ -1,9 +1,7 @@
 /*
- * da9052 declarations for DA9052 PMICs.
+ * da9052 declarations.
  *
- * Copyright(c) 2011 Dialog Semiconductor Ltd.
- *
- * Author: David Dajun Chen <dchen@diasemi.com>
+ * Copyright(c) 2009 Dialog Semiconductor Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -12,7 +10,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -21,109 +19,237 @@
  *
  */
 
-#ifndef __MFD_DA9052_DA9052_H
-#define __MFD_DA9052_DA9052_H
+#ifndef __LINUX_MFD_DA9052_DA9052_H
+#define __LINUX_MFD_DA9052_DA9052_H
 
-#include <linux/interrupt.h>
-#include <linux/regmap.h>
 #include <linux/slab.h>
-#include <linux/completion.h>
-#include <linux/list.h>
 #include <linux/mfd/core.h>
 
+#include <linux/mfd/da9052/eh.h>
 #include <linux/mfd/da9052/reg.h>
+#include <linux/mfd/da9052/led.h>
 
-#define DA9052_IRQ_DCIN	0
-#define DA9052_IRQ_VBUS	1
-#define DA9052_IRQ_DCINREM	2
-#define DA9052_IRQ_VBUSREM	3
-#define DA9052_IRQ_VDDLOW	4
-#define DA9052_IRQ_ALARM	5
-#define DA9052_IRQ_SEQRDY	6
-#define DA9052_IRQ_COMP1V2	7
-#define DA9052_IRQ_NONKEY	8
-#define DA9052_IRQ_IDFLOAT	9
-#define DA9052_IRQ_IDGND	10
-#define DA9052_IRQ_CHGEND	11
-#define DA9052_IRQ_TBAT	12
-#define DA9052_IRQ_ADC_EOM	13
-#define DA9052_IRQ_PENDOWN	14
-#define DA9052_IRQ_TSIREADY	15
-#define DA9052_IRQ_GPI0	16
-#define DA9052_IRQ_GPI1	17
-#define DA9052_IRQ_GPI2	18
-#define DA9052_IRQ_GPI3	19
-#define DA9052_IRQ_GPI4	20
-#define DA9052_IRQ_GPI5	21
-#define DA9052_IRQ_GPI6	22
-#define DA9052_IRQ_GPI7	23
-#define DA9052_IRQ_GPI8	24
-#define DA9052_IRQ_GPI9	25
-#define DA9052_IRQ_GPI10	26
-#define DA9052_IRQ_GPI11	27
-#define DA9052_IRQ_GPI12	28
-#define DA9052_IRQ_GPI13	29
-#define DA9052_IRQ_GPI14	30
-#define DA9052_IRQ_GPI15	31
 
-enum da9052_chip_id {
-	DA9052,
-	DA9053_AA,
-	DA9053_BA,
-	DA9053_BB,
+#define SPI 1
+#define I2C 2
+
+#define DA9052_SSC_DEVICE_NAME		"da9052_ssc"
+#define DA9052_EH_DEVICE_NAME		"da9052_eh"
+
+#define DA9052_IRQ			S3C_EINT(9)
+
+/* Module specific error codes */
+#define INVALID_REGISTER		2
+#define INVALID_READ			3
+#define INVALID_PAGE			4
+
+/* Defines for Volatile and Non Volatile register types */
+#define VOLATILE			0
+#define NON_VOLATILE			1
+
+/* Defines for cache state */
+#define VALID				0
+#define INVALID				1
+
+/* Total number of registers in DA9057 */
+#define DA9052_REG_CNT			(DA9052_PAGE1_REG_END+1)
+
+/* Maximum number of registers that can be read/written by a singe request */
+#define	MAX_READ_WRITE_CNT		16
+
+
+#define DA9052_SSC_SPI_DEVICE_NAME	"da9052_ssc_spi"
+#define PAGE_0_START			1
+#define PAGE_0_END			127
+#define PAGE_1_START			128
+#define PAGE_1_END			255
+#define ACTIVE_PAGE_0			0
+#define ACTIVE_PAGE_1			1
+#define PAGECON_0			0
+#define PAGECON_128			128
+#define RW_POL				1
+
+#define DA9052_SSC_I2C_DEVICE_NAME		"da9052_ssc_i2c"
+#define	DA9052_I2C_ADDR				0x90
+#define	DA9052_SSC_I2C_PAGE_WRITE_MODE		0
+#define DA9052_SSC_I2C_REPEAT_WRITE_MODE	1
+#define DA9052_SSC_I2C_WRITE_MODE		DA9052_SSC_I2C_REPEAT_WRITE_MODE
+
+#define DA9053_VERSION_AA 1
+#define DA9053_VERSION_BB 2
+
+struct da9052_ssc_msg {
+	unsigned char	data;
+	unsigned char	addr;
 };
 
-struct da9052_pdata;
+struct da9052_modify_msg {
+	unsigned char	clear_mask;
+	unsigned char	set_mask;
+};
+
+struct ssc_cache_entry{
+	 unsigned char	val;
+	 unsigned char	type:4;
+	 unsigned char	status:4;
+};
+
+struct da9052_eh_nb{
+	struct list_head nb_list;
+	unsigned char	eve_type;
+	void (*call_back)(struct da9052_eh_nb *, unsigned int);
+};
+
+
+struct da9052_regulator_init_data {
+	struct regulator_init_data *init_data;
+	int id;
+};
+
+struct da9052_regulator_platform_data {
+	struct regulator_init_data *regulators;
+};
+
+struct da9052_tsi_platform_data {
+	u32	pen_up_interval;
+	u16	tsi_delay_bit_shift;
+	u16	tsi_skip_bit_shift;
+	u16	num_gpio_tsi_register;
+	u16	tsi_supply_voltage;
+	u16	max_tsi_delay;
+	u16	max_tsi_skip_slot;
+#define DA9052_4_WIRE		0
+#define DA9052_5_WIRE_YXSXY_IO1	1
+#define DA9052_5_WIRE_XYSXY_IO1	2
+#define DA9052_5_WIRE_YXSXY_IO2	3
+#define DA9052_5_WIRE_XYSXY_IO2	4
+#define DA9052_5_WIRE_ADC_IO1	5
+#define DA9052_5_WIRE_ADC_IO2	6
+	u16	config_index;
+};
+
+
+struct da9052_bat_platform_data {
+	u16	sw_temp_control_en;
+	u16	monitoring_interval;
+	u16	sw_bat_temp_threshold;
+	u16	sw_junc_temp_threshold;
+	u16	hysteresis_window_size;
+	u16	current_monitoring_window;
+	u16	bat_with_no_resistor;
+	u16	bat_capacity_limit_low;
+	u16	bat_capacity_full;
+	u16	bat_capacity_limit_high;
+	u16	chg_hysteresis_const;
+	u16	hysteresis_reading_interval;
+	u16	hysteresis_no_of_reading;
+	u16	filter_size;
+	u16	bat_volt_cutoff;
+	u16	vbat_first_valid_detect_iteration;
+};
 
 struct da9052 {
+	struct mutex ssc_lock;
+	struct mutex eve_nb_lock;
+	struct mutex manconv_lock;
+	struct work_struct eh_isr_work;
+	struct ssc_cache_entry ssc_cache[DA9052_REG_CNT];
+	int (*read) (struct da9052 *da9052, struct da9052_ssc_msg *sscmsg);
+	int (*write) (struct da9052 *da9052, struct da9052_ssc_msg *sscmsg);
+	int (*read_many) (struct da9052 *da9052,
+		struct da9052_ssc_msg *sscmsg, int cnt);
+	int (*write_many)(struct da9052 *da9052,
+		struct da9052_ssc_msg *sscmsg, int cnt);
+	int (*modify_many)(struct da9052 *da9052,
+		struct da9052_ssc_msg *sscmsg,
+		struct da9052_modify_msg *modmsg, int cnt);
+	int (*register_event_notifier)(struct da9052 *da9052,
+		struct da9052_eh_nb *nb);
+	int (*unregister_event_notifier)(struct da9052 *da9052,
+		struct da9052_eh_nb *nb);
+	int (*event_enable)(struct da9052 *da9052, unsigned char eve_type);
+	int (*event_disable)(struct da9052 *da9052, unsigned char eve_type);
+	int (*register_modify)(struct da9052 *da9052, unsigned reg,
+			unsigned clear_mask, unsigned set_mask);
+	int num_regulators;
+	int connecting_device;
+	int irq;
+	struct		spi_device *spi_dev;
+	unsigned int	spi_active_page;
+	unsigned char	rw_pol;
+	unsigned char	*spi_rx_buf;
+	unsigned char	*spi_tx_buf;
+
+	struct i2c_client *i2c_client;
 	struct device *dev;
-	struct regmap *regmap;
-
-	int irq_base;
-	u8 chip_id;
-
-	int chip_irq;
+	struct i2c_adapter *adapter;
+	unsigned char	slave_addr;
+	int chip_version;
+	unsigned long irq_mask;
+	unsigned spurious_irq_count;
 };
 
-/* Device I/O API */
-static inline int da9052_reg_read(struct da9052 *da9052, unsigned char reg)
-{
-	int val, ret;
+struct da9052_platform_data {
+	int (*init)(struct da9052 *da9052);
+	int	irq_high;
+	int	irq_base;
+	int	gpio_base;
+	int	num_regulators;
+	struct da9052 *da9052;
+	struct regulator_init_data *regulators;
+	struct da9052_leds_platform_data *led_data;
+	struct da9052_tsi_platform_data *tsi_data;
+	struct da9052_bat_platform_data *bat_data;
+};
 
-	ret = regmap_read(da9052->regmap, reg, &val);
-	if (ret < 0)
-		return ret;
-	return val;
-}
+struct da9052_ssc_ops {
+	int (*write)(struct da9052 *da9052, struct da9052_ssc_msg *msg);
+	int (*read)(struct da9052 *da9052, struct da9052_ssc_msg *msg);
+	int (*write_many)(struct da9052 *da9052,
+	struct da9052_ssc_msg *sscmsg, int msg_no);
+	int (*read_many)(struct da9052 *da9052,
+	struct da9052_ssc_msg *sscmsg, int msg_no);
+	int (*device_register)(struct da9052 *da9052);
+	void (*device_unregister)(void);
+};
 
-static inline int da9052_reg_write(struct da9052 *da9052, unsigned char reg,
-				    unsigned char val)
-{
-	return regmap_write(da9052->regmap, reg, val);
-}
+int da9052_ssc_write(struct da9052 *da9052,
+		struct da9052_ssc_msg *sscmsg);
+int da9052_ssc_read(struct da9052 *da9052,
+		struct da9052_ssc_msg *sscmsg);
+int da9052_ssc_write_many(struct da9052 *da9052,
+		struct da9052_ssc_msg *sscmsg, int cnt);
+int da9052_ssc_read_many(struct da9052 *da9052,
+		struct da9052_ssc_msg *sscmsg, int cnt);
 
-static inline int da9052_group_read(struct da9052 *da9052, unsigned char reg,
-				     unsigned reg_cnt, unsigned char *val)
-{
-	return regmap_bulk_read(da9052->regmap, reg, val, reg_cnt);
-}
+int da9052_spi_write(struct da9052 *da9052,
+		struct da9052_ssc_msg *msg);
+int da9052_spi_read(struct da9052 *da9052,
+		struct da9052_ssc_msg *msg);
 
-static inline int da9052_group_write(struct da9052 *da9052, unsigned char reg,
-				      unsigned reg_cnt, unsigned char *val)
-{
-	return regmap_raw_write(da9052->regmap, reg, val, reg_cnt);
-}
+int da9052_spi_write_many(struct da9052 *da9052, struct da9052_ssc_msg *sscmsg,
+		int msg_no);
+int da9052_spi_read_many(struct da9052 *da9052,
+		struct da9052_ssc_msg *sscmsg,
+		int msg_no);
 
-static inline int da9052_reg_update(struct da9052 *da9052, unsigned char reg,
-				     unsigned char bit_mask,
-				     unsigned char reg_val)
-{
-	return regmap_update_bits(da9052->regmap, reg, bit_mask, reg_val);
-}
+void da9052_ssc_exit(struct da9052 *da9052);
+int da9052_ssc_init(struct da9052 *da9052);
 
-int da9052_device_init(struct da9052 *da9052, u8 chip_id);
-void da9052_device_exit(struct da9052 *da9052);
+/* I2C specific Functions */
+int da9052_i2c_write(struct da9052 *da9052, struct da9052_ssc_msg *msg);
+int da9052_i2c_read(struct da9052 *da9052, struct da9052_ssc_msg *msg);
+int da9052_i2c_write_many(struct da9052 *da9052,
+		struct da9052_ssc_msg *sscmsg, int msg_no);
+int da9052_i2c_read_many(struct da9052 *da9052,
+		struct da9052_ssc_msg *sscmsg, int msg_no);
 
-extern struct regmap_config da9052_regmap_config;
-
-#endif /* __MFD_DA9052_DA9052_H */
+void da9052_lock(struct da9052 *da9052);
+void da9052_unlock(struct da9052 *da9052);
+int eh_register_nb(struct da9052 *da9052, struct da9052_eh_nb *nb);
+int eh_unregister_nb(struct da9052 *da9052, struct da9052_eh_nb *nb);
+int da9052_manual_read(struct da9052 *da9052,
+		unsigned char channel);
+void da9053_power_off(void);
+int da9053_get_chip_version(void);
+#endif /* __LINUX_MFD_DA9052_DA9052_H */

@@ -33,8 +33,13 @@
 #include <asm/pgtable.h>
 #include <asm/mmu.h>
 #include <asm/mmu_context.h>
+#include <asm/system.h>
 #include <linux/uaccess.h>
 #include <asm/exceptions.h>
+
+#if defined(CONFIG_KGDB)
+int debugger_kernel_faults = 1;
+#endif
 
 static unsigned long pte_misses;	/* updated by do_page_fault() */
 static unsigned long pte_errors;	/* updated by do_page_fault() */
@@ -47,7 +52,7 @@ static int store_updates_sp(struct pt_regs *regs)
 {
 	unsigned int inst;
 
-	if (get_user(inst, (unsigned int __user *)regs->pc))
+	if (get_user(inst, (unsigned int *)regs->pc))
 		return 0;
 	/* check for 1 in the rD field */
 	if (((inst >> 21) & 0x1f) != 1)
@@ -76,6 +81,10 @@ void bad_page_fault(struct pt_regs *regs, unsigned long address, int sig)
 	}
 
 	/* kernel has accessed a bad area */
+#if defined(CONFIG_KGDB)
+	if (debugger_kernel_faults)
+		debugger(regs);
+#endif
 	die("kernel access of bad area", regs, sig);
 }
 
@@ -105,6 +114,13 @@ void do_page_fault(struct pt_regs *regs, unsigned long address,
 	/* for instr TLB miss and instr storage exception ESR_S is undefined */
 	if ((error_code & 0x13) == 0x13 || (error_code & 0x11) == 0x11)
 		is_write = 0;
+
+#if defined(CONFIG_KGDB)
+	if (debugger_fault_handler && regs->trap == 0x300) {
+		debugger_fault_handler(regs);
+		return;
+	}
+#endif /* CONFIG_KGDB */
 
 	if (unlikely(in_atomic() || !mm)) {
 		if (kernel_mode(regs))
@@ -210,6 +226,7 @@ good_area:
 	 * make sure we exit gracefully rather than endlessly redo
 	 * the fault.
 	 */
+survive:
 	fault = handle_mm_fault(mm, vma, address, is_write ? FAULT_FLAG_WRITE : 0);
 	if (unlikely(fault & VM_FAULT_ERROR)) {
 		if (fault & VM_FAULT_OOM)

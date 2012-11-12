@@ -41,14 +41,17 @@ static inline unsigned packet_length(const struct sk_buff *skb)
 
 int br_dev_queue_push_xmit(struct sk_buff *skb)
 {
-	/* ip_fragment doesn't copy the MAC header */
-	if (nf_bridge_maybe_copy_header(skb) ||
-	    (packet_length(skb) > skb->dev->mtu && !skb_is_gso(skb))) {
+	/* drop mtu oversized packets except gso */
+	if (packet_length(skb) > skb->dev->mtu && !skb_is_gso(skb))
 		kfree_skb(skb);
-	} else {
-		skb_push(skb, ETH_HLEN);
-		br_drop_fake_rtable(skb);
-		dev_queue_xmit(skb);
+	else {
+		/* ip_fragment doesn't copy the MAC header */
+		if (nf_bridge_maybe_copy_header(skb))
+			kfree_skb(skb);
+		else {
+			skb_push(skb, ETH_HLEN);
+			dev_queue_xmit(skb);
+		}
 	}
 
 	return 0;
@@ -64,17 +67,6 @@ int br_forward_finish(struct sk_buff *skb)
 static void __br_deliver(const struct net_bridge_port *to, struct sk_buff *skb)
 {
 	skb->dev = to->dev;
-
-	if (unlikely(netpoll_tx_running(to->dev))) {
-		if (packet_length(skb) > skb->dev->mtu && !skb_is_gso(skb))
-			kfree_skb(skb);
-		else {
-			skb_push(skb, ETH_HLEN);
-			br_netpoll_send_skb(to, skb);
-		}
-		return;
-	}
-
 	NF_HOOK(NFPROTO_BRIDGE, NF_BR_LOCAL_OUT, skb, NULL, skb->dev,
 		br_forward_finish);
 }
@@ -99,7 +91,7 @@ static void __br_forward(const struct net_bridge_port *to, struct sk_buff *skb)
 /* called with rcu_read_lock */
 void br_deliver(const struct net_bridge_port *to, struct sk_buff *skb)
 {
-	if (to && should_deliver(to, skb)) {
+	if (should_deliver(to, skb)) {
 		__br_deliver(to, skb);
 		return;
 	}
@@ -220,7 +212,7 @@ static void br_multicast_flood(struct net_bridge_mdb_entry *mdst,
 	struct net_bridge_port_group *p;
 	struct hlist_node *rp;
 
-	rp = rcu_dereference(hlist_first_rcu(&br->router_list));
+	rp = rcu_dereference(br->router_list.first);
 	p = mdst ? rcu_dereference(mdst->ports) : NULL;
 	while (p || rp) {
 		struct net_bridge_port *port, *lport, *rport;
@@ -239,7 +231,7 @@ static void br_multicast_flood(struct net_bridge_mdb_entry *mdst,
 		if ((unsigned long)lport >= (unsigned long)port)
 			p = rcu_dereference(p->next);
 		if ((unsigned long)rport >= (unsigned long)port)
-			rp = rcu_dereference(hlist_next_rcu(rp));
+			rp = rcu_dereference(rp->next);
 	}
 
 	if (!prev)

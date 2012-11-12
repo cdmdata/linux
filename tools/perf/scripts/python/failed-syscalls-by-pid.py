@@ -13,26 +13,21 @@ sys.path.append(os.environ['PERF_EXEC_PATH'] + \
 
 from perf_trace_context import *
 from Core import *
-from Util import *
 
-usage = "perf script -s syscall-counts-by-pid.py [comm|pid]\n";
+usage = "perf trace -s syscall-counts-by-pid.py [comm]\n";
 
 for_comm = None
-for_pid = None
 
 if len(sys.argv) > 2:
 	sys.exit(usage)
 
 if len(sys.argv) > 1:
-	try:
-		for_pid = int(sys.argv[1])
-	except:
-		for_comm = sys.argv[1]
+	for_comm = sys.argv[1]
 
 syscalls = autodict()
 
 def trace_begin():
-	print "Press control+C to stop and show the summary"
+	pass
 
 def trace_end():
 	print_error_totals()
@@ -40,9 +35,9 @@ def trace_end():
 def raw_syscalls__sys_exit(event_name, context, common_cpu,
 	common_secs, common_nsecs, common_pid, common_comm,
 	id, ret):
-	if (for_comm and common_comm != for_comm) or \
-	   (for_pid  and common_pid  != for_pid ):
-		return
+	if for_comm is not None:
+		if common_comm != for_comm:
+			return
 
 	if ret < 0:
 		try:
@@ -67,7 +62,7 @@ def print_error_totals():
 		    print "\n%s [%d]\n" % (comm, pid),
 		    id_keys = syscalls[comm][pid].keys()
 		    for id in id_keys:
-			    print "  syscall: %-16s\n" % syscall_name(id),
+			    print "  syscall: %-16d\n" % (id),
 			    ret_keys = syscalls[comm][pid][id].keys()
 			    for ret, val in sorted(syscalls[comm][pid][id].iteritems(), key = lambda(k, v): (v, k),  reverse = True):
-				    print "    err = %-20s  %10d\n" % (strerror(ret), val),
+				    print "    err = %-20d  %10d\n" % (ret, val),

@@ -49,15 +49,13 @@
  * for fast lookup of ref objects given a base object.
  */
 
-#define pr_fmt(fmt) "[TTM] " fmt
-
 #include "ttm/ttm_object.h"
 #include "ttm/ttm_module.h"
 #include <linux/list.h>
 #include <linux/spinlock.h>
 #include <linux/slab.h>
 #include <linux/module.h>
-#include <linux/atomic.h>
+#include <asm/atomic.h>
 
 struct ttm_object_file {
 	struct ttm_object_device *tdev;
@@ -208,7 +206,7 @@ void ttm_base_object_unref(struct ttm_base_object **p_base)
 	 */
 
 	write_lock(&tdev->object_lock);
-	kref_put(&base->refcount, ttm_release_base);
+	(void)kref_put(&base->refcount, &ttm_release_base);
 	write_unlock(&tdev->object_lock);
 }
 EXPORT_SYMBOL(ttm_base_object_unref);
@@ -234,7 +232,8 @@ struct ttm_base_object *ttm_base_object_lookup(struct ttm_object_file *tfile,
 		return NULL;
 
 	if (tfile != base->tfile && !base->shareable) {
-		pr_err("Attempted access of non-shareable object\n");
+		printk(KERN_ERR TTM_PFX
+		       "Attempted access of non-shareable object.\n");
 		ttm_base_object_unref(&base);
 		return NULL;
 	}

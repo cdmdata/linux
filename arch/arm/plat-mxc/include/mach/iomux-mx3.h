@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2006 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2004-2010 Freescale Semiconductor, Inc. All Rights Reserved.
  * Copyright (C) 2008 by Sascha Hauer <kernel@pengutronix.de>
  *
  * This program is free software; you can redistribute it and/or
@@ -112,12 +112,12 @@ enum iomux_gp_func {
  * 	- setups the iomux according to the configuration
  * 	- if the pin is configured as a GPIO, we claim it through kernel gpiolib
  */
-int mxc_iomux_alloc_pin(unsigned int pin, const char *label);
+int mxc_iomux_alloc_pin(const unsigned int pin, const char *label);
 /*
  * setups mutliple pins
  * convenient way to call the above function with tables
  */
-int mxc_iomux_setup_multiple_pins(const unsigned int *pin_list, unsigned count,
+int mxc_iomux_setup_multiple_pins(unsigned int *pin_list, unsigned count,
 		const char *label);
 
 /*
@@ -126,12 +126,12 @@ int mxc_iomux_setup_multiple_pins(const unsigned int *pin_list, unsigned count,
  * 	- frees the GPIO if the pin was configured as GPIO
  * 	- DOES NOT reconfigure the IOMUX in its reset state
  */
-void mxc_iomux_release_pin(unsigned int pin);
+void mxc_iomux_release_pin(const unsigned int pin);
 /*
  * releases multiple pins
  * convenvient way to call the above function with tables
  */
-void mxc_iomux_release_multiple_pins(const unsigned int *pin_list, int count);
+void mxc_iomux_release_multiple_pins(unsigned int *pin_list, int count);
 
 /*
  * This function enables/disables the general purpose function for a particular
@@ -554,6 +554,7 @@ enum iomux_pins {
 #define MX31_PIN_CSPI3_SCLK__SCLK	IOMUX_MODE(MX31_PIN_CSPI3_SCLK, IOMUX_CONFIG_FUNC)
 #define MX31_PIN_CSPI3_SPI_RDY__SPI_RDY	IOMUX_MODE(MX31_PIN_CSPI3_SPI_RDY, IOMUX_CONFIG_FUNC)
 #define MX31_PIN_BATT_LINE__OWIRE	IOMUX_MODE(MX31_PIN_BATT_LINE, IOMUX_CONFIG_FUNC)
+#define MX31_PIN_BATT_LINE__GPIO2_17	IOMUX_MODE(MX31_PIN_BATT_LINE, IOMUX_CONFIG_GPIO)
 #define MX31_PIN_CS4__CS4		IOMUX_MODE(MX31_PIN_CS4, IOMUX_CONFIG_FUNC)
 #define MX31_PIN_SD1_DATA3__SD1_DATA3	IOMUX_MODE(MX31_PIN_SD1_DATA3, IOMUX_CONFIG_FUNC)
 #define MX31_PIN_SD1_DATA2__SD1_DATA2	IOMUX_MODE(MX31_PIN_SD1_DATA2, IOMUX_CONFIG_FUNC)
@@ -696,6 +697,7 @@ enum iomux_pins {
 #define MX31_PIN_GPIO3_1__GPIO3_1	IOMUX_MODE(MX31_PIN_GPIO3_1, IOMUX_CONFIG_GPIO)
 #define MX31_PIN_TXD2__GPIO1_28		IOMUX_MODE(MX31_PIN_TXD2, IOMUX_CONFIG_GPIO)
 #define MX31_PIN_GPIO1_0__GPIO1_0	IOMUX_MODE(MX31_PIN_GPIO1_0, IOMUX_CONFIG_GPIO)
+#define MX31_PIN_GPIO1_2__GPIO1_2	IOMUX_MODE(MX31_PIN_GPIO1_2, IOMUX_CONFIG_GPIO)
 #define MX31_PIN_SVEN0__GPIO2_0		IOMUX_MODE(MX31_PIN_SVEN0, IOMUX_CONFIG_GPIO)
 #define MX31_PIN_STX0__GPIO2_1		IOMUX_MODE(MX31_PIN_STX0, IOMUX_CONFIG_GPIO)
 #define MX31_PIN_SRX0__GPIO2_2		IOMUX_MODE(MX31_PIN_SRX0, IOMUX_CONFIG_GPIO)
@@ -735,8 +737,7 @@ enum iomux_pins {
 #define MX31_PIN_KEY_COL5_KEY_COL5	IOMUX_MODE(MX31_PIN_KEY_COL5, IOMUX_CONFIG_FUNC)
 #define MX31_PIN_KEY_COL6_KEY_COL6	IOMUX_MODE(MX31_PIN_KEY_COL6, IOMUX_CONFIG_FUNC)
 #define MX31_PIN_KEY_COL7_KEY_COL7	IOMUX_MODE(MX31_PIN_KEY_COL7, IOMUX_CONFIG_FUNC)
-#define MX31_PIN_WATCHDOG_RST__WATCHDOG_RST	IOMUX_MODE(MX31_PIN_WATCHDOG_RST, IOMUX_CONFIG_FUNC)
-
+#define MX31_PIN_SRST0__GPIO3_2		IOMUX_MODE(MX31_PIN_SRST0, IOMUX_CONFIG_GPIO)
 
 /*
  * XXX: The SS0, SS1, SS2, SS3 lines of spi3 are multiplexed with cspi2_ss0,

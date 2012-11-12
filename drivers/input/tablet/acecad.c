@@ -229,13 +229,12 @@ static int usb_acecad_probe(struct usb_interface *intf, const struct usb_device_
 
 	err = input_register_device(acecad->input);
 	if (err)
-		goto fail3;
+		goto fail2;
 
 	usb_set_intfdata(intf, acecad);
 
 	return 0;
 
- fail3:	usb_free_urb(acecad->irq);
  fail2:	usb_free_coherent(dev, 8, acecad->data, acecad->data_dma);
  fail1: input_free_device(input_dev);
 	kfree(acecad);
@@ -269,4 +268,19 @@ static struct usb_driver usb_acecad_driver = {
 	.id_table =	usb_acecad_id_table,
 };
 
-module_usb_driver(usb_acecad_driver);
+static int __init usb_acecad_init(void)
+{
+	int result = usb_register(&usb_acecad_driver);
+	if (result == 0)
+		printk(KERN_INFO KBUILD_MODNAME ": " DRIVER_VERSION ":"
+		       DRIVER_DESC "\n");
+	return result;
+}
+
+static void __exit usb_acecad_exit(void)
+{
+	usb_deregister(&usb_acecad_driver);
+}
+
+module_init(usb_acecad_init);
+module_exit(usb_acecad_exit);

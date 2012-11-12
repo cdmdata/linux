@@ -16,7 +16,7 @@
 #include <linux/module.h>
 #include <linux/interrupt.h>
 #include <linux/dmapool.h>
-#include <linux/device.h>
+#include <linux/sysdev.h>
 #include <linux/errno.h>
 #include <linux/slab.h>
 #include <linux/delay.h>
@@ -35,7 +35,7 @@
 /* dma channel state information */
 
 struct s3c64xx_dmac {
-	struct device		dev;
+	struct sys_device	 sysdev;
 	struct clk		*clk;
 	void __iomem		*regs;
 	struct s3c2410_dma_chan *channels;
@@ -113,7 +113,7 @@ found:
 	return chan;
 }
 
-int s3c2410_dma_config(enum dma_ch channel, int xferunit)
+int s3c2410_dma_config(unsigned int channel, int xferunit)
 {
 	struct s3c2410_dma_chan *chan = s3c_dma_lookup_channel(channel);
 
@@ -147,14 +147,14 @@ static void s3c64xx_dma_fill_lli(struct s3c2410_dma_chan *chan,
 	u32 control0, control1;
 
 	switch (chan->source) {
-	case DMA_FROM_DEVICE:
+	case S3C2410_DMASRC_HW:
 		src = chan->dev_addr;
 		dst = data;
 		control0 = PL080_CONTROL_SRC_AHB2;
 		control0 |= PL080_CONTROL_DST_INCR;
 		break;
 
-	case DMA_TO_DEVICE:
+	case S3C2410_DMASRC_MEM:
 		src = data;
 		dst = chan->dev_addr;
 		control0 = PL080_CONTROL_DST_AHB2;
@@ -212,7 +212,6 @@ static int s3c64xx_dma_start(struct s3c2410_dma_chan *chan)
 
 	config = readl(chan->regs + PL080S_CH_CONFIG);
 	config |= PL080_CONFIG_ENABLE;
-	config &= ~PL080_CONFIG_HALT;
 
 	pr_debug("%s: writing config %08x\n", __func__, config);
 	writel(config, chan->regs + PL080S_CH_CONFIG);
@@ -297,7 +296,7 @@ static int s3c64xx_dma_flush(struct s3c2410_dma_chan *chan)
 	return 0;
 }
 
-int s3c2410_dma_ctrl(enum dma_ch channel, enum s3c2410_chan_op op)
+int s3c2410_dma_ctrl(unsigned int channel, enum s3c2410_chan_op op)
 {
 	struct s3c2410_dma_chan *chan = s3c_dma_lookup_channel(channel);
 
@@ -315,7 +314,7 @@ int s3c2410_dma_ctrl(enum dma_ch channel, enum s3c2410_chan_op op)
 	case S3C2410_DMAOP_FLUSH:
 		return s3c64xx_dma_flush(chan);
 
-	/* believe PAUSE/RESUME are no-ops */
+	/* belive PAUSE/RESUME are no-ops */
 	case S3C2410_DMAOP_PAUSE:
 	case S3C2410_DMAOP_RESUME:
 	case S3C2410_DMAOP_STARTED:
@@ -331,7 +330,7 @@ EXPORT_SYMBOL(s3c2410_dma_ctrl);
  *
  */
 
-int s3c2410_dma_enqueue(enum dma_ch channel, void *id,
+int s3c2410_dma_enqueue(unsigned int channel, void *id,
 			dma_addr_t data, int size)
 {
 	struct s3c2410_dma_chan *chan = s3c_dma_lookup_channel(channel);
@@ -415,8 +414,8 @@ err_buff:
 EXPORT_SYMBOL(s3c2410_dma_enqueue);
 
 
-int s3c2410_dma_devconfig(enum dma_ch channel,
-			  enum dma_data_direction source,
+int s3c2410_dma_devconfig(unsigned int channel,
+			  enum s3c2410_dmasrc source,
 			  unsigned long devaddr)
 {
 	struct s3c2410_dma_chan *chan = s3c_dma_lookup_channel(channel);
@@ -437,11 +436,11 @@ int s3c2410_dma_devconfig(enum dma_ch channel,
 	pr_debug("%s: peripheral %d\n", __func__, peripheral);
 
 	switch (source) {
-	case DMA_FROM_DEVICE:
+	case S3C2410_DMASRC_HW:
 		config = 2 << PL080_CONFIG_FLOW_CONTROL_SHIFT;
 		config |= peripheral << PL080_CONFIG_SRC_SEL_SHIFT;
 		break;
-	case DMA_TO_DEVICE:
+	case S3C2410_DMASRC_MEM:
 		config = 1 << PL080_CONFIG_FLOW_CONTROL_SHIFT;
 		config |= peripheral << PL080_CONFIG_DST_SEL_SHIFT;
 		break;
@@ -463,7 +462,7 @@ int s3c2410_dma_devconfig(enum dma_ch channel,
 EXPORT_SYMBOL(s3c2410_dma_devconfig);
 
 
-int s3c2410_dma_getposition(enum dma_ch channel,
+int s3c2410_dma_getposition(unsigned int channel,
 			    dma_addr_t *src, dma_addr_t *dst)
 {
 	struct s3c2410_dma_chan *chan = s3c_dma_lookup_channel(channel);
@@ -487,7 +486,7 @@ EXPORT_SYMBOL(s3c2410_dma_getposition);
  * get control of an dma channel
 */
 
-int s3c2410_dma_request(enum dma_ch channel,
+int s3c2410_dma_request(unsigned int channel,
 			struct s3c2410_dma_client *client,
 			void *dev)
 {
@@ -533,7 +532,7 @@ EXPORT_SYMBOL(s3c2410_dma_request);
  * allowed to go through.
 */
 
-int s3c2410_dma_free(enum dma_ch channel, struct s3c2410_dma_client *client)
+int s3c2410_dma_free(unsigned int channel, struct s3c2410_dma_client *client)
 {
 	struct s3c2410_dma_chan *chan = s3c_dma_lookup_channel(channel);
 	unsigned long flags;
@@ -631,9 +630,8 @@ static irqreturn_t s3c64xx_dma_irq(int irq, void *pw)
 	return IRQ_HANDLED;
 }
 
-static struct bus_type dma_subsys = {
+static struct sysdev_class dma_sysclass = {
 	.name		= "s3c64xx-dma",
-	.dev_name	= "s3c64xx-dma",
 };
 
 static int s3c64xx_dma_init1(int chno, enum dma_ch chbase,
@@ -652,12 +650,12 @@ static int s3c64xx_dma_init1(int chno, enum dma_ch chbase,
 		return -ENOMEM;
 	}
 
-	dmac->dev.id = chno / 8;
-	dmac->dev.bus = &dma_subsys;
+	dmac->sysdev.id = chno / 8;
+	dmac->sysdev.cls = &dma_sysclass;
 
-	err = device_register(&dmac->dev);
+	err = sysdev_register(&dmac->sysdev);
 	if (err) {
-		printk(KERN_ERR "%s: failed to register device\n", __func__);
+		printk(KERN_ERR "%s: failed to register sysdevice\n", __func__);
 		goto err_alloc;
 	}
 
@@ -668,7 +666,7 @@ static int s3c64xx_dma_init1(int chno, enum dma_ch chbase,
 		goto err_dev;
 	}
 
-	snprintf(clkname, sizeof(clkname), "dma%d", dmac->dev.id);
+	snprintf(clkname, sizeof(clkname), "dma%d", dmac->sysdev.id);
 
 	dmac->clk = clk_get(NULL, clkname);
 	if (IS_ERR(dmac->clk)) {
@@ -691,22 +689,21 @@ static int s3c64xx_dma_init1(int chno, enum dma_ch chbase,
 
 	regptr = regs + PL080_Cx_BASE(0);
 
-	for (ch = 0; ch < 8; ch++, chptr++) {
-		pr_debug("%s: registering DMA %d (%p)\n",
-			 __func__, chno + ch, regptr);
+	for (ch = 0; ch < 8; ch++, chno++, chptr++) {
+		printk(KERN_INFO "%s: registering DMA %d (%p)\n",
+		       __func__, chno, regptr);
 
 		chptr->bit = 1 << ch;
-		chptr->number = chno + ch;
+		chptr->number = chno;
 		chptr->dmac = dmac;
 		chptr->regs = regptr;
-		regptr += PL080_Cx_STRIDE;
+		regptr += PL008_Cx_STRIDE;
 	}
 
 	/* for the moment, permanently enable the controller */
 	writel(PL080_CONFIG_ENABLE, regs + PL080_CONFIG);
 
-	printk(KERN_INFO "PL080: IRQ %d, at %p, channels %d..%d\n",
-	       irq, regs, chno, chno+8);
+	printk(KERN_INFO "PL080: IRQ %d, at %p\n", irq, regs);
 
 	return 0;
 
@@ -716,7 +713,7 @@ err_clk:
 err_map:
 	iounmap(regs);
 err_dev:
-	device_unregister(&dmac->dev);
+	sysdev_unregister(&dmac->sysdev);
 err_alloc:
 	kfree(dmac);
 	return err;
@@ -734,16 +731,16 @@ static int __init s3c64xx_dma_init(void)
 		return -ENOMEM;
 	}
 
-	ret = subsys_system_register(&dma_subsys, NULL);
+	ret = sysdev_class_register(&dma_sysclass);
 	if (ret) {
-		printk(KERN_ERR "%s: failed to create subsys\n", __func__);
+		printk(KERN_ERR "%s: failed to create sysclass\n", __func__);
 		return -ENOMEM;
 	}
 
 	/* Set all DMA configuration to be DMA, not SDMA */
-	writel(0xffffff, S3C64XX_SDMA_SEL);
+	writel(0xffffff, S3C_SYSREG(0x110));
 
-	/* Register standard DMA controllers */
+	/* Register standard DMA controlers */
 	s3c64xx_dma_init1(0, DMACH_UART0, IRQ_DMA0, 0x75000000);
 	s3c64xx_dma_init1(8, DMACH_PCM1_TX, IRQ_DMA1, 0x75100000);
 

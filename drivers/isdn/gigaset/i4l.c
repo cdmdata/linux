@@ -15,7 +15,6 @@
 
 #include "gigaset.h"
 #include <linux/isdnif.h>
-#include <linux/export.h>
 
 #define SBUFSIZE	4096	/* sk_buff payload size */
 #define TRANSBUFSIZE	768	/* bytes per skb for transparent receive */
@@ -202,6 +201,8 @@ static int command_from_LL(isdn_ctrl *cntrl)
 	int i;
 	size_t l;
 
+	gigaset_debugdrivers();
+
 	gig_dbg(DEBUG_CMD, "driver: %d, command: %d, arg: 0x%lx",
 		cntrl->driver, cntrl->command, cntrl->arg);
 
@@ -243,7 +244,7 @@ static int command_from_LL(isdn_ctrl *cntrl)
 		dev_kfree_skb(bcs->rx_skb);
 		gigaset_new_rx_skb(bcs);
 
-		commands = kzalloc(AT_NUM * (sizeof *commands), GFP_ATOMIC);
+		commands = kzalloc(AT_NUM*(sizeof *commands), GFP_ATOMIC);
 		if (!commands) {
 			gigaset_free_channel(bcs);
 			dev_err(cs->dev, "ISDN_CMD_DIAL: out of memory\n");
@@ -261,7 +262,7 @@ static int command_from_LL(isdn_ctrl *cntrl)
 			if (!commands[AT_TYPE])
 				goto oom;
 			snprintf(commands[AT_DIAL], l,
-				 "D%s\r", cntrl->parm.setup.phone + 2);
+				 "D%s\r", cntrl->parm.setup.phone+2);
 		} else {
 			commands[AT_TYPE] = kstrdup("^SCTP=1\r", GFP_ATOMIC);
 			if (!commands[AT_TYPE])
@@ -418,8 +419,6 @@ oom:
 	dev_err(bcs->cs->dev, "out of memory\n");
 	for (i = 0; i < AT_NUM; ++i)
 		kfree(commands[i]);
-	kfree(commands);
-	gigaset_free_channel(bcs);
 	return -ENOMEM;
 }
 
@@ -482,7 +481,7 @@ int gigaset_isdn_icall(struct at_state_t *at_state)
 		response.parm.setup.si2 = 2;
 	} else {
 		dev_warn(cs->dev, "RING ignored - unsupported BC %s\n",
-			 at_state->str_var[STR_ZBC]);
+		     at_state->str_var[STR_ZBC]);
 		return ICALL_IGNORE;
 	}
 	if (at_state->str_var[STR_NMBR]) {
@@ -518,7 +517,7 @@ int gigaset_isdn_icall(struct at_state_t *at_state)
 		return ICALL_REJECT;
 	case 3:	/* incomplete */
 		dev_warn(cs->dev,
-			 "LL requested unsupported feature: Incomplete Number\n");
+		       "LL requested unsupported feature: Incomplete Number\n");
 		return ICALL_IGNORE;
 	case 4:	/* proceeding */
 		/* Gigaset will send ALERTING anyway.
@@ -624,6 +623,8 @@ int gigaset_isdn_regdev(struct cardstate *cs, const char *isdnid)
 {
 	isdn_if *iif;
 
+	pr_info("ISDN4Linux interface\n");
+
 	iif = kmalloc(sizeof *iif, GFP_KERNEL);
 	if (!iif) {
 		pr_err("out of memory\n");
@@ -642,7 +643,9 @@ int gigaset_isdn_regdev(struct cardstate *cs, const char *isdnid)
 	iif->maxbufsize = MAX_BUF_SIZE;
 	iif->features = ISDN_FEATURE_L2_TRANS |
 		ISDN_FEATURE_L2_HDLC |
+#ifdef GIG_X75
 		ISDN_FEATURE_L2_X75I |
+#endif
 		ISDN_FEATURE_L3_TRANS |
 		ISDN_FEATURE_P_EURO;
 	iif->hl_hdrlen = HW_HDR_LEN;		/* Area for storing ack */
@@ -682,7 +685,6 @@ void gigaset_isdn_unregdev(struct cardstate *cs)
  */
 void gigaset_isdn_regdrv(void)
 {
-	pr_info("ISDN4Linux interface\n");
 	/* nothing to do */
 }
 

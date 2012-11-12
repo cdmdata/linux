@@ -17,15 +17,18 @@
 #include <linux/delay.h>
 #include <linux/slab.h>
 #include <sound/soc.h>
+#include <sound/soc-dapm.h>
 #include <sound/initval.h>
 #include <sound/tlv.h>
 
 #include "ak4671.h"
 
+static struct snd_soc_codec *ak4671_codec;
 
 /* codec private data */
 struct ak4671_priv {
-	enum snd_soc_control_type control_type;
+	struct snd_soc_codec codec;
+	u8 reg_cache[AK4671_CACHEREGNUM];
 };
 
 /* ak4671 register cache & default register settings */
@@ -168,15 +171,18 @@ static int ak4671_out2_event(struct snd_soc_dapm_widget *w,
 		struct snd_kcontrol *kcontrol, int event)
 {
 	struct snd_soc_codec *codec = w->codec;
+	u8 reg;
 
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
-		snd_soc_update_bits(codec, AK4671_LOUT2_POWER_MANAGERMENT,
-				    AK4671_MUTEN, AK4671_MUTEN);
+		reg = snd_soc_read(codec, AK4671_LOUT2_POWER_MANAGERMENT);
+		reg |= AK4671_MUTEN;
+		snd_soc_write(codec, AK4671_LOUT2_POWER_MANAGERMENT, reg);
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
-		snd_soc_update_bits(codec, AK4671_LOUT2_POWER_MANAGERMENT,
-				    AK4671_MUTEN, 0);
+		reg = snd_soc_read(codec, AK4671_LOUT2_POWER_MANAGERMENT);
+		reg &= ~AK4671_MUTEN;
+		snd_soc_write(codec, AK4671_LOUT2_POWER_MANAGERMENT, reg);
 		break;
 	}
 
@@ -348,7 +354,7 @@ static const struct snd_soc_dapm_widget ak4671_dapm_widgets[] = {
 	SND_SOC_DAPM_SUPPLY("PMPLL", AK4671_PLL_MODE_SELECT1, 0, 0, NULL, 0),
 };
 
-static const struct snd_soc_dapm_route ak4671_intercon[] = {
+static const struct snd_soc_dapm_route intercon[] = {
 	{"DAC Left", "NULL", "PMPLL"},
 	{"DAC Right", "NULL", "PMPLL"},
 	{"ADC Left", "NULL", "PMPLL"},
@@ -428,6 +434,16 @@ static const struct snd_soc_dapm_route ak4671_intercon[] = {
 	{"LOUT3 Mixer", "LINS4", "LIN4 Mixing Circuit"},
 	{"ROUT3 Mixer", "RINS4", "RIN4 Mixing Circuit"},
 };
+
+static int ak4671_add_widgets(struct snd_soc_codec *codec)
+{
+	snd_soc_dapm_new_controls(codec, ak4671_dapm_widgets,
+				  ARRAY_SIZE(ak4671_dapm_widgets));
+
+	snd_soc_dapm_add_routes(codec, intercon, ARRAY_SIZE(intercon));
+
+	return 0;
+}
 
 static int ak4671_hw_params(struct snd_pcm_substream *substream,
 		struct snd_pcm_hw_params *params,
@@ -572,18 +588,21 @@ static int ak4671_set_dai_fmt(struct snd_soc_dai *dai, unsigned int fmt)
 static int ak4671_set_bias_level(struct snd_soc_codec *codec,
 		enum snd_soc_bias_level level)
 {
+	u8 reg;
+
 	switch (level) {
 	case SND_SOC_BIAS_ON:
 	case SND_SOC_BIAS_PREPARE:
 	case SND_SOC_BIAS_STANDBY:
-		snd_soc_update_bits(codec, AK4671_AD_DA_POWER_MANAGEMENT,
-				    AK4671_PMVCM, AK4671_PMVCM);
+		reg = snd_soc_read(codec, AK4671_AD_DA_POWER_MANAGEMENT);
+		snd_soc_write(codec, AK4671_AD_DA_POWER_MANAGEMENT,
+				reg | AK4671_PMVCM);
 		break;
 	case SND_SOC_BIAS_OFF:
 		snd_soc_write(codec, AK4671_AD_DA_POWER_MANAGEMENT, 0x00);
 		break;
 	}
-	codec->dapm.bias_level = level;
+	codec->bias_level = level;
 	return 0;
 }
 
@@ -594,14 +613,14 @@ static int ak4671_set_bias_level(struct snd_soc_codec *codec,
 
 #define AK4671_FORMATS		SNDRV_PCM_FMTBIT_S16_LE
 
-static const struct snd_soc_dai_ops ak4671_dai_ops = {
+static struct snd_soc_dai_ops ak4671_dai_ops = {
 	.hw_params	= ak4671_hw_params,
 	.set_sysclk	= ak4671_set_dai_sysclk,
 	.set_fmt	= ak4671_set_dai_fmt,
 };
 
-static struct snd_soc_dai_driver ak4671_dai = {
-	.name = "ak4671-hifi",
+struct snd_soc_dai ak4671_dai = {
+	.name = "AK4671",
 	.playback = {
 		.stream_name = "Playback",
 		.channels_min = 1,
@@ -616,67 +635,151 @@ static struct snd_soc_dai_driver ak4671_dai = {
 		.formats = AK4671_FORMATS,},
 	.ops = &ak4671_dai_ops,
 };
+EXPORT_SYMBOL_GPL(ak4671_dai);
 
-static int ak4671_probe(struct snd_soc_codec *codec)
+static int ak4671_probe(struct platform_device *pdev)
 {
-	struct ak4671_priv *ak4671 = snd_soc_codec_get_drvdata(codec);
-	int ret;
+	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
+	struct snd_soc_codec *codec;
+	int ret = 0;
 
-	ret = snd_soc_codec_set_cache_io(codec, 8, 8, ak4671->control_type);
-	if (ret < 0) {
-		dev_err(codec->dev, "Failed to set cache I/O: %d\n", ret);
-		return ret;
+	if (ak4671_codec == NULL) {
+		dev_err(&pdev->dev, "Codec device not registered\n");
+		return -ENODEV;
 	}
 
-	snd_soc_add_codec_controls(codec, ak4671_snd_controls,
+	socdev->card->codec = ak4671_codec;
+	codec = ak4671_codec;
+
+	/* register pcms */
+	ret = snd_soc_new_pcms(socdev, SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1);
+	if (ret < 0) {
+		dev_err(codec->dev, "failed to create pcms: %d\n", ret);
+		goto pcm_err;
+	}
+
+	snd_soc_add_controls(codec, ak4671_snd_controls,
 			     ARRAY_SIZE(ak4671_snd_controls));
+	ak4671_add_widgets(codec);
 
 	ak4671_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
 
 	return ret;
+
+pcm_err:
+	return ret;
 }
 
-static int ak4671_remove(struct snd_soc_codec *codec)
+static int ak4671_remove(struct platform_device *pdev)
 {
-	ak4671_set_bias_level(codec, SND_SOC_BIAS_OFF);
+	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
+
+	snd_soc_free_pcms(socdev);
+	snd_soc_dapm_free(socdev);
+
 	return 0;
 }
 
-static struct snd_soc_codec_driver soc_codec_dev_ak4671 = {
+struct snd_soc_codec_device soc_codec_dev_ak4671 = {
 	.probe = ak4671_probe,
 	.remove = ak4671_remove,
-	.set_bias_level = ak4671_set_bias_level,
-	.reg_cache_size = AK4671_CACHEREGNUM,
-	.reg_word_size = sizeof(u8),
-	.reg_cache_default = ak4671_reg,
-	.dapm_widgets = ak4671_dapm_widgets,
-	.num_dapm_widgets = ARRAY_SIZE(ak4671_dapm_widgets),
-	.dapm_routes = ak4671_intercon,
-	.num_dapm_routes = ARRAY_SIZE(ak4671_intercon),
 };
+EXPORT_SYMBOL_GPL(soc_codec_dev_ak4671);
+
+static int ak4671_register(struct ak4671_priv *ak4671,
+		enum snd_soc_control_type control)
+{
+	int ret;
+	struct snd_soc_codec *codec = &ak4671->codec;
+
+	if (ak4671_codec) {
+		dev_err(codec->dev, "Another AK4671 is registered\n");
+		ret = -EINVAL;
+		goto err;
+	}
+
+	mutex_init(&codec->mutex);
+	INIT_LIST_HEAD(&codec->dapm_widgets);
+	INIT_LIST_HEAD(&codec->dapm_paths);
+
+	snd_soc_codec_set_drvdata(codec,  ak4671);
+	codec->name = "AK4671";
+	codec->owner = THIS_MODULE;
+	codec->bias_level = SND_SOC_BIAS_OFF;
+	codec->set_bias_level = ak4671_set_bias_level;
+	codec->dai = &ak4671_dai;
+	codec->num_dai = 1;
+	codec->reg_cache_size = AK4671_CACHEREGNUM;
+	codec->reg_cache = &ak4671->reg_cache;
+
+	memcpy(codec->reg_cache, ak4671_reg, sizeof(ak4671_reg));
+
+	ret = snd_soc_codec_set_cache_io(codec, 8, 8, control);
+	if (ret < 0) {
+		dev_err(codec->dev, "Failed to set cache I/O: %d\n", ret);
+		goto err;
+	}
+
+	ak4671_dai.dev = codec->dev;
+	ak4671_codec = codec;
+
+	ret = snd_soc_register_codec(codec);
+	if (ret != 0) {
+		dev_err(codec->dev, "Failed to register codec: %d\n", ret);
+		goto err;
+	}
+
+	ret = snd_soc_register_dai(&ak4671_dai);
+	if (ret != 0) {
+		dev_err(codec->dev, "Failed to register DAI: %d\n", ret);
+		goto err_codec;
+	}
+
+	return 0;
+
+err_codec:
+	snd_soc_unregister_codec(codec);
+err:
+	kfree(ak4671);
+	return ret;
+}
+
+static void ak4671_unregister(struct ak4671_priv *ak4671)
+{
+	ak4671_set_bias_level(&ak4671->codec, SND_SOC_BIAS_OFF);
+	snd_soc_unregister_dai(&ak4671_dai);
+	snd_soc_unregister_codec(&ak4671->codec);
+	kfree(ak4671);
+	ak4671_codec = NULL;
+}
 
 static int __devinit ak4671_i2c_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
 	struct ak4671_priv *ak4671;
-	int ret;
+	struct snd_soc_codec *codec;
 
-	ak4671 = devm_kzalloc(&client->dev, sizeof(struct ak4671_priv),
-			      GFP_KERNEL);
+	ak4671 = kzalloc(sizeof(struct ak4671_priv), GFP_KERNEL);
 	if (ak4671 == NULL)
 		return -ENOMEM;
 
-	i2c_set_clientdata(client, ak4671);
-	ak4671->control_type = SND_SOC_I2C;
+	codec = &ak4671->codec;
+	codec->hw_write = (hw_write_t)i2c_master_send;
 
-	ret = snd_soc_register_codec(&client->dev,
-			&soc_codec_dev_ak4671, &ak4671_dai, 1);
-	return ret;
+	i2c_set_clientdata(client, ak4671);
+	codec->control_data = client;
+
+	codec->dev = &client->dev;
+
+	return ak4671_register(ak4671, SND_SOC_I2C);
 }
 
 static __devexit int ak4671_i2c_remove(struct i2c_client *client)
 {
-	snd_soc_unregister_codec(&client->dev);
+	struct ak4671_priv *ak4671 = i2c_get_clientdata(client);
+
+	ak4671_unregister(ak4671);
+
 	return 0;
 }
 
@@ -688,7 +791,7 @@ MODULE_DEVICE_TABLE(i2c, ak4671_i2c_id);
 
 static struct i2c_driver ak4671_i2c_driver = {
 	.driver = {
-		.name = "ak4671-codec",
+		.name = "ak4671",
 		.owner = THIS_MODULE,
 	},
 	.probe = ak4671_i2c_probe,

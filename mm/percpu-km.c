@@ -27,7 +27,7 @@
  *   chunk size is not aligned.  percpu-km code will whine about it.
  */
 
-#if defined(CONFIG_SMP) && defined(CONFIG_NEED_PER_CPU_PAGE_FIRST_CHUNK)
+#ifdef CONFIG_NEED_PER_CPU_PAGE_FIRST_CHUNK
 #error "contiguous percpu allocation is incompatible with paged first chunk"
 #endif
 
@@ -35,11 +35,7 @@
 
 static int pcpu_populate_chunk(struct pcpu_chunk *chunk, int off, int size)
 {
-	unsigned int cpu;
-
-	for_each_possible_cpu(cpu)
-		memset((void *)pcpu_chunk_addr(chunk, cpu, 0) + off, 0, size);
-
+	/* noop */
 	return 0;
 }
 

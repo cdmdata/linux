@@ -137,11 +137,11 @@ int pciehp_unconfigure_device(struct slot *p_slot)
 					 "Cannot remove display device %s\n",
 					 pci_name(temp));
 				pci_dev_put(temp);
-				rc = -EINVAL;
+				rc = EINVAL;
 				break;
 			}
 		}
-		pci_stop_and_remove_bus_device(temp);
+		pci_remove_bus_device(temp);
 		/*
 		 * Ensure that no new Requests will be generated from
 		 * the device.

@@ -32,6 +32,7 @@
 #include <linux/types.h>
 #include <linux/slab.h>
 #include <linux/pci.h>
+#include <linux/workqueue.h>
 #include "../pci.h"
 #include "shpchp.h"
 
@@ -51,7 +52,7 @@ static int queue_interrupt_event(struct slot *p_slot, u32 event_type)
 	info->p_slot = p_slot;
 	INIT_WORK(&info->work, interrupt_event_handler);
 
-	queue_work(shpchp_wq, &info->work);
+	schedule_work(&info->work);
 
 	return 0;
 }
@@ -456,7 +457,7 @@ void shpchp_queue_pushbutton_work(struct work_struct *work)
 		kfree(info);
 		goto out;
 	}
-	queue_work(shpchp_ordered_wq, &info->work);
+	queue_work(shpchp_wq, &info->work);
  out:
 	mutex_unlock(&p_slot->lock);
 }
@@ -504,7 +505,7 @@ static void handle_button_press_event(struct slot *p_slot)
 		p_slot->hpc_ops->green_led_blink(p_slot);
 		p_slot->hpc_ops->set_attention_status(p_slot, 0);
 
-		queue_delayed_work(shpchp_wq, &p_slot->work, 5*HZ);
+		schedule_delayed_work(&p_slot->work, 5*HZ);
 		break;
 	case BLINKINGOFF_STATE:
 	case BLINKINGON_STATE:

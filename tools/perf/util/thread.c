@@ -7,6 +7,46 @@
 #include "util.h"
 #include "debug.h"
 
+/* Skip "." and ".." directories */
+static int filter(const struct dirent *dir)
+{
+	if (dir->d_name[0] == '.')
+		return 0;
+	else
+		return 1;
+}
+
+int find_all_tid(int pid, pid_t ** all_tid)
+{
+	char name[256];
+	int items;
+	struct dirent **namelist = NULL;
+	int ret = 0;
+	int i;
+
+	sprintf(name, "/proc/%d/task", pid);
+	items = scandir(name, &namelist, filter, NULL);
+	if (items <= 0)
+                return -ENOENT;
+	*all_tid = malloc(sizeof(pid_t) * items);
+	if (!*all_tid) {
+		ret = -ENOMEM;
+		goto failure;
+	}
+
+	for (i = 0; i < items; i++)
+		(*all_tid)[i] = atoi(namelist[i]->d_name);
+
+	ret = items;
+
+failure:
+	for (i=0; i<items; i++)
+		free(namelist[i]);
+	free(namelist);
+
+	return ret;
+}
+
 static struct thread *thread__new(pid_t pid)
 {
 	struct thread *self = zalloc(sizeof(*self));
@@ -20,13 +60,6 @@ static struct thread *thread__new(pid_t pid)
 	}
 
 	return self;
-}
-
-void thread__delete(struct thread *self)
-{
-	map_groups__exit(&self->mg);
-	free(self->comm);
-	free(self);
 }
 
 int thread__set_comm(struct thread *self, const char *comm)
@@ -61,7 +94,7 @@ static size_t thread__fprintf(struct thread *self, FILE *fp)
 	       map_groups__fprintf(&self->mg, verbose, fp);
 }
 
-struct thread *machine__findnew_thread(struct machine *self, pid_t pid)
+struct thread *perf_session__findnew(struct perf_session *self, pid_t pid)
 {
 	struct rb_node **p = &self->threads.rb_node;
 	struct rb_node *parent = NULL;
@@ -125,12 +158,12 @@ int thread__fork(struct thread *self, struct thread *parent)
 	return 0;
 }
 
-size_t machine__fprintf(struct machine *machine, FILE *fp)
+size_t perf_session__fprintf(struct perf_session *self, FILE *fp)
 {
 	size_t ret = 0;
 	struct rb_node *nd;
 
-	for (nd = rb_first(&machine->threads); nd; nd = rb_next(nd)) {
+	for (nd = rb_first(&self->threads); nd; nd = rb_next(nd)) {
 		struct thread *pos = rb_entry(nd, struct thread, rb_node);
 
 		ret += thread__fprintf(pos, fp);

@@ -7,7 +7,7 @@
  *
  */
 #include <linux/module.h>
-#include <linux/edac.h>
+#include <linux/sysdev.h>
 #include <linux/slab.h>
 #include <linux/ctype.h>
 
@@ -338,12 +338,12 @@ static struct kobj_type ktype_edac_pci_main_kobj = {
  * edac_pci_main_kobj_setup()
  *
  *	setup the sysfs for EDAC PCI attributes
- *	assumes edac_subsys has already been initialized
+ *	assumes edac_class has already been initialized
  */
 static int edac_pci_main_kobj_setup(void)
 {
 	int err;
-	struct bus_type *edac_subsys;
+	struct sysdev_class *edac_class;
 
 	debugf0("%s()\n", __func__);
 
@@ -352,11 +352,11 @@ static int edac_pci_main_kobj_setup(void)
 		return 0;
 
 	/* First time, so create the main kobject and its
-	 * controls and attributes
+	 * controls and atributes
 	 */
-	edac_subsys = edac_get_sysfs_subsys();
-	if (edac_subsys == NULL) {
-		debugf1("%s() no edac_subsys\n", __func__);
+	edac_class = edac_get_edac_class();
+	if (edac_class == NULL) {
+		debugf1("%s() no edac_class\n", __func__);
 		err = -ENODEV;
 		goto decrement_count_fail;
 	}
@@ -368,7 +368,7 @@ static int edac_pci_main_kobj_setup(void)
 	if (!try_module_get(THIS_MODULE)) {
 		debugf1("%s() try_module_get() failed\n", __func__);
 		err = -ENODEV;
-		goto mod_get_fail;
+		goto decrement_count_fail;
 	}
 
 	edac_pci_top_main_kobj = kzalloc(sizeof(struct kobject), GFP_KERNEL);
@@ -381,7 +381,7 @@ static int edac_pci_main_kobj_setup(void)
 	/* Instanstiate the pci object */
 	err = kobject_init_and_add(edac_pci_top_main_kobj,
 				   &ktype_edac_pci_main_kobj,
-				   &edac_subsys->dev_root->kobj, "pci");
+				   &edac_class->kset.kobj, "pci");
 	if (err) {
 		debugf1("Failed to register '.../edac/pci'\n");
 		goto kobject_init_and_add_fail;
@@ -402,9 +402,6 @@ kobject_init_and_add_fail:
 
 kzalloc_fail:
 	module_put(THIS_MODULE);
-
-mod_get_fail:
-	edac_put_sysfs_subsys();
 
 decrement_count_fail:
 	/* if are on this error exit, nothing to tear down */
@@ -432,7 +429,6 @@ static void edac_pci_main_kobj_teardown(void)
 			__func__);
 		kobject_put(edac_pci_top_main_kobj);
 	}
-	edac_put_sysfs_subsys();
 }
 
 /*
@@ -551,7 +547,7 @@ static void edac_pci_dev_parity_clear(struct pci_dev *dev)
 /*
  *  PCI Parity polling
  *
- *	Function to retrieve the current parity status
+ *	Fucntion to retrieve the current parity status
  *	and decode it
  *
  */

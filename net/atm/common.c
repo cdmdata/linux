@@ -23,7 +23,7 @@
 #include <linux/uaccess.h>
 #include <linux/poll.h>
 
-#include <linux/atomic.h>
+#include <asm/atomic.h>
 
 #include "resources.h"		/* atm_find_dev */
 #include "common.h"		/* prototypes */
@@ -36,8 +36,6 @@ EXPORT_SYMBOL(vcc_hash);
 
 DEFINE_RWLOCK(vcc_sklist_lock);
 EXPORT_SYMBOL(vcc_sklist_lock);
-
-static ATOMIC_NOTIFIER_HEAD(atm_dev_notify_chain);
 
 static void __vcc_insert_socket(struct sock *sk)
 {
@@ -214,42 +212,6 @@ void vcc_release_async(struct atm_vcc *vcc, int reply)
 }
 EXPORT_SYMBOL(vcc_release_async);
 
-void vcc_process_recv_queue(struct atm_vcc *vcc)
-{
-	struct sk_buff_head queue, *rq;
-	struct sk_buff *skb, *tmp;
-	unsigned long flags;
-
-	__skb_queue_head_init(&queue);
-	rq = &sk_atm(vcc)->sk_receive_queue;
-
-	spin_lock_irqsave(&rq->lock, flags);
-	skb_queue_splice_init(rq, &queue);
-	spin_unlock_irqrestore(&rq->lock, flags);
-
-	skb_queue_walk_safe(&queue, skb, tmp) {
-		__skb_unlink(skb, &queue);
-		vcc->push(vcc, skb);
-	}
-}
-EXPORT_SYMBOL(vcc_process_recv_queue);
-
-void atm_dev_signal_change(struct atm_dev *dev, char signal)
-{
-	pr_debug("%s signal=%d dev=%p number=%d dev->signal=%d\n",
-		__func__, signal, dev, dev->number, dev->signal);
-
-	/* atm driver sending invalid signal */
-	WARN_ON(signal < ATM_PHY_SIG_LOST || signal > ATM_PHY_SIG_FOUND);
-
-	if (dev->signal == signal)
-		return; /* no change */
-
-	dev->signal = signal;
-
-	atomic_notifier_call_chain(&atm_dev_notify_chain, signal, dev);
-}
-EXPORT_SYMBOL(atm_dev_signal_change);
 
 void atm_dev_release_vccs(struct atm_dev *dev)
 {
@@ -272,7 +234,6 @@ void atm_dev_release_vccs(struct atm_dev *dev)
 	}
 	write_unlock_irq(&vcc_sklist_lock);
 }
-EXPORT_SYMBOL(atm_dev_release_vccs);
 
 static int adjust_tp(struct atm_trafprm *tp, unsigned char aal)
 {
@@ -522,11 +483,8 @@ int vcc_recvmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
 
 	if (sock->state != SS_CONNECTED)
 		return -ENOTCONN;
-
-	/* only handle MSG_DONTWAIT and MSG_PEEK */
-	if (flags & ~(MSG_DONTWAIT | MSG_PEEK))
+	if (flags & ~MSG_DONTWAIT)		/* only handle MSG_DONTWAIT */
 		return -EOPNOTSUPP;
-
 	vcc = ATM_SD(sock);
 	if (test_bit(ATM_VF_RELEASED, &vcc->flags) ||
 	    test_bit(ATM_VF_CLOSE, &vcc->flags) ||
@@ -547,13 +505,8 @@ int vcc_recvmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
 	if (error)
 		return error;
 	sock_recv_ts_and_drops(msg, sk, skb);
-
-	if (!(flags & MSG_PEEK)) {
-		pr_debug("%d -= %d\n", atomic_read(&sk->sk_rmem_alloc),
-			 skb->truesize);
-		atm_return(vcc, skb->truesize);
-	}
-
+	pr_debug("%d -= %d\n", atomic_read(&sk->sk_rmem_alloc), skb->truesize);
+	atm_return(vcc, skb->truesize);
 	skb_free_datagram(sk, skb);
 	return copied;
 }
@@ -821,24 +774,12 @@ int vcc_getsockopt(struct socket *sock, int level, int optname,
 	default:
 		if (level == SOL_SOCKET)
 			return -EINVAL;
-		break;
+			break;
 	}
 	if (!vcc->dev || !vcc->dev->ops->getsockopt)
 		return -EINVAL;
 	return vcc->dev->ops->getsockopt(vcc, level, optname, optval, len);
 }
-
-int register_atmdevice_notifier(struct notifier_block *nb)
-{
-	return atomic_notifier_chain_register(&atm_dev_notify_chain, nb);
-}
-EXPORT_SYMBOL_GPL(register_atmdevice_notifier);
-
-void unregister_atmdevice_notifier(struct notifier_block *nb)
-{
-	atomic_notifier_chain_unregister(&atm_dev_notify_chain, nb);
-}
-EXPORT_SYMBOL_GPL(unregister_atmdevice_notifier);
 
 static int __init atm_init(void)
 {

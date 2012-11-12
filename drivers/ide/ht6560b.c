@@ -10,6 +10,7 @@
  *  Author:    Mikko Ala-Fossi            <maf@iki.fi>
  *             Jan Evert van Grootheest   <j.e.van.grootheest@caiway.nl>
  *
+ *  Try:  http://www.maf.iki.fi/~maf/ht6560b/
  */
 
 #define DRV_NAME	"ht6560b"
@@ -317,7 +318,7 @@ static void __init ht6560b_init_dev(ide_drive_t *drive)
 	ide_set_drivedata(drive, (void *)t);
 }
 
-static bool probe_ht6560b;
+static int probe_ht6560b;
 
 module_param_named(probe, probe_ht6560b, bool, 0);
 MODULE_PARM_DESC(probe, "probe for HT6560B chipset");

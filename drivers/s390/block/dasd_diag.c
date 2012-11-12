@@ -10,7 +10,6 @@
 
 #define KMSG_COMPONENT "dasd"
 
-#include <linux/kernel_stat.h>
 #include <linux/stddef.h>
 #include <linux/kernel.h>
 #include <linux/slab.h>
@@ -24,7 +23,7 @@
 #include <asm/debug.h>
 #include <asm/ebcdic.h>
 #include <asm/io.h>
-#include <asm/irq.h>
+#include <asm/s390_ext.h>
 #include <asm/vtoc.h>
 #include <asm/diag.h>
 
@@ -44,7 +43,7 @@ MODULE_LICENSE("GPL");
 			   sizeof(struct dasd_diag_req)) / \
 		           sizeof(struct dasd_diag_bio)) / 2)
 #define DIAG_MAX_RETRIES	32
-#define DIAG_TIMEOUT		50
+#define DIAG_TIMEOUT		50 * HZ
 
 static struct dasd_discipline dasd_diag_discipline;
 
@@ -229,27 +228,29 @@ dasd_diag_term_IO(struct dasd_ccw_req * cqr)
 }
 
 /* Handle external interruption. */
-static void dasd_ext_handler(struct ext_code ext_code,
-			     unsigned int param32, unsigned long param64)
+static void
+dasd_ext_handler(__u16 code)
 {
 	struct dasd_ccw_req *cqr, *next;
 	struct dasd_device *device;
 	unsigned long long expires;
 	unsigned long flags;
+	u8 int_code, status;
 	addr_t ip;
 	int rc;
 
-	switch (ext_code.subcode >> 8) {
+	int_code = *((u8 *) DASD_DIAG_LC_INT_CODE);
+	status = *((u8 *) DASD_DIAG_LC_INT_STATUS);
+	switch (int_code) {
 	case DASD_DIAG_CODE_31BIT:
-		ip = (addr_t) param32;
+		ip = (addr_t) *((u32 *) DASD_DIAG_LC_INT_PARM_31BIT);
 		break;
 	case DASD_DIAG_CODE_64BIT:
-		ip = (addr_t) param64;
+		ip = (addr_t) *((u64 *) DASD_DIAG_LC_INT_PARM_64BIT);
 		break;
 	default:
 		return;
 	}
-	kstat_cpu(smp_processor_id()).irqs[EXTINT_DSD]++;
 	if (!ip) {		/* no intparm: unsolicited interrupt */
 		DBF_EVENT(DBF_NOTICE, "%s", "caught unsolicited "
 			      "interrupt");
@@ -280,7 +281,7 @@ static void dasd_ext_handler(struct ext_code ext_code,
 	cqr->stopclk = get_clock();
 
 	expires = 0;
-	if ((ext_code.subcode & 0xff) == 0) {
+	if (status == 0) {
 		cqr->status = DASD_CQR_SUCCESS;
 		/* Start first request on queue if possible -> fast_io. */
 		if (!list_empty(&device->ccw_queue)) {
@@ -295,8 +296,8 @@ static void dasd_ext_handler(struct ext_code ext_code,
 	} else {
 		cqr->status = DASD_CQR_QUEUED;
 		DBF_DEV_EVENT(DBF_DEBUG, device, "interrupt status for "
-			      "request %p was %d (%d retries left)", cqr,
-			      ext_code.subcode & 0xff, cqr->retries);
+			    "request %p was %d (%d retries left)", cqr, status,
+			    cqr->retries);
 		dasd_diag_erp(device);
 	}
 
@@ -358,8 +359,6 @@ dasd_diag_check_device(struct dasd_device *device)
 		rc = -EOPNOTSUPP;
 		goto out;
 	}
-
-	device->default_expires = DIAG_TIMEOUT;
 
 	/* Figure out position of label block */
 	switch (private->rdc_data.vdev_class) {
@@ -564,7 +563,7 @@ static struct dasd_ccw_req *dasd_diag_build_cp(struct dasd_device *memdev,
 	cqr->startdev = memdev;
 	cqr->memdev = memdev;
 	cqr->block = block;
-	cqr->expires = memdev->default_expires * HZ;
+	cqr->expires = DIAG_TIMEOUT;
 	cqr->status = DASD_CQR_FILLED;
 	return cqr;
 }
@@ -619,7 +618,6 @@ static struct dasd_discipline dasd_diag_discipline = {
 	.ebcname = "DIAG",
 	.max_blocks = DIAG_MAX_BLOCKS,
 	.check_device = dasd_diag_check_device,
-	.verify_path = dasd_generic_verify_path,
 	.fill_geometry = dasd_diag_fill_geometry,
 	.start_IO = dasd_start_diag,
 	.term_IO = dasd_diag_term_IO,
@@ -642,7 +640,7 @@ dasd_diag_init(void)
 	}
 	ASCEBC(dasd_diag_discipline.ebcname, 4);
 
-	service_subclass_irq_register();
+	ctl_set_bit(0, 9);
 	register_external_interrupt(0x2603, dasd_ext_handler);
 	dasd_diag_discipline_pointer = &dasd_diag_discipline;
 	return 0;
@@ -652,7 +650,7 @@ static void __exit
 dasd_diag_cleanup(void)
 {
 	unregister_external_interrupt(0x2603, dasd_ext_handler);
-	service_subclass_irq_unregister();
+	ctl_clear_bit(0, 9);
 	dasd_diag_discipline_pointer = NULL;
 }
 

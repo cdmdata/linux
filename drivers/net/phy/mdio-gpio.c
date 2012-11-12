@@ -95,7 +95,6 @@ static struct mii_bus * __devinit mdio_gpio_bus_init(struct device *dev,
 		goto out;
 
 	bitbang->ctrl.ops = &mdio_gpio_ops;
-	bitbang->ctrl.reset = pdata->reset;
 	bitbang->mdc = pdata->mdc;
 	bitbang->mdio = pdata->mdio;
 
@@ -116,7 +115,7 @@ static struct mii_bus * __devinit mdio_gpio_bus_init(struct device *dev,
 		if (!new_bus->irq[i])
 			new_bus->irq[i] = PHY_POLL;
 
-	snprintf(new_bus->id, MII_BUS_ID_SIZE, "gpio-%x", bus_id);
+	snprintf(new_bus->id, MII_BUS_ID_SIZE, "%x", bus_id);
 
 	if (gpio_request(bitbang->mdc, "mdc"))
 		goto out_free_bus;
@@ -189,7 +188,8 @@ static int __devexit mdio_gpio_remove(struct platform_device *pdev)
 
 #ifdef CONFIG_OF_GPIO
 
-static int __devinit mdio_ofgpio_probe(struct platform_device *ofdev)
+static int __devinit mdio_ofgpio_probe(struct of_device *ofdev,
+                                        const struct of_device_id *match)
 {
 	struct mdio_gpio_platform_data *pdata;
 	struct mii_bus *new_bus;
@@ -224,7 +224,7 @@ out_free:
 	return -ENODEV;
 }
 
-static int __devexit mdio_ofgpio_remove(struct platform_device *ofdev)
+static int __devexit mdio_ofgpio_remove(struct of_device *ofdev)
 {
 	mdio_gpio_bus_destroy(&ofdev->dev);
 	kfree(ofdev->dev.platform_data);
@@ -240,9 +240,9 @@ static struct of_device_id mdio_ofgpio_match[] = {
 };
 MODULE_DEVICE_TABLE(of, mdio_ofgpio_match);
 
-static struct platform_driver mdio_ofgpio_driver = {
+static struct of_platform_driver mdio_ofgpio_driver = {
 	.driver = {
-		.name = "mdio-ofgpio",
+		.name = "mdio-gpio",
 		.owner = THIS_MODULE,
 		.of_match_table = mdio_ofgpio_match,
 	},
@@ -252,16 +252,16 @@ static struct platform_driver mdio_ofgpio_driver = {
 
 static inline int __init mdio_ofgpio_init(void)
 {
-	return platform_driver_register(&mdio_ofgpio_driver);
+	return of_register_platform_driver(&mdio_ofgpio_driver);
 }
 
-static inline void mdio_ofgpio_exit(void)
+static inline void __exit mdio_ofgpio_exit(void)
 {
-	platform_driver_unregister(&mdio_ofgpio_driver);
+	of_unregister_platform_driver(&mdio_ofgpio_driver);
 }
 #else
 static inline int __init mdio_ofgpio_init(void) { return 0; }
-static inline void mdio_ofgpio_exit(void) { }
+static inline void __exit mdio_ofgpio_exit(void) { }
 #endif /* CONFIG_OF_GPIO */
 
 static struct platform_driver mdio_gpio_driver = {

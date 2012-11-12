@@ -31,7 +31,7 @@
  */
 
 #include <rdma/ib_umem.h>
-#include <linux/atomic.h>
+#include <asm/atomic.h>
 
 #include "iw_cxgb4.h"
 
@@ -59,7 +59,7 @@ static int write_adapter_mem(struct c4iw_rdev *rdev, u32 addr, u32 len,
 		wr_len = roundup(sizeof *req + sizeof *sc +
 				 roundup(copy_len, T4_ULPTX_MIN_IO), 16);
 
-		skb = alloc_skb(wr_len, GFP_KERNEL);
+		skb = alloc_skb(wr_len, GFP_KERNEL | __GFP_NOFAIL);
 		if (!skb)
 			return -ENOMEM;
 		set_wr_txq(skb, CPL_PRIORITY_CONTROL, 0);
@@ -71,7 +71,7 @@ static int write_adapter_mem(struct c4iw_rdev *rdev, u32 addr, u32 len,
 		if (i == (num_wqe-1)) {
 			req->wr.wr_hi = cpu_to_be32(FW_WR_OP(FW_ULPTX_WR) |
 						    FW_WR_COMPL(1));
-			req->wr.wr_lo = (__force __be64)(unsigned long) &wr_wait;
+			req->wr.wr_lo = (__force __be64)&wr_wait;
 		} else
 			req->wr.wr_hi = cpu_to_be32(FW_WR_OP(FW_ULPTX_WR));
 		req->wr.wr_mid = cpu_to_be32(
@@ -103,7 +103,14 @@ static int write_adapter_mem(struct c4iw_rdev *rdev, u32 addr, u32 len,
 		len -= C4IW_MAX_INLINE_SIZE;
 	}
 
-	ret = c4iw_wait_for_reply(rdev, &wr_wait, 0, 0, __func__);
+	wait_event_timeout(wr_wait.wait, wr_wait.done, C4IW_WR_TO);
+	if (!wr_wait.done) {
+		printk(KERN_ERR MOD "Device %s not responding!\n",
+		       pci_name(rdev->lldi.pdev));
+		rdev->flags = T4_FATAL_ERROR;
+		ret = -EIO;
+	} else
+		ret = wr_wait.ret;
 	return ret;
 }
 
@@ -625,7 +632,7 @@ pbl_done:
 	mhp->attr.perms = c4iw_ib_to_tpt_access(acc);
 	mhp->attr.va_fbo = virt;
 	mhp->attr.page_size = shift - 12;
-	mhp->attr.len = length;
+	mhp->attr.len = (u32) length;
 
 	err = register_mem(rhp, php, mhp, shift);
 	if (err)

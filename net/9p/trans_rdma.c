@@ -26,8 +26,6 @@
  *
  */
 
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
-
 #include <linux/in.h>
 #include <linux/module.h>
 #include <linux/net.h>
@@ -61,6 +59,7 @@
 						 * safely advertise a maxsize
 						 * of 64k */
 
+#define P9_RDMA_MAX_SGE (P9_RDMA_MAXSIZE >> PAGE_SHIFT)
 /**
  * struct p9_trans_rdma - RDMA transport instance
  *
@@ -169,6 +168,7 @@ static int parse_opts(char *params, struct p9_rdma_opts *opts)
 	substring_t args[MAX_OPT_ARGS];
 	int option;
 	char *options, *tmp_options;
+	int ret;
 
 	opts->port = P9_PORT;
 	opts->sq_depth = P9_RDMA_SQ_DEPTH;
@@ -180,8 +180,8 @@ static int parse_opts(char *params, struct p9_rdma_opts *opts)
 
 	tmp_options = kstrdup(params, GFP_KERNEL);
 	if (!tmp_options) {
-		p9_debug(P9_DEBUG_ERROR,
-			 "failed to allocate copy of option string\n");
+		P9_DPRINTK(P9_DEBUG_ERROR,
+			   "failed to allocate copy of option string\n");
 		return -ENOMEM;
 	}
 	options = tmp_options;
@@ -194,8 +194,9 @@ static int parse_opts(char *params, struct p9_rdma_opts *opts)
 		token = match_token(p, tokens, args);
 		r = match_int(&args[0], &option);
 		if (r < 0) {
-			p9_debug(P9_DEBUG_ERROR,
-				 "integer field, but no integer?\n");
+			P9_DPRINTK(P9_DEBUG_ERROR,
+				   "integer field, but no integer?\n");
+			ret = r;
 			continue;
 		}
 		switch (token) {
@@ -303,7 +304,8 @@ handle_recv(struct p9_client *client, struct p9_trans_rdma *rdma,
 	return;
 
  err_out:
-	p9_debug(P9_DEBUG_ERROR, "req %p err %d status %d\n", req, err, status);
+	P9_DPRINTK(P9_DEBUG_ERROR, "req %p err %d status %d\n",
+		   req, err, status);
 	rdma->state = P9_RDMA_FLUSHING;
 	client->status = Disconnected;
 }
@@ -319,8 +321,8 @@ handle_send(struct p9_client *client, struct p9_trans_rdma *rdma,
 
 static void qp_event_handler(struct ib_event *event, void *context)
 {
-	p9_debug(P9_DEBUG_ERROR, "QP event %d context %p\n",
-		 event->event, context);
+	P9_DPRINTK(P9_DEBUG_ERROR, "QP event %d context %p\n", event->event,
+								context);
 }
 
 static void cq_comp_handler(struct ib_cq *cq, void *cq_context)
@@ -346,7 +348,8 @@ static void cq_comp_handler(struct ib_cq *cq, void *cq_context)
 			break;
 
 		default:
-			pr_err("unexpected completion type, c->wc_op=%d, wc.opcode=%d, status=%d\n",
+			printk(KERN_ERR "9prdma: unexpected completion type, "
+			       "c->wc_op=%d, wc.opcode=%d, status=%d\n",
 			       c->wc_op, wc.opcode, wc.status);
 			break;
 		}
@@ -356,7 +359,7 @@ static void cq_comp_handler(struct ib_cq *cq, void *cq_context)
 
 static void cq_event_handler(struct ib_event *e, void *v)
 {
-	p9_debug(P9_DEBUG_ERROR, "CQ event %d context %p\n", e->event, v);
+	P9_DPRINTK(P9_DEBUG_ERROR, "CQ event %d context %p\n", e->event, v);
 }
 
 static void rdma_destroy_trans(struct p9_trans_rdma *rdma)
@@ -407,7 +410,7 @@ post_recv(struct p9_client *client, struct p9_rdma_context *c)
 	return ib_post_recv(rdma->qp, &wr, &bad_wr);
 
  error:
-	p9_debug(P9_DEBUG_ERROR, "EIO\n");
+	P9_DPRINTK(P9_DEBUG_ERROR, "EIO\n");
 	return -EIO;
 }
 
@@ -422,11 +425,9 @@ static int rdma_request(struct p9_client *client, struct p9_req_t *req)
 	struct p9_rdma_context *rpl_context = NULL;
 
 	/* Allocate an fcall for the reply */
-	rpl_context = kmalloc(sizeof *rpl_context, GFP_NOFS);
-	if (!rpl_context) {
-		err = -ENOMEM;
+	rpl_context = kmalloc(sizeof *rpl_context, GFP_KERNEL);
+	if (!rpl_context)
 		goto err_close;
-	}
 
 	/*
 	 * If the request has a buffer, steal it, otherwise
@@ -435,7 +436,7 @@ static int rdma_request(struct p9_client *client, struct p9_req_t *req)
 	 */
 	if (!req->rc) {
 		req->rc = kmalloc(sizeof(struct p9_fcall)+client->msize,
-				  GFP_NOFS);
+								GFP_KERNEL);
 		if (req->rc) {
 			req->rc->sdata = (char *) req->rc +
 						sizeof(struct p9_fcall);
@@ -444,8 +445,8 @@ static int rdma_request(struct p9_client *client, struct p9_req_t *req)
 	}
 	rpl_context->rc = req->rc;
 	if (!rpl_context->rc) {
-		err = -ENOMEM;
-		goto err_free2;
+		kfree(rpl_context);
+		goto err_close;
 	}
 
 	/*
@@ -457,8 +458,11 @@ static int rdma_request(struct p9_client *client, struct p9_req_t *req)
 	 */
 	if (atomic_inc_return(&rdma->rq_count) <= rdma->rq_depth) {
 		err = post_recv(client, rpl_context);
-		if (err)
-			goto err_free1;
+		if (err) {
+			kfree(rpl_context->rc);
+			kfree(rpl_context);
+			goto err_close;
+		}
 	} else
 		atomic_dec(&rdma->rq_count);
 
@@ -466,11 +470,9 @@ static int rdma_request(struct p9_client *client, struct p9_req_t *req)
 	req->rc = NULL;
 
 	/* Post the request */
-	c = kmalloc(sizeof *c, GFP_NOFS);
-	if (!c) {
-		err = -ENOMEM;
-		goto err_free1;
-	}
+	c = kmalloc(sizeof *c, GFP_KERNEL);
+	if (!c)
+		goto err_close;
 	c->req = req;
 
 	c->busa = ib_dma_map_single(rdma->cm_id->device,
@@ -497,15 +499,9 @@ static int rdma_request(struct p9_client *client, struct p9_req_t *req)
 	return ib_post_send(rdma->qp, &wr, &bad_wr);
 
  error:
-	kfree(c);
-	kfree(rpl_context->rc);
-	kfree(rpl_context);
-	p9_debug(P9_DEBUG_ERROR, "EIO\n");
+	P9_DPRINTK(P9_DEBUG_ERROR, "EIO\n");
 	return -EIO;
- err_free1:
-	kfree(rpl_context->rc);
- err_free2:
-	kfree(rpl_context);
+
  err_close:
 	spin_lock_irqsave(&rdma->req_lock, flags);
 	if (rdma->state < P9_RDMA_CLOSING) {
@@ -589,8 +585,7 @@ rdma_create_trans(struct p9_client *client, const char *addr, char *args)
 		return -ENOMEM;
 
 	/* Create the RDMA CM ID */
-	rdma->cm_id = rdma_create_id(p9_cm_event_handler, client, RDMA_PS_TCP,
-				     IB_QPT_RC);
+	rdma->cm_id = rdma_create_id(p9_cm_event_handler, client, RDMA_PS_TCP);
 	if (IS_ERR(rdma->cm_id))
 		goto error;
 

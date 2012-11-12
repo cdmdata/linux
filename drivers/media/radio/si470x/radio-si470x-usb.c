@@ -29,6 +29,7 @@
 
 /* driver definitions */
 #define DRIVER_AUTHOR "Tobias Lorenz <tobias.lorenz@gmx.net>"
+#define DRIVER_KERNEL_VERSION KERNEL_VERSION(1, 0, 10)
 #define DRIVER_CARD "Silicon Labs Si470x FM Radio Receiver"
 #define DRIVER_DESC "USB radio driver for Si470x FM Radio Receivers"
 #define DRIVER_VERSION "1.0.10"
@@ -395,6 +396,7 @@ int si470x_disconnect_check(struct si470x_device *radio)
 static void si470x_int_in_callback(struct urb *urb)
 {
 	struct si470x_device *radio = urb->context;
+	unsigned char buf[RDS_REPORT_SIZE];
 	int retval;
 	unsigned char regnr;
 	unsigned char blocknum;
@@ -422,6 +424,7 @@ static void si470x_int_in_callback(struct urb *urb)
 
 	if (urb->actual_length > 0) {
 		/* Update RDS registers with URB data */
+		buf[0] = RDS_REPORT;
 		for (regnr = 0; regnr < RDS_REGISTER_NUM; regnr++)
 			radio->registers[STATUSRSSI + regnr] =
 			    get_unaligned_be16(&radio->int_in_buffer[
@@ -514,7 +517,7 @@ int si470x_fops_open(struct file *file)
 	struct si470x_device *radio = video_drvdata(file);
 	int retval;
 
-	mutex_lock(&radio->lock);
+	lock_kernel();
 	radio->users++;
 
 	retval = usb_autopm_get_interface(radio->intf);
@@ -555,7 +558,7 @@ int si470x_fops_open(struct file *file)
 	}
 
 done:
-	mutex_unlock(&radio->lock);
+	unlock_kernel();
 	return retval;
 }
 
@@ -574,7 +577,7 @@ int si470x_fops_release(struct file *file)
 		goto done;
 	}
 
-	mutex_lock(&radio->lock);
+	mutex_lock(&radio->disconnect_lock);
 	radio->users--;
 	if (radio->users == 0) {
 		/* shutdown interrupt handler */
@@ -588,7 +591,7 @@ int si470x_fops_release(struct file *file)
 			video_unregister_device(radio->videodev);
 			kfree(radio->int_in_buffer);
 			kfree(radio->buffer);
-			mutex_unlock(&radio->lock);
+			mutex_unlock(&radio->disconnect_lock);
 			kfree(radio);
 			goto done;
 		}
@@ -600,7 +603,7 @@ int si470x_fops_release(struct file *file)
 		retval = si470x_stop(radio);
 		usb_autopm_put_interface(radio->intf);
 	}
-	mutex_unlock(&radio->lock);
+	mutex_unlock(&radio->disconnect_lock);
 done:
 	return retval;
 }
@@ -623,6 +626,7 @@ int si470x_vidioc_querycap(struct file *file, void *priv,
 	strlcpy(capability->card, DRIVER_CARD, sizeof(capability->card));
 	usb_make_path(radio->usbdev, capability->bus_info,
 			sizeof(capability->bus_info));
+	capability->version = DRIVER_KERNEL_VERSION;
 	capability->capabilities = V4L2_CAP_HW_FREQ_SEEK |
 		V4L2_CAP_TUNER | V4L2_CAP_RADIO | V4L2_CAP_RDS_CAPTURE;
 
@@ -657,6 +661,7 @@ static int si470x_usb_driver_probe(struct usb_interface *intf,
 	radio->disconnected = 0;
 	radio->usbdev = interface_to_usbdev(intf);
 	radio->intf = intf;
+	mutex_init(&radio->disconnect_lock);
 	mutex_init(&radio->lock);
 
 	iface_desc = intf->cur_altsetting;
@@ -695,7 +700,7 @@ static int si470x_usb_driver_probe(struct usb_interface *intf,
 	radio->videodev = video_device_alloc();
 	if (!radio->videodev) {
 		retval = -ENOMEM;
-		goto err_urb;
+		goto err_intbuffer;
 	}
 	memcpy(radio->videodev, &si470x_viddev_template,
 			sizeof(si470x_viddev_template));
@@ -786,8 +791,6 @@ err_all:
 	kfree(radio->buffer);
 err_video:
 	video_device_release(radio->videodev);
-err_urb:
-	usb_free_urb(radio->int_in_urb);
 err_intbuffer:
 	kfree(radio->int_in_buffer);
 err_radio:
@@ -827,7 +830,7 @@ static void si470x_usb_driver_disconnect(struct usb_interface *intf)
 {
 	struct si470x_device *radio = usb_get_intfdata(intf);
 
-	mutex_lock(&radio->lock);
+	mutex_lock(&radio->disconnect_lock);
 	radio->disconnected = 1;
 	usb_set_intfdata(intf, NULL);
 	if (radio->users == 0) {
@@ -840,10 +843,10 @@ static void si470x_usb_driver_disconnect(struct usb_interface *intf)
 		kfree(radio->int_in_buffer);
 		video_unregister_device(radio->videodev);
 		kfree(radio->buffer);
-		mutex_unlock(&radio->lock);
+		mutex_unlock(&radio->disconnect_lock);
 		kfree(radio);
 	} else {
-		mutex_unlock(&radio->lock);
+		mutex_unlock(&radio->disconnect_lock);
 	}
 }
 
@@ -861,7 +864,33 @@ static struct usb_driver si470x_usb_driver = {
 	.supports_autosuspend	= 1,
 };
 
-module_usb_driver(si470x_usb_driver);
+
+
+/**************************************************************************
+ * Module Interface
+ **************************************************************************/
+
+/*
+ * si470x_module_init - module init
+ */
+static int __init si470x_module_init(void)
+{
+	printk(KERN_INFO DRIVER_DESC ", Version " DRIVER_VERSION "\n");
+	return usb_register(&si470x_usb_driver);
+}
+
+
+/*
+ * si470x_module_exit - module exit
+ */
+static void __exit si470x_module_exit(void)
+{
+	usb_deregister(&si470x_usb_driver);
+}
+
+
+module_init(si470x_module_init);
+module_exit(si470x_module_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR(DRIVER_AUTHOR);

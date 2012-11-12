@@ -24,6 +24,7 @@
 #include <asm/uaccess.h>
 #include <asm/page.h>
 #include <asm/pgalloc.h>
+#include <asm/system.h>
 #include <asm/machdep.h>
 #include <asm/io.h>
 #include <asm/dma.h>
@@ -299,8 +300,6 @@ void __init paging_init(void)
 		zones_size[ZONE_DMA] = m68k_memory[i].size >> PAGE_SHIFT;
 		free_area_init_node(i, zones_size,
 				    m68k_memory[i].addr >> PAGE_SHIFT, NULL);
-		if (node_present_pages(i))
-			node_set_state(i, N_NORMAL_MEMORY);
 	}
 }
 

@@ -409,9 +409,9 @@ int pnp_check_irq(struct pnp_dev *dev, struct resource *res)
 	return 1;
 }
 
-#ifdef CONFIG_ISA_DMA_API
 int pnp_check_dma(struct pnp_dev *dev, struct resource *res)
 {
+#ifndef CONFIG_IA64
 	int i;
 	struct pnp_dev *tdev;
 	struct resource *tres;
@@ -466,8 +466,11 @@ int pnp_check_dma(struct pnp_dev *dev, struct resource *res)
 	}
 
 	return 1;
+#else
+	/* IA64 does not have legacy DMA */
+	return 0;
+#endif
 }
-#endif /* CONFIG_ISA_DMA_API */
 
 unsigned long pnp_resource_type(struct resource *res)
 {
@@ -520,7 +523,7 @@ struct pnp_resource *pnp_add_irq_resource(struct pnp_dev *dev, int irq,
 	res->start = irq;
 	res->end = irq;
 
-	dev_printk(KERN_DEBUG, &dev->dev, "%pR\n", res);
+	pnp_dbg(&dev->dev, "  add %pr\n", res);
 	return pnp_res;
 }
 
@@ -541,7 +544,7 @@ struct pnp_resource *pnp_add_dma_resource(struct pnp_dev *dev, int dma,
 	res->start = dma;
 	res->end = dma;
 
-	dev_printk(KERN_DEBUG, &dev->dev, "%pR\n", res);
+	pnp_dbg(&dev->dev, "  add %pr\n", res);
 	return pnp_res;
 }
 
@@ -565,7 +568,7 @@ struct pnp_resource *pnp_add_io_resource(struct pnp_dev *dev,
 	res->start = start;
 	res->end = end;
 
-	dev_printk(KERN_DEBUG, &dev->dev, "%pR\n", res);
+	pnp_dbg(&dev->dev, "  add %pr\n", res);
 	return pnp_res;
 }
 
@@ -589,7 +592,7 @@ struct pnp_resource *pnp_add_mem_resource(struct pnp_dev *dev,
 	res->start = start;
 	res->end = end;
 
-	dev_printk(KERN_DEBUG, &dev->dev, "%pR\n", res);
+	pnp_dbg(&dev->dev, "  add %pr\n", res);
 	return pnp_res;
 }
 
@@ -613,7 +616,7 @@ struct pnp_resource *pnp_add_bus_resource(struct pnp_dev *dev,
 	res->start = start;
 	res->end = end;
 
-	dev_printk(KERN_DEBUG, &dev->dev, "%pR\n", res);
+	pnp_dbg(&dev->dev, "  add %pr\n", res);
 	return pnp_res;
 }
 

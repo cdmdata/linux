@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <errno.h>
 
 #include "../perf.h"
@@ -35,11 +36,11 @@ static int stop_script_unsupported(void)
 	return 0;
 }
 
-static void process_event_unsupported(union perf_event *event __unused,
-				      struct perf_sample *sample __unused,
-				      struct perf_evsel *evsel __unused,
-				      struct machine *machine __unused,
-				      struct thread *thread __unused)
+static void process_event_unsupported(int cpu __unused,
+				      void *data __unused,
+				      int size __unused,
+				      unsigned long long nsecs __unused,
+				      char *comm __unused)
 {
 }
 
@@ -96,7 +97,7 @@ void setup_python_scripting(void)
 	register_python_scripting(&python_scripting_unsupported_ops);
 }
 #else
-extern struct scripting_ops python_scripting_ops;
+struct scripting_ops python_scripting_ops;
 
 void setup_python_scripting(void)
 {
@@ -157,7 +158,7 @@ void setup_perl_scripting(void)
 	register_perl_scripting(&perl_scripting_unsupported_ops);
 }
 #else
-extern struct scripting_ops perl_scripting_ops;
+struct scripting_ops perl_scripting_ops;
 
 void setup_perl_scripting(void)
 {

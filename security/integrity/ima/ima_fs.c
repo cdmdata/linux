@@ -45,8 +45,7 @@ static ssize_t ima_show_htable_violations(struct file *filp,
 }
 
 static const struct file_operations ima_htable_violations_ops = {
-	.read = ima_show_htable_violations,
-	.llseek = generic_file_llseek,
+	.read = ima_show_htable_violations
 };
 
 static ssize_t ima_show_measurements_count(struct file *filp,
@@ -58,8 +57,7 @@ static ssize_t ima_show_measurements_count(struct file *filp,
 }
 
 static const struct file_operations ima_measurements_count_ops = {
-	.read = ima_show_measurements_count,
-	.llseek = generic_file_llseek,
+	.read = ima_show_measurements_count
 };
 
 /* returns pointer to hlist_node */
@@ -287,7 +285,7 @@ static atomic_t policy_opencount = ATOMIC_INIT(1);
 /*
  * ima_open_policy: sequentialize access to the policy file
  */
-static int ima_open_policy(struct inode * inode, struct file * filp)
+int ima_open_policy(struct inode * inode, struct file * filp)
 {
 	/* No point in being allowed to open it if you aren't going to write */
 	if (!(filp->f_flags & O_WRONLY))
@@ -321,8 +319,7 @@ static int ima_release_policy(struct inode *inode, struct file *file)
 static const struct file_operations ima_measure_policy_ops = {
 	.open = ima_open_policy,
 	.write = ima_write_policy,
-	.release = ima_release_policy,
-	.llseek = generic_file_llseek,
+	.release = ima_release_policy
 };
 
 int __init ima_fs_init(void)

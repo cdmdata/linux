@@ -24,8 +24,7 @@
  */
 
 #include <linux/kernel.h>
-#include <linux/export.h>
-#include <linux/errno.h>
+#include <linux/module.h>
 #include <asm/hvcall.h>
 #include <asm/hvconsole.h>
 #include "plpar_wrappers.h"
@@ -74,7 +73,7 @@ int hvc_put_chars(uint32_t vtermno, const char *buf, int count)
 	if (ret == H_SUCCESS)
 		return count;
 	if (ret == H_BUSY)
-		return -EAGAIN;
+		return 0;
 	return -EIO;
 }
 

@@ -68,7 +68,7 @@ static int tps6507x_i2c_write_device(struct tps6507x_dev *tps6507x, char reg,
 	u8 msg[TPS6507X_MAX_REGISTER + 1];
 	int ret;
 
-	if (bytes > TPS6507X_MAX_REGISTER)
+	if (bytes > (TPS6507X_MAX_REGISTER + 1))
 		return -EINVAL;
 
 	msg[0] = reg;
@@ -89,8 +89,10 @@ static int tps6507x_i2c_probe(struct i2c_client *i2c,
 	int ret = 0;
 
 	tps6507x = kzalloc(sizeof(struct tps6507x_dev), GFP_KERNEL);
-	if (tps6507x == NULL)
+	if (tps6507x == NULL) {
+		kfree(i2c);
 		return -ENOMEM;
+	}
 
 	i2c_set_clientdata(i2c, tps6507x);
 	tps6507x->dev = &i2c->dev;

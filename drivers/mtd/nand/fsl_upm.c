@@ -33,7 +33,10 @@ struct fsl_upm_nand {
 	struct mtd_info mtd;
 	struct nand_chip chip;
 	int last_ctrl;
+#ifdef CONFIG_MTD_PARTITIONS
 	struct mtd_partition *parts;
+#endif
+
 	struct fsl_upm upm;
 	uint8_t upm_addr_offset;
 	uint8_t upm_cmd_offset;
@@ -158,7 +161,9 @@ static int __devinit fun_chip_init(struct fsl_upm_nand *fun,
 {
 	int ret;
 	struct device_node *flash_np;
-	struct mtd_part_parser_data ppdata;
+#ifdef CONFIG_MTD_PARTITIONS
+	static const char *part_types[] = { "cmdlinepart", NULL, };
+#endif
 
 	fun->chip.IO_ADDR_R = fun->io_base;
 	fun->chip.IO_ADDR_W = fun->io_base;
@@ -181,7 +186,7 @@ static int __devinit fun_chip_init(struct fsl_upm_nand *fun,
 	if (!flash_np)
 		return -ENODEV;
 
-	fun->mtd.name = kasprintf(GFP_KERNEL, "0x%llx.%s", (u64)io_res->start,
+	fun->mtd.name = kasprintf(GFP_KERNEL, "%x.%s", io_res->start,
 				  flash_np->name);
 	if (!fun->mtd.name) {
 		ret = -ENOMEM;
@@ -192,20 +197,32 @@ static int __devinit fun_chip_init(struct fsl_upm_nand *fun,
 	if (ret)
 		goto err;
 
-	ppdata.of_node = flash_np;
-	ret = mtd_device_parse_register(&fun->mtd, NULL, &ppdata, NULL, 0);
+#ifdef CONFIG_MTD_PARTITIONS
+	ret = parse_mtd_partitions(&fun->mtd, part_types, &fun->parts, 0);
+
+#ifdef CONFIG_MTD_OF_PARTS
+	if (ret == 0) {
+		ret = of_mtd_parse_partitions(fun->dev, flash_np, &fun->parts);
+		if (ret < 0)
+			goto err;
+	}
+#endif
+	if (ret > 0)
+		ret = add_mtd_partitions(&fun->mtd, fun->parts, ret);
+	else
+#endif
+		ret = add_mtd_device(&fun->mtd);
 err:
 	of_node_put(flash_np);
-	if (ret)
-		kfree(fun->mtd.name);
 	return ret;
 }
 
-static int __devinit fun_probe(struct platform_device *ofdev)
+static int __devinit fun_probe(struct of_device *ofdev,
+			       const struct of_device_id *ofid)
 {
 	struct fsl_upm_nand *fun;
 	struct resource io_res;
-	const __be32 *prop;
+	const uint32_t *prop;
 	int rnb_gpio;
 	int ret;
 	int size;
@@ -253,7 +270,7 @@ static int __devinit fun_probe(struct platform_device *ofdev)
 			goto err1;
 		}
 		for (i = 0; i < fun->mchip_count; i++)
-			fun->mchip_offsets[i] = be32_to_cpu(prop[i]);
+			fun->mchip_offsets[i] = prop[i];
 	} else {
 		fun->mchip_count = 1;
 	}
@@ -278,13 +295,13 @@ static int __devinit fun_probe(struct platform_device *ofdev)
 
 	prop = of_get_property(ofdev->dev.of_node, "chip-delay", NULL);
 	if (prop)
-		fun->chip_delay = be32_to_cpup(prop);
+		fun->chip_delay = *prop;
 	else
 		fun->chip_delay = 50;
 
 	prop = of_get_property(ofdev->dev.of_node, "fsl,upm-wait-flags", &size);
 	if (prop && size == sizeof(uint32_t))
-		fun->wait_flags = be32_to_cpup(prop);
+		fun->wait_flags = *prop;
 	else
 		fun->wait_flags = FSL_UPM_WAIT_RUN_PATTERN |
 				  FSL_UPM_WAIT_WRITE_BYTE;
@@ -318,7 +335,7 @@ err1:
 	return ret;
 }
 
-static int __devexit fun_remove(struct platform_device *ofdev)
+static int __devexit fun_remove(struct of_device *ofdev)
 {
 	struct fsl_upm_nand *fun = dev_get_drvdata(&ofdev->dev);
 	int i;
@@ -343,7 +360,7 @@ static const struct of_device_id of_fun_match[] = {
 };
 MODULE_DEVICE_TABLE(of, of_fun_match);
 
-static struct platform_driver of_fun_driver = {
+static struct of_platform_driver of_fun_driver = {
 	.driver = {
 		.name = "fsl,upm-nand",
 		.owner = THIS_MODULE,
@@ -353,7 +370,17 @@ static struct platform_driver of_fun_driver = {
 	.remove		= __devexit_p(fun_remove),
 };
 
-module_platform_driver(of_fun_driver);
+static int __init fun_module_init(void)
+{
+	return of_register_platform_driver(&of_fun_driver);
+}
+module_init(fun_module_init);
+
+static void __exit fun_module_exit(void)
+{
+	of_unregister_platform_driver(&of_fun_driver);
+}
+module_exit(fun_module_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Anton Vorontsov <avorontsov@ru.mvista.com>");

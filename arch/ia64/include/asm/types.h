@@ -28,6 +28,8 @@
 # define __IA64_UL(x)		((unsigned long)(x))
 # define __IA64_UL_CONST(x)	x##UL
 
+typedef unsigned int umode_t;
+
 /*
  * These aren't exported outside the kernel to avoid name space clashes
  */
@@ -37,6 +39,9 @@ struct fnptr {
 	unsigned long ip;
 	unsigned long gp;
 };
+
+/* DMA addresses are 64-bits wide, in general.  */
+typedef u64 dma_addr_t;
 
 # endif /* __KERNEL__ */
 #endif /* !__ASSEMBLY__ */

@@ -49,8 +49,6 @@
 		for max gain, 0x14 for minimal gain.
 */
 
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
-
 #define MODULE_NAME "pac7311"
 
 #include <linux/input.h>
@@ -263,7 +261,7 @@ static const __u8 page4_7311[] = {
 
 static void reg_w_buf(struct gspca_dev *gspca_dev,
 		  __u8 index,
-		  const u8 *buffer, int len)
+		  const char *buffer, int len)
 {
 	int ret;
 
@@ -272,14 +270,15 @@ static void reg_w_buf(struct gspca_dev *gspca_dev,
 	memcpy(gspca_dev->usb_buf, buffer, len);
 	ret = usb_control_msg(gspca_dev->dev,
 			usb_sndctrlpipe(gspca_dev->dev, 0),
-			0,		/* request */
+			1,		/* request */
 			USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_DEVICE,
 			0,		/* value */
 			index, gspca_dev->usb_buf, len,
 			500);
 	if (ret < 0) {
-		pr_err("reg_w_buf() failed index 0x%02x, error %d\n",
-		       index, ret);
+		PDEBUG(D_ERR, "reg_w_buf(): "
+		"Failed to write registers to index 0x%x, error %i",
+		index, ret);
 		gspca_dev->usb_err = ret;
 	}
 }
@@ -301,8 +300,9 @@ static void reg_w(struct gspca_dev *gspca_dev,
 			0, index, gspca_dev->usb_buf, 1,
 			500);
 	if (ret < 0) {
-		pr_err("reg_w() failed index 0x%02x, value 0x%02x, error %d\n",
-		       index, value, ret);
+		PDEBUG(D_ERR, "reg_w(): "
+		"Failed to write register to index 0x%x, value 0x%x, error %i",
+		index, value, ret);
 		gspca_dev->usb_err = ret;
 	}
 }
@@ -336,8 +336,10 @@ static void reg_w_page(struct gspca_dev *gspca_dev,
 				0, index, gspca_dev->usb_buf, 1,
 				500);
 		if (ret < 0) {
-			pr_err("reg_w_page() failed index 0x%02x, value 0x%02x, error %d\n",
-			       index, page[index], ret);
+			PDEBUG(D_ERR, "reg_w_page(): "
+			"Failed to write register to index 0x%x, "
+			"value 0x%x, error %i",
+			index, page[index], ret);
 			gspca_dev->usb_err = ret;
 			break;
 		}
@@ -597,6 +599,7 @@ static const unsigned char pac_jpeg_header2[] = {
 };
 
 static void pac_start_frame(struct gspca_dev *gspca_dev,
+		struct gspca_frame *frame,
 		__u16 lines, __u16 samples_per_line)
 {
 	unsigned char tmpbuf[4];
@@ -621,12 +624,18 @@ static void sd_pkt_scan(struct gspca_dev *gspca_dev,
 			int len)			/* iso packet length */
 {
 	struct sd *sd = (struct sd *) gspca_dev;
-	u8 *image;
 	unsigned char *sof;
+	struct gspca_frame *frame;
 
 	sof = pac_find_sof(&sd->sof_read, data, len);
 	if (sof) {
 		int n, lum_offset, footer_length;
+
+		frame = gspca_get_i_frame(gspca_dev);
+		if (frame == NULL) {
+			gspca_dev->last_packet_type = DISCARD_PACKET;
+			return;
+		}
 
 		/* 6 bytes after the FF D9 EOF marker a number of lumination
 		   bytes are send corresponding to different parts of the
@@ -638,16 +647,16 @@ static void sd_pkt_scan(struct gspca_dev *gspca_dev,
 		/* Finish decoding current frame */
 		n = (sof - data) - (footer_length + sizeof pac_sof_marker);
 		if (n < 0) {
-			gspca_dev->image_len += n;
+			frame->data_end += n;
 			n = 0;
-		} else {
-			gspca_frame_add(gspca_dev, INTER_PACKET, data, n);
 		}
-		image = gspca_dev->image;
-		if (image != NULL
-		 && image[gspca_dev->image_len - 2] == 0xff
-		 && image[gspca_dev->image_len - 1] == 0xd9)
-			gspca_frame_add(gspca_dev, LAST_PACKET, NULL, 0);
+		gspca_frame_add(gspca_dev, INTER_PACKET,
+					data, n);
+		if (gspca_dev->last_packet_type != DISCARD_PACKET &&
+				frame->data_end[-2] == 0xff &&
+				frame->data_end[-1] == 0xd9)
+			gspca_frame_add(gspca_dev, LAST_PACKET,
+						NULL, 0);
 
 		n = sof - data;
 		len -= n;
@@ -662,7 +671,7 @@ static void sd_pkt_scan(struct gspca_dev *gspca_dev,
 			atomic_set(&sd->avg_lum, -1);
 
 		/* Start the new frame with the jpeg header */
-		pac_start_frame(gspca_dev,
+		pac_start_frame(gspca_dev, frame,
 			gspca_dev->height, gspca_dev->width);
 	}
 	gspca_frame_add(gspca_dev, INTER_PACKET, data, len);
@@ -673,8 +682,9 @@ static int sd_setcontrast(struct gspca_dev *gspca_dev, __s32 val)
 	struct sd *sd = (struct sd *) gspca_dev;
 
 	sd->contrast = val;
-	if (gspca_dev->streaming)
+	if (gspca_dev->streaming) {
 		setcontrast(gspca_dev);
+	}
 	return gspca_dev->usb_err;
 }
 
@@ -789,7 +799,7 @@ static int sd_getvflip(struct gspca_dev *gspca_dev, __s32 *val)
 	return 0;
 }
 
-#if defined(CONFIG_INPUT) || defined(CONFIG_INPUT_MODULE)
+#ifdef CONFIG_INPUT
 static int sd_int_pkt_scan(struct gspca_dev *gspca_dev,
 			u8 *data,		/* interrupt packet data */
 			int len)		/* interrupt packet length */
@@ -832,13 +842,13 @@ static const struct sd_desc sd_desc = {
 	.stop0 = sd_stop0,
 	.pkt_scan = sd_pkt_scan,
 	.dq_callback = do_autogain,
-#if defined(CONFIG_INPUT) || defined(CONFIG_INPUT_MODULE)
+#ifdef CONFIG_INPUT
 	.int_pkt_scan = sd_int_pkt_scan,
 #endif
 };
 
 /* -- module initialisation -- */
-static const struct usb_device_id device_table[] = {
+static const struct usb_device_id device_table[] __devinitconst = {
 	{USB_DEVICE(0x093a, 0x2600)},
 	{USB_DEVICE(0x093a, 0x2601)},
 	{USB_DEVICE(0x093a, 0x2603)},
@@ -850,7 +860,7 @@ static const struct usb_device_id device_table[] = {
 MODULE_DEVICE_TABLE(usb, device_table);
 
 /* -- device connect -- */
-static int sd_probe(struct usb_interface *intf,
+static int __devinit sd_probe(struct usb_interface *intf,
 			const struct usb_device_id *id)
 {
 	return gspca_dev_probe(intf, id, &sd_desc, sizeof(struct sd),
@@ -868,4 +878,21 @@ static struct usb_driver sd_driver = {
 #endif
 };
 
-module_usb_driver(sd_driver);
+/* -- module insert / remove -- */
+static int __init sd_mod_init(void)
+{
+	int ret;
+	ret = usb_register(&sd_driver);
+	if (ret < 0)
+		return ret;
+	PDEBUG(D_PROBE, "registered");
+	return 0;
+}
+static void __exit sd_mod_exit(void)
+{
+	usb_deregister(&sd_driver);
+	PDEBUG(D_PROBE, "deregistered");
+}
+
+module_init(sd_mod_init);
+module_exit(sd_mod_exit);

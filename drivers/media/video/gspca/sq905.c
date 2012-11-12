@@ -22,7 +22,7 @@
  * History and Acknowledgments
  *
  * The original Linux driver for SQ905 based cameras was written by
- * Marcell Lengyel and furter developed by many other contributors
+ * Marcell Lengyel and furter developed by many other contributers
  * and is available from http://sourceforge.net/projects/sqcam/
  *
  * This driver takes advantage of the reverse engineering work done for
@@ -32,8 +32,6 @@
  * based drivers and may still contain code fragments taken from those
  * drivers.
  */
-
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #define MODULE_NAME "sq905"
 
@@ -125,7 +123,8 @@ static int sq905_command(struct gspca_dev *gspca_dev, u16 index)
 			      SQ905_COMMAND, index, gspca_dev->usb_buf, 1,
 			      SQ905_CMD_TIMEOUT);
 	if (ret < 0) {
-		pr_err("%s: usb_control_msg failed (%d)\n", __func__, ret);
+		PDEBUG(D_ERR, "%s: usb_control_msg failed (%d)",
+			__func__, ret);
 		return ret;
 	}
 
@@ -136,7 +135,8 @@ static int sq905_command(struct gspca_dev *gspca_dev, u16 index)
 			      SQ905_PING, 0, gspca_dev->usb_buf, 1,
 			      SQ905_CMD_TIMEOUT);
 	if (ret < 0) {
-		pr_err("%s: usb_control_msg failed 2 (%d)\n", __func__, ret);
+		PDEBUG(D_ERR, "%s: usb_control_msg failed 2 (%d)",
+			__func__, ret);
 		return ret;
 	}
 
@@ -158,7 +158,7 @@ static int sq905_ack_frame(struct gspca_dev *gspca_dev)
 			      SQ905_READ_DONE, 0, gspca_dev->usb_buf, 1,
 			      SQ905_CMD_TIMEOUT);
 	if (ret < 0) {
-		pr_err("%s: usb_control_msg failed (%d)\n", __func__, ret);
+		PDEBUG(D_ERR, "%s: usb_control_msg failed (%d)", __func__, ret);
 		return ret;
 	}
 
@@ -186,7 +186,7 @@ sq905_read_data(struct gspca_dev *gspca_dev, u8 *data, int size, int need_lock)
 	if (need_lock)
 		mutex_unlock(&gspca_dev->usb_lock);
 	if (ret < 0) {
-		pr_err("%s: usb_control_msg failed (%d)\n", __func__, ret);
+		PDEBUG(D_ERR, "%s: usb_control_msg failed (%d)", __func__, ret);
 		return ret;
 	}
 	ret = usb_bulk_msg(gspca_dev->dev,
@@ -195,7 +195,8 @@ sq905_read_data(struct gspca_dev *gspca_dev, u8 *data, int size, int need_lock)
 
 	/* successful, it returns 0, otherwise  negative */
 	if (ret < 0 || act_len != size) {
-		pr_err("bulk read fail (%d) len %d/%d\n", ret, act_len, size);
+		PDEBUG(D_ERR, "bulk read fail (%d) len %d/%d",
+			ret, act_len, size);
 		return -EIO;
 	}
 	return 0;
@@ -225,7 +226,7 @@ static void sq905_dostream(struct work_struct *work)
 
 	buffer = kmalloc(SQ905_MAX_TRANSFER, GFP_KERNEL | GFP_DMA);
 	if (!buffer) {
-		pr_err("Couldn't allocate USB buffer\n");
+		PDEBUG(D_ERR, "Couldn't allocate USB buffer");
 		goto quit_stream;
 	}
 
@@ -395,7 +396,7 @@ static int sd_start(struct gspca_dev *gspca_dev)
 }
 
 /* Table of supported USB devices */
-static const struct usb_device_id device_table[] = {
+static const __devinitdata struct usb_device_id device_table[] = {
 	{USB_DEVICE(0x2770, 0x9120)},
 	{}
 };
@@ -432,4 +433,23 @@ static struct usb_driver sd_driver = {
 #endif
 };
 
-module_usb_driver(sd_driver);
+/* -- module insert / remove -- */
+static int __init sd_mod_init(void)
+{
+	int ret;
+
+	ret = usb_register(&sd_driver);
+	if (ret < 0)
+		return ret;
+	PDEBUG(D_PROBE, "registered");
+	return 0;
+}
+
+static void __exit sd_mod_exit(void)
+{
+	usb_deregister(&sd_driver);
+	PDEBUG(D_PROBE, "deregistered");
+}
+
+module_init(sd_mod_init);
+module_exit(sd_mod_exit);

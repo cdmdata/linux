@@ -22,6 +22,7 @@
 #include <linux/miscdevice.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
+#include <linux/smp_lock.h>
 #include <linux/reboot.h>
 #include <asm/uaccess.h>
 
@@ -190,7 +191,7 @@ static struct ocfs2_live_connection *ocfs2_connection_find(const char *name)
 			return c;
 	}
 
-	return NULL;
+	return c;
 }
 
 /*
@@ -611,10 +612,12 @@ static int ocfs2_control_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 	p->op_this_node = -1;
 
+	lock_kernel();
 	mutex_lock(&ocfs2_control_lock);
 	file->private_data = p;
 	list_add(&p->op_list, &ocfs2_control_private_list);
 	mutex_unlock(&ocfs2_control_lock);
+	unlock_kernel();
 
 	return 0;
 }
@@ -625,7 +628,6 @@ static const struct file_operations ocfs2_control_fops = {
 	.read    = ocfs2_control_read,
 	.write   = ocfs2_control_write,
 	.owner   = THIS_MODULE,
-	.llseek  = default_llseek,
 };
 
 static struct miscdevice ocfs2_control_device = {
@@ -827,8 +829,8 @@ static int user_cluster_connect(struct ocfs2_cluster_connection *conn)
 		goto out;
 	}
 
-	rc = dlm_new_lockspace(conn->cc_name, NULL, DLM_LSFL_FS, DLM_LVB_LEN,
-			       NULL, NULL, NULL, &fsdlm);
+	rc = dlm_new_lockspace(conn->cc_name, strlen(conn->cc_name),
+			       &fsdlm, DLM_LSFL_FS, DLM_LVB_LEN);
 	if (rc) {
 		ocfs2_live_connection_drop(control);
 		goto out;

@@ -53,7 +53,6 @@ struct tda18271_std_map {
 	struct tda18271_std_map_item dvbt_7;
 	struct tda18271_std_map_item dvbt_8;
 	struct tda18271_std_map_item qam_6;
-	struct tda18271_std_map_item qam_7;
 	struct tda18271_std_map_item qam_8;
 };
 
@@ -81,9 +80,8 @@ enum tda18271_output_options {
 
 enum tda18271_small_i2c {
 	TDA18271_39_BYTE_CHUNK_INIT = 0,
-	TDA18271_16_BYTE_CHUNK_INIT = 16,
-	TDA18271_08_BYTE_CHUNK_INIT = 8,
-	TDA18271_03_BYTE_CHUNK_INIT = 3,
+	TDA18271_16_BYTE_CHUNK_INIT = 1,
+	TDA18271_08_BYTE_CHUNK_INIT = 2,
 };
 
 struct tda18271_config {
@@ -99,7 +97,7 @@ struct tda18271_config {
 	/* output options that can be disabled */
 	enum tda18271_output_options output_opt;
 
-	/* some i2c providers can't write all 39 registers at once */
+	/* some i2c providers cant write all 39 registers at once */
 	enum tda18271_small_i2c small_i2c;
 
 	/* force rf tracking filter calibration on startup */

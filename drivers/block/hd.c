@@ -44,6 +44,7 @@
 #define HD_IRQ 14
 
 #define REALLY_SLOW_IO
+#include <asm/system.h>
 #include <asm/io.h>
 #include <asm/uaccess.h>
 
@@ -154,7 +155,7 @@ else \
 
 #if (HD_DELAY > 0)
 
-#include <linux/i8253.h>
+#include <asm/i8253.h>
 
 unsigned long last_req;
 
@@ -626,7 +627,7 @@ repeat:
 		req_data_dir(req) == READ ? "read" : "writ",
 		cyl, head, sec, nsect, req->buffer);
 #endif
-	if (req->cmd_type == REQ_TYPE_FS) {
+	if (blk_fs_request(req)) {
 		switch (rq_data_dir(req)) {
 		case READ:
 			hd_out(disk, nsect, sec, head, cyl, ATA_CMD_PIO_READ,
@@ -732,7 +733,7 @@ static int __init hd_init(void)
 		 * the BIOS or CMOS.  This doesn't work all that well,
 		 * since this assumes that this is a primary or secondary
 		 * drive, and if we're using this legacy driver, it's
-		 * probably an auxiliary controller added to recover
+		 * probably an auxilliary controller added to recover
 		 * legacy data off an ST-506 drive.  Either way, it's
 		 * definitely safest to have the user explicitly specify
 		 * the information.

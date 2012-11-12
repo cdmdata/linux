@@ -226,7 +226,7 @@ struct ib_fast_reg_page_list *mlx4_ib_alloc_fast_reg_page_list(struct ib_device 
 	struct mlx4_ib_fast_reg_page_list *mfrpl;
 	int size = page_list_len * sizeof (u64);
 
-	if (page_list_len > MLX4_MAX_FAST_REG_PAGES)
+	if (size > PAGE_SIZE)
 		return ERR_PTR(-EINVAL);
 
 	mfrpl = kmalloc(sizeof *mfrpl, GFP_KERNEL);

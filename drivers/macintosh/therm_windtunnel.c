@@ -41,17 +41,18 @@
 #include <asm/prom.h>
 #include <asm/machdep.h>
 #include <asm/io.h>
+#include <asm/system.h>
 #include <asm/sections.h>
 #include <asm/macio.h>
 
-#define LOG_TEMP		0			/* continuously log temperature */
+#define LOG_TEMP		0			/* continously log temperature */
 
 static struct {
 	volatile int		running;
 	struct task_struct	*poll_task;
 	
 	struct mutex	 	lock;
-	struct platform_device	*of_dev;
+	struct of_device	*of_dev;
 	
 	struct i2c_client	*thermostat;
 	struct i2c_client	*fan;
@@ -442,13 +443,14 @@ static struct i2c_driver g4fan_driver = {
 /*	initialization / cleanup					*/
 /************************************************************************/
 
-static int therm_of_probe(struct platform_device *dev)
+static int
+therm_of_probe( struct of_device *dev, const struct of_device_id *match )
 {
 	return i2c_add_driver( &g4fan_driver );
 }
 
 static int
-therm_of_remove( struct platform_device *dev )
+therm_of_remove( struct of_device *dev )
 {
 	i2c_del_driver( &g4fan_driver );
 	return 0;
@@ -460,7 +462,7 @@ static const struct of_device_id therm_of_match[] = {{
     }, {}
 };
 
-static struct platform_driver therm_of_driver = {
+static struct of_platform_driver therm_of_driver = {
 	.driver = {
 		.name = "temperature",
 		.owner = THIS_MODULE,
@@ -507,14 +509,14 @@ g4fan_init( void )
 		return -ENODEV;
 	}
 
-	platform_driver_register( &therm_of_driver );
+	of_register_platform_driver( &therm_of_driver );
 	return 0;
 }
 
 static void __exit
 g4fan_exit( void )
 {
-	platform_driver_unregister( &therm_of_driver );
+	of_unregister_platform_driver( &therm_of_driver );
 
 	if( x.of_dev )
 		of_device_unregister( x.of_dev );

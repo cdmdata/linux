@@ -26,12 +26,13 @@
 #include <linux/platform_device.h>
 
 #include <mach/hardware.h>
-#include <mach/smemc.h>
 #include <asm/io.h>
 #include <asm/irq.h>
+#include <asm/system.h>
 #include <mach/pxa2xx-regs.h>
 #include <asm/mach-types.h>
 
+#include <pcmcia/cs_types.h>
 #include <pcmcia/ss.h>
 #include <pcmcia/cistpl.h>
 
@@ -116,48 +117,36 @@ static inline u_int pxa2xx_pcmcia_cmd_time(u_int mem_clk_10khz,
 
 static int pxa2xx_pcmcia_set_mcmem( int sock, int speed, int clock )
 {
-	uint32_t val;
-
-	val = ((pxa2xx_mcxx_setup(speed, clock)
+	MCMEM(sock) = ((pxa2xx_mcxx_setup(speed, clock)
 		& MCXX_SETUP_MASK) << MCXX_SETUP_SHIFT)
 		| ((pxa2xx_mcxx_asst(speed, clock)
 		& MCXX_ASST_MASK) << MCXX_ASST_SHIFT)
 		| ((pxa2xx_mcxx_hold(speed, clock)
 		& MCXX_HOLD_MASK) << MCXX_HOLD_SHIFT);
-
-	__raw_writel(val, MCMEM(sock));
 
 	return 0;
 }
 
 static int pxa2xx_pcmcia_set_mcio( int sock, int speed, int clock )
 {
-	uint32_t val;
-
-	val = ((pxa2xx_mcxx_setup(speed, clock)
+	MCIO(sock) = ((pxa2xx_mcxx_setup(speed, clock)
 		& MCXX_SETUP_MASK) << MCXX_SETUP_SHIFT)
 		| ((pxa2xx_mcxx_asst(speed, clock)
 		& MCXX_ASST_MASK) << MCXX_ASST_SHIFT)
 		| ((pxa2xx_mcxx_hold(speed, clock)
 		& MCXX_HOLD_MASK) << MCXX_HOLD_SHIFT);
-
-	__raw_writel(val, MCIO(sock));
 
 	return 0;
 }
 
 static int pxa2xx_pcmcia_set_mcatt( int sock, int speed, int clock )
 {
-	uint32_t val;
-
-	val = ((pxa2xx_mcxx_setup(speed, clock)
+	MCATT(sock) = ((pxa2xx_mcxx_setup(speed, clock)
 		& MCXX_SETUP_MASK) << MCXX_SETUP_SHIFT)
 		| ((pxa2xx_mcxx_asst(speed, clock)
 		& MCXX_ASST_MASK) << MCXX_ASST_SHIFT)
 		| ((pxa2xx_mcxx_hold(speed, clock)
 		& MCXX_HOLD_MASK) << MCXX_HOLD_SHIFT);
-
-	__raw_writel(val, MCATT(sock));
 
 	return 0;
 }
@@ -178,8 +167,8 @@ static int pxa2xx_pcmcia_set_mcxx(struct soc_pcmcia_socket *skt, unsigned int cl
 
 static int pxa2xx_pcmcia_set_timing(struct soc_pcmcia_socket *skt)
 {
-	unsigned long clk = clk_get_rate(skt->clk);
-	return pxa2xx_pcmcia_set_mcxx(skt, clk / 10000);
+	unsigned int clk = get_memclk_frequency_10khz();
+	return pxa2xx_pcmcia_set_mcxx(skt, clk);
 }
 
 #ifdef CONFIG_CPU_FREQ
@@ -214,23 +203,23 @@ pxa2xx_pcmcia_frequency_change(struct soc_pcmcia_socket *skt,
 }
 #endif
 
-void pxa2xx_configure_sockets(struct device *dev)
+static void pxa2xx_configure_sockets(struct device *dev)
 {
 	struct pcmcia_low_level *ops = dev->platform_data;
+
 	/*
 	 * We have at least one socket, so set MECR:CIT
 	 * (Card Is There)
 	 */
-	uint32_t mecr = MECR_CIT;
+	MECR |= MECR_CIT;
 
 	/* Set MECR:NOS (Number Of Sockets) */
 	if ((ops->first + ops->nr) > 1 ||
 	    machine_is_viper() || machine_is_arcom_zeus())
-		mecr |= MECR_NOS;
-
-	__raw_writel(mecr, MECR);
+		MECR |= MECR_NOS;
+	else
+		MECR &= ~MECR_NOS;
 }
-EXPORT_SYMBOL(pxa2xx_configure_sockets);
 
 static const char *skt_names[] = {
 	"PCMCIA socket 0",
@@ -282,59 +271,43 @@ static int pxa2xx_drv_pcmcia_probe(struct platform_device *dev)
 	struct pcmcia_low_level *ops;
 	struct skt_dev_info *sinfo;
 	struct soc_pcmcia_socket *skt;
-	struct clk *clk;
 
 	ops = (struct pcmcia_low_level *)dev->dev.platform_data;
-	if (!ops) {
-		ret = -ENODEV;
-		goto err0;
-	}
-
-	if (cpu_is_pxa320() && ops->nr > 1) {
-		dev_err(&dev->dev, "pxa320 supports only one pcmcia slot");
-		ret = -EINVAL;
-		goto err0;
-	}
-
-	clk = clk_get(&dev->dev, NULL);
-	if (!clk)
+	if (!ops)
 		return -ENODEV;
 
 	pxa2xx_drv_pcmcia_ops(ops);
 
 	sinfo = kzalloc(SKT_DEV_INFO_SIZE(ops->nr), GFP_KERNEL);
-	if (!sinfo) {
-		clk_put(clk);
+	if (!sinfo)
 		return -ENOMEM;
-	}
 
 	sinfo->nskt = ops->nr;
-	sinfo->clk = clk;
 
 	/* Initialize processor specific parameters */
 	for (i = 0; i < ops->nr; i++) {
 		skt = &sinfo->skt[i];
 
 		skt->nr = ops->first + i;
-		skt->clk = clk;
-		soc_pcmcia_init_one(skt, ops, &dev->dev);
+		skt->ops = ops;
+		skt->socket.owner = ops->owner;
+		skt->socket.dev.parent = &dev->dev;
+		skt->socket.pci_irq = NO_IRQ;
 
 		ret = pxa2xx_drv_pcmcia_add_one(skt);
 		if (ret)
-			goto err1;
+			break;
 	}
 
-	pxa2xx_configure_sockets(&dev->dev);
-	dev_set_drvdata(&dev->dev, sinfo);
+	if (ret) {
+		while (--i >= 0)
+			soc_pcmcia_remove_one(&sinfo->skt[i]);
+		kfree(sinfo);
+	} else {
+		pxa2xx_configure_sockets(&dev->dev);
+		dev_set_drvdata(&dev->dev, sinfo);
+	}
 
-	return 0;
-
-err1:
-	while (--i >= 0)
-		soc_pcmcia_remove_one(&sinfo->skt[i]);
-	clk_put(clk);
-	kfree(sinfo);
-err0:
 	return ret;
 }
 
@@ -348,7 +321,6 @@ static int pxa2xx_drv_pcmcia_remove(struct platform_device *dev)
 	for (i = 0; i < sinfo->nskt; i++)
 		soc_pcmcia_remove_one(&sinfo->skt[i]);
 
-	clk_put(sinfo->clk);
 	kfree(sinfo);
 	return 0;
 }

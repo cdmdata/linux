@@ -17,8 +17,11 @@
 #include <linux/device.h>
 #include <linux/io.h>
 
+#include <pcmcia/cs_types.h>
 #include <pcmcia/ss.h>
+#include <pcmcia/cs.h>
 
+#include <asm/system.h>
 
 #include "pd6729.h"
 #include "i82365.h"
@@ -644,7 +647,7 @@ static int __devinit pd6729_pci_probe(struct pci_dev *dev,
 	if (!pci_resource_start(dev, 0)) {
 		dev_warn(&dev->dev, "refusing to load the driver as the "
 			"io_base is NULL.\n");
-		goto err_out_disable;
+		goto err_out_free_mem;
 	}
 
 	dev_info(&dev->dev, "Cirrus PD6729 PCI to PCMCIA Bridge at 0x%llx "
@@ -724,17 +727,17 @@ static int __devinit pd6729_pci_probe(struct pci_dev *dev,
 
 	return 0;
 
-err_out_free_res2:
+ err_out_free_res2:
 	if (irq_mode == 1)
 		free_irq(dev->irq, socket);
 	else
 		del_timer_sync(&socket->poll_timer);
-err_out_free_res:
+ err_out_free_res:
 	pci_release_regions(dev);
-err_out_disable:
+ err_out_disable:
 	pci_disable_device(dev);
 
-err_out_free_mem:
+ err_out_free_mem:
 	kfree(socket);
 	return ret;
 }
@@ -762,8 +765,13 @@ static void __devexit pd6729_pci_remove(struct pci_dev *dev)
 	kfree(socket);
 }
 
-static DEFINE_PCI_DEVICE_TABLE(pd6729_pci_ids) = {
-	{ PCI_DEVICE(PCI_VENDOR_ID_CIRRUS, PCI_DEVICE_ID_CIRRUS_6729) },
+static struct pci_device_id pd6729_pci_ids[] = {
+	{
+		.vendor		= PCI_VENDOR_ID_CIRRUS,
+		.device		= PCI_DEVICE_ID_CIRRUS_6729,
+		.subvendor	= PCI_ANY_ID,
+		.subdevice	= PCI_ANY_ID,
+	},
 	{ }
 };
 MODULE_DEVICE_TABLE(pci, pd6729_pci_ids);

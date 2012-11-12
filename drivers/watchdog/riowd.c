@@ -3,8 +3,6 @@
  * Copyright (C) 2001, 2008 David S. Miller (davem@davemloft.net)
  */
 
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
-
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/types.h>
@@ -174,7 +172,8 @@ static struct miscdevice riowd_miscdev = {
 	.fops	= &riowd_fops
 };
 
-static int __devinit riowd_probe(struct platform_device *op)
+static int __devinit riowd_probe(struct of_device *op,
+				 const struct of_device_id *match)
 {
 	struct riowd *p;
 	int err = -EINVAL;
@@ -191,7 +190,7 @@ static int __devinit riowd_probe(struct platform_device *op)
 
 	p->regs = of_ioremap(&op->resource[0], 0, 2, DRIVER_NAME);
 	if (!p->regs) {
-		pr_err("Cannot map registers\n");
+		printk(KERN_ERR PFX "Cannot map registers.\n");
 		goto out_free;
 	}
 	/* Make miscdev useable right away */
@@ -199,12 +198,12 @@ static int __devinit riowd_probe(struct platform_device *op)
 
 	err = misc_register(&riowd_miscdev);
 	if (err) {
-		pr_err("Cannot register watchdog misc device\n");
+		printk(KERN_ERR PFX "Cannot register watchdog misc device.\n");
 		goto out_iounmap;
 	}
 
-	pr_info("Hardware watchdog [%i minutes], regs at %p\n",
-		riowd_timeout, p->regs);
+	printk(KERN_INFO PFX "Hardware watchdog [%i minutes], "
+	       "regs at %p\n", riowd_timeout, p->regs);
 
 	dev_set_drvdata(&op->dev, p);
 	return 0;
@@ -220,7 +219,7 @@ out:
 	return err;
 }
 
-static int __devexit riowd_remove(struct platform_device *op)
+static int __devexit riowd_remove(struct of_device *op)
 {
 	struct riowd *p = dev_get_drvdata(&op->dev);
 
@@ -239,7 +238,7 @@ static const struct of_device_id riowd_match[] = {
 };
 MODULE_DEVICE_TABLE(of, riowd_match);
 
-static struct platform_driver riowd_driver = {
+static struct of_platform_driver riowd_driver = {
 	.driver = {
 		.name = DRIVER_NAME,
 		.owner = THIS_MODULE,
@@ -249,4 +248,15 @@ static struct platform_driver riowd_driver = {
 	.remove		= __devexit_p(riowd_remove),
 };
 
-module_platform_driver(riowd_driver);
+static int __init riowd_init(void)
+{
+	return of_register_driver(&riowd_driver, &of_bus_type);
+}
+
+static void __exit riowd_exit(void)
+{
+	of_unregister_driver(&riowd_driver);
+}
+
+module_init(riowd_init);
+module_exit(riowd_exit);

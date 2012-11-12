@@ -280,7 +280,7 @@ static int powermate_alloc_buffers(struct usb_device *udev, struct powermate_dev
 
 	pm->configcr = kmalloc(sizeof(*(pm->configcr)), GFP_KERNEL);
 	if (!pm->configcr)
-		return -ENOMEM;
+		return -1;
 
 	return 0;
 }
@@ -441,7 +441,18 @@ static struct usb_driver powermate_driver = {
         .id_table =     powermate_devices,
 };
 
-module_usb_driver(powermate_driver);
+static int __init powermate_init(void)
+{
+	return usb_register(&powermate_driver);
+}
+
+static void __exit powermate_cleanup(void)
+{
+	usb_deregister(&powermate_driver);
+}
+
+module_init(powermate_init);
+module_exit(powermate_cleanup);
 
 MODULE_AUTHOR( "William R Sowerbutts" );
 MODULE_DESCRIPTION( "Griffin Technology, Inc PowerMate driver" );

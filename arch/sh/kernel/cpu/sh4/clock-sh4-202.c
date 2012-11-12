@@ -13,7 +13,7 @@
 #include <linux/kernel.h>
 #include <linux/err.h>
 #include <linux/io.h>
-#include <linux/clkdev.h>
+#include <asm/clkdev.h>
 #include <asm/clock.h>
 #include <asm/freq.h>
 
@@ -41,7 +41,7 @@ static inline int frqcr3_lookup(struct clk *clk, unsigned long rate)
 	return 5;
 }
 
-static struct sh_clk_ops sh4202_emi_clk_ops = {
+static struct clk_ops sh4202_emi_clk_ops = {
 	.recalc		= emi_clk_recalc,
 };
 
@@ -56,7 +56,7 @@ static unsigned long femi_clk_recalc(struct clk *clk)
 	return clk->parent->rate / frqcr3_divisors[idx];
 }
 
-static struct sh_clk_ops sh4202_femi_clk_ops = {
+static struct clk_ops sh4202_femi_clk_ops = {
 	.recalc		= femi_clk_recalc,
 };
 
@@ -81,7 +81,8 @@ static void shoc_clk_init(struct clk *clk)
 	for (i = 0; i < ARRAY_SIZE(frqcr3_divisors); i++) {
 		int divisor = frqcr3_divisors[i];
 
-		if (clk->ops->set_rate(clk, clk->parent->rate / divisor) == 0)
+		if (clk->ops->set_rate(clk, clk->parent->rate /
+						divisor, 0) == 0)
 			break;
 	}
 
@@ -109,7 +110,7 @@ static int shoc_clk_verify_rate(struct clk *clk, unsigned long rate)
 	return 0;
 }
 
-static int shoc_clk_set_rate(struct clk *clk, unsigned long rate)
+static int shoc_clk_set_rate(struct clk *clk, unsigned long rate, int algo_id)
 {
 	unsigned long frqcr3;
 	unsigned int tmp;
@@ -130,7 +131,7 @@ static int shoc_clk_set_rate(struct clk *clk, unsigned long rate)
 	return 0;
 }
 
-static struct sh_clk_ops sh4202_shoc_clk_ops = {
+static struct clk_ops sh4202_shoc_clk_ops = {
 	.init		= shoc_clk_init,
 	.recalc		= shoc_clk_recalc,
 	.set_rate	= shoc_clk_set_rate,
@@ -146,6 +147,8 @@ static struct clk *sh4202_onchip_clocks[] = {
 	&sh4202_femi_clk,
 	&sh4202_shoc_clk,
 };
+
+#define CLKDEV_CON_ID(_id, _clk) { .con_id = _id, .clk = _clk }
 
 static struct clk_lookup lookups[] = {
 	/* main clocks */

@@ -29,7 +29,6 @@ static int linear_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 {
 	struct linear_c *lc;
 	unsigned long long tmp;
-	char dummy;
 
 	if (argc != 2) {
 		ti->error = "Invalid argument count";
@@ -42,7 +41,7 @@ static int linear_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 		return -ENOMEM;
 	}
 
-	if (sscanf(argv[1], "%llu%c", &tmp, &dummy) != 1) {
+	if (sscanf(argv[1], "%llu", &tmp) != 1) {
 		ti->error = "dm-linear: Invalid device sector";
 		goto bad;
 	}
@@ -54,7 +53,6 @@ static int linear_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 	}
 
 	ti->num_flush_requests = 1;
-	ti->num_discard_requests = 1;
 	ti->private = lc;
 	return 0;
 
@@ -75,7 +73,7 @@ static sector_t linear_map_sector(struct dm_target *ti, sector_t bi_sector)
 {
 	struct linear_c *lc = ti->private;
 
-	return lc->start + dm_target_offset(ti, bi_sector);
+	return lc->start + (bi_sector - ti->begin);
 }
 
 static void linear_map_bio(struct dm_target *ti, struct bio *bio)
@@ -117,17 +115,7 @@ static int linear_ioctl(struct dm_target *ti, unsigned int cmd,
 			unsigned long arg)
 {
 	struct linear_c *lc = (struct linear_c *) ti->private;
-	struct dm_dev *dev = lc->dev;
-	int r = 0;
-
-	/*
-	 * Only pass ioctls through if the device sizes match exactly.
-	 */
-	if (lc->start ||
-	    ti->len != i_size_read(dev->bdev->bd_inode) >> SECTOR_SHIFT)
-		r = scsi_verify_blk_ioctl(NULL, cmd);
-
-	return r ? : __blkdev_driver_ioctl(dev->bdev, dev->mode, cmd, arg);
+	return __blkdev_driver_ioctl(lc->dev->bdev, lc->dev->mode, cmd, arg);
 }
 
 static int linear_merge(struct dm_target *ti, struct bvec_merge_data *bvm,

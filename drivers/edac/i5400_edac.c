@@ -33,7 +33,7 @@
 /*
  * Alter this version for the I5400 module when modifications are made
  */
-#define I5400_REVISION    " Ver: 1.0.0"
+#define I5400_REVISION    " Ver: 1.0.0 " __DATE__
 
 #define EDAC_MOD_STR      "i5400_edac"
 
@@ -648,7 +648,7 @@ static void i5400_process_nonfatal_error_info(struct mem_ctl_info *mci,
 		return;
 	}
 
-	/* Miscellaneous errors */
+	/* Miscelaneous errors */
 	errnum = find_first_bit(&allErrors, ARRAY_SIZE(error_name));
 
 	branch = extract_fbdchan_indx(info->ferr_nf_fbd);
@@ -735,7 +735,7 @@ static int i5400_get_devices(struct mem_ctl_info *mci, int dev_idx)
 
 	/* Attempt to 'get' the MCH register we want */
 	pdev = NULL;
-	while (1) {
+	while (!pvt->branchmap_werrors || !pvt->fsb_error_regs) {
 		pdev = pci_get_device(PCI_VENDOR_ID_INTEL,
 				      PCI_DEVICE_ID_INTEL_5400_ERR, pdev);
 		if (!pdev) {
@@ -743,42 +743,23 @@ static int i5400_get_devices(struct mem_ctl_info *mci, int dev_idx)
 			i5400_printk(KERN_ERR,
 				"'system address,Process Bus' "
 				"device not found:"
-				"vendor 0x%x device 0x%x ERR func 1 "
+				"vendor 0x%x device 0x%x ERR funcs "
 				"(broken BIOS?)\n",
 				PCI_VENDOR_ID_INTEL,
 				PCI_DEVICE_ID_INTEL_5400_ERR);
-			return -ENODEV;
+			goto error;
 		}
 
-		/* Store device 16 func 1 */
-		if (PCI_FUNC(pdev->devfn) == 1)
+		/* Store device 16 funcs 1 and 2 */
+		switch (PCI_FUNC(pdev->devfn)) {
+		case 1:
+			pvt->branchmap_werrors = pdev;
 			break;
-	}
-	pvt->branchmap_werrors = pdev;
-
-	pdev = NULL;
-	while (1) {
-		pdev = pci_get_device(PCI_VENDOR_ID_INTEL,
-				      PCI_DEVICE_ID_INTEL_5400_ERR, pdev);
-		if (!pdev) {
-			/* End of list, leave */
-			i5400_printk(KERN_ERR,
-				"'system address,Process Bus' "
-				"device not found:"
-				"vendor 0x%x device 0x%x ERR func 2 "
-				"(broken BIOS?)\n",
-				PCI_VENDOR_ID_INTEL,
-				PCI_DEVICE_ID_INTEL_5400_ERR);
-
-			pci_dev_put(pvt->branchmap_werrors);
-			return -ENODEV;
+		case 2:
+			pvt->fsb_error_regs = pdev;
+			break;
 		}
-
-		/* Store device 16 func 2 */
-		if (PCI_FUNC(pdev->devfn) == 2)
-			break;
 	}
-	pvt->fsb_error_regs = pdev;
 
 	debugf1("System Address, processor bus- PCI Bus ID: %s  %x:%x\n",
 		pci_name(pvt->system_address),
@@ -797,10 +778,7 @@ static int i5400_get_devices(struct mem_ctl_info *mci, int dev_idx)
 			"MC: 'BRANCH 0' device not found:"
 			"vendor 0x%x device 0x%x Func 0 (broken BIOS?)\n",
 			PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_5400_FBD0);
-
-		pci_dev_put(pvt->fsb_error_regs);
-		pci_dev_put(pvt->branchmap_werrors);
-		return -ENODEV;
+		goto error;
 	}
 
 	/* If this device claims to have more than 2 channels then
@@ -818,14 +796,14 @@ static int i5400_get_devices(struct mem_ctl_info *mci, int dev_idx)
 			"(broken BIOS?)\n",
 			PCI_VENDOR_ID_INTEL,
 			PCI_DEVICE_ID_INTEL_5400_FBD1);
-
-		pci_dev_put(pvt->branch_0);
-		pci_dev_put(pvt->fsb_error_regs);
-		pci_dev_put(pvt->branchmap_werrors);
-		return -ENODEV;
+		goto error;
 	}
 
 	return 0;
+
+error:
+	i5400_put_devices(mci);
+	return -ENODEV;
 }
 
 /*
@@ -1262,7 +1240,7 @@ static int i5400_probe1(struct pci_dev *pdev, int dev_idx)
 	 * actual number of slots/dimms per channel, we thus utilize the
 	 * resource as specified by the chipset. Thus, we might have
 	 * have more DIMMs per channel than actually on the mobo, but this
-	 * allows the driver to support up to the chipset max, without
+	 * allows the driver to support upto the chipset max, without
 	 * some fancy mobo determination.
 	 */
 	num_dimms_per_channel = MAX_DIMMS_PER_CHANNEL;
@@ -1370,7 +1348,7 @@ static int __devinit i5400_init_one(struct pci_dev *pdev,
 
 	/* wake up device */
 	rc = pci_enable_device(pdev);
-	if (rc)
+	if (rc == -EIO)
 		return rc;
 
 	/* now probe and enable the device */
@@ -1405,7 +1383,7 @@ static void __devexit i5400_remove_one(struct pci_dev *pdev)
  *
  *	The "E500P" device is the first device supported.
  */
-static DEFINE_PCI_DEVICE_TABLE(i5400_pci_tbl) = {
+static const struct pci_device_id i5400_pci_tbl[] __devinitdata = {
 	{PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_5400_ERR)},
 	{0,}			/* 0 terminated list. */
 };

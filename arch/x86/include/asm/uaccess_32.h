@@ -6,6 +6,7 @@
  */
 #include <linux/errno.h>
 #include <linux/thread_info.h>
+#include <linux/prefetch.h>
 #include <linux/string.h>
 #include <asm/asm.h>
 #include <asm/page.h>
@@ -212,6 +213,11 @@ static inline unsigned long __must_check copy_from_user(void *to,
 
 	return n;
 }
+
+long __must_check strncpy_from_user(char *dst, const char __user *src,
+				    long count);
+long __must_check __strncpy_from_user(char *dst,
+				      const char __user *src, long count);
 
 /**
  * strlen_user: - Get the size of a string in user space.

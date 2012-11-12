@@ -68,7 +68,7 @@
 #include <linux/stat.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
-#include <linux/mutex.h>
+#include <linux/smp_lock.h>
 #include <linux/toshiba.h>
 
 #define TOSH_MINOR_DEV 181
@@ -78,7 +78,6 @@ MODULE_AUTHOR("Jonathan Buzzard <jonathan@buzzard.org.uk>");
 MODULE_DESCRIPTION("Toshiba laptop SMM driver");
 MODULE_SUPPORTED_DEVICE("toshiba");
 
-static DEFINE_MUTEX(tosh_mutex);
 static int tosh_fn;
 module_param_named(fn, tosh_fn, int, 0);
 MODULE_PARM_DESC(fn, "User specified Fn key detection port");
@@ -96,7 +95,6 @@ static long tosh_ioctl(struct file *, unsigned int,
 static const struct file_operations tosh_fops = {
 	.owner		= THIS_MODULE,
 	.unlocked_ioctl	= tosh_ioctl,
-	.llseek		= noop_llseek,
 };
 
 static struct miscdevice tosh_device = {
@@ -276,16 +274,16 @@ static long tosh_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 				return -EINVAL;
 
 			/* do we need to emulate the fan ? */
-			mutex_lock(&tosh_mutex);
+			lock_kernel();
 			if (tosh_fan==1) {
 				if (((ax==0xf300) || (ax==0xf400)) && (bx==0x0004)) {
 					err = tosh_emulate_fan(&regs);
-					mutex_unlock(&tosh_mutex);
+					unlock_kernel();
 					break;
 				}
 			}
 			err = tosh_smm(&regs);
-			mutex_unlock(&tosh_mutex);
+			unlock_kernel();
 			break;
 		default:
 			return -EINVAL;

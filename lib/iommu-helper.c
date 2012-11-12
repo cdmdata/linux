@@ -2,9 +2,8 @@
  * IOMMU helper functions for the free area management
  */
 
-#include <linux/export.h>
+#include <linux/module.h>
 #include <linux/bitmap.h>
-#include <linux/bug.h>
 
 int iommu_is_span_boundary(unsigned int index, unsigned int nr,
 			   unsigned long shift,
@@ -39,3 +38,12 @@ again:
 	return -1;
 }
 EXPORT_SYMBOL(iommu_area_alloc);
+
+unsigned long iommu_num_pages(unsigned long addr, unsigned long len,
+			      unsigned long io_page_size)
+{
+	unsigned long size = (addr & (io_page_size - 1)) + len;
+
+	return DIV_ROUND_UP(size, io_page_size);
+}
+EXPORT_SYMBOL(iommu_num_pages);

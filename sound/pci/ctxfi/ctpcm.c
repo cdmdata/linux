@@ -129,6 +129,8 @@ static int ct_pcm_playback_open(struct snd_pcm_substream *substream)
 
 	apcm->substream = substream;
 	apcm->interrupt = ct_atc_pcm_interrupt;
+	runtime->private_data = apcm;
+	runtime->private_free = ct_atc_pcm_free_substream;
 	if (IEC958 == substream->pcm->device) {
 		runtime->hw = ct_spdif_passthru_playback_hw;
 		atc->spdif_out_passthru(atc, 1);
@@ -153,12 +155,8 @@ static int ct_pcm_playback_open(struct snd_pcm_substream *substream)
 	}
 
 	apcm->timer = ct_timer_instance_new(atc->timer, apcm);
-	if (!apcm->timer) {
-		kfree(apcm);
+	if (!apcm->timer)
 		return -ENOMEM;
-	}
-	runtime->private_data = apcm;
-	runtime->private_free = ct_atc_pcm_free_substream;
 
 	return 0;
 }
@@ -280,6 +278,8 @@ static int ct_pcm_capture_open(struct snd_pcm_substream *substream)
 	apcm->started = 0;
 	apcm->substream = substream;
 	apcm->interrupt = ct_atc_pcm_interrupt;
+	runtime->private_data = apcm;
+	runtime->private_free = ct_atc_pcm_free_substream;
 	runtime->hw = ct_pcm_capture_hw;
 	runtime->hw.rate_max = atc->rsr * atc->msr;
 
@@ -298,12 +298,8 @@ static int ct_pcm_capture_open(struct snd_pcm_substream *substream)
 	}
 
 	apcm->timer = ct_timer_instance_new(atc->timer, apcm);
-	if (!apcm->timer) {
-		kfree(apcm);
+	if (!apcm->timer)
 		return -ENOMEM;
-	}
-	runtime->private_data = apcm;
-	runtime->private_free = ct_atc_pcm_free_substream;
 
 	return 0;
 }
@@ -404,7 +400,7 @@ int ct_alsa_pcm_create(struct ct_atc *atc,
 	int err;
 	int playback_count, capture_count;
 
-	playback_count = (IEC958 == device) ? 1 : 256;
+	playback_count = (IEC958 == device) ? 1 : 8;
 	capture_count = (FRONT == device) ? 1 : 0;
 	err = snd_pcm_new(atc->card, "ctxfi", device,
 			  playback_count, capture_count, &pcm);

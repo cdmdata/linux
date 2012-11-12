@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2007 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2004-2011 Freescale Semiconductor, Inc.
  * Copyright 2008 Juergen Beisert, kernel@pengutronix.de
  *
  * This program is free software; you can redistribute it and/or
@@ -22,112 +22,107 @@
 
 #include <asm/sizes.h>
 
-#define addr_in_module(addr, mod) \
-	((unsigned long)(addr) - mod ## _BASE_ADDR < mod ## _SIZE)
-
-#define IMX_IO_P2V_MODULE(addr, module)					\
-	(((addr) - module ## _BASE_ADDR) < module ## _SIZE ?		\
-	 (addr) - (module ## _BASE_ADDR) + (module ## _BASE_ADDR_VIRT) : 0)
-
 /*
- * This is rather complicated for humans and ugly to verify, but for a machine
- * it's OK.  Still more as it is usually only applied to constants.  The upsides
- * on using this approach are:
- *
- *  - same mapping on all i.MX machines
- *  - works for assembler, too
- *  - no need to nurture #defines for virtual addresses
- *
- * The downside it, it's hard to verify (but I have a script for that).
- *
- * Obviously this needs to be injective for each SoC.  In general it maps the
- * whole address space to [0xf4000000, 0xf5ffffff].  So [0xf6000000,0xfeffffff]
- * is free for per-machine use (e.g. KZM_ARM11_01 uses 64MiB there).
- *
- * It applies the following mappings for the different SoCs:
- *
- * mx1:
- *	IO	0x00200000+0x100000	->	0xf4000000+0x100000
- * mx21:
- *	AIPI	0x10000000+0x100000	->	0xf4400000+0x100000
- *	SAHB1	0x80000000+0x100000	->	0xf4000000+0x100000
- *	X_MEMC	0xdf000000+0x004000	->	0xf5f00000+0x004000
- * mx25:
- *	AIPS1	0x43f00000+0x100000	->	0xf5300000+0x100000
- *	AIPS2	0x53f00000+0x100000	->	0xf5700000+0x100000
- *	AVIC	0x68000000+0x100000	->	0xf5800000+0x100000
- * mx27:
- *	AIPI	0x10000000+0x100000	->	0xf4400000+0x100000
- *	SAHB1	0x80000000+0x100000	->	0xf4000000+0x100000
- *	X_MEMC	0xd8000000+0x100000	->	0xf5c00000+0x100000
- * mx31:
- *	AIPS1	0x43f00000+0x100000	->	0xf5300000+0x100000
- *	AIPS2	0x53f00000+0x100000	->	0xf5700000+0x100000
- *	AVIC	0x68000000+0x100000	->	0xf5800000+0x100000
- *	X_MEMC	0xb8000000+0x010000	->	0xf4c00000+0x010000
- *	SPBA0	0x50000000+0x100000	->	0xf5400000+0x100000
- * mx35:
- *	AIPS1	0x43f00000+0x100000	->	0xf5300000+0x100000
- *	AIPS2	0x53f00000+0x100000	->	0xf5700000+0x100000
- *	AVIC	0x68000000+0x100000	->	0xf5800000+0x100000
- *	X_MEMC	0xb8000000+0x010000	->	0xf4c00000+0x010000
- *	SPBA0	0x50000000+0x100000	->	0xf5400000+0x100000
- * mx50:
- *	TZIC	0x0fffc000+0x004000	->	0xf4bfc000+0x004000
- *	SPBA0	0x50000000+0x100000	->	0xf5400000+0x100000
- *	AIPS1	0x53f00000+0x100000	->	0xf5700000+0x100000
- *	AIPS2	0x63f00000+0x100000	->	0xf5300000+0x100000
- * mx51:
- *	TZIC	0xe0000000+0x004000	->	0xf5000000+0x004000
- *	IRAM	0x1ffe0000+0x020000	->	0xf4fe0000+0x020000
- *	SPBA0	0x70000000+0x100000	->	0xf5400000+0x100000
- *	AIPS1	0x73f00000+0x100000	->	0xf5700000+0x100000
- *	AIPS2	0x83f00000+0x100000	->	0xf4300000+0x100000
- * mx53:
- *	TZIC	0x0fffc000+0x004000	->	0xf4bfc000+0x004000
- *	SPBA0	0x50000000+0x100000	->	0xf5400000+0x100000
- *	AIPS1	0x53f00000+0x100000	->	0xf5700000+0x100000
- *	AIPS2	0x63f00000+0x100000	->	0xf5300000+0x100000
- * mx6q:
- *	SCU	0x00a00000+0x001000	->	0xf4000000+0x001000
- *	CCM	0x020c4000+0x004000	->	0xf42c4000+0x004000
- *	ANATOP	0x020c8000+0x001000	->	0xf42c8000+0x001000
- *	UART4	0x021f0000+0x004000	->	0xf42f0000+0x004000
+ * ---------------------------------------------------------------------------
+ * Processor specific defines
+ * ---------------------------------------------------------------------------
  */
-#define IMX_IO_P2V(x)	(						\
-			0xf4000000 +					\
-			(((x) & 0x50000000) >> 6) +			\
-			(((x) & 0x0b000000) >> 4) +			\
-			(((x) & 0x000fffff)))
+#define CHIP_REV_1_0		0x10
+#define CHIP_REV_1_1		0x11
+#define CHIP_REV_1_2		0x12
+#define CHIP_REV_1_3		0x13
+#define CHIP_REV_2_0		0x20
+#define CHIP_REV_2_1		0x21
+#define CHIP_REV_2_2		0x22
+#define CHIP_REV_2_3		0x23
+#define CHIP_REV_3_0		0x30
+#define CHIP_REV_3_1		0x31
+#define CHIP_REV_3_2		0x32
 
-#define IMX_IO_ADDRESS(x)	IOMEM(IMX_IO_P2V(x))
+#define BOARD_REV_1		0x000
+#define BOARD_REV_2		0x100
+#define BOARD_REV_3		0x200
+#define BOARD_REV_4		0x300
+#define BOARD_REV_5		0x400
 
-#include <mach/mxc.h>
+#define IMX_IO_ADDRESS(addr, module)					\
+	((void __force __iomem *)					\
+	 (((unsigned long)((addr) - (module ## _BASE_ADDR)) < module ## _SIZE) ?\
+	 (addr) - (module ## _BASE_ADDR) + (module ## _BASE_ADDR_VIRT) : 0))
 
-#include <mach/mx6q.h>
-#include <mach/mx50.h>
-#include <mach/mx51.h>
-#include <mach/mx53.h>
+#ifdef CONFIG_ARCH_MX5
+#include <mach/mx5x.h>
+#endif
+
+#ifdef CONFIG_ARCH_MX3
 #include <mach/mx3x.h>
 #include <mach/mx31.h>
 #include <mach/mx35.h>
-#include <mach/mx2x.h>
-#include <mach/mx21.h>
-#include <mach/mx27.h>
-#include <mach/mx1.h>
-#include <mach/mx25.h>
+#endif
 
-#define imx_map_entry(soc, name, _type)	{				\
-	.virtual = soc ## _IO_P2V(soc ## _ ## name ## _BASE_ADDR),	\
-	.pfn = __phys_to_pfn(soc ## _ ## name ## _BASE_ADDR),		\
-	.length = soc ## _ ## name ## _SIZE,				\
-	.type = _type,							\
-}
+#ifdef CONFIG_ARCH_MX37
+#include <mach/mx37.h>
+#endif
 
-/* There's a off-by-one betweem the gpio bank number and the gpiochip */
-/* range e.g. GPIO_1_5 is gpio 5 under linux */
-#define IMX_GPIO_NR(bank, nr)		(((bank) - 1) * 32 + (nr))
+#ifdef CONFIG_ARCH_MX2
+# include <mach/mx2x.h>
+# ifdef CONFIG_MACH_MX21
+#  include <mach/mx21.h>
+# endif
+# ifdef CONFIG_MACH_MX27
+#  include <mach/mx27.h>
+# endif
+#endif
 
-#define IMX_GPIO_TO_IRQ(gpio)	(MXC_GPIO_IRQ_START + (gpio))
+#ifdef CONFIG_ARCH_MX1
+# include <mach/mx1.h>
+#endif
 
+#ifdef CONFIG_ARCH_MX25
+# include <mach/mx25.h>
+#endif
+
+#ifdef CONFIG_ARCH_MXC91231
+# include <mach/mxc91231.h>
+#endif
+
+#ifndef __ASSEMBLY__
+extern unsigned int system_rev;
+#define board_is_rev(rev)	(((system_rev & 0x0F00) == rev) ? 1 : 0)
+#endif
+
+#ifdef CONFIG_ARCH_MX5
+#define board_is_mx53_loco_mc34708() \
+  (cpu_is_mx53() &&  board_is_rev(BOARD_REV_2))
+#define board_is_mx53_arm2()  (cpu_is_mx53() && board_is_rev(BOARD_REV_2))
+#define board_is_mx53_evk_a() (cpu_is_mx53() && board_is_rev(BOARD_REV_1))
+#define board_is_mx53_evk_b() (cpu_is_mx53() && board_is_rev(BOARD_REV_3))
+#define board_is_mx53_ard_a() (cpu_is_mx53() && board_is_rev(BOARD_REV_1))
+#define board_is_mx53_ard_b() (cpu_is_mx53() && board_is_rev(BOARD_REV_2))
+#define board_is_mx50_rd3()	  (cpu_is_mx50() && board_is_rev(BOARD_REV_4))
+#endif
+
+#include <mach/mxc.h>
+
+/*!
+ * Register an interrupt handler for the SMN as well as the SCC.  In some
+ * implementations, the SMN is not connected at all, and in others, it is
+ * on the same interrupt line as the SCM. Comment this line out accordingly
+ */
+#define USE_SMN_INTERRUPT
+
+/*!
+ * This option is used to set or clear the RXDMUXSEL bit in control reg 3.
+ * Certain platforms need this bit to be set in order to receive Irda data.
+ */
+#define MXC_UART_IR_RXDMUX      0x0004
+/*!
+ * This option is used to set or clear the RXDMUXSEL bit in control reg 3.
+ * Certain platforms need this bit to be set in order to receive UART data.
+ */
+#define MXC_UART_RXDMUX         0x0004
+
+#ifndef MXC_INT_FORCE
+#define MXC_INT_FORCE	-1
+#endif
 #endif /* __ASM_ARCH_MXC_HARDWARE_H__ */

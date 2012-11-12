@@ -75,7 +75,7 @@ static void videobuf_vm_close(struct vm_area_struct *vma)
 		struct videobuf_vmalloc_memory *mem;
 
 		dprintk(1, "munmap %p q=%p\n", map, q);
-		videobuf_queue_lock(q);
+		mutex_lock(&q->vb_lock);
 
 		/* We need first to cancel streams, before unmapping */
 		if (q->streaming)
@@ -102,10 +102,10 @@ static void videobuf_vm_close(struct vm_area_struct *vma)
 				   called with IRQ's disabled
 				 */
 				dprintk(1, "%s: buf[%d] freeing (%p)\n",
-					__func__, i, mem->vaddr);
+					__func__, i, mem->vmalloc);
 
-				vfree(mem->vaddr);
-				mem->vaddr = NULL;
+				vfree(mem->vmalloc);
+				mem->vmalloc = NULL;
 			}
 
 			q->bufs[i]->map   = NULL;
@@ -114,7 +114,7 @@ static void videobuf_vm_close(struct vm_area_struct *vma)
 
 		kfree(map);
 
-		videobuf_queue_unlock(q);
+		mutex_unlock(&q->vb_lock);
 	}
 
 	return;
@@ -135,7 +135,7 @@ static const struct vm_operations_struct videobuf_vm_ops = {
 	struct videobuf_dma_sg_memory
  */
 
-static struct videobuf_buffer *__videobuf_alloc_vb(size_t size)
+static struct videobuf_buffer *__videobuf_alloc(size_t size)
 {
 	struct videobuf_vmalloc_memory *mem;
 	struct videobuf_buffer *vb;
@@ -170,7 +170,7 @@ static int __videobuf_iolock(struct videobuf_queue *q,
 		dprintk(1, "%s memory method MMAP\n", __func__);
 
 		/* All handling should be done by __videobuf_mmap_mapper() */
-		if (!mem->vaddr) {
+		if (!mem->vmalloc) {
 			printk(KERN_ERR "memory is not alloced/mmapped.\n");
 			return -EINVAL;
 		}
@@ -189,13 +189,13 @@ static int __videobuf_iolock(struct videobuf_queue *q,
 		 * read() method.
 		 */
 
-		mem->vaddr = vmalloc_user(pages);
-		if (!mem->vaddr) {
+		mem->vmalloc = vmalloc_user(pages);
+		if (!mem->vmalloc) {
 			printk(KERN_ERR "vmalloc (%d pages) failed\n", pages);
 			return -ENOMEM;
 		}
 		dprintk(1, "vmalloc is at addr %p (%d pages)\n",
-			mem->vaddr, pages);
+			mem->vmalloc, pages);
 
 #if 0
 		int rc;
@@ -245,6 +245,8 @@ static int __videobuf_mmap_mapper(struct videobuf_queue *q,
 		return -ENOMEM;
 
 	buf->map = map;
+	map->start = vma->vm_start;
+	map->end   = vma->vm_end;
 	map->q     = q;
 
 	buf->baddr = vma->vm_start;
@@ -254,18 +256,18 @@ static int __videobuf_mmap_mapper(struct videobuf_queue *q,
 	MAGIC_CHECK(mem->magic, MAGIC_VMAL_MEM);
 
 	pages = PAGE_ALIGN(vma->vm_end - vma->vm_start);
-	mem->vaddr = vmalloc_user(pages);
-	if (!mem->vaddr) {
+	mem->vmalloc = vmalloc_user(pages);
+	if (!mem->vmalloc) {
 		printk(KERN_ERR "vmalloc (%d pages) failed\n", pages);
 		goto error;
 	}
-	dprintk(1, "vmalloc is at addr %p (%d pages)\n", mem->vaddr, pages);
+	dprintk(1, "vmalloc is at addr %p (%d pages)\n", mem->vmalloc, pages);
 
 	/* Try to remap memory */
-	retval = remap_vmalloc_range(vma, mem->vaddr, 0);
+	retval = remap_vmalloc_range(vma, mem->vmalloc, 0);
 	if (retval < 0) {
 		printk(KERN_ERR "mmap: remap failed with error %d. ", retval);
-		vfree(mem->vaddr);
+		vfree(mem->vmalloc);
 		goto error;
 	}
 
@@ -291,7 +293,7 @@ error:
 static struct videobuf_qtype_ops qops = {
 	.magic        = MAGIC_QTYPE_OPS,
 
-	.alloc_vb     = __videobuf_alloc_vb,
+	.alloc        = __videobuf_alloc,
 	.iolock       = __videobuf_iolock,
 	.mmap_mapper  = __videobuf_mmap_mapper,
 	.vaddr        = videobuf_to_vmalloc,
@@ -304,11 +306,10 @@ void videobuf_queue_vmalloc_init(struct videobuf_queue *q,
 			 enum v4l2_buf_type type,
 			 enum v4l2_field field,
 			 unsigned int msize,
-			 void *priv,
-			 struct mutex *ext_lock)
+			 void *priv)
 {
 	videobuf_queue_core_init(q, ops, dev, irqlock, type, field, msize,
-				 priv, &qops, ext_lock);
+				 priv, &qops);
 }
 EXPORT_SYMBOL_GPL(videobuf_queue_vmalloc_init);
 
@@ -318,7 +319,7 @@ void *videobuf_to_vmalloc(struct videobuf_buffer *buf)
 	BUG_ON(!mem);
 	MAGIC_CHECK(mem->magic, MAGIC_VMAL_MEM);
 
-	return mem->vaddr;
+	return mem->vmalloc;
 }
 EXPORT_SYMBOL_GPL(videobuf_to_vmalloc);
 
@@ -340,8 +341,8 @@ void videobuf_vmalloc_free(struct videobuf_buffer *buf)
 
 	MAGIC_CHECK(mem->magic, MAGIC_VMAL_MEM);
 
-	vfree(mem->vaddr);
-	mem->vaddr = NULL;
+	vfree(mem->vmalloc);
+	mem->vmalloc = NULL;
 
 	return;
 }

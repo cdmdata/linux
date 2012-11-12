@@ -1,6 +1,5 @@
 /*
  *  Copyright (C) 2001  MandrakeSoft S.A.
- *  Copyright 2010 Red Hat, Inc. and/or its affiliates.
  *
  *    MandrakeSoft S.A.
  *    43, rue d'Aboukir
@@ -152,7 +151,7 @@ static void ioapic_write_indirect(struct kvm_ioapic *ioapic, u32 val)
 		update_handled_vectors(ioapic);
 		mask_after = e->fields.mask;
 		if (mask_before != mask_after)
-			kvm_fire_mask_notifiers(ioapic->kvm, KVM_IRQCHIP_IOAPIC, index, mask_after);
+			kvm_fire_mask_notifiers(ioapic->kvm, index, mask_after);
 		if (e->fields.trig_mode == IOAPIC_LEVEL_TRIG
 		    && ioapic->irr & (1 << index))
 			ioapic_service(ioapic, index);
@@ -167,7 +166,7 @@ static int ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
 
 	ioapic_debug("dest=%x dest_mode=%x delivery_mode=%x "
 		     "vector=%x trig_mode=%x\n",
-		     entry->fields.dest_id, entry->fields.dest_mode,
+		     entry->fields.dest, entry->fields.dest_mode,
 		     entry->fields.delivery_mode, entry->fields.vector,
 		     entry->fields.trig_mode);
 
@@ -185,7 +184,7 @@ static int ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
 		irqe.dest_mode = 0; /* Physical mode. */
 		/* need to read apic_id from apic regiest since
 		 * it can be rewritten */
-		irqe.dest_id = ioapic->kvm->bsp_vcpu_id;
+		irqe.dest_id = ioapic->kvm->bsp_vcpu->vcpu_id;
 	}
 #endif
 	return kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe);
@@ -332,18 +331,9 @@ static int ioapic_mmio_write(struct kvm_io_device *this, gpa_t addr, int len,
 		     (void*)addr, len, val);
 	ASSERT(!(addr & 0xf));	/* check alignment */
 
-	switch (len) {
-	case 8:
-	case 4:
+	if (len == 4 || len == 8)
 		data = *(u32 *) val;
-		break;
-	case 2:
-		data = *(u16 *) val;
-		break;
-	case 1:
-		data = *(u8  *) val;
-		break;
-	default:
+	else {
 		printk(KERN_WARNING "ioapic: Unsupported size %d\n", len);
 		return 0;
 	}
@@ -352,7 +342,7 @@ static int ioapic_mmio_write(struct kvm_io_device *this, gpa_t addr, int len,
 	spin_lock(&ioapic->lock);
 	switch (addr) {
 	case IOAPIC_REG_SELECT:
-		ioapic->ioregsel = data & 0xFF; /* 8-bit register */
+		ioapic->ioregsel = data;
 		break;
 
 	case IOAPIC_REG_WINDOW:
@@ -403,8 +393,7 @@ int kvm_ioapic_init(struct kvm *kvm)
 	kvm_iodevice_init(&ioapic->dev, &ioapic_mmio_ops);
 	ioapic->kvm = kvm;
 	mutex_lock(&kvm->slots_lock);
-	ret = kvm_io_bus_register_dev(kvm, KVM_MMIO_BUS, ioapic->base_address,
-				      IOAPIC_MEM_LENGTH, &ioapic->dev);
+	ret = kvm_io_bus_register_dev(kvm, KVM_MMIO_BUS, &ioapic->dev);
 	mutex_unlock(&kvm->slots_lock);
 	if (ret < 0) {
 		kvm->arch.vioapic = NULL;

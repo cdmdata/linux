@@ -193,7 +193,6 @@ static int cr_backlight_probe(struct platform_device *pdev)
 	}
 
 	memset(&props, 0, sizeof(struct backlight_properties));
-	props.type = BACKLIGHT_RAW;
 	bdp = backlight_device_register("cr-backlight", &pdev->dev, NULL,
 					&cr_backlight_ops, &props);
 	if (IS_ERR(bdp)) {
@@ -212,7 +211,7 @@ static int cr_backlight_probe(struct platform_device *pdev)
 			      &gpio_bar);
 	gpio_bar &= ~0x3F;
 
-	crp = devm_kzalloc(&pdev->dev, sizeof(*crp), GFP_KERNEL);
+	crp = kzalloc(sizeof(*crp), GFP_KERNEL);
 	if (!crp) {
 		lcd_device_unregister(ldp);
 		backlight_device_unregister(bdp);

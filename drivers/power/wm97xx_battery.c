@@ -25,9 +25,11 @@
 #include <linux/irq.h>
 #include <linux/slab.h>
 
+static DEFINE_MUTEX(bat_lock);
 static struct work_struct bat_work;
-static DEFINE_MUTEX(work_lock);
+static struct mutex work_lock;
 static int bat_status = POWER_SUPPLY_STATUS_UNKNOWN;
+static struct wm97xx_batt_info *gpdata;
 static enum power_supply_property *prop;
 
 static unsigned long wm97xx_read_bat(struct power_supply *bat_ps)
@@ -146,7 +148,7 @@ static irqreturn_t wm97xx_chrg_irq(int irq, void *data)
 #ifdef CONFIG_PM
 static int wm97xx_bat_suspend(struct device *dev)
 {
-	flush_work_sync(&bat_work);
+	flush_scheduled_work();
 	return 0;
 }
 
@@ -170,6 +172,12 @@ static int __devinit wm97xx_bat_probe(struct platform_device *dev)
 	struct wm97xx_pdata *wmdata = dev->dev.platform_data;
 	struct wm97xx_batt_pdata *pdata;
 
+	if (gpdata) {
+		dev_err(&dev->dev, "Do not pass platform_data through "
+			"wm97xx_bat_set_pdata!\n");
+		return -EINVAL;
+	}
+
 	if (!wmdata) {
 		dev_err(&dev->dev, "No platform data supplied\n");
 		return -EINVAL;
@@ -179,6 +187,8 @@ static int __devinit wm97xx_bat_probe(struct platform_device *dev)
 
 	if (dev->id != -1)
 		return -EINVAL;
+
+	mutex_init(&work_lock);
 
 	if (!pdata) {
 		dev_err(&dev->dev, "No platform_data supplied\n");
@@ -193,7 +203,7 @@ static int __devinit wm97xx_bat_probe(struct platform_device *dev)
 		if (ret)
 			goto err2;
 		ret = request_irq(gpio_to_irq(pdata->charge_gpio),
-				wm97xx_chrg_irq, 0,
+				wm97xx_chrg_irq, IRQF_DISABLED,
 				"AC Detect", dev);
 		if (ret)
 			goto err2;
@@ -270,7 +280,7 @@ static int __devexit wm97xx_bat_remove(struct platform_device *dev)
 		free_irq(gpio_to_irq(pdata->charge_gpio), dev);
 		gpio_free(pdata->charge_gpio);
 	}
-	cancel_work_sync(&bat_work);
+	flush_scheduled_work();
 	power_supply_unregister(&bat_ps);
 	kfree(prop);
 	return 0;
@@ -288,7 +298,27 @@ static struct platform_driver wm97xx_bat_driver = {
 	.remove		= __devexit_p(wm97xx_bat_remove),
 };
 
-module_platform_driver(wm97xx_bat_driver);
+static int __init wm97xx_bat_init(void)
+{
+	return platform_driver_register(&wm97xx_bat_driver);
+}
+
+static void __exit wm97xx_bat_exit(void)
+{
+	platform_driver_unregister(&wm97xx_bat_driver);
+}
+
+/* The interface is deprecated, as well as linux/wm97xx_batt.h */
+void wm97xx_bat_set_pdata(struct wm97xx_batt_info *data);
+
+void wm97xx_bat_set_pdata(struct wm97xx_batt_info *data)
+{
+	gpdata = data;
+}
+EXPORT_SYMBOL_GPL(wm97xx_bat_set_pdata);
+
+module_init(wm97xx_bat_init);
+module_exit(wm97xx_bat_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Marek Vasut <marek.vasut@gmail.com>");

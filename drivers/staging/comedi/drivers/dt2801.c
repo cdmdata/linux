@@ -98,18 +98,7 @@ static struct comedi_driver driver_dt2801 = {
 	.detach = dt2801_detach,
 };
 
-static int __init driver_dt2801_init_module(void)
-{
-	return comedi_driver_register(&driver_dt2801);
-}
-
-static void __exit driver_dt2801_cleanup_module(void)
-{
-	comedi_driver_unregister(&driver_dt2801);
-}
-
-module_init(driver_dt2801_init_module);
-module_exit(driver_dt2801_cleanup_module);
+COMEDI_INITCLEANUP(driver_dt2801);
 
 #if 0
 /* ignore 'defined but not used' warning */
@@ -720,26 +709,14 @@ static int dt2801_dio_insn_config(struct comedi_device *dev,
 		which = 1;
 
 	/* configure */
-	switch (data[0]) {
-	case INSN_CONFIG_DIO_OUTPUT:
+	if (data[0]) {
 		s->io_bits = 0xff;
 		dt2801_writecmd(dev, DT_C_SET_DIGOUT);
-		break;
-	case INSN_CONFIG_DIO_INPUT:
+	} else {
 		s->io_bits = 0;
 		dt2801_writecmd(dev, DT_C_SET_DIGIN);
-		break;
-	case INSN_CONFIG_DIO_QUERY:
-		data[1] = s->io_bits ? COMEDI_OUTPUT : COMEDI_INPUT;
-		return insn->n;
-	default:
-		return -EINVAL;
 	}
 	dt2801_writedata(dev, which);
 
 	return 1;
 }
-
-MODULE_AUTHOR("Comedi http://www.comedi.org");
-MODULE_DESCRIPTION("Comedi low-level driver");
-MODULE_LICENSE("GPL");

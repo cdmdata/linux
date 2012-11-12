@@ -22,8 +22,10 @@
 #define __PDAUDIOCF_H
 
 #include <sound/pcm.h>
-#include <linux/io.h>
+#include <asm/io.h>
 #include <linux/interrupt.h>
+#include <pcmcia/cs_types.h>
+#include <pcmcia/cs.h>
 #include <pcmcia/cistpl.h>
 #include <pcmcia/ds.h>
 

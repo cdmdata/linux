@@ -35,7 +35,7 @@
 
 #include <linux/types.h>
 #include <linux/percpu.h>
-#include <linux/export.h>
+#include <linux/module.h>
 #include <linux/jiffies.h>
 #include <linux/random.h>
 
@@ -127,7 +127,7 @@ core_initcall(random32_init);
 
 /*
  *	Generate better values after random number generator
- *	is fully initialized.
+ *	is fully initalized.
  */
 static int __init random32_reseed(void)
 {

@@ -1,11 +1,15 @@
 /*
  * Range add and subtract
  */
-#include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/init.h>
 #include <linux/sort.h>
 
 #include <linux/range.h>
+
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+#endif
 
 int add_range(struct range *range, int az, int nr_range, u64 start, u64 end)
 {
@@ -119,7 +123,7 @@ static int cmp_range(const void *x1, const void *x2)
 
 int clean_sort_range(struct range *range, int az)
 {
-	int i, j, k = az - 1, nr_range = az;
+	int i, j, k = az - 1, nr_range = 0;
 
 	for (i = 0; i < k; i++) {
 		if (range[i].end)

@@ -41,10 +41,8 @@
 struct thermal_data {
 	struct device *hwmon_dev;
 	struct mutex mutex;
-	/*
-	 * Cache the hyst value so we don't keep re-reading it. In theory
-	 * we could cache it forever as nobody else should be writing it.
-	 */
+	/* Cache the hyst value so we don't keep re-reading it. In theory
+	   we could cache it forever as nobody else should be writing it. */
 	u8 cached_hyst;
 	unsigned long hyst_valid;
 };
@@ -82,42 +80,13 @@ static ssize_t store_temp(struct device *dev,
 	unsigned long val;
 	int retval;
 
-	if (kstrtoul(buf, 10, &val))
+	if (strict_strtoul(buf, 10, &val))
 		return -EINVAL;
 	retval = i2c_smbus_write_byte_data(client, sda->index,
 					DIV_ROUND_CLOSEST(val, 1000));
 	if (retval < 0)
 		return retval;
 	return count;
-}
-
-static ssize_t store_bit(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct i2c_client *client = to_i2c_client(dev);
-	struct thermal_data *data = i2c_get_clientdata(client);
-	struct sensor_device_attribute_2 *sda = to_sensor_dev_attr_2(attr);
-	unsigned long val;
-	int retval;
-
-	if (kstrtoul(buf, 10, &val))
-		return -EINVAL;
-
-	mutex_lock(&data->mutex);
-	retval = i2c_smbus_read_byte_data(client, sda->nr);
-	if (retval < 0)
-		goto fail;
-
-	retval &= ~sda->index;
-	if (val)
-		retval |= sda->index;
-
-	retval = i2c_smbus_write_byte_data(client, sda->index, retval);
-	if (retval == 0)
-		retval = count;
-fail:
-	mutex_unlock(&data->mutex);
-	return retval;
 }
 
 static ssize_t show_hyst(struct device *dev,
@@ -153,7 +122,7 @@ static ssize_t store_hyst(struct device *dev,
 	int hyst;
 	unsigned long val;
 
-	if (kstrtoul(buf, 10, &val))
+	if (strict_strtoul(buf, 10, &val))
 		return -EINVAL;
 
 	mutex_lock(&data->mutex);
@@ -231,9 +200,6 @@ static SENSOR_DEVICE_ATTR_2(temp3_crit_alarm, S_IRUGO,
 static SENSOR_DEVICE_ATTR(temp3_crit_hyst, S_IRUGO | S_IWUSR,
 	show_hyst, store_hyst, 0x1A);
 
-static SENSOR_DEVICE_ATTR_2(power_state, S_IRUGO | S_IWUSR,
-	show_bit, store_bit, 0x03, 0x40);
-
 static struct attribute *mid_att_thermal[] = {
 	&sensor_dev_attr_temp1_min.dev_attr.attr,
 	&sensor_dev_attr_temp1_max.dev_attr.attr,
@@ -259,7 +225,6 @@ static struct attribute *mid_att_thermal[] = {
 	&sensor_dev_attr_temp3_max_alarm.dev_attr.attr,
 	&sensor_dev_attr_temp3_crit_alarm.dev_attr.attr,
 	&sensor_dev_attr_temp3_crit_hyst.dev_attr.attr,
-	&sensor_dev_attr_power_state.dev_attr.attr,
 	NULL
 };
 
@@ -271,32 +236,23 @@ static int emc1403_detect(struct i2c_client *client,
 			struct i2c_board_info *info)
 {
 	int id;
-	/* Check if thermal chip is SMSC and EMC1403 or EMC1423 */
+	/* Check if thermal chip is SMSC and EMC1403 */
 
 	id = i2c_smbus_read_byte_data(client, THERMAL_SMSC_ID_REG);
 	if (id != 0x5d)
 		return -ENODEV;
 
+	/* Note: 0x25 is the 1404 which is very similar and this
+	   driver could be extended */
 	id = i2c_smbus_read_byte_data(client, THERMAL_PID_REG);
-	switch (id) {
-	case 0x21:
-		strlcpy(info->type, "emc1403", I2C_NAME_SIZE);
-		break;
-	case 0x23:
-		strlcpy(info->type, "emc1423", I2C_NAME_SIZE);
-		break;
-	/*
-	 * Note: 0x25 is the 1404 which is very similar and this
-	 * driver could be extended
-	 */
-	default:
+	if (id != 0x21)
 		return -ENODEV;
-	}
 
 	id = i2c_smbus_read_byte_data(client, THERMAL_REVISION_REG);
 	if (id != 0x01)
 		return -ENODEV;
 
+	strlcpy(info->type, "emc1403", I2C_NAME_SIZE);
 	return 0;
 }
 
@@ -319,6 +275,7 @@ static int emc1403_probe(struct i2c_client *client,
 	res = sysfs_create_group(&client->dev.kobj, &m_thermal_gr);
 	if (res) {
 		dev_warn(&client->dev, "create group failed\n");
+		hwmon_device_unregister(data->hwmon_dev);
 		goto thermal_error1;
 	}
 	data->hwmon_dev = hwmon_device_register(&client->dev);
@@ -348,12 +305,11 @@ static int emc1403_remove(struct i2c_client *client)
 }
 
 static const unsigned short emc1403_address_list[] = {
-	0x18, 0x29, 0x4c, 0x4d, I2C_CLIENT_END
+	0x18, 0x2a, 0x4c, 0x4d, I2C_CLIENT_END
 };
 
 static const struct i2c_device_id emc1403_idtable[] = {
 	{ "emc1403", 0 },
-	{ "emc1423", 0 },
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, emc1403_idtable);
@@ -370,7 +326,18 @@ static struct i2c_driver sensor_emc1403 = {
 	.address_list = emc1403_address_list,
 };
 
-module_i2c_driver(sensor_emc1403);
+static int __init sensor_emc1403_init(void)
+{
+	return i2c_add_driver(&sensor_emc1403);
+}
+
+static void  __exit sensor_emc1403_exit(void)
+{
+	i2c_del_driver(&sensor_emc1403);
+}
+
+module_init(sensor_emc1403_init);
+module_exit(sensor_emc1403_exit);
 
 MODULE_AUTHOR("Kalhan Trisal <kalhan.trisal@intel.com");
 MODULE_DESCRIPTION("emc1403 Thermal Driver");

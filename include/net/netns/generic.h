@@ -5,7 +5,6 @@
 #ifndef __NET_GENERIC_H__
 #define __NET_GENERIC_H__
 
-#include <linux/bug.h>
 #include <linux/rcupdate.h>
 
 /*
@@ -31,7 +30,7 @@ struct net_generic {
 	void *ptr[0];
 };
 
-static inline void *net_generic(const struct net *net, int id)
+static inline void *net_generic(struct net *net, int id)
 {
 	struct net_generic *ng;
 	void *ptr;
@@ -42,7 +41,6 @@ static inline void *net_generic(const struct net *net, int id)
 	ptr = ng->ptr[id - 1];
 	rcu_read_unlock();
 
-	BUG_ON(!ptr);
 	return ptr;
 }
 #endif

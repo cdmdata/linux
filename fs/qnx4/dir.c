@@ -11,6 +11,7 @@
  * 20-06-1998 by Frank Denis : Linux 2.1.99+ & dcache support.
  */
 
+#include <linux/smp_lock.h>
 #include <linux/buffer_head.h>
 #include "qnx4.h"
 
@@ -27,6 +28,8 @@ static int qnx4_readdir(struct file *filp, void *dirent, filldir_t filldir)
 
 	QNX4DEBUG((KERN_INFO "qnx4_readdir:i_size = %ld\n", (long) inode->i_size));
 	QNX4DEBUG((KERN_INFO "filp->f_pos         = %ld\n", (long) filp->f_pos));
+
+	lock_kernel();
 
 	while (filp->f_pos < inode->i_size) {
 		blknum = qnx4_block_map( inode, filp->f_pos >> QNX4_BLOCK_SIZE_BITS );
@@ -68,6 +71,7 @@ static int qnx4_readdir(struct file *filp, void *dirent, filldir_t filldir)
 		brelse(bh);
 	}
 out:
+	unlock_kernel();
 	return 0;
 }
 

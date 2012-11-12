@@ -18,6 +18,7 @@
 #include <linux/percpu.h>
 #include <linux/profile.h>
 #include <linux/sched.h>
+#include <linux/tick.h>
 
 #include <asm/irq_regs.h>
 
@@ -48,13 +49,9 @@ struct tick_device *tick_get_device(int cpu)
  */
 int tick_is_oneshot_available(void)
 {
-	struct clock_event_device *dev = __this_cpu_read(tick_cpu_device.evtdev);
+	struct clock_event_device *dev = __get_cpu_var(tick_cpu_device).evtdev;
 
-	if (!dev || !(dev->features & CLOCK_EVT_FEAT_ONESHOT))
-		return 0;
-	if (!(dev->features & CLOCK_EVT_FEAT_C3STOP))
-		return 1;
-	return tick_broadcast_oneshot_available();
+	return dev && (dev->features & CLOCK_EVT_FEAT_ONESHOT);
 }
 
 /*
@@ -94,7 +91,7 @@ void tick_handle_periodic(struct clock_event_device *dev)
 	 */
 	next = ktime_add(dev->next_event, tick_period);
 	for (;;) {
-		if (!clockevents_program_event(dev, next, false))
+		if (!clockevents_program_event(dev, next, ktime_get()))
 			return;
 		/*
 		 * Have to be careful here. If we're in oneshot mode,
@@ -137,7 +134,7 @@ void tick_setup_periodic(struct clock_event_device *dev, int broadcast)
 		clockevents_set_mode(dev, CLOCK_EVT_MODE_ONESHOT);
 
 		for (;;) {
-			if (!clockevents_program_event(dev, next, false))
+			if (!clockevents_program_event(dev, next, ktime_get()))
 				return;
 			next = ktime_add(next, tick_period);
 		}

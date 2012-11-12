@@ -42,11 +42,11 @@
 #include <asm/calgary.h>
 #include <asm/tce.h>
 #include <asm/pci-direct.h>
+#include <asm/system.h>
 #include <asm/dma.h>
 #include <asm/rio.h>
 #include <asm/bios_ebda.h>
 #include <asm/x86_init.h>
-#include <asm/iommu_table.h>
 
 #ifdef CONFIG_CALGARY_IOMMU_ENABLED_BY_DEFAULT
 int use_calgary __read_mostly = 1;
@@ -430,7 +430,7 @@ static void calgary_unmap_page(struct device *dev, dma_addr_t dma_addr,
 }
 
 static void* calgary_alloc_coherent(struct device *dev, size_t size,
-	dma_addr_t *dma_handle, gfp_t flag, struct dma_attrs *attrs)
+	dma_addr_t *dma_handle, gfp_t flag)
 {
 	void *ret = NULL;
 	dma_addr_t mapping;
@@ -463,8 +463,7 @@ error:
 }
 
 static void calgary_free_coherent(struct device *dev, size_t size,
-				  void *vaddr, dma_addr_t dma_handle,
-				  struct dma_attrs *attrs)
+				  void *vaddr, dma_addr_t dma_handle)
 {
 	unsigned int npages;
 	struct iommu_table *tbl = find_iommu_table(dev);
@@ -477,8 +476,8 @@ static void calgary_free_coherent(struct device *dev, size_t size,
 }
 
 static struct dma_map_ops calgary_dma_ops = {
-	.alloc = calgary_alloc_coherent,
-	.free = calgary_free_coherent,
+	.alloc_coherent = calgary_alloc_coherent,
+	.free_coherent = calgary_free_coherent,
 	.map_sg = calgary_map_sg,
 	.unmap_sg = calgary_unmap_sg,
 	.map_page = calgary_map_page,
@@ -1279,7 +1278,7 @@ static int __init calgary_bus_has_devices(int bus, unsigned short pci_dev)
 
 	if (pci_dev == PCI_DEVICE_ID_IBM_CALIOC2) {
 		/*
-		 * FIXME: properly scan for devices across the
+		 * FIXME: properly scan for devices accross the
 		 * PCI-to-PCI bridge on every CalIOC2 port.
 		 */
 		return 1;
@@ -1295,7 +1294,7 @@ static int __init calgary_bus_has_devices(int bus, unsigned short pci_dev)
 
 /*
  * calgary_init_bitmap_from_tce_table():
- * Function for kdump case. In the second/kdump kernel initialize
+ * Funtion for kdump case. In the second/kdump kernel initialize
  * the bitmap based on the tce table entries obtained from first kernel
  */
 static void calgary_init_bitmap_from_tce_table(struct iommu_table *tbl)
@@ -1365,7 +1364,7 @@ static int __init calgary_iommu_init(void)
 	return 0;
 }
 
-int __init detect_calgary(void)
+void __init detect_calgary(void)
 {
 	int bus;
 	void *tbl;
@@ -1379,13 +1378,13 @@ int __init detect_calgary(void)
 	 * another HW IOMMU already, bail out.
 	 */
 	if (no_iommu || iommu_detected)
-		return -ENODEV;
+		return;
 
 	if (!use_calgary)
-		return -ENODEV;
+		return;
 
 	if (!early_pci_allowed())
-		return -ENODEV;
+		return;
 
 	printk(KERN_DEBUG "Calgary: detecting Calgary via BIOS EBDA area\n");
 
@@ -1411,13 +1410,13 @@ int __init detect_calgary(void)
 	if (!rio_table_hdr) {
 		printk(KERN_DEBUG "Calgary: Unable to locate Rio Grande table "
 		       "in EBDA - bailing!\n");
-		return -ENODEV;
+		return;
 	}
 
 	ret = build_detail_arrays();
 	if (ret) {
 		printk(KERN_DEBUG "Calgary: build_detail_arrays ret %d\n", ret);
-		return -ENOMEM;
+		return;
 	}
 
 	specified_table_size = determine_tce_table_size((is_kdump_kernel() ?
@@ -1465,7 +1464,7 @@ int __init detect_calgary(void)
 
 		x86_init.iommu.iommu_init = calgary_iommu_init;
 	}
-	return calgary_found;
+	return;
 
 cleanup:
 	for (--bus; bus >= 0; --bus) {
@@ -1474,7 +1473,6 @@ cleanup:
 		if (info->tce_space)
 			free_tce_table(info->tce_space);
 	}
-	return -ENOMEM;
 }
 
 static int __init calgary_parse_options(char *p)
@@ -1553,7 +1551,7 @@ static void __init calgary_fixup_one_tce_space(struct pci_dev *dev)
 			continue;
 
 		/* cover the whole region */
-		npages = resource_size(r) >> PAGE_SHIFT;
+		npages = (r->end - r->start) >> PAGE_SHIFT;
 		npages++;
 
 		iommu_range_reserve(tbl, r->start, npages);
@@ -1596,5 +1594,3 @@ static int __init calgary_fixup_tce_spaces(void)
  * and before device_initcall.
  */
 rootfs_initcall(calgary_fixup_tce_spaces);
-
-IOMMU_INIT_POST(detect_calgary);

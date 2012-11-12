@@ -208,20 +208,8 @@ static void spid_start(struct ccw_device *cdev)
 	req->timeout	= PGID_TIMEOUT;
 	req->maxretries	= PGID_RETRIES;
 	req->lpm	= 0x80;
-	req->singlepath	= 1;
 	req->callback	= spid_callback;
 	spid_do(cdev);
-}
-
-static int pgid_is_reset(struct pgid *p)
-{
-	char *c;
-
-	for (c = (char *)p + 1; c < (char *)(p + 1); c++) {
-		if (*c != 0)
-			return 0;
-	}
-	return 1;
 }
 
 static int pgid_cmp(struct pgid *p1, struct pgid *p2)
@@ -234,7 +222,7 @@ static int pgid_cmp(struct pgid *p1, struct pgid *p2)
  * Determine pathgroup state from PGID data.
  */
 static void pgid_analyze(struct ccw_device *cdev, struct pgid **p,
-			 int *mismatch, int *reserved, u8 *reset)
+			 int *mismatch, int *reserved, int *reset)
 {
 	struct pgid *pgid = &cdev->private->pgid[0];
 	struct pgid *first = NULL;
@@ -249,8 +237,9 @@ static void pgid_analyze(struct ccw_device *cdev, struct pgid **p,
 			continue;
 		if (pgid->inf.ps.state2 == SNID_STATE2_RESVD_ELSE)
 			*reserved = 1;
-		if (pgid_is_reset(pgid)) {
-			*reset |= lpm;
+		if (pgid->inf.ps.state1 == SNID_STATE1_RESET) {
+			/* A PGID was reset. */
+			*reset = 1;
 			continue;
 		}
 		if (!first) {
@@ -317,7 +306,7 @@ static void snid_done(struct ccw_device *cdev, int rc)
 	struct pgid *pgid;
 	int mismatch = 0;
 	int reserved = 0;
-	u8 reset = 0;
+	int reset = 0;
 	u8 donepm;
 
 	if (rc)
@@ -331,12 +320,11 @@ static void snid_done(struct ccw_device *cdev, int rc)
 		donepm = pgid_to_donepm(cdev);
 		sch->vpm = donepm & sch->opm;
 		cdev->private->pgid_todo_mask &= ~donepm;
-		cdev->private->pgid_reset_mask |= reset;
 		pgid_fill(cdev, pgid);
 	}
 out:
 	CIO_MSG_EVENT(2, "snid: device 0.%x.%04x: rc=%d pvm=%02x vpm=%02x "
-		      "todo=%02x mism=%d rsvd=%d reset=%02x\n", id->ssid,
+		      "todo=%02x mism=%d rsvd=%d reset=%d\n", id->ssid,
 		      id->devno, rc, cdev->private->pgid_valid_mask, sch->vpm,
 		      cdev->private->pgid_todo_mask, mismatch, reserved, reset);
 	switch (rc) {
@@ -432,7 +420,6 @@ static void verify_start(struct ccw_device *cdev)
 	req->timeout	= PGID_TIMEOUT;
 	req->maxretries	= PGID_RETRIES;
 	req->lpm	= 0x80;
-	req->singlepath	= 1;
 	if (cdev->private->flags.pgroup) {
 		CIO_TRACE_EVENT(4, "snid");
 		CIO_HEX_EVENT(4, devid, sizeof(*devid));
@@ -520,7 +507,6 @@ void ccw_device_disband_start(struct ccw_device *cdev)
 	req->timeout	= PGID_TIMEOUT;
 	req->maxretries	= PGID_RETRIES;
 	req->lpm	= sch->schib.pmcw.pam & sch->opm;
-	req->singlepath	= 1;
 	req->callback	= disband_callback;
 	fn = SPID_FUNC_DISBAND;
 	if (cdev->private->flags.mpath)

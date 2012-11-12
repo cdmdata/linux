@@ -9,10 +9,8 @@
 
 #include <net/caif/caif_layer.h>
 #include <net/caif/cfcnfg.h>
-#include <net/caif/caif_device.h>
 #include <linux/caif/caif_socket.h>
 #include <linux/if.h>
-#include <linux/net.h>
 
 /**
  * struct caif_param - CAIF parameters.
@@ -30,7 +28,7 @@ struct caif_param {
  * @sockaddr:		Socket address to connect.
  * @priority:		Priority of the connection.
  * @link_selector:	Link selector (high bandwidth or low latency)
- * @ifindex:		kernel index of the interface.
+ * @link_name:		Name of the CAIF Link Layer to use.
  * @param:		Connect Request parameters (CAIF_SO_REQ_PARAM).
  *
  * This struct is used when connecting a CAIF channel.
@@ -41,7 +39,7 @@ struct caif_connect_request {
 	struct sockaddr_caif sockaddr;
 	enum caif_channel_priority priority;
 	enum caif_link_selector link_selector;
-	int ifindex;
+	char link_name[16];
 	struct caif_param param;
 };
 
@@ -52,9 +50,6 @@ struct caif_connect_request {
  * @client_layer:	User implementation of client layer. This layer
  *			MUST have receive and control callback functions
  *			implemented.
- * @ifindex:		Link layer interface index used for this connection.
- * @headroom:		Head room needed by CAIF protocol.
- * @tailroom:		Tail room needed by CAIF protocol.
  *
  * This function connects a CAIF channel. The Client must implement
  * the struct cflayer. This layer represents the Client layer and holds
@@ -64,65 +59,45 @@ struct caif_connect_request {
  * E.g. CAIF Socket will call this function for each socket it connects
  * and have one client_layer instance for each socket.
  */
-int caif_connect_client(struct net *net,
-			struct caif_connect_request *conn_req,
-			struct cflayer *client_layer, int *ifindex,
-			int *headroom, int *tailroom);
+int caif_connect_client(struct caif_connect_request *config,
+			   struct cflayer *client_layer);
 
 /**
  * caif_disconnect_client - Disconnects a client from the CAIF stack.
  *
- * @client_layer: Client layer to be disconnected.
- */
-int caif_disconnect_client(struct net *net, struct cflayer *client_layer);
-
-
-/**
- * caif_client_register_refcnt - register ref-count functions provided by client.
- *
- * @adapt_layer: Client layer using CAIF Stack.
- * @hold:	Function provided by client layer increasing ref-count
- * @put:	Function provided by client layer decreasing ref-count
- *
- * Client of the CAIF Stack must register functions for reference counting.
- * These functions are called by the CAIF Stack for every upstream packet,
- * and must therefore be implemented efficiently.
- *
- * Client should call caif_free_client when reference count degrease to zero.
- */
-
-void caif_client_register_refcnt(struct cflayer *adapt_layer,
-					void (*hold)(struct cflayer *lyr),
-					void (*put)(struct cflayer *lyr));
-/**
- * caif_free_client - Free memory used to manage the client in the CAIF Stack.
- *
  * @client_layer: Client layer to be removed.
- *
- * This function must be called from client layer in order to free memory.
- * Caller must guarantee that no packets are in flight upstream when calling
- * this function.
  */
-void caif_free_client(struct cflayer *adap_layer);
+int caif_disconnect_client(struct cflayer *client_layer);
 
 /**
- * struct caif_enroll_dev - Enroll a net-device as a CAIF Link layer
- * @dev:		Network device to enroll.
- * @caifdev:		Configuration information from CAIF Link Layer
- * @link_support:	Link layer support layer
- * @head_room:		Head room needed by link support layer
- * @layer:		Lowest layer in CAIF stack
- * @rcv_fun:		Receive function for CAIF stack.
+ * caif_release_client - Release adaptation layer reference to client.
  *
- * This function enroll a CAIF link layer into CAIF Stack and
- * expects the interface to be able to handle CAIF payload.
- * The link_support layer is used to add any Link Layer specific
- * framing.
+ * @client_layer: Client layer.
+ *
+ * Releases a client/adaptation layer use of the caif stack.
+ * This function must be used after caif_disconnect_client to
+ * decrease the reference count of the service layer.
  */
-void caif_enroll_dev(struct net_device *dev, struct caif_dev_common *caifdev,
-			struct cflayer *link_support, int head_room,
-			struct cflayer **layer, int (**rcv_func)(
-				struct sk_buff *, struct net_device *,
-				struct packet_type *, struct net_device *));
+void caif_release_client(struct cflayer *client_layer);
+
+/**
+ * connect_req_to_link_param - Translate configuration parameters
+ *				from socket format to internal format.
+ * @cnfg:	Pointer to configuration handler
+ * @con_req:	Configuration parameters supplied in function
+ *		caif_connect_client
+ * @channel_setup_param: Parameters supplied to the CAIF Core stack for
+ *			 setting up channels.
+ *
+ */
+int connect_req_to_link_param(struct cfcnfg *cnfg,
+				struct caif_connect_request *con_req,
+				struct cfctrl_link_param *channel_setup_param);
+
+/**
+ * get_caif_conf() - Get the configuration handler.
+ */
+struct cfcnfg *get_caif_conf(void);
+
 
 #endif /* CAIF_DEV_H_ */

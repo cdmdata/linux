@@ -7,7 +7,6 @@
 /* declare packet_type enums */
 enum packet_types {
 #define NL_PACKET(name, number, fields) P_ ## name = number,
-#define NL_RESPONSE(name, number) P_ ## name = number,
 #define NL_INTEGER(pn, pr, member)
 #define NL_INT64(pn, pr, member)
 #define NL_BIT(pn, pr, member)
@@ -28,9 +27,9 @@ enum packet_types {
 #define NL_STRING(pn, pr, member, len)	\
 	unsigned char member[len]; int member ## _len; \
 	int tag_and_len ## member;
-#include <linux/drbd_nl.h>
+#include "linux/drbd_nl.h"
 
-/* declare tag-list-sizes */
+/* declate tag-list-sizes */
 static const int tag_list_sizes[] = {
 #define NL_PACKET(name, number, fields) 2 fields ,
 #define NL_INTEGER(pn, pr, member)      + 4 + 4

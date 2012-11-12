@@ -42,7 +42,6 @@
 #include <linux/ieee80211.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
-#include <linux/moduleparam.h>
 
 #include "iwm.h"
 #include "bus.h"
@@ -909,7 +908,7 @@ int iwm_scan_ssids(struct iwm_priv *iwm, struct cfg80211_ssid *ssids,
 		return ret;
 	}
 
-	iwm->scan_id = (iwm->scan_id + 1) % IWM_SCAN_ID_MAX;
+	iwm->scan_id = iwm->scan_id++ % IWM_SCAN_ID_MAX;
 
 	return 0;
 }

@@ -42,7 +42,6 @@ struct nlmclnt_initdata {
 	unsigned short		protocol;
 	u32			nfs_version;
 	int			noresvport;
-	struct net		*net;
 };
 
 /*

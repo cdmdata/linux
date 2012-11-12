@@ -29,8 +29,6 @@
 #include <asm/cpu.h>
 #include <asm/fixed_code.h>
 #include <asm/early_printk.h>
-#include <asm/irq_handler.h>
-#include <asm/pda.h>
 
 u16 _bfin_swrst;
 EXPORT_SYMBOL(_bfin_swrst);
@@ -55,7 +53,8 @@ EXPORT_SYMBOL(mtd_size);
 #endif
 
 char __initdata command_line[COMMAND_LINE_SIZE];
-struct blackfin_initial_pda __initdata initial_pda;
+void __initdata *init_retx, *init_saved_retx, *init_saved_seqstat,
+	*init_saved_icplb_fault_addr, *init_saved_dcplb_fault_addr;
 
 /* boot memmap, for parsing "memmap=" */
 #define BFIN_MEMMAP_MAX		128 /* number of entries in bfin_memmap */
@@ -105,8 +104,6 @@ void __cpuinit bfin_setup_caches(unsigned int cpu)
 #ifdef CONFIG_BFIN_DCACHE
 	bfin_dcache_init(dcplb_tbl[cpu]);
 #endif
-
-	bfin_setup_cpudata(cpu);
 
 	/*
 	 * In cache coherence emulation mode, we need to have the
@@ -166,6 +163,7 @@ void __cpuinit bfin_setup_cpudata(unsigned int cpu)
 {
 	struct blackfin_cpudata *cpudata = &per_cpu(cpu_data, cpu);
 
+	cpudata->idle = current;
 	cpudata->imemctl = bfin_read_IMEM_CONTROL();
 	cpudata->dmemctl = bfin_read_DMEM_CONTROL();
 }
@@ -217,47 +215,10 @@ void __init bfin_relocate_l1_mem(void)
 
 	early_dma_memcpy_done();
 
-#if defined(CONFIG_SMP) && defined(CONFIG_ICACHE_FLUSH_L1)
-	blackfin_iflush_l1_entry[0] = (unsigned long)blackfin_icache_flush_range_l1;
-#endif
-
 	/* if necessary, copy L2 text/data to L2 SRAM */
 	if (L2_LENGTH && l2_len)
 		memcpy(_stext_l2, _l2_lma, l2_len);
 }
-
-#ifdef CONFIG_SMP
-void __init bfin_relocate_coreb_l1_mem(void)
-{
-	unsigned long text_l1_len = (unsigned long)_text_l1_len;
-	unsigned long data_l1_len = (unsigned long)_data_l1_len;
-	unsigned long data_b_l1_len = (unsigned long)_data_b_l1_len;
-
-	blackfin_dma_early_init();
-
-	/* if necessary, copy L1 text to L1 instruction SRAM */
-	if (L1_CODE_LENGTH && text_l1_len)
-		early_dma_memcpy((void *)COREB_L1_CODE_START, _text_l1_lma,
-				text_l1_len);
-
-	/* if necessary, copy L1 data to L1 data bank A SRAM */
-	if (L1_DATA_A_LENGTH && data_l1_len)
-		early_dma_memcpy((void *)COREB_L1_DATA_A_START, _data_l1_lma,
-				data_l1_len);
-
-	/* if necessary, copy L1 data B to L1 data bank B SRAM */
-	if (L1_DATA_B_LENGTH && data_b_l1_len)
-		early_dma_memcpy((void *)COREB_L1_DATA_B_START, _data_b_l1_lma,
-				data_b_l1_len);
-
-	early_dma_memcpy_done();
-
-#ifdef CONFIG_ICACHE_FLUSH_L1
-	blackfin_iflush_l1_entry[1] = (unsigned long)blackfin_icache_flush_range_l1 -
-			(unsigned long)_stext_l1 + COREB_L1_CODE_START;
-#endif
-}
-#endif
 
 #ifdef CONFIG_ROMKERNEL
 void __init bfin_relocate_xip_data(void)
@@ -550,7 +511,6 @@ static __init void memory_setup(void)
 {
 #ifdef CONFIG_MTD_UCLINUX
 	unsigned long mtd_phys = 0;
-	unsigned long n;
 #endif
 	unsigned long max_mem;
 
@@ -594,9 +554,9 @@ static __init void memory_setup(void)
 	mtd_size = PAGE_ALIGN(*((unsigned long *)(mtd_phys + 8)));
 
 # if defined(CONFIG_EXT2_FS) || defined(CONFIG_EXT3_FS)
-	n = ext2_image_size((void *)(mtd_phys + 0x400));
-	if (n)
-		mtd_size = PAGE_ALIGN(n * 1024);
+	if (*((unsigned short *)(mtd_phys + 0x438)) == EXT2_SUPER_MAGIC)
+		mtd_size =
+		    PAGE_ALIGN(*((unsigned long *)(mtd_phys + 0x404)) << 10);
 # endif
 
 # if defined(CONFIG_CRAMFS)
@@ -830,18 +790,10 @@ static inline int __init get_mem_size(void)
 	u32 ddrctl = bfin_read_EBIU_DDRCTL1();
 	int ret = 0;
 	switch (ddrctl & 0xc0000) {
-	case DEVSZ_64:
-		ret = 64 / 8;
-		break;
-	case DEVSZ_128:
-		ret = 128 / 8;
-		break;
-	case DEVSZ_256:
-		ret = 256 / 8;
-		break;
-	case DEVSZ_512:
-		ret = 512 / 8;
-		break;
+		case DEVSZ_64:  ret = 64 / 8;
+		case DEVSZ_128: ret = 128 / 8;
+		case DEVSZ_256: ret = 256 / 8;
+		case DEVSZ_512: ret = 512 / 8;
 	}
 	switch (ddrctl & 0x30000) {
 		case DEVWD_4:  ret *= 2;
@@ -862,7 +814,6 @@ void __init native_machine_early_platform_add_devices(void)
 
 void __init setup_arch(char **cmdline_p)
 {
-	u32 mmr;
 	unsigned long sclk, cclk;
 
 	native_machine_early_platform_add_devices();
@@ -913,13 +864,6 @@ void __init setup_arch(char **cmdline_p)
 	bfin_write_EBIU_MODE(CONFIG_EBIU_MODEVAL);
 	bfin_write_EBIU_FCTL(CONFIG_EBIU_FCTLVAL);
 #endif
-#ifdef CONFIG_BFIN_HYSTERESIS_CONTROL
-	bfin_write_PORTF_HYSTERESIS(HYST_PORTF_0_15);
-	bfin_write_PORTG_HYSTERESIS(HYST_PORTG_0_15);
-	bfin_write_PORTH_HYSTERESIS(HYST_PORTH_0_15);
-	bfin_write_MISCPORT_HYSTERESIS((bfin_read_MISCPORT_HYSTERESIS() &
-					~HYST_NONEGPIO_MASK) | HYST_NONEGPIO);
-#endif
 
 	cclk = get_cclk();
 	sclk = get_sclk();
@@ -933,14 +877,17 @@ void __init setup_arch(char **cmdline_p)
 		bfin_read_IMDMA_D1_IRQ_STATUS();
 	}
 #endif
+	printk(KERN_INFO "Hardware Trace ");
+	if (bfin_read_TBUFCTL() & 0x1)
+		printk(KERN_CONT "Active ");
+	else
+		printk(KERN_CONT "Off ");
+	if (bfin_read_TBUFCTL() & 0x2)
+		printk(KERN_CONT "and Enabled\n");
+	else
+		printk(KERN_CONT "and Disabled\n");
 
-	mmr = bfin_read_TBUFCTL();
-	printk(KERN_INFO "Hardware Trace %s and %sabled\n",
-		(mmr & 0x1) ? "active" : "off",
-		(mmr & 0x2) ? "en" : "dis");
-
-	mmr = bfin_read_SYSCR();
-	printk(KERN_INFO "Boot Mode: %i\n", mmr & 0xF);
+	printk(KERN_INFO "Boot Mode: %i\n", bfin_read_SYSCR() & 0xF);
 
 	/* Newer parts mirror SWRST bits in SYSCR */
 #if defined(CONFIG_BF53x) || defined(CONFIG_BF561) || \
@@ -948,7 +895,7 @@ void __init setup_arch(char **cmdline_p)
 	_bfin_swrst = bfin_read_SWRST();
 #else
 	/* Clear boot mode field */
-	_bfin_swrst = mmr & ~0xf;
+	_bfin_swrst = bfin_read_SYSCR() & ~0xf;
 #endif
 
 #ifdef CONFIG_DEBUG_DOUBLEFAULT_PRINT
@@ -966,16 +913,13 @@ void __init setup_arch(char **cmdline_p)
 		printk(KERN_EMERG "Recovering from DOUBLE FAULT event\n");
 #ifdef CONFIG_DEBUG_DOUBLEFAULT
 		/* We assume the crashing kernel, and the current symbol table match */
-		printk(KERN_EMERG " While handling exception (EXCAUSE = %#x) at %pF\n",
-			initial_pda.seqstat_doublefault & SEQSTAT_EXCAUSE,
-			initial_pda.retx_doublefault);
-		printk(KERN_NOTICE "   DCPLB_FAULT_ADDR: %pF\n",
-			initial_pda.dcplb_doublefault_addr);
-		printk(KERN_NOTICE "   ICPLB_FAULT_ADDR: %pF\n",
-			initial_pda.icplb_doublefault_addr);
+		printk(KERN_EMERG " While handling exception (EXCAUSE = 0x%x) at %pF\n",
+			(int)init_saved_seqstat & SEQSTAT_EXCAUSE, init_saved_retx);
+		printk(KERN_NOTICE "   DCPLB_FAULT_ADDR: %pF\n", init_saved_dcplb_fault_addr);
+		printk(KERN_NOTICE "   ICPLB_FAULT_ADDR: %pF\n", init_saved_icplb_fault_addr);
 #endif
 		printk(KERN_NOTICE " The instruction at %pF caused a double exception\n",
-			initial_pda.retx);
+			init_retx);
 	} else if (_bfin_swrst & RESET_WDOG)
 		printk(KERN_INFO "Recovering from Watchdog event\n");
 	else if (_bfin_swrst & RESET_SOFTWARE)
@@ -1048,6 +992,8 @@ void __init setup_arch(char **cmdline_p)
 static int __init topology_init(void)
 {
 	unsigned int cpu;
+	/* Record CPU-private information for the boot processor. */
+	bfin_setup_cpudata(0);
 
 	for_each_possible_cpu(cpu) {
 		register_cpu(&per_cpu(cpu_data, cpu).cpu, cpu);
@@ -1293,13 +1239,11 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 		   dsup_banks, BFIN_DSUBBANKS, BFIN_DWAYS,
 		   BFIN_DLINES);
 #ifdef __ARCH_SYNC_CORE_DCACHE
-	seq_printf(m, "dcache flushes\t: %lu\n", dcache_invld_count[cpu_num]);
+	seq_printf(m, "SMP Dcache Flushes\t: %lu\n\n", dcache_invld_count[cpu_num]);
 #endif
 #ifdef __ARCH_SYNC_CORE_ICACHE
-	seq_printf(m, "icache flushes\t: %lu\n", icache_invld_count[cpu_num]);
+	seq_printf(m, "SMP Icache Flushes\t: %lu\n\n", icache_invld_count[cpu_num]);
 #endif
-
-	seq_printf(m, "\n");
 
 	if (cpu_num != num_possible_cpus() - 1)
 		return 0;
@@ -1324,11 +1268,13 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 			      " in data cache\n");
 	}
 	seq_printf(m, "board name\t: %s\n", bfin_board_name);
-	seq_printf(m, "board memory\t: %ld kB (0x%08lx -> 0x%08lx)\n",
-		physical_mem_end >> 10, 0ul, physical_mem_end);
-	seq_printf(m, "kernel memory\t: %d kB (0x%08lx -> 0x%08lx)\n",
+	seq_printf(m, "board memory\t: %ld kB (0x%p -> 0x%p)\n",
+		 physical_mem_end >> 10, (void *)0, (void *)physical_mem_end);
+	seq_printf(m, "kernel memory\t: %d kB (0x%p -> 0x%p)\n",
 		((int)memory_end - (int)_rambase) >> 10,
-		_rambase, memory_end);
+		(void *)_rambase,
+		(void *)memory_end);
+	seq_printf(m, "\n");
 
 	return 0;
 }
@@ -1336,7 +1282,7 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 static void *c_start(struct seq_file *m, loff_t *pos)
 {
 	if (*pos == 0)
-		*pos = cpumask_first(cpu_online_mask);
+		*pos = first_cpu(cpu_online_map);
 	if (*pos >= num_online_cpus())
 		return NULL;
 
@@ -1345,7 +1291,7 @@ static void *c_start(struct seq_file *m, loff_t *pos)
 
 static void *c_next(struct seq_file *m, void *v, loff_t *pos)
 {
-	*pos = cpumask_next(*pos, cpu_online_mask);
+	*pos = next_cpu(*pos, cpu_online_map);
 
 	return c_start(m, pos);
 }

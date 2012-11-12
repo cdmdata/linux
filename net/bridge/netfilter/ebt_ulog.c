@@ -102,15 +102,16 @@ static struct sk_buff *ulog_alloc_skb(unsigned int size)
 	unsigned int n;
 
 	n = max(size, nlbufsiz);
-	skb = alloc_skb(n, GFP_ATOMIC | __GFP_NOWARN);
+	skb = alloc_skb(n, GFP_ATOMIC);
 	if (!skb) {
+		pr_debug("cannot alloc whole buffer of size %ub!\n", n);
 		if (n > size) {
 			/* try to allocate only as much as we need for
 			 * current packet */
 			skb = alloc_skb(size, GFP_ATOMIC);
 			if (!skb)
-				pr_debug("cannot even allocate buffer of size %ub\n",
-					 size);
+				pr_debug("cannot even allocate "
+					 "buffer of size %ub\n", size);
 		}
 	}
 
@@ -176,9 +177,8 @@ static void ebt_ulog_packet(unsigned int hooknr, const struct sk_buff *skb,
 	if (in) {
 		strcpy(pm->physindev, in->name);
 		/* If in isn't a bridge, then physindev==indev */
-		if (br_port_exists(in))
-			/* rcu_read_lock()ed by nf_hook_slow */
-			strcpy(pm->indev, br_port_get_rcu(in)->br->dev->name);
+		if (in->br_port)
+			strcpy(pm->indev, in->br_port->br->dev->name);
 		else
 			strcpy(pm->indev, in->name);
 	} else
@@ -187,8 +187,7 @@ static void ebt_ulog_packet(unsigned int hooknr, const struct sk_buff *skb,
 	if (out) {
 		/* If out exists, then out is a bridge port */
 		strcpy(pm->physoutdev, out->name);
-		/* rcu_read_lock()ed by nf_hook_slow */
-		strcpy(pm->outdev, br_port_get_rcu(out)->br->dev->name);
+		strcpy(pm->outdev, out->br_port->br->dev->name);
 	} else
 		pm->outdev[0] = pm->physoutdev[0] = '\0';
 
@@ -215,6 +214,7 @@ unlock:
 nlmsg_failure:
 	pr_debug("error during NLMSG_PUT. This should "
 		 "not happen, please report to author.\n");
+	goto unlock;
 alloc_failure:
 	goto unlock;
 }

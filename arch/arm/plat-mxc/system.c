@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 1999 ARM Limited
  * Copyright (C) 2000 Deep Blue Solutions Ltd
- * Copyright 2006-2007 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2006-2011 Freescale Semiconductor, Inc.
  * Copyright 2008 Juergen Beisert, kernel@pengutronix.de
  * Copyright 2009 Ilya Yanok, Emcraft Systems Ltd, yanok@emcraft.com
  *
@@ -14,6 +14,10 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #include <linux/kernel.h>
@@ -21,34 +25,62 @@
 #include <linux/io.h>
 #include <linux/err.h>
 #include <linux/delay.h>
-#include <linux/module.h>
 
+#include <asm/mach-types.h>
+#include <mach/iomux-mx53.h>
 #include <mach/hardware.h>
 #include <mach/common.h>
-#include <asm/system_misc.h>
 #include <asm/proc-fns.h>
-#include <asm/mach-types.h>
-
-void __iomem *(*imx_ioremap)(unsigned long, size_t, unsigned int) = NULL;
-EXPORT_SYMBOL_GPL(imx_ioremap);
+#include <asm/system.h>
+#include <mach/gpio.h>
 
 static void __iomem *wdog_base;
-
+extern int dvfs_core_is_active;
+extern void stop_dvfs(void);
+#define MX53_WDA_GPIO 9
 /*
  * Reset the system. It is called by machine_restart().
  */
-void mxc_restart(char mode, const char *cmd)
+void arch_reset(char mode, const char *cmd)
 {
 	unsigned int wcr_enable;
+
+#ifdef CONFIG_ARCH_MXC91231
+	if (cpu_is_mxc91231()) {
+		mxc91231_arch_reset(mode, cmd);
+		return;
+	}
+#endif
+
+#ifdef CONFIG_ARCH_MX51
+	/* Workaround to reset NFC_CONFIG3 register
+	 * due to the chip warm reset does not reset it
+	 */
+	 if (cpu_is_mx51() || cpu_is_mx53())
+		__raw_writel(0x20600, IO_ADDRESS(NFC_BASE_ADDR) + 0x28);
+#if defined (CONFIG_MACH_NITROGEN_IMX51)  \
+	|| defined (CONFIG_MACH_NITROGEN_VM_IMX51) \
+	|| defined (CONFIG_MACH_NITROGEN_P_IMX51) \
+	|| defined (CONFIG_MACH_NITROGEN_EJ_IMX51)
+	extern mx51_reboot_setup(void);
+	mx51_reboot_setup();
+#endif
+#endif
+
+#ifdef CONFIG_ARCH_MX5
+	/* Stop DVFS-CORE before reboot. */
+	if (dvfs_core_is_active)
+		stop_dvfs();
+#endif
 
 	if (cpu_is_mx1()) {
 		wcr_enable = (1 << 0);
 	} else {
 		struct clk *clk;
 
-		clk = clk_get_sys("imx2-wdt.0", NULL);
+		clk = clk_get_sys("imx-wdt.0", NULL);
 		if (!IS_ERR(clk))
-			clk_prepare_enable(clk);
+			clk_enable(clk);
 		wcr_enable = (1 << 2);
 	}
 
@@ -64,7 +96,7 @@ void mxc_restart(char mode, const char *cmd)
 	mdelay(50);
 
 	/* we'll take a jump through zero as a poor second */
-	soft_restart(0);
+	cpu_reset(0);
 }
 
 void mxc_arch_reset_init(void __iomem *base)

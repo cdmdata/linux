@@ -32,6 +32,7 @@
 #include <asm/mach/arch.h>
 
 #include <mach/mux.h>
+#include <mach/dm365.h>
 #include <mach/common.h>
 #include <mach/i2c.h>
 #include <mach/serial.h>
@@ -40,8 +41,6 @@
 #include <mach/keyscan.h>
 
 #include <media/tvp514x.h>
-
-#include "davinci.h"
 
 static inline int have_imager(void)
 {
@@ -55,7 +54,9 @@ static inline int have_tvp7002(void)
 	return 0;
 }
 
-#define DM365_EVM_PHY_ID		"davinci_mdio-0:01"
+#define DM365_EVM_PHY_MASK		(0x2)
+#define DM365_EVM_MDIO_FREQUENCY	(2200000) /* PHY bus frequency */
+
 /*
  * A MAX-II CPLD is used for various board control functions.
  */
@@ -108,7 +109,7 @@ static struct mtd_partition davinci_nand_partitions[] = {
 		/* UBL (a few copies) plus U-Boot */
 		.name		= "bootloader",
 		.offset		= 0,
-		.size		= 30 * NAND_BLOCK_SIZE,
+		.size		= 28 * NAND_BLOCK_SIZE,
 		.mask_flags	= MTD_WRITEABLE, /* force read-only */
 	}, {
 		/* U-Boot environment */
@@ -140,7 +141,7 @@ static struct davinci_nand_pdata davinci_nand_data = {
 	.parts			= davinci_nand_partitions,
 	.nr_parts		= ARRAY_SIZE(davinci_nand_partitions),
 	.ecc_mode		= NAND_ECC_HW,
-	.bbt_options		= NAND_BBT_USE_FLASH,
+	.options		= NAND_USE_FLASH_BBT,
 	.ecc_bits		= 4,
 };
 
@@ -174,9 +175,7 @@ static struct at24_platform_data eeprom_info = {
 	.context	= (void *)0x7f00,
 };
 
-static struct snd_platform_data dm365_evm_snd_data = {
-	.asp_chan_q = EVENTQ_3,
-};
+static struct snd_platform_data dm365_evm_snd_data;
 
 static struct i2c_board_info i2c_info[] = {
 	{
@@ -521,7 +520,7 @@ fail:
 	 */
 	if (have_imager()) {
 		label = "HD imager";
-		mux |= 2;
+		mux |= 1;
 
 		/* externally mux MMC1/ENET/AIC33 to imager */
 		mux |= BIT(6) | BIT(5) | BIT(3);
@@ -534,14 +533,15 @@ fail:
 
 		/* ... and ENET ... */
 		dm365evm_emac_configure();
-		soc_info->emac_pdata->phy_id = DM365_EVM_PHY_ID;
+		soc_info->emac_pdata->phy_mask = DM365_EVM_PHY_MASK;
+		soc_info->emac_pdata->mdio_max_freq = DM365_EVM_MDIO_FREQUENCY;
 		resets &= ~BIT(3);
 
 		/* ... and AIC33 */
 		resets &= ~BIT(1);
 
 		if (have_tvp7002()) {
-			mux |= 1;
+			mux |= 2;
 			resets &= ~BIT(2);
 			label = "tvp7002 HD";
 		} else {
@@ -613,12 +613,12 @@ static __init void dm365_evm_init(void)
 }
 
 MACHINE_START(DAVINCI_DM365_EVM, "DaVinci DM365 EVM")
-	.atag_offset	= 0x100,
+	.phys_io	= IO_PHYS,
+	.io_pg_offst	= (__IO_ADDRESS(IO_PHYS) >> 18) & 0xfffc,
+	.boot_params	= (0x80000100),
 	.map_io		= dm365_evm_map_io,
 	.init_irq	= davinci_irq_init,
 	.timer		= &davinci_timer,
 	.init_machine	= dm365_evm_init,
-	.dma_zone_size	= SZ_128M,
-	.restart	= davinci_restart,
 MACHINE_END
 

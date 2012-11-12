@@ -3,7 +3,7 @@
 #ifdef __KERNEL__
 
 
-struct device;
+struct sys_device;
 struct device_node;
 
 #ifdef CONFIG_NUMA
@@ -19,10 +19,14 @@ struct device_node;
 #define RECLAIM_DISTANCE 10
 
 /*
- * Avoid creating an extra level of balancing (SD_ALLNODES) on the largest
- * POWER7 boxes which have a maximum of 32 nodes.
+ * Before going off node we want the VM to try and reclaim from the local
+ * node. It does this if the remote distance is larger than RECLAIM_DISTANCE.
+ * With the default REMOTE_DISTANCE of 20 and the default RECLAIM_DISTANCE of
+ * 20, we never reclaim and go off node straight away.
+ *
+ * To fix this we choose a smaller value of RECLAIM_DISTANCE.
  */
-#define SD_NODES_PER_DOMAIN 32
+#define RECLAIM_DISTANCE 10
 
 #include <asm/mmzone.h>
 
@@ -36,6 +40,8 @@ static inline int cpu_to_node(int cpu)
 #define cpumask_of_node(node) ((node) == -1 ?				\
 			       cpu_all_mask :				\
 			       node_to_cpumask_map[node])
+
+int of_node_to_nid(struct device_node *device);
 
 struct pci_bus;
 #ifdef CONFIG_PCI
@@ -65,11 +71,11 @@ static inline int pcibus_to_node(struct pci_bus *bus)
 	.forkexec_idx		= 0,					\
 									\
 	.flags			= 1*SD_LOAD_BALANCE			\
-				| 0*SD_BALANCE_NEWIDLE			\
+				| 1*SD_BALANCE_NEWIDLE			\
 				| 1*SD_BALANCE_EXEC			\
 				| 1*SD_BALANCE_FORK			\
 				| 0*SD_BALANCE_WAKE			\
-				| 1*SD_WAKE_AFFINE			\
+				| 0*SD_WAKE_AFFINE			\
 				| 0*SD_PREFER_LOCAL			\
 				| 0*SD_SHARE_CPUPOWER			\
 				| 0*SD_POWERSAVINGS_BALANCE		\
@@ -81,42 +87,31 @@ static inline int pcibus_to_node(struct pci_bus *bus)
 	.balance_interval	= 1,					\
 }
 
-extern int __node_distance(int, int);
-#define node_distance(a, b) __node_distance(a, b)
-
 extern void __init dump_numa_cpu_topology(void);
 
-extern int sysfs_add_device_to_node(struct device *dev, int nid);
-extern void sysfs_remove_device_from_node(struct device *dev, int nid);
+extern int sysfs_add_device_to_node(struct sys_device *dev, int nid);
+extern void sysfs_remove_device_from_node(struct sys_device *dev, int nid);
 
 #else
+
+static inline int of_node_to_nid(struct device_node *device)
+{
+	return 0;
+}
 
 static inline void dump_numa_cpu_topology(void) {}
 
-static inline int sysfs_add_device_to_node(struct device *dev, int nid)
+static inline int sysfs_add_device_to_node(struct sys_device *dev, int nid)
 {
 	return 0;
 }
 
-static inline void sysfs_remove_device_from_node(struct device *dev,
+static inline void sysfs_remove_device_from_node(struct sys_device *dev,
 						int nid)
 {
 }
-#endif /* CONFIG_NUMA */
 
-#if defined(CONFIG_NUMA) && defined(CONFIG_PPC_SPLPAR)
-extern int start_topology_update(void);
-extern int stop_topology_update(void);
-#else
-static inline int start_topology_update(void)
-{
-	return 0;
-}
-static inline int stop_topology_update(void)
-{
-	return 0;
-}
-#endif /* CONFIG_NUMA && CONFIG_PPC_SPLPAR */
+#endif /* CONFIG_NUMA */
 
 #include <asm-generic/topology.h>
 

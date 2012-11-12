@@ -21,7 +21,6 @@
 
 #include "flask.h"
 #include "av_permissions.h"
-#include "security.h"
 
 struct nlmsg_perm {
 	u16	nlmsg_type;
@@ -66,8 +65,6 @@ static struct nlmsg_perm nlmsg_route_perms[] =
 	{ RTM_NEWADDRLABEL,	NETLINK_ROUTE_SOCKET__NLMSG_WRITE },
 	{ RTM_DELADDRLABEL,	NETLINK_ROUTE_SOCKET__NLMSG_WRITE },
 	{ RTM_GETADDRLABEL,	NETLINK_ROUTE_SOCKET__NLMSG_READ  },
-	{ RTM_GETDCB,		NETLINK_ROUTE_SOCKET__NLMSG_READ  },
-	{ RTM_SETDCB,		NETLINK_ROUTE_SOCKET__NLMSG_WRITE },
 };
 
 static struct nlmsg_perm nlmsg_firewall_perms[] =

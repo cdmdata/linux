@@ -2,7 +2,6 @@
  * JFFS2 -- Journalling Flash File System, Version 2.
  *
  * Copyright © 2001-2007 Red Hat, Inc.
- * Copyright © 2004-2010 David Woodhouse <dwmw2@infradead.org>
  *
  * Created by David Woodhouse <dwmw2@infradead.org>
  *
@@ -28,11 +27,6 @@
 #define JFFS2_SB_FLAG_BUILDING 4 /* File system building is in progress */
 
 struct jffs2_inodirty;
-
-struct jffs2_mount_opts {
-	bool override_compr;
-	unsigned int compr;
-};
 
 /* A struct for the overall file system control.  Pointers to
    jffs2_sb_info structs are named `c' in the source code.
@@ -105,7 +99,6 @@ struct jffs2_sb_info {
 	wait_queue_head_t erase_wait;		/* For waiting for erases to complete */
 
 	wait_queue_head_t inocache_wq;
-	int inocache_hashsize;
 	struct jffs2_inode_cache **inocache_list;
 	spinlock_t inocache_lock;
 
@@ -131,7 +124,6 @@ struct jffs2_sb_info {
 #endif
 
 	struct jffs2_summary *summary;		/* Summary information */
-	struct jffs2_mount_opts mount_opts;
 
 #ifdef CONFIG_JFFS2_FS_XATTR
 #define XATTRINDEX_HASHSIZE	(57)
@@ -150,4 +142,4 @@ struct jffs2_sb_info {
 	void *os_priv;
 };
 
-#endif /* _JFFS2_FS_SB */
+#endif /* _JFFS2_FB_SB */

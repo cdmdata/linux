@@ -32,7 +32,8 @@
 #include <linux/bitops.h>
 #include <linux/ftrace.h>
 
-#include <linux/atomic.h>
+#include <asm/system.h>
+#include <asm/atomic.h>
 #include <asm/current.h>
 #include <asm/delay.h>
 #include <asm/tlbflush.h>
@@ -154,7 +155,10 @@ ipi_interrupt(int irq, void *dev_id)
 				
 			case IPI_RESCHEDULE:
 				smp_debug(100, KERN_DEBUG "CPU%d IPI_RESCHEDULE\n", this_cpu);
-				scheduler_ipi();
+				/*
+				 * Reschedule callback.  Everything to be
+				 * done is done by the interrupt return path.
+				 */
 				break;
 
 			case IPI_CALL_FUNC:
@@ -290,7 +294,8 @@ smp_cpu_init(int cpunum)
 	mb();
 
 	/* Well, support 2.4 linux scheme as well. */
-	if (cpu_online(cpunum))	{
+	if (cpu_isset(cpunum, cpu_online_map))
+	{
 		extern void machine_halt(void); /* arch/parisc.../process.c */
 
 		printk(KERN_CRIT "CPU#%d already initialized!\n", cpunum);

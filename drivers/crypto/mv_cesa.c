@@ -15,7 +15,6 @@
 #include <linux/platform_device.h>
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
-#include <linux/module.h>
 #include <crypto/internal/hash.h>
 #include <crypto/sha.h>
 
@@ -134,6 +133,7 @@ struct mv_req_hash_ctx {
 	int extra_bytes;	/* unprocessed bytes in buffer */
 	enum hash_op op;
 	int count_add;
+	struct scatterlist dummysg;
 };
 
 static void compute_aes_dec_key(struct mv_ctx *ctx)
@@ -187,9 +187,9 @@ static void copy_src_to_buf(struct req_progress *p, char *dbuf, int len)
 {
 	int ret;
 	void *sbuf;
-	int copy_len;
+	int copied = 0;
 
-	while (len) {
+	while (1) {
 		if (!p->sg_src_left) {
 			ret = sg_miter_next(&p->src_sg_it);
 			BUG_ON(!ret);
@@ -199,14 +199,19 @@ static void copy_src_to_buf(struct req_progress *p, char *dbuf, int len)
 
 		sbuf = p->src_sg_it.addr + p->src_start;
 
-		copy_len = min(p->sg_src_left, len);
-		memcpy(dbuf, sbuf, copy_len);
-
-		p->src_start += copy_len;
-		p->sg_src_left -= copy_len;
-
-		len -= copy_len;
-		dbuf += copy_len;
+		if (p->sg_src_left <= len - copied) {
+			memcpy(dbuf + copied, sbuf, p->sg_src_left);
+			copied += p->sg_src_left;
+			p->sg_src_left = 0;
+			if (copied >= len)
+				break;
+		} else {
+			int copy_len = len - copied;
+			memcpy(dbuf + copied, sbuf, copy_len);
+			p->src_start += copy_len;
+			p->sg_src_left -= copy_len;
+			break;
+		}
 	}
 }
 
@@ -270,6 +275,7 @@ static void mv_process_current_q(int first_block)
 	memcpy(cpg->sram + SRAM_CONFIG, &op,
 			sizeof(struct sec_accel_config));
 
+	writel(SRAM_CONFIG, cpg->reg + SEC_ACCEL_DESC_P0);
 	/* GO */
 	writel(SEC_CMD_EN_SEC_ACCL0, cpg->reg + SEC_ACCEL_CMD);
 
@@ -296,7 +302,6 @@ static void mv_crypto_algo_completion(void)
 static void mv_process_hash_current(int first_block)
 {
 	struct ahash_request *req = ahash_request_cast(cpg->cur_req);
-	const struct mv_tfm_hash_ctx *tfm_ctx = crypto_tfm_ctx(req->base.tfm);
 	struct mv_req_hash_ctx *req_ctx = ahash_request_ctx(req);
 	struct req_progress *p = &cpg->p;
 	struct sec_accel_config op = { 0 };
@@ -309,8 +314,6 @@ static void mv_process_hash_current(int first_block)
 		break;
 	case COP_HMAC_SHA1:
 		op.config = CFG_OP_MAC_ONLY | CFG_MACM_HMAC_SHA1;
-		memcpy(cpg->sram + SRAM_HMAC_IV_IN,
-				tfm_ctx->ivs, sizeof(tfm_ctx->ivs));
 		break;
 	}
 
@@ -342,18 +345,11 @@ static void mv_process_hash_current(int first_block)
 			op.config |= CFG_LAST_FRAG;
 		else
 			op.config |= CFG_MID_FRAG;
-
-		if (first_block) {
-			writel(req_ctx->state[0], cpg->reg + DIGEST_INITIAL_VAL_A);
-			writel(req_ctx->state[1], cpg->reg + DIGEST_INITIAL_VAL_B);
-			writel(req_ctx->state[2], cpg->reg + DIGEST_INITIAL_VAL_C);
-			writel(req_ctx->state[3], cpg->reg + DIGEST_INITIAL_VAL_D);
-			writel(req_ctx->state[4], cpg->reg + DIGEST_INITIAL_VAL_E);
-		}
 	}
 
 	memcpy(cpg->sram + SRAM_CONFIG, &op, sizeof(struct sec_accel_config));
 
+	writel(SRAM_CONFIG, cpg->reg + SEC_ACCEL_DESC_P0);
 	/* GO */
 	writel(SEC_CMD_EN_SEC_ACCL0, cpg->reg + SEC_ACCEL_CMD);
 
@@ -413,6 +409,12 @@ static void mv_hash_algo_completion(void)
 		copy_src_to_buf(&cpg->p, ctx->buffer, ctx->extra_bytes);
 	sg_miter_stop(&cpg->p.src_sg_it);
 
+	ctx->state[0] = readl(cpg->reg + DIGEST_INITIAL_VAL_A);
+	ctx->state[1] = readl(cpg->reg + DIGEST_INITIAL_VAL_B);
+	ctx->state[2] = readl(cpg->reg + DIGEST_INITIAL_VAL_C);
+	ctx->state[3] = readl(cpg->reg + DIGEST_INITIAL_VAL_D);
+	ctx->state[4] = readl(cpg->reg + DIGEST_INITIAL_VAL_E);
+
 	if (likely(ctx->last_chunk)) {
 		if (likely(ctx->count <= MAX_HW_HASH_SIZE)) {
 			memcpy(req->result, cpg->sram + SRAM_DIGEST_BUF,
@@ -420,12 +422,6 @@ static void mv_hash_algo_completion(void)
 						       (req)));
 		} else
 			mv_hash_final_fallback(req);
-	} else {
-		ctx->state[0] = readl(cpg->reg + DIGEST_INITIAL_VAL_A);
-		ctx->state[1] = readl(cpg->reg + DIGEST_INITIAL_VAL_B);
-		ctx->state[2] = readl(cpg->reg + DIGEST_INITIAL_VAL_C);
-		ctx->state[3] = readl(cpg->reg + DIGEST_INITIAL_VAL_D);
-		ctx->state[4] = readl(cpg->reg + DIGEST_INITIAL_VAL_E);
 	}
 }
 
@@ -484,7 +480,7 @@ static int count_sgs(struct scatterlist *sl, unsigned int total_bytes)
 	int i = 0;
 	size_t cur_len;
 
-	while (sl) {
+	while (1) {
 		cur_len = sl[i].length;
 		++i;
 		if (total_bytes > cur_len)
@@ -521,11 +517,28 @@ static void mv_start_new_hash_req(struct ahash_request *req)
 {
 	struct req_progress *p = &cpg->p;
 	struct mv_req_hash_ctx *ctx = ahash_request_ctx(req);
+	const struct mv_tfm_hash_ctx *tfm_ctx = crypto_tfm_ctx(req->base.tfm);
 	int num_sgs, hw_bytes, old_extra_bytes, rc;
 	cpg->cur_req = &req->base;
 	memset(p, 0, sizeof(struct req_progress));
 	hw_bytes = req->nbytes + ctx->extra_bytes;
 	old_extra_bytes = ctx->extra_bytes;
+
+	if (unlikely(ctx->extra_bytes)) {
+		memcpy(cpg->sram + SRAM_DATA_IN_START, ctx->buffer,
+		       ctx->extra_bytes);
+		p->crypt_len = ctx->extra_bytes;
+	}
+
+	memcpy(cpg->sram + SRAM_HMAC_IV_IN, tfm_ctx->ivs, sizeof(tfm_ctx->ivs));
+
+	if (unlikely(!ctx->first_hash)) {
+		writel(ctx->state[0], cpg->reg + DIGEST_INITIAL_VAL_A);
+		writel(ctx->state[1], cpg->reg + DIGEST_INITIAL_VAL_B);
+		writel(ctx->state[2], cpg->reg + DIGEST_INITIAL_VAL_C);
+		writel(ctx->state[3], cpg->reg + DIGEST_INITIAL_VAL_D);
+		writel(ctx->state[4], cpg->reg + DIGEST_INITIAL_VAL_E);
+	}
 
 	ctx->extra_bytes = hw_bytes % SHA1_BLOCK_SIZE;
 	if (ctx->extra_bytes != 0
@@ -541,12 +554,6 @@ static void mv_start_new_hash_req(struct ahash_request *req)
 		p->hw_nbytes = hw_bytes;
 		p->complete = mv_hash_algo_completion;
 		p->process = mv_process_hash_current;
-
-		if (unlikely(old_extra_bytes)) {
-			memcpy(cpg->sram + SRAM_DATA_IN_START, ctx->buffer,
-			       old_extra_bytes);
-			p->crypt_len = old_extra_bytes;
-		}
 
 		mv_process_hash_current(1);
 	} else {
@@ -596,7 +603,9 @@ static int queue_manag(void *data)
 			if (async_req->tfm->__crt_alg->cra_type !=
 			    &crypto_ahash_type) {
 				struct ablkcipher_request *req =
-				    ablkcipher_request_cast(async_req);
+				    container_of(async_req,
+						 struct ablkcipher_request,
+						 base);
 				mv_start_new_crypt_req(req);
 			} else {
 				struct ahash_request *req =
@@ -713,14 +722,19 @@ static int mv_hash_update(struct ahash_request *req)
 static int mv_hash_final(struct ahash_request *req)
 {
 	struct mv_req_hash_ctx *ctx = ahash_request_ctx(req);
-
-	ahash_request_set_crypt(req, NULL, req->result, 0);
+	/* dummy buffer of 4 bytes */
+	sg_init_one(&ctx->dummysg, ctx->buffer, 4);
+	/* I think I'm allowed to do that... */
+	ahash_request_set_crypt(req, &ctx->dummysg, req->result, 0);
 	mv_update_hash_req_ctx(ctx, 1, 0);
 	return mv_handle_req(&req->base);
 }
 
 static int mv_hash_finup(struct ahash_request *req)
 {
+	if (!req->nbytes)
+		return mv_hash_final(req);
+
 	mv_update_hash_req_ctx(ahash_request_ctx(req), 1, req->nbytes);
 	return mv_handle_req(&req->base);
 }
@@ -843,7 +857,7 @@ static int mv_cra_hash_init(struct crypto_tfm *tfm, const char *base_hash_name,
 			printk(KERN_WARNING MV_CESA
 			       "Base driver '%s' could not be loaded!\n",
 			       base_hash_name);
-			err = PTR_ERR(base_hash);
+			err = PTR_ERR(fallback_tfm);
 			goto err_bad_base;
 		}
 	}
@@ -899,8 +913,7 @@ struct crypto_alg mv_aes_alg_ecb = {
 	.cra_name		= "ecb(aes)",
 	.cra_driver_name	= "mv-ecb-aes",
 	.cra_priority	= 300,
-	.cra_flags	= CRYPTO_ALG_TYPE_ABLKCIPHER |
-			  CRYPTO_ALG_KERN_DRIVER_ONLY | CRYPTO_ALG_ASYNC,
+	.cra_flags	= CRYPTO_ALG_TYPE_ABLKCIPHER | CRYPTO_ALG_ASYNC,
 	.cra_blocksize	= 16,
 	.cra_ctxsize	= sizeof(struct mv_ctx),
 	.cra_alignmask	= 0,
@@ -922,8 +935,7 @@ struct crypto_alg mv_aes_alg_cbc = {
 	.cra_name		= "cbc(aes)",
 	.cra_driver_name	= "mv-cbc-aes",
 	.cra_priority	= 300,
-	.cra_flags	= CRYPTO_ALG_TYPE_ABLKCIPHER |
-			  CRYPTO_ALG_KERN_DRIVER_ONLY | CRYPTO_ALG_ASYNC,
+	.cra_flags	= CRYPTO_ALG_TYPE_ABLKCIPHER | CRYPTO_ALG_ASYNC,
 	.cra_blocksize	= AES_BLOCK_SIZE,
 	.cra_ctxsize	= sizeof(struct mv_ctx),
 	.cra_alignmask	= 0,
@@ -955,8 +967,7 @@ struct ahash_alg mv_sha1_alg = {
 			  .cra_driver_name = "mv-sha1",
 			  .cra_priority = 300,
 			  .cra_flags =
-			  CRYPTO_ALG_ASYNC | CRYPTO_ALG_KERN_DRIVER_ONLY |
-			  CRYPTO_ALG_NEED_FALLBACK,
+			  CRYPTO_ALG_ASYNC | CRYPTO_ALG_NEED_FALLBACK,
 			  .cra_blocksize = SHA1_BLOCK_SIZE,
 			  .cra_ctxsize = sizeof(struct mv_tfm_hash_ctx),
 			  .cra_init = mv_cra_hash_sha1_init,
@@ -980,8 +991,7 @@ struct ahash_alg mv_hmac_sha1_alg = {
 			  .cra_driver_name = "mv-hmac-sha1",
 			  .cra_priority = 300,
 			  .cra_flags =
-			  CRYPTO_ALG_ASYNC | CRYPTO_ALG_KERN_DRIVER_ONLY |
-			  CRYPTO_ALG_NEED_FALLBACK,
+			  CRYPTO_ALG_ASYNC | CRYPTO_ALG_NEED_FALLBACK,
 			  .cra_blocksize = SHA1_BLOCK_SIZE,
 			  .cra_ctxsize = sizeof(struct mv_tfm_hash_ctx),
 			  .cra_init = mv_cra_hash_hmac_sha1_init,
@@ -1045,31 +1055,24 @@ static int mv_probe(struct platform_device *pdev)
 	cp->queue_th = kthread_run(queue_manag, cp, "mv_crypto");
 	if (IS_ERR(cp->queue_th)) {
 		ret = PTR_ERR(cp->queue_th);
-		goto err_unmap_sram;
+		goto err_thread;
 	}
 
 	ret = request_irq(irq, crypto_int, IRQF_DISABLED, dev_name(&pdev->dev),
 			cp);
 	if (ret)
-		goto err_thread;
+		goto err_unmap_sram;
 
 	writel(SEC_INT_ACCEL0_DONE, cpg->reg + SEC_ACCEL_INT_MASK);
 	writel(SEC_CFG_STOP_DIG_ERR, cpg->reg + SEC_ACCEL_CFG);
-	writel(SRAM_CONFIG, cpg->reg + SEC_ACCEL_DESC_P0);
 
 	ret = crypto_register_alg(&mv_aes_alg_ecb);
-	if (ret) {
-		printk(KERN_WARNING MV_CESA
-		       "Could not register aes-ecb driver\n");
-		goto err_irq;
-	}
+	if (ret)
+		goto err_reg;
 
 	ret = crypto_register_alg(&mv_aes_alg_cbc);
-	if (ret) {
-		printk(KERN_WARNING MV_CESA
-		       "Could not register aes-cbc driver\n");
+	if (ret)
 		goto err_unreg_ecb;
-	}
 
 	ret = crypto_register_ahash(&mv_sha1_alg);
 	if (ret == 0)
@@ -1088,9 +1091,9 @@ static int mv_probe(struct platform_device *pdev)
 	return 0;
 err_unreg_ecb:
 	crypto_unregister_alg(&mv_aes_alg_ecb);
-err_irq:
-	free_irq(irq, cp);
 err_thread:
+	free_irq(irq, cp);
+err_reg:
 	kthread_stop(cp->queue_th);
 err_unmap_sram:
 	iounmap(cp->sram);
@@ -1133,7 +1136,17 @@ static struct platform_driver marvell_crypto = {
 };
 MODULE_ALIAS("platform:mv_crypto");
 
-module_platform_driver(marvell_crypto);
+static int __init mv_crypto_init(void)
+{
+	return platform_driver_register(&marvell_crypto);
+}
+module_init(mv_crypto_init);
+
+static void __exit mv_crypto_exit(void)
+{
+	platform_driver_unregister(&marvell_crypto);
+}
+module_exit(mv_crypto_exit);
 
 MODULE_AUTHOR("Sebastian Andrzej Siewior <sebastian@breakpoint.cc>");
 MODULE_DESCRIPTION("Support for Marvell's cryptographic engine");
