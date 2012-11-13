@@ -442,7 +442,7 @@ static int bq27x00_battery_flags(struct bq27x00_device_info *di,
       return flg;
    }
 
-   flg = flg & 0x03;
+   flg = flg & 0x07;
    val->intval=flg;
    return(0);
 }
