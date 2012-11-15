@@ -47,7 +47,12 @@
 #define REG_CMD_MAIN			0x3024
 #define REG_STA_FOCUS			0x3027
 #define REG_STA_ZONE			0x3026
-#define REG_CMD_TAG			0x3025
+#define REG_CMD_TAG				0x3025
+#define REG_CMD_PARA3 			0x5082
+#define REG_CMD_PARA2 			0x5083
+#define REG_CMD_PARA1			0x5084
+#define REG_CMD_PARA0 			0x5085
+
 
 /* OV5642 Auto Focus Commands and Responses */
 #define	S_STARTUP			0xFA
@@ -6336,6 +6341,7 @@ static int ov5642_set_awb(__s32 value){
 static int ov5642_config_auto_focus(void){
 	ov5642_write_reg(REG_CMD_TAG, 0x02);
 	ov5642_write_reg(REG_CMD_MAIN, 0x10);
+	return 0;
 }
 
 static int ov5642_auto_focus_start(void) {
@@ -7252,6 +7258,30 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s, struct v4l2_control *vc) {
 	return retval;
 }
 
+static int ioctl_send_command(struct v4l2_int_device *s, struct v4l2_send_command_control *vc) {
+	int ret = 0;
+	pr_info("*** %s", __FUNCTION__);
+
+	switch (vc->id) {
+		case 101: //step to near
+			pr_info("Stepping to near object");
+			ov5642_write_reg(REG_CMD_TAG, 0x01);
+			ov5642_write_reg(REG_CMD_MAIN, 0x05);
+			break;
+		case 102: //step to far
+			pr_info("Stepping to far object");
+			ov5642_write_reg(REG_CMD_TAG, 0x10);
+			ov5642_write_reg(REG_CMD_PARA0, 0x0);
+			ov5642_write_reg(REG_CMD_MAIN, 0x05);
+			break;
+
+		default:
+			break;
+	}
+
+	return ret;
+}
+
 /*!
  * ioctl_enum_framesizes - V4L2 sensor interface handler for
  *			   VIDIOC_ENUM_FRAMESIZES ioctl
@@ -7458,9 +7488,9 @@ static struct v4l2_int_ioctl_desc ov5642_ioctl_desc[] = {  {
 		{ vidioc_int_g_ctrl_num, (v4l2_int_ioctl_func*) ioctl_g_ctrl }, {
 				vidioc_int_s_ctrl_num, (v4l2_int_ioctl_func*) ioctl_s_ctrl }, {
 				vidioc_int_enum_framesizes_num,
-				(v4l2_int_ioctl_func *) ioctl_enum_framesizes }, {
-				vidioc_int_g_chip_ident_num,
-				(v4l2_int_ioctl_func *) ioctl_g_chip_ident }, };
+				(v4l2_int_ioctl_func *) ioctl_enum_framesizes },
+				{vidioc_int_g_chip_ident_num, (v4l2_int_ioctl_func *) ioctl_g_chip_ident },
+				{vidioc_int_send_command_num, (v4l2_int_ioctl_func *) ioctl_send_command }, };
 
 static struct v4l2_int_slave ov5642_slave = { .ioctls = ov5642_ioctl_desc,
 		.num_ioctls = ARRAY_SIZE(ov5642_ioctl_desc), };
