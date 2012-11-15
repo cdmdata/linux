@@ -1224,9 +1224,8 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c)
 
 		ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi,true, true);
 
-		if (vidioc_int_s_ctrl(cam->sensor,c)) {
-			ret = -EINVAL;
-		}
+		ret = vidioc_int_s_ctrl(cam->sensor,c);
+
 		ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
 		break;
 	}
