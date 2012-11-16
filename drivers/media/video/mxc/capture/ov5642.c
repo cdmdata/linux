@@ -218,7 +218,7 @@ static struct reg_value ov5642_initial_setting[] = { { 0x3103, 0x93, 0, 0 }, {
 		0x5297, 0x02, 0, 0 }, { 0x5298, 0x00, 0, 0 }, { 0x5299, 0x02, 0, 0 }, {
 		0x529a, 0x00, 0, 0 }, { 0x529b, 0x02, 0, 0 }, { 0x529c, 0x00, 0, 0 }, {
 		0x529d, 0x02, 0, 0 }, { 0x529e, 0x00, 0, 0 }, { 0x529f, 0x02, 0, 0 }, {
-		0x3a0f, 0x3c, 0, 0 }, { 0x3a10, 0x30, 0, 0 }, { 0x3a1b, 0x3c, 0, 0 }, {
+		0x3a0f, 0x30, 0, 0 }, { 0x3a10, 0x28, 0, 0 }, { 0x3a1b, 0x3c, 0, 0 }, {
 		0x3a1e, 0x30, 0, 0 }, { 0x3a11, 0x70, 0, 0 }, { 0x3a1f, 0x10, 0, 0 }, {
 		0x3030, 0x0b, 0, 0 }, { 0x3a02, 0x00, 0, 0 }, { 0x3a03, 0x7d, 0, 0 }, {
 		0x3a04, 0x00, 0, 0 }, { 0x3a14, 0x00, 0, 0 }, { 0x3a15, 0x7d, 0, 0 }, {
@@ -276,8 +276,8 @@ static struct reg_value ov5642_initial_setting[] = { { 0x3103, 0x93, 0, 0 }, {
 		0x5195, 0xf0, 0, 0 }, { 0x5196, 0x03, 0, 0 }, { 0x5197, 0x01, 0, 0 }, {
 		0x5198, 0x04, 0, 0 }, { 0x5199, 0x12, 0, 0 }, { 0x519a, 0x04, 0, 0 }, {
 		0x519b, 0x00, 0, 0 }, { 0x519c, 0x06, 0, 0 }, { 0x519d, 0x82, 0, 0 }, {
-		0x519e, 0x00, 0, 0 }, { 0x5025, 0x80, 0, 0 }, { 0x3a0f, 0x38, 0, 0 }, {
-		0x3a10, 0x30, 0, 0 }, { 0x3a1b, 0x3a, 0, 0 }, { 0x3a1e, 0x2e, 0, 0 }, {
+		0x519e, 0x00, 0, 0 }, { 0x5025, 0x80, 0, 0 }, { 0x3a0f, 0x30, 0, 0 }, {
+		0x3a10, 0x28, 0, 0 }, { 0x3a1b, 0x3a, 0, 0 }, { 0x3a1e, 0x2e, 0, 0 }, {
 		0x3a11, 0x60, 0, 0 }, { 0x3a1f, 0x10, 0, 0 },
 
 		{ 0x5688, 0xa6,	0, 0 }, { 0x5689, 0x6a, 0, 0 }, { 0x568a, 0xea, 0, 0 },
@@ -5969,7 +5969,7 @@ static struct reg_value ov5642_setting_30fps_VGA_640_480[] = { { 0x3103, 0x93,
 		0, 0 }, { 0x5297, 0x02, 0, 0 }, { 0x5298, 0x00, 0, 0 }, { 0x5299, 0x02,
 		0, 0 }, { 0x529a, 0x00, 0, 0 }, { 0x529b, 0x02, 0, 0 }, { 0x529c, 0x00,
 		0, 0 }, { 0x529d, 0x02, 0, 0 }, { 0x529e, 0x00, 0, 0 }, { 0x529f, 0x02,
-		0, 0 }, { 0x3a0f, 0x3c, 0, 0 }, { 0x3a10, 0x30, 0, 0 }, { 0x3a1b, 0x3c,
+		0, 0 }, { 0x3a0f, 0x30, 0, 0 }, { 0x3a10, 0x28, 0, 0 }, { 0x3a1b, 0x3c,
 		0, 0 }, { 0x3a1e, 0x30, 0, 0 }, { 0x3a11, 0x70, 0, 0 }, { 0x3a1f, 0x10,
 		0, 0 }, { 0x3030, 0x2b, 0, 0 }, { 0x3a02, 0x00, 0, 0 }, { 0x3a03, 0x7d,
 		0, 0 }, { 0x3a04, 0x00, 0, 0 }, { 0x3a14, 0x00, 0, 0 }, { 0x3a15, 0x7d,
@@ -6029,8 +6029,8 @@ static struct reg_value ov5642_setting_30fps_VGA_640_480[] = { { 0x3103, 0x93,
 		0, 0 }, { 0x5195, 0xf0, 0, 0 }, { 0x5196, 0x03, 0, 0 }, { 0x5197, 0x01,
 		0, 0 }, { 0x5198, 0x04, 0, 0 }, { 0x5199, 0x12, 0, 0 }, { 0x519a, 0x04,
 		0, 0 }, { 0x519b, 0x00, 0, 0 }, { 0x519c, 0x06, 0, 0 }, { 0x519d, 0x82,
-		0, 0 }, { 0x519e, 0x00, 0, 0 }, { 0x5025, 0x80, 0, 0 }, { 0x3a0f, 0x38,
-		0, 0 }, { 0x3a10, 0x30, 0, 0 }, { 0x3a1b, 0x3a, 0, 0 }, { 0x3a1e, 0x2e,
+		0, 0 }, { 0x519e, 0x00, 0, 0 }, { 0x5025, 0x80, 0, 0 }, { 0x3a0f, 0x30,
+		0, 0 }, { 0x3a10, 0x28, 0, 0 }, { 0x3a1b, 0x3a, 0, 0 }, { 0x3a1e, 0x2e,
 		0, 0 }, { 0x3a11, 0x60, 0, 0 }, { 0x3a1f, 0x10, 0, 0 },
 
 		{ 0x5688, 0xa6,	0, 0 }, { 0x5689, 0x6a, 0, 0 }, { 0x568a, 0xea, 0, 0 },
@@ -6343,6 +6343,57 @@ static int ov5642_config_auto_focus(void){
 	ov5642_write_reg(REG_CMD_MAIN, 0x10);
 	return 0;
 }
+
+static int ov5642_config_brightness(void){
+	//-0.3EV - from ovt software notes
+	ov5642_write_reg(0x3a0f ,0x30);
+	ov5642_write_reg(0x3a10 ,0x28);
+	ov5642_write_reg(0x3a11 ,0x61);
+	ov5642_write_reg(0x3a1b ,0x30);
+	ov5642_write_reg(0x3a1e ,0x28);
+	ov5642_write_reg(0x3a1f ,0x10);
+
+	//saturation +1
+	ov5642_write_reg(0x5001 ,0xff);
+	ov5642_write_reg(0x5583 ,0x50);
+	ov5642_write_reg(0x5584 ,0x50);
+	ov5642_write_reg(0x5580 ,0x02);
+
+
+	//-o.7EV - from ovt software notes
+//	ov5642_write_reg(0x3a0f ,0x28);
+//	ov5642_write_reg(0x3a10 ,0x20);
+//	ov5642_write_reg(0x3a11 ,0x51);
+//	ov5642_write_reg(0x3a1b ,0x28);
+//	ov5642_write_reg(0x3a1e ,0x20);
+//	ov5642_write_reg(0x3a1f ,0x10);
+
+	//no idea - From DellStreak5
+//	ov5642_write_reg(0x3a0f, 0x30);
+//	ov5642_write_reg(0x3a10, 0x28);
+//	ov5642_write_reg(0x3a1b, 0x30);
+//	ov5642_write_reg(0x3a1e, 0x28);
+//	ov5642_write_reg(0x3a11, 0x61);
+//	ov5642_write_reg(0x3a1f, 0x10);
+
+	//+3 contrast -from ovt software notes
+//	ov5642_write_reg(0x5001 ,0xff);
+//	ov5642_write_reg(0x5580 ,0x04);
+//	ov5642_write_reg(0x5587 ,0x2c);
+//	ov5642_write_reg(0x5588 ,0x2c);
+//	ov5642_write_reg(0x558a ,0x00);
+
+//	ov5642_write_reg(0x5001, 0xbf);
+//	ov5642_write_reg(0x5583, 0x44);
+//	ov5642_write_reg(0x5584, 0x44);
+//	ov5642_write_reg(0x5580, 0x06);
+//	ov5642_write_reg(0x5587, 0x20);
+//	ov5642_write_reg(0x5588, 0x20);
+//	ov5642_write_reg(0x5589, 0x00);
+
+	return 0;
+}
+
 
 static int ov5642_auto_focus_start(void) {
 	register u16 RegAddr = 0;
@@ -6687,9 +6738,6 @@ static int ov5642_prep_cap_mode_post(void) {
 	if (ov5642_cap_sensor_data.gain == 0x10)
 		ov5642_cap_sensor_data.gain = 0x11;
 
-	//bump the gain by X%
-	ov5642_cap_sensor_data.gain += ov5642_cap_sensor_data.gain * 5/100;
-
 	ov5642_write_reg(0x350b, ov5642_cap_sensor_data.gain);
 	ov5642_write_reg(0x3502, ov5642_cap_sensor_data.exposure_low);
 	ov5642_write_reg(0x3501, ov5642_cap_sensor_data.exposure_mid);
@@ -6781,6 +6829,7 @@ static int ov5642_change_mode(enum ov5642_frame_rate frame_rate,
 			msleep(Delay_ms);
 	}
 
+	ov5642_config_brightness();
 	disableFocusHUD();
 
 	err: return retval;
@@ -7260,7 +7309,7 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s, struct v4l2_control *vc) {
 
 static int ioctl_send_command(struct v4l2_int_device *s, struct v4l2_send_command_control *vc) {
 	int ret = 0;
-	pr_info("*** %s", __FUNCTION__);
+	pr_info("*** %s - command: %d", __FUNCTION__, vc->id);
 
 	switch (vc->id) {
 		case 101: //step to near
@@ -7268,11 +7317,15 @@ static int ioctl_send_command(struct v4l2_int_device *s, struct v4l2_send_comman
 			ov5642_write_reg(REG_CMD_TAG, 0x01);
 			ov5642_write_reg(REG_CMD_MAIN, 0x05);
 			break;
-		case 102: //step to far
+		case 102: //step to furthest
 			pr_info("Stepping to far object");
-			ov5642_write_reg(REG_CMD_TAG, 0x10);
-			ov5642_write_reg(REG_CMD_PARA0, 0x0);
+			ov5642_write_reg(REG_CMD_TAG, 0x2);
 			ov5642_write_reg(REG_CMD_MAIN, 0x05);
+			break;
+
+		case 103: //write register
+			pr_info("Writing 0x%x to register 0x%x", vc->value1, vc->value0);
+			ov5642_write_reg(vc->value0, vc->value1);
 			break;
 
 		default:
