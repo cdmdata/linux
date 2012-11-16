@@ -924,6 +924,12 @@ struct v4l2_ext_controls {
 	struct v4l2_ext_control *controls;
 };
 
+struct v4l2_send_command_control {
+	int32_t		     id;
+	int32_t		     value0;
+	int32_t		     value1;
+};
+
 /*  Values for ctrl_class field */
 #define V4L2_CTRL_CLASS_USER 0x00980000	/* Old-style 'user' controls */
 #define V4L2_CTRL_CLASS_MPEG 0x00990000	/* MPEG-compression controls */
@@ -1368,6 +1374,7 @@ enum v4l2_auto_focus_range {
 };
 #define V4L2_CID_FLASH_STROBE_START		(V4L2_CID_CAMERA_CLASS_BASE+32)
 #define V4L2_CID_FLASH_STROBE_STOP		(V4L2_CID_CAMERA_CLASS_BASE+33)
+#define V4L2_CID_SEND_COMMAND			(V4L2_CID_CAMERA_CLASS_BASE+34)
 /* END Section (RS) */
 
 /* FM Modulator class control IDs */
@@ -1871,6 +1878,7 @@ struct v4l2_dbg_chip_ident {
 #define	VIDIOC_DQEVENT		 _IOR('V', 89, struct v4l2_event)
 #define	VIDIOC_SUBSCRIBE_EVENT	 _IOW('V', 90, struct v4l2_event_subscription)
 #define	VIDIOC_UNSUBSCRIBE_EVENT _IOW('V', 91, struct v4l2_event_subscription)
+#define VIDIOC_SEND_COMMAND		_IOWR('V', 92, struct v4l2_send_command_control)
 
 /* Reminder: when adding new ioctls please add support for them to
    drivers/media/video/v4l2-compat-ioctl32.c as well! */
