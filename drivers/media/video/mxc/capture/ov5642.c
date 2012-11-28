@@ -6335,6 +6335,18 @@ static int ov5642_set_awb(__s32 value){
 			ov5642_write_reg(REG_AWB_B_GAIN_LOW, 	0xf0 );
 
 			break;
+
+		case V4L2_WHITE_BALANCE_FLASH:
+			pr_info("Setting AWB to FLASH");
+			ov5642_write_reg(REG_AWB_MANUAL, 		0x01 );
+			ov5642_write_reg(REG_AWB_R_GAIN_HIGH, 	0x7  );
+			ov5642_write_reg(REG_AWB_R_GAIN_LOW, 	0x02 );
+			ov5642_write_reg(REG_AWB_G_GAIN_HIGH, 	0x4  );
+			ov5642_write_reg(REG_AWB_G_GAIN_LOW, 	0x0  );
+			ov5642_write_reg(REG_AWB_B_GAIN_HIGH, 	0x5  );
+			ov5642_write_reg(REG_AWB_B_GAIN_LOW, 	0x15 );
+			break;
+
 		default:
 			break;
 	}
@@ -6342,7 +6354,7 @@ static int ov5642_set_awb(__s32 value){
 }
 
 static int ov5642_config_auto_focus(void){
-	ov5642_write_reg(REG_CMD_TAG, 0x02);
+	ov5642_write_reg(REG_CMD_TAG, 0x01);
 	ov5642_write_reg(REG_CMD_MAIN, 0x10);
 	return 0;
 }
@@ -6461,6 +6473,10 @@ static int ov5642_strobe_start(void){
     u8 cur_range=0;
 
     pr_info("*** %s", __FUNCTION__);
+
+    //set white balance
+    ov5642_set_awb(V4L2_WHITE_BALANCE_FLASH);
+
     retval = ov5642_write_reg(0x3000, 0x00);
     retval = ov5642_write_reg(0x3004, 0xFF);
     retval = ov5642_write_reg(0x3016, 0x02);
@@ -6479,7 +6495,7 @@ static int ov5642_strobe_start(void){
 
 
     //set LED mode 3, strobe on
-    retval = ov5642_write_reg(0x3b00, 0x03);
+    //retval = ov5642_write_reg(0x3b00, 0x03);
     retval = ov5642_write_reg(0x3b00, 0x83);
     return retval;
 }
@@ -6491,6 +6507,7 @@ static int ov5642_strobe_stop(void){
 
     //set LED mode 3, strobe off
     retval = ov5642_write_reg(0x3b00, 0x03);
+    ov5642_set_awb(V4L2_WHITE_BALANCE_AUTO);
 
     return retval;
 }
@@ -7335,6 +7352,10 @@ static int ioctl_send_command(struct v4l2_int_device *s, struct v4l2_send_comman
 			ov5642_write_reg(vc->value0, vc->value1);
 			break;
 
+		case 104: //read sensor data
+			pr_info("SendCommand: read sensor AEG values");
+			ov5642_prep_cap_mode_pre();
+			break;
 		default:
 			break;
 	}
