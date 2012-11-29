@@ -39,9 +39,9 @@ static int xrp6840_probe(struct i2c_client *client,
 
 	//Configure device
     printk(KERN_INFO "Sending init to xrp6840\n");
-    buf[0]=0xE3;
+    buf[0]=0xE1;
     buf[1]=0x60;
-    buf[2]=0xFC;
+    buf[2]=0xEC;
     buf[3]=0x0C;
 
     res=i2c_master_send(client, buf, 4);
