@@ -6193,6 +6193,19 @@ static s32 ov5642_read_reg(u16 reg, u8 *val) {
 	return u8RdVal;
 }
 
+
+static void updateSensorData(void){
+	u8 RegVal = 0;
+	register u16 RegAddr = 0;
+	pr_info("*** %s", __FUNCTION__);
+
+	//update exposure
+	RegAddr = 0x5690;
+	ov5642_read_reg(RegAddr, &RegVal);
+	ov5642_data.brightness = RegVal;
+	pr_info("Avarage luminance: 0x%x", RegVal);
+}
+
 static int disableFocusHUD(void) {
 	register u16 RegAddr = 0;
 	register u8 Val = 0;
@@ -6286,6 +6299,10 @@ static int ov5642_set_idle_mode(void) {
 	return retval;
 }
 
+
+
+
+
 static int ov5642_set_awb(__s32 value){
 	register u16 RegAddr = 0;
 	int retval = -1;
@@ -6361,18 +6378,18 @@ static int ov5642_config_auto_focus(void){
 
 static int ov5642_config_brightness(void){
 	//-0.3EV - from ovt software notes
-	ov5642_write_reg(0x3a0f ,0x30);
-	ov5642_write_reg(0x3a10 ,0x28);
-	ov5642_write_reg(0x3a11 ,0x61);
-	ov5642_write_reg(0x3a1b ,0x30);
-	ov5642_write_reg(0x3a1e ,0x28);
-	ov5642_write_reg(0x3a1f ,0x10);
-
-	//saturation +1
-	ov5642_write_reg(0x5001 ,0xff);
-	ov5642_write_reg(0x5583 ,0x50);
-	ov5642_write_reg(0x5584 ,0x50);
-	ov5642_write_reg(0x5580 ,0x02);
+//	ov5642_write_reg(0x3a0f ,0x30);
+//	ov5642_write_reg(0x3a10 ,0x28);
+//	ov5642_write_reg(0x3a11 ,0x61);
+//	ov5642_write_reg(0x3a1b ,0x30);
+//	ov5642_write_reg(0x3a1e ,0x28);
+//	ov5642_write_reg(0x3a1f ,0x10);
+//
+//	//saturation +1
+//	ov5642_write_reg(0x5001 ,0xff);
+//	ov5642_write_reg(0x5583 ,0x50);
+//	ov5642_write_reg(0x5584 ,0x50);
+//	ov5642_write_reg(0x5580 ,0x02);
 
 
 	//-o.7EV - from ovt software notes
@@ -6409,6 +6426,29 @@ static int ov5642_config_brightness(void){
 	return 0;
 }
 
+static int ov5642_set_af_ininite_mode(void) {
+	int retval = 0;
+	u8 ReadVal = 0x03;
+	int lc = 0;
+
+	pr_info("Setting AF to infinite mode...");
+
+	ov5642_write_reg(REG_CMD_TAG, 0x03);
+	ov5642_write_reg(REG_CMD_MAIN, 0x05);
+
+	//wait for REG_CMD_TAG == 0x0
+	for (lc = 0; (lc < 100) && (ReadVal != 0x0); ++lc) {
+		retval = ov5642_read_reg(REG_CMD_TAG, &ReadVal);
+		if (retval < 0) {
+			pr_err("Error reading REG_CMD_TAG. Aborting focus request");
+			retval = -1;
+			break;
+		}
+		mdelay(10);
+	}
+
+	return retval;
+}
 
 static int ov5642_auto_focus_start(void) {
 	register u16 RegAddr = 0;
@@ -6418,12 +6458,14 @@ static int ov5642_auto_focus_start(void) {
 
 	pr_info("*** %s", __FUNCTION__);
 
+	//if we are in low light, set focus to infinite mode
+	updateSensorData();
+	if (ov5642_data.brightness < 0x1a) {
+		return ov5642_set_af_ininite_mode();
+	}
+
 	retval = ov5642_set_idle_mode();
 	ov5642_config_auto_focus();
-
-//	//set 5x zone (mode2)
-//	ov5642_write_reg(REG_CMD_TAG, 0x02);
-//	ov5642_write_reg(REG_CMD_MAIN, 0x10);
 
 	if (retval > -1) {
 		RegVal = CMD_SINGLE_FOCUS_MODE;
@@ -6443,9 +6485,6 @@ static int ov5642_auto_focus_start(void) {
 			if (retval < 0) {
 				pr_err("%s, read reg 0x%x failed\n", __FUNCTION__, RegAddr);
 			}
-//			if (RegVal != S_IDLE) {
-//				pr_info("Focus value: 0x%x", RegVal);
-//			}
 			mdelay(1);
 		}
 	} else {
@@ -6465,6 +6504,8 @@ static int ov5642_auto_focus_start(void) {
 }
 
 
+
+
 static int ov5642_strobe_start(void){
     int retval = 0;
     int bl=0, lc=0;
@@ -6482,20 +6523,7 @@ static int ov5642_strobe_start(void){
     retval = ov5642_write_reg(0x3016, 0x02);
     retval = ov5642_write_reg(0x3b07, 0x0a);
 
-    //write max exposure and gain
-//    ov5642_write_reg(0x3503 ,0x07); //stop aec, agc
-//
-//    ov5642_write_reg(0x350b, 0x00);
-//	ov5642_write_reg(0x3502, 0x00);
-//	ov5642_write_reg(0x3501, 0x00);
-//	ov5642_write_reg(0x3500, 0x00);
-//
-//	ov5642_write_reg(0x3503 ,0x00);
-
-
-
     //set LED mode 3, strobe on
-    //retval = ov5642_write_reg(0x3b00, 0x03);
     retval = ov5642_write_reg(0x3b00, 0x83);
     return retval;
 }
@@ -6511,118 +6539,6 @@ static int ov5642_strobe_stop(void){
 
     return retval;
 }
-
-//static int ov5642_capture_mode(void){
-//	bool m_60Hz = false;
-//	u16 capture_frame_rate = 50;
-//	u16 g_preview_frame_rate = 225;
-//
-//	u8 exposure_low, exposure_mid, exposure_high;
-//	u8 ret_l, ret_m, ret_h, gain, lines_10ms, ret_af;
-//	u16 ulcapture_exposure, icapture_gain, preview_maxlines;
-//	u32 ulcapture_exposure_gain, capture_maxlines, g_preview_exposure;
-//
-//	pr_info(">>>>>>>>>>>> %s <<<<<<<<<<<<<", __FUNCTION__);
-//
-//	ov5642_write_reg(0x3503, 0x07);
-//
-//	ret_h = ret_m = ret_l = 0;
-//	g_preview_exposure = 0;
-//	ov5642_read_reg(0x3500, &ret_h);
-//	ov5642_read_reg(0x3501, &ret_m);
-//	ov5642_read_reg(0x3502, &ret_l);
-//	g_preview_exposure = (ret_h << 12) + (ret_m << 4) + (ret_l >> 4);
-//
-//	ret_h = ret_m = ret_l = 0;
-//	preview_maxlines = 0;
-//	ov5642_read_reg(0x380e, &ret_h);
-//	ov5642_read_reg(0x380f, &ret_l);
-//	preview_maxlines = (ret_h << 8) + ret_l;
-//	/*Read back AGC Gain for preview*/
-//	gain = 0;
-//	ov5642_read_reg(0x350b, &gain);
-//
-//	//ov5642_init_mode(ov5642_15_fps, ov5642_mode_QSXGA_2592_1944);
-//	ret_h = ret_m = ret_l = 0;
-//	ov5642_read_reg(0x380e, &ret_h);
-//	ov5642_read_reg(0x380f, &ret_l);
-//	capture_maxlines = (ret_h << 8) + ret_l;
-//	if (m_60Hz == true)
-//		lines_10ms = capture_frame_rate * capture_maxlines / 12000;
-//	else
-//		lines_10ms = capture_frame_rate * capture_maxlines / 10000;
-//
-//	if (preview_maxlines == 0)
-//		preview_maxlines = 1;
-//
-//	ulcapture_exposure = (g_preview_exposure * (capture_frame_rate)
-//			* (capture_maxlines))
-//			/ (((preview_maxlines) * (g_preview_frame_rate)));
-//	icapture_gain = (gain & 0x0f) + 16;
-//	if (gain & 0x10)
-//		icapture_gain = icapture_gain << 1;
-//
-//	if (gain & 0x20)
-//		icapture_gain = icapture_gain << 1;
-//
-//	if (gain & 0x40)
-//		icapture_gain = icapture_gain << 1;
-//
-//	if (gain & 0x80)
-//		icapture_gain = icapture_gain << 1;
-//
-//	ulcapture_exposure_gain = 2 * ulcapture_exposure * icapture_gain;
-//
-//	if (ulcapture_exposure_gain < capture_maxlines * 16) {
-//		ulcapture_exposure = ulcapture_exposure_gain / 16;
-//		if (ulcapture_exposure > lines_10ms) {
-//			ulcapture_exposure /= lines_10ms;
-//			ulcapture_exposure *= lines_10ms;
-//		}
-//	} else
-//		ulcapture_exposure = capture_maxlines;
-//
-//	if (ulcapture_exposure == 0)
-//		ulcapture_exposure = 1;
-//
-//	icapture_gain = (ulcapture_exposure_gain * 2 / ulcapture_exposure + 1) / 2;
-//	exposure_low = ((unsigned char) ulcapture_exposure) << 4;
-//	exposure_mid = (unsigned char) (ulcapture_exposure >> 4) & 0xff;
-//	exposure_high = (unsigned char) (ulcapture_exposure >> 12);
-//
-//	gain = 0;
-//	if (icapture_gain > 31) {
-//		gain |= 0x10;
-//		icapture_gain = icapture_gain >> 1;
-//	}
-//	if (icapture_gain > 31) {
-//		gain |= 0x20;
-//		icapture_gain = icapture_gain >> 1;
-//	}
-//	if (icapture_gain > 31) {
-//		gain |= 0x40;
-//		icapture_gain = icapture_gain >> 1;
-//	}
-//	if (icapture_gain > 31) {
-//		gain |= 0x80;
-//		icapture_gain = icapture_gain >> 1;
-//	}
-//	if (icapture_gain > 16)
-//		gain |= ((icapture_gain - 16) & 0x0f);
-//
-//	if (gain == 0x10)
-//		gain = 0x11;
-//
-//	ov5642_write_reg(0x350b, 0x0);//gain);
-//	ov5642_write_reg(0x3502, exposure_low);
-//	ov5642_write_reg(0x3501, exposure_mid);
-//	ov5642_write_reg(0x3500, exposure_high);
-//	msleep(500);
-//
-//	return 0;
-//}
-
-
 
 static struct capture_sensor_data {
 	bool m_60Hz;
@@ -7149,17 +7065,7 @@ static int ioctl_g_fmt_cap(struct v4l2_int_device *s, struct v4l2_format *f) {
 	return 0;
 }
 
-static void updateSensorData(void){
-	u8 RegVal = 0;
-	register u16 RegAddr = 0;
-	pr_info("*** %s", __FUNCTION__);
 
-	//update exposure
-	RegAddr = 0x5690;
-	ov5642_read_reg(RegAddr, &RegVal);
-	ov5642_data.brightness = RegVal;
-	pr_info("Avarage luminance: 0x%x", RegVal);
-}
 
 /*!
  * ioctl_g_ctrl - V4L2 sensor interface handler for VIDIOC_G_CTRL ioctl
