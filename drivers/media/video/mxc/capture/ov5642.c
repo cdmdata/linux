@@ -32,6 +32,7 @@
 #include <media/v4l2-int-device.h>
 #include "mxc_v4l2_capture.h"
 
+
 #define OV5642_VOLTAGE_ANALOG               2800000
 #define OV5642_VOLTAGE_DIGITAL_CORE         1500000
 #define OV5642_VOLTAGE_DIGITAL_IO           1800000
@@ -6142,6 +6143,9 @@ static int ov5642_remove(struct i2c_client *client);
 static s32 ov5642_read_reg(u16 reg, u8 *val);
 static s32 ov5642_write_reg(u16 reg, u8 val);
 
+//extern int xrp6840_torch_mode_on();
+//extern int xrp6840_torch_mode_off();
+
 static const struct i2c_device_id ov5642_id[] = { { "ov5642", 0 }, { }, };
 
 MODULE_DEVICE_TABLE(i2c, ov5642_id);
@@ -6310,12 +6314,35 @@ static int ov5642_set_awb(__s32 value){
 	switch (value) {
 		case V4L2_WHITE_BALANCE_AUTO:
 			pr_info("Setting AWB to AUTO");
-			ov5642_write_reg(REG_AWB_MANUAL, 0x0000);
+//			ov5642_write_reg(REG_AWB_MANUAL, 0x0000);
 
 			//based on DellStreak 5
-			ov5642_write_reg(0x5191, 0xff);
-			ov5642_write_reg(0x5192, 0x00);
-			ov5642_write_reg(0x5183, 0x94);
+//			ov5642_write_reg(0x5191, 0xff);
+//			ov5642_write_reg(0x5192, 0x00);
+//			ov5642_write_reg(0x5183, 0x94);
+
+
+			//Advanced AWB based on OVT Software notes
+			ov5642_write_reg(0x3406 ,0x0 );
+			ov5642_write_reg(0x5192 ,0x04);
+			ov5642_write_reg(0x5191 ,0xf8);
+			ov5642_write_reg(0x518d ,0x26);
+			ov5642_write_reg(0x518f ,0x42);
+			ov5642_write_reg(0x518e ,0x2b);
+			ov5642_write_reg(0x5190 ,0x42);
+			ov5642_write_reg(0x518b ,0xd0);
+			ov5642_write_reg(0x518c ,0xbd);
+			ov5642_write_reg(0x5187 ,0x18);
+			ov5642_write_reg(0x5188 ,0x18);
+			ov5642_write_reg(0x5189 ,0x56);
+			ov5642_write_reg(0x518a ,0x5c);
+			ov5642_write_reg(0x5186 ,0x1c);
+			ov5642_write_reg(0x5181 ,0x50);
+			ov5642_write_reg(0x5184 ,0x20);
+			ov5642_write_reg(0x5182 ,0x11);
+			ov5642_write_reg(0x5183 ,0x0 );
+
+
 			break;
 
 		case V4L2_WHITE_BALANCE_INCANDESCENT:
@@ -6376,7 +6403,40 @@ static int ov5642_config_auto_focus(void){
 	return 0;
 }
 
+static int ov5642_set_post_processing(void){
+	pr_info("*** %s", __FUNCTION__);
+	ov5642_write_reg(0x5001 ,0xff);
+
+	//saturation adjustment
+	ov5642_write_reg(0x5583 ,0x45); //u chan
+	ov5642_write_reg(0x5584 ,0x50); //v chan
+
+	//hue
+	ov5642_write_reg(0x5581 ,0x80);
+	ov5642_write_reg(0x5582 ,0x10);
+
+	//brightness
+	ov5642_write_reg(0x5589 ,0x10);
+
+	//contrast
+	//ov5642_write_reg(0x5587 ,0x28);
+	//ov5642_write_reg(0x5588 ,0x28);
+
+	//turn on hue,saturation, brightness adjustments
+	ov5642_write_reg(0x558a ,0x09);
+	ov5642_write_reg(0x5580 ,0x07);
+}
+
 static int ov5642_config_brightness(void){
+	//saturation + 3
+	//ov5642_write_reg(0x5001 ,0xff);
+	//ov5642_write_reg(0x5583 ,0x70);
+
+	//ov5642_write_reg(0x5584 ,0x50);
+	//ov5642_write_reg(0x5580 ,0x02);
+
+
+
 	//-0.3EV - from ovt software notes
 //	ov5642_write_reg(0x3a0f ,0x30);
 //	ov5642_write_reg(0x3a10 ,0x28);
@@ -6426,7 +6486,7 @@ static int ov5642_config_brightness(void){
 	return 0;
 }
 
-static int ov5642_set_af_ininite_mode(void) {
+static int ov5642_set_af_infinite_mode(void) {
 	int retval = 0;
 	u8 ReadVal = 0x03;
 	int lc = 0;
@@ -6455,13 +6515,16 @@ static int ov5642_auto_focus_start(void) {
 	u8 RegVal = 0;
 	int retval = 0;
 	int lc = 0;
+	int torchOn = 0;
 
 	pr_info("*** %s", __FUNCTION__);
 
-	//if we are in low light, set focus to infinite mode
+	//if low light turn on the torch
 	updateSensorData();
 	if (ov5642_data.brightness < 0x1a) {
-		return ov5642_set_af_ininite_mode();
+		//torchOn = 1;
+		//xrp6840_torch_mode_on();
+		return ov5642_set_af_infinite_mode();
 	}
 
 	retval = ov5642_set_idle_mode();
@@ -6492,6 +6555,11 @@ static int ov5642_auto_focus_start(void) {
 	}
 
 	pr_info(">>>>>>>>>> Final focus status is 0x%x. Loop exited after: %d", RegVal, lc);
+
+//	if (torchOn == 1){
+//		xrp6840_torch_mode_off();
+//		torchOn = 0;
+//	}
 
 	retval = 0;
 
@@ -6682,6 +6750,7 @@ static int ov5642_prep_cap_mode_post(void) {
 	ov5642_write_reg(0x3502, ov5642_cap_sensor_data.exposure_low);
 	ov5642_write_reg(0x3501, ov5642_cap_sensor_data.exposure_mid);
 	ov5642_write_reg(0x3500, ov5642_cap_sensor_data.exposure_high);
+
 	print_capture_sensor_data();
 	msleep(100);
 
@@ -6769,7 +6838,7 @@ static int ov5642_change_mode(enum ov5642_frame_rate frame_rate,
 			msleep(Delay_ms);
 	}
 
-	ov5642_config_brightness();
+	ov5642_set_post_processing();
 	disableFocusHUD();
 
 	err: return retval;
@@ -7237,8 +7306,12 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s, struct v4l2_control *vc) {
 	return retval;
 }
 
+
+
 static int ioctl_send_command(struct v4l2_int_device *s, struct v4l2_send_command_control *vc) {
 	int ret = 0;
+	int fooret = 0;
+	u8 RegVal = 0;
 	pr_info("*** %s - command: %d", __FUNCTION__, vc->id);
 
 	switch (vc->id) {
@@ -7262,12 +7335,29 @@ static int ioctl_send_command(struct v4l2_int_device *s, struct v4l2_send_comman
 			pr_info("SendCommand: read sensor AEG values");
 			ov5642_prep_cap_mode_pre();
 			break;
+
+
+		case 105: //read register
+			ov5642_read_reg(vc->value0, &RegVal);
+			pr_info("Register: 0x%x Value: 0x%x", vc->value0, RegVal);
+			break;
+
+		case 106: //debug
+			//fooret = xrp6840_torch_mode_on();
+			pr_info("Out from xrp6840: %d", fooret);
+
+		case 107: //debug
+			//fooret = xrp6840_torch_mode_off();
+			pr_info("Out from xrp6840: %d", fooret);
+
 		default:
 			break;
 	}
 
 	return ret;
 }
+
+
 
 /*!
  * ioctl_enum_framesizes - V4L2 sensor interface handler for

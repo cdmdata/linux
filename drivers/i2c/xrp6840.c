@@ -115,4 +115,4 @@ static int __init xrp6840_init(void)
 
  MODULE_AUTHOR("Steve Jardine CDMData, Inc.");
  MODULE_LICENSE("GPL");
- MODULE_DESCRIPTION("LED Flash Driver for Exar XRP6840A");         
+ MODULE_DESCRIPTION("LED Flash Driver for Exar XRP6840A");
