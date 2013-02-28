@@ -2651,6 +2651,8 @@ struct gpio n53k_gpios_specific[] __initdata = {
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 	{.label = "USBH1 Power",	.gpio = MAKE_GP(2, 17),		.flags = GPIOF_INIT_HIGH},	/* EIM_A21, active high power enable */
 #if !defined(CONFIG_GPIO_OUTPUT) && !defined(CONFIG_GPIO_OUTPUT_MODULE)
+#define N53K_BARCODE_SCAN_TRIG			MAKE_GP(3, 30)
+	{.label = "barcode scan power",	.gpio = MAKE_GP(3, 23),		.flags = GPIOF_INIT_HIGH},
 	{.label = "barcode scan trig",	.gpio = MAKE_GP(3, 30),		.flags = GPIOF_INIT_LOW},	/* EIM_D30, active high scanner trigger */
 	{.label = "Led1",		.gpio = MAKE_GP(5, 4),		.flags = GPIOF_INIT_HIGH},
 	{.label = "Led2",		.gpio = MAKE_GP(3, 31),		.flags = GPIOF_INIT_HIGH},	/* EIM_D31, active low, Yellow LED */
@@ -2914,7 +2916,8 @@ static iomux_v3_cfg_t n53k_pads_specific[] __initdata = {
 	MX53_PAD_NANDF_WE_B__GPIO6_12,		/* main power */
 	MX53_PAD_PATA_CS_1__GPIO7_10,		/* eMMC reset */
 	MX53_PAD_EIM_DA6__GPIO_3_6,    		/* rtc isl1208 i2c_en */
-	NEW_PAD_CTRL(MX53_PAD_EIM_OE__GPIO2_25, PAD_CTL_PUS_100K_UP)    /* rtc isl1208 interrupt */
+	NEW_PAD_CTRL(MX53_PAD_EIM_OE__GPIO2_25, PAD_CTL_PUS_100K_UP),    /* rtc isl1208 interrupt */
+	NEW_PAD_CTRL(MX53_PAD_EIM_LBA__GPIO2_27, BUTTON_100K) | MUX_SION_MASK,  /* barcode scanner interrupt */
 };
 
 #ifdef CONFIG_WL12XX_PLATFORM_DATA
