@@ -985,32 +985,12 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c) {
 			tmp_rotation = IPU_ROTATE_90_LEFT;
 			break;
 		case V4L2_MXC_CAM_ROTATE_NONE:
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, true, true);
-			if (vidioc_int_s_ctrl(cam->sensor, c)) {
-				ret = -EINVAL;
-			}
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
-			break;
 		case V4L2_MXC_CAM_ROTATE_VERT_FLIP:
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, true, true);
-			if (vidioc_int_s_ctrl(cam->sensor, c)) {
-				ret = -EINVAL;
-			}
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
-			break;
 		case V4L2_MXC_CAM_ROTATE_HORIZ_FLIP:
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, true, true);
-			if (vidioc_int_s_ctrl(cam->sensor, c)) {
-				ret = -EINVAL;
-			}
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
-			break;
 		case V4L2_MXC_CAM_ROTATE_180:
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, true, true);
 			if (vidioc_int_s_ctrl(cam->sensor, c)) {
 				ret = -EINVAL;
 			}
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
 			break;
 		default:
 			ret = -EINVAL;
@@ -1025,9 +1005,7 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c) {
 	case V4L2_CID_HUE:
 		if (cam->sensor) {
 			cam->hue = c->value;
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, true, true);
 			ret = vidioc_int_s_ctrl(cam->sensor, c);
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
 		} else {
 			pr_err("ERROR: v4l2 capture: slave not found!\n");
 			ret = -ENODEV;
@@ -1036,9 +1014,7 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c) {
 	case V4L2_CID_CONTRAST:
 		if (cam->sensor) {
 			cam->contrast = c->value;
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, true, true);
 			ret = vidioc_int_s_ctrl(cam->sensor, c);
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
 		} else {
 			pr_err("ERROR: v4l2 capture: slave not found!\n");
 			ret = -ENODEV;
@@ -1047,9 +1023,7 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c) {
 	case V4L2_CID_BRIGHTNESS:
 		if (cam->sensor) {
 			cam->bright = c->value;
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, true, true);
 			ret = vidioc_int_s_ctrl(cam->sensor, c);
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
 		} else {
 			pr_err("ERROR: v4l2 capture: slave not found!\n");
 			ret = -ENODEV;
@@ -1058,9 +1032,7 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c) {
 	case V4L2_CID_SATURATION:
 		if (cam->sensor) {
 			cam->saturation = c->value;
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, true, true);
 			ret = vidioc_int_s_ctrl(cam->sensor, c);
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
 		} else {
 			pr_err("ERROR: v4l2 capture: slave not found!\n");
 			ret = -ENODEV;
@@ -1069,9 +1041,7 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c) {
 	case V4L2_CID_RED_BALANCE:
 		if (cam->sensor) {
 			cam->red = c->value;
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, true, true);
 			ret = vidioc_int_s_ctrl(cam->sensor, c);
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
 		} else {
 			pr_err("ERROR: v4l2 capture: slave not found!\n");
 			ret = -ENODEV;
@@ -1080,9 +1050,7 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c) {
 	case V4L2_CID_BLUE_BALANCE:
 		if (cam->sensor) {
 			cam->blue = c->value;
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, true, true);
 			ret = vidioc_int_s_ctrl(cam->sensor, c);
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
 		} else {
 			pr_err("ERROR: v4l2 capture: slave not found!\n");
 			ret = -ENODEV;
@@ -1091,9 +1059,7 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c) {
 	case V4L2_CID_EXPOSURE:
 		if (cam->sensor) {
 			cam->ae_mode = c->value;
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, true, true);
 			ret = vidioc_int_s_ctrl(cam->sensor, c);
-			ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
 		} else {
 			pr_err("ERROR: v4l2 capture: slave not found!\n");
 			ret = -ENODEV;
@@ -1233,9 +1199,7 @@ static int mxc_v4l2_s_param(cam_data *cam, struct v4l2_streamparm *parm) {
 		return 0;
 	}
 	/* This will change any camera settings needed. */
-	ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, true, true);
 	err = vidioc_int_s_parm(cam->sensor, parm);
-	ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
 	if (err) {
 		pr_err("%s: vidioc_int_s_parm returned an error %d\n", __func__, err);
 		goto exit;
@@ -1572,15 +1536,15 @@ static int mxc_v4l_open(struct file *file) {
 				cam_fmt.fmt.pix.width, cam_fmt.fmt.pix.height);
 		ipu_csi_set_window_size(cam->crop_current.width,
 				cam->crop_current.width, cam->csi);
-		ipu_csi_set_window_pos(cam->crop_current.left, cam->crop_current.top,
-				cam->csi);
-		ipu_csi_init_interface(cam->crop_bounds.width, cam->crop_bounds.height,
+		ipu_csi_set_window_pos(cam->crop_current.left,
+				cam->crop_current.top, cam->csi);
+		ipu_csi_init_interface(cam->crop_bounds.width,
+				cam->crop_bounds.height,
 				cam_fmt.fmt.pix.pixelformat, csi_param);
 
-		ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, true, true);
+		vidioc_int_s_power(cam->sensor, 1);
 		vidioc_int_init(cam->sensor);
-
-		ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
+		vidioc_int_dev_init(cam->sensor);
 	}
 
 	file->private_data = dev;
@@ -1620,7 +1584,9 @@ static int mxc_v4l_close(struct file *file) {
 	}
 
 	if (--cam->open_count == 0) {
-		wait_event_interruptible(cam->power_queue, cam->low_power == false);
+		wait_event_interruptible(cam->power_queue,
+				cam->low_power == false);
+		vidioc_int_s_power(cam->sensor, 0);
 		pr_info("mxc_v4l_close: release resource\n");
 
 		if (strcmp(mxc_capture_inputs[cam->current_input].name, "CSI MEM")
@@ -2706,10 +2672,6 @@ static int mxc_v4l2_master_attach(struct v4l2_int_device *slave) {
 		return -1;
 	}
 
-	ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, true, true);
-	vidioc_int_s_power(cam->sensor, 1);
-	vidioc_int_dev_init(slave);
-	ipu_csi_enable_mclk_if(CSI_MCLK_I2C, cam->csi, false, false);
 	cam_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	vidioc_int_g_fmt_cap(cam->sensor, &cam_fmt);
 
