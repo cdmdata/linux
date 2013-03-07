@@ -2657,9 +2657,6 @@ struct gpio n53k_gpios_specific[] __initdata = {
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 	{.label = "USBH1 Power",	.gpio = MAKE_GP(2, 17),		.flags = GPIOF_INIT_HIGH},	/* EIM_A21, active high power enable */
 #if !defined(CONFIG_GPIO_OUTPUT) && !defined(CONFIG_GPIO_OUTPUT_MODULE)
-#define N53K_BARCODE_SCAN_TRIG			MAKE_GP(3, 30)
-//	{.label = "barcode scan power",	.gpio = MAKE_GP(3, 23),		.flags = GPIOF_INIT_HIGH},
-//	{.label = "barcode scan trig",	.gpio = MAKE_GP(3, 30),		.flags = GPIOF_INIT_LOW},	/* EIM_D30, active high scanner trigger */
 	/*
 	 * Wake* trig*
 	 *  x     0 - line lasts for 3 seconds, then off
@@ -2907,8 +2904,6 @@ static iomux_v3_cfg_t n53k_pads_specific[] __initdata = {
 	/* I2C3 */
 	MX53_PAD_GPIO_3__I2C3_SCL,	/* GPIO1[3] */
 	MX53_PAD_GPIO_16__I2C3_SDA,	/* gpio7[11] */
-//	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* barcode scan power */
-//	MX53_PAD_EIM_D30__GPIO_3_30,	/* Barcode scanner trigger */
 	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP) | MUX_SION_MASK,	/* barcode scanner wake */
 	NEW_PAD_CTRL(MX53_PAD_EIM_D30__GPIO_3_30, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP) | MUX_SION_MASK,	/* Barcode scanner trigger */
 
