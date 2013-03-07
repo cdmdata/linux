@@ -769,11 +769,12 @@ static struct mxc_pwm_platform_data mxc_pwm2_platform_data = {
 };
 
 #ifdef CONFIG_MACH_MX53_NITROGEN_K
-#define N53K_DISPLAY_BL_EN      MAKE_GP(2, 16)
+#define N53K_DISPLAY_BL_EN			MAKE_GP(2, 16)
+
 int n53k_bl_notify(struct device *dev, int brightness)
 {
-  gpio_set_value(N53K_DISPLAY_BL_EN, brightness ? 1 : 0);
-  return brightness;
+	gpio_set_value(N53K_DISPLAY_BL_EN, brightness ? 1 : 0);
+	return brightness;
 }
 #endif
 
@@ -785,7 +786,7 @@ static struct platform_pwm_backlight_data mxc_backlight_data_pwm2 = {
 	.pwm_period_ns = 1000000000/32768,	/* 30517 */
 #ifdef CONFIG_MACH_MX53_NITROGEN_K
 	.usable_range = {0,256},
- 	.notify = n53k_bl_notify,
+	.notify = n53k_bl_notify,
 #endif
 };
 #endif
@@ -2598,7 +2599,7 @@ struct gpio n53k_gpios_specific[] __initdata = {
 #ifdef CONFIG_K2
 #define	N53K_HEADPHONE_DET			MAKE_GP(1, 2)
 	{.label = "headphone detect",	.gpio = MAKE_GP(1, 2),		.flags = GPIOF_DIR_IN},
-#define N53K_DISPLAY_BL_EN      MAKE_GP(2, 16)
+#define N53K_DISPLAY_BL_EN			MAKE_GP(2, 16)
 	{.label = "Display power",	.gpio = MAKE_GP(2, 16),		.flags = GPIOF_INIT_HIGH},
 #define N53K_CAMERA_POWER_DOWN			MAKE_GP(2, 22)
 	{.label = "Camera power down",	.gpio = MAKE_GP(2, 22),		.flags = GPIOF_INIT_HIGH},
@@ -2664,14 +2665,14 @@ struct gpio n53k_gpios_specific[] __initdata = {
 #define N53K_BARCODE_SCAN_TRIG			MAKE_GP(3, 30)
 //	{.label = "barcode scan power",	.gpio = MAKE_GP(3, 23),		.flags = GPIOF_INIT_HIGH},
 //	{.label = "barcode scan trig",	.gpio = MAKE_GP(3, 30),		.flags = GPIOF_INIT_LOW},	/* EIM_D30, active high scanner trigger */
-/*
-  * Wake* trig*
-  *  x     0 - line lasts for 3 seconds, then off
-  *  0     1 - aim mode, dot beam which expands to line every 5 seconds
-  *  1     1 - beam off
-  */
-	{.label = "barcode scan trig",  .gpio = MAKE_GP(3, 30),    .flags = GPIOF_INIT_HIGH},  /* EIM_D30, active low scanner trigger */
-	{.label = "barcode wake",  .gpio = MAKE_GP(3, 23),    .flags = GPIOF_INIT_HIGH},  /* EIM_D23, active low scanner wake up */
+	/*
+	 * Wake* trig*
+	 *  x     0 - line lasts for 3 seconds, then off
+	 *  0     1 - aim mode, dot beam which expands to line every 5 seconds
+	 *  1     1 - beam off
+	 */
+	{.label = "barcode scan trig",	.gpio = MAKE_GP(3, 30),		.flags = GPIOF_INIT_HIGH},	/* EIM_D30, active low scanner trigger */
+	{.label = "barcode wake",	.gpio = MAKE_GP(3, 23),		.flags = GPIOF_INIT_HIGH},	/* EIM_D23, active low scanner wake up */
 	{.label = "Led1",		.gpio = MAKE_GP(5, 4),		.flags = GPIOF_INIT_HIGH},
 	{.label = "Led2",		.gpio = MAKE_GP(3, 31),		.flags = GPIOF_INIT_HIGH},	/* EIM_D31, active low, Yellow LED */
 	{.label = "Led3",		.gpio = MAKE_GP(3, 22),		.flags = GPIOF_INIT_HIGH},	/* EIM_D22, active low, Blue LED */
@@ -2684,7 +2685,7 @@ struct gpio n53k_gpios_specific[] __initdata = {
 static const unsigned i2c2_gpiomux_gpios[] = {
 	/* i2c3- i2c6*/
 	I2C2_HUB_EDID, I2C2_HUB_BQ24163, I2C2_HUB_AMBIENT, I2C2_HUB_CAMERA,
-	MAKE_GP(3, 6),    /* 7 - EIM_DA6 - rtc isl1208 select */
+	MAKE_GP(3, 6),		/* 7 - EIM_DA6 - rtc isl1208 select */
 
 };
 
@@ -2770,10 +2771,10 @@ static struct i2c_board_info n53k_i2c6_board_info[] __initdata = {
 	 .platform_data  = &camera_data,
 	},
 #endif
- 	{
- 	.type = "xrp6840", 
- 	.addr = 0x28,
- 	},
+	{
+	.type = "xrp6840",
+	.addr = 0x28,
+	},
 };
 static struct i2c_board_info n53k_i2c7_board_info[] __initdata = {
 #if defined(CONFIG_RTC_DRV_ISL1208) || defined(CONFIG_RTC_DRV_ISL1208_MODULE)
@@ -2913,8 +2914,9 @@ static iomux_v3_cfg_t n53k_pads_specific[] __initdata = {
 	MX53_PAD_GPIO_16__I2C3_SDA,	/* gpio7[11] */
 //	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* barcode scan power */
 //	MX53_PAD_EIM_D30__GPIO_3_30,	/* Barcode scanner trigger */
-	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP) | MUX_SION_MASK,  /* barcode scanner wake */
-	NEW_PAD_CTRL(MX53_PAD_EIM_D30__GPIO_3_30, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP) | MUX_SION_MASK,  /* Barcode scanner trigger */
+	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP) | MUX_SION_MASK,	/* barcode scanner wake */
+	NEW_PAD_CTRL(MX53_PAD_EIM_D30__GPIO_3_30, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP) | MUX_SION_MASK,	/* Barcode scanner trigger */
+
 	/* LED daughter board */
 	MX53_PAD_EIM_A20__GPIO_2_18,	/* Led4 */
 	MX53_PAD_EIM_D22__GPIO_3_22,	/* Led3 */
@@ -2932,9 +2934,9 @@ static iomux_v3_cfg_t n53k_pads_specific[] __initdata = {
 	MX53_PAD_NANDF_RB0__GPIO6_10,		/* i2c2 hub-Camera */
 	MX53_PAD_NANDF_WE_B__GPIO6_12,		/* main power */
 	MX53_PAD_PATA_CS_1__GPIO7_10,		/* eMMC reset */
-	MX53_PAD_EIM_DA6__GPIO_3_6,    		/* rtc isl1208 i2c_en */
-	NEW_PAD_CTRL(MX53_PAD_EIM_OE__GPIO2_25, PAD_CTL_PUS_100K_UP),    /* rtc isl1208 interrupt */
-	NEW_PAD_CTRL(MX53_PAD_EIM_LBA__GPIO2_27, BUTTON_100K) | MUX_SION_MASK,  /* barcode scanner interrupt */
+	MX53_PAD_EIM_DA6__GPIO_3_6,		/* rtc isl1208 i2c_en */
+	NEW_PAD_CTRL(MX53_PAD_EIM_OE__GPIO2_25, PAD_CTL_PUS_100K_UP),		/* rtc isl1208 interrupt */
+	NEW_PAD_CTRL(MX53_PAD_EIM_LBA__GPIO2_27, BUTTON_100K) | MUX_SION_MASK,	/* barcode scanner interrupt */
 
 	/* W3 for Lvds display */
 	NEW_PAD_CTRL(MX53_PAD_EIM_A18__GPIO_2_20, PAD_CTL_PUS_100K_UP),	/* w3 scl, external pullup */
@@ -3047,7 +3049,7 @@ static void __init n53k_board_init(void)
 	i2c_register_board_info(4, n53k_i2c4_board_info, ARRAY_SIZE(n53k_i2c4_board_info));
 	i2c_register_board_info(5, n53k_i2c5_board_info, ARRAY_SIZE(n53k_i2c5_board_info));
 	i2c_register_board_info(6, n53k_i2c6_board_info, ARRAY_SIZE(n53k_i2c6_board_info));
- 	i2c_register_board_info(7, n53k_i2c7_board_info, ARRAY_SIZE(n53k_i2c7_board_info));
+	i2c_register_board_info(7, n53k_i2c7_board_info, ARRAY_SIZE(n53k_i2c7_board_info));
 #endif
 
 	/* eMMC is sdhc4 */
