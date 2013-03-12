@@ -10,6 +10,7 @@
  */
 
 #include<linux/module.h>
+#include <linux/slab.h>
 #include<linux/delay.h>
 #include<linux/err.h>
 #include<linux/i2c.h>
@@ -17,10 +18,69 @@
 #include<linux/kthread.h>
 #include<linux/platform_device.h>
 
+struct xrp6840_priv
+{
+	struct i2c_client	*client;
+	int			enabled;
+};
 
-static int xrp6840_probe(struct i2c_client *adapter,
-		const struct i2c_device_id *device_id);
-static int xrp6840_remove(struct i2c_client *client);
+static char on_str[] = {0xe1, 0x60, 0xec, 0x0c};	/* Configure device */
+static char off_str[] = {0x00};
+
+static void xrp6840_notify(void *pdata, int on)
+{
+	int ret;
+	struct i2c_client *client = (struct i2c_client *)pdata;
+	struct xrp6840_priv *xrp = i2c_get_clientdata(client);
+	char *p = on ? on_str : off_str;
+	char cnt = on ? sizeof(on_str) : sizeof(off_str);
+
+	xrp->enabled = on;
+	ret = i2c_master_send(client, p, cnt);
+	if (ret != cnt) {
+		/* ERROR HANDLING: i2c transaction failed */
+		pr_info("%s: Failed to write to the i2c bus.\n", __func__);
+		return;
+	}
+	pr_info("%s: on=%d cnt=%d\n", __func__, on, cnt);
+}
+
+
+static ssize_t xrp6840_enable_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	u8 tmp[8];
+	int result;
+	struct xrp6840_priv *xrp = dev_get_drvdata(dev);
+
+	tmp[0] = 0;
+	tmp[1] = 0;
+	tmp[2] = 0;
+	tmp[3] = 0;
+	result = i2c_master_recv(xrp->client, tmp, 4);
+	if (result != 4) {
+		dev_err(dev, "i2c_master_recv failed(%i)\n", result);
+	}
+	return sprintf(buf, "%d, %02x %02x %02x %02x\n", xrp->enabled, tmp[0], tmp[1], tmp[2], tmp[3]);
+}
+
+static ssize_t xrp6840_enable_store(struct device *dev, struct device_attribute *attr,
+	const char *buf, size_t count)
+{
+	int val;
+	struct xrp6840_priv *xrp = dev_get_drvdata(dev);
+	val = simple_strtol(buf, NULL, 10);
+	if (val < 0)
+		return count;
+
+	xrp6840_notify(xrp->client, val);
+	return count;
+}
+
+static DEVICE_ATTR(xrp6840_enable, 0644, xrp6840_enable_show, xrp6840_enable_store);
+
+
+void set_camera_active_notify(void *pdata, void (*notify_callback)(void * pdata, int on));
 
 /*!
  * xrp6840 I2C initialize XRP6840 function
@@ -31,28 +91,42 @@ static int xrp6840_remove(struct i2c_client *client);
 static int xrp6840_probe(struct i2c_client *client,
 		const struct i2c_device_id *id) 
 {
-	char buf[10] = {0};
-	int res;
+	struct xrp6840_priv *xrp = kzalloc(sizeof(struct xrp6840_priv),GFP_KERNEL);
+	int ret;
 
-	printk(KERN_INFO "In xrp6840 probe");
+	if (!xrp) {
+		dev_err(&client->dev, "Couldn't allocate memory\n");
+		return -ENOMEM;
+	}
+	xrp->client = client;
+	i2c_set_clientdata(client, xrp);
 
+	set_camera_active_notify(client, xrp6840_notify);
+	ret = device_create_file(&client->dev, &dev_attr_xrp6840_enable);
+	if (ret < 0)
+		pr_warn("failed to add xrp6840 sysfs enable file\n");
+	pr_info("Leaving %s", __func__);
+	return 0;
+}
 
-	//Configure device
-    printk(KERN_INFO "Sending init to xrp6840\n");
-    buf[0]=0xE1;
-    buf[1]=0x60;
-    buf[2]=0xEC;
-    buf[3]=0x0C;
+/*!
+ * xrp6840 I2C detach function
+ *
+ * @param client            struct i2c_client *
+ * @return  Error code indicating success or failure
+ */
+static int xrp6840_remove(struct i2c_client *client)
+{
+	struct xrp6840_priv *xrp = i2c_get_clientdata(client);
 
-    res=i2c_master_send(client, buf, 4);
- 	if (res!= 4) {
-        /* ERROR HANDLING: i2c transaction failed */
-        printk(KERN_INFO "Failed to write to the i2c bus.\n");
-        return(res);
-    }
-
-    printk(KERN_INFO "Leaving xrp6840_probe");
-    return(0);
+	printk(KERN_INFO "In xrp6840 remove");
+	set_camera_active_notify(NULL, NULL);
+	if (xrp && xrp->enabled)
+		xrp6840_notify(client, 0);
+	device_remove_file(&client->dev, &dev_attr_xrp6840_enable);
+	if (xrp)
+		kfree(xrp);
+	return 0;
 }
 
 static const struct i2c_device_id xrp6840_id[] = { { "xrp6840", 0 }, { } };
@@ -66,29 +140,6 @@ static struct i2c_driver xrp6840_driver = {
           .remove = __devexit_p(xrp6840_remove),
           .id_table = xrp6840_id,
  };
-
-
-/*!
- * xrp6840 I2C detach function
- *
- * @param client            struct i2c_client *
- * @return  Error code indicating success or failure
- */
-static int xrp6840_remove(struct i2c_client *client) {
-	char buf[10] = {0};
-	int res;
-
-	printk(KERN_INFO "In xrp6840 remove");
-    buf[0]=0x00; // Shutdown 
-
-    res=i2c_master_send(client, buf, 1);
- 	if (res != 1) {
-        /* ERROR HANDLING: i2c transaction failed */
-        printk(KERN_INFO "Failed to write to the i2c bus.\n %x",res);
-    }
-
-    return(res);
-}
 
 static int __init xrp6840_init(void)
  {
