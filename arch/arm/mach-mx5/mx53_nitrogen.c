@@ -1661,8 +1661,28 @@ static struct platform_device boundary_camera_interfaces[] = {
 
 #ifdef HAVE_CAMERA
 static struct mxc_camera_platform_data camera_data;
+
+static void *camera_pdata;
+static void (*camera_notify_callback)(void * pdata, int on);
+
+void set_camera_active_notify(void *pdata, void (*notify_callback)(void * pdata, int on))
+{
+	camera_pdata = pdata;
+	camera_notify_callback = notify_callback;
+}
+EXPORT_SYMBOL(set_camera_active_notify);
+
+static void camera_flash_notify(int on)
+{
+	if (camera_notify_callback)
+		camera_notify_callback(camera_pdata, on);
+
+}
+
 static void camera_pwdn(int pwdn)
 {
+	if (pwdn)
+		camera_flash_notify(0);
 	pr_debug("pwdn=%d camera_data.power_down=%x camera_data.reset=%x\n", pwdn, camera_data.power_down, camera_data.reset);
 	mxc_iomux_v3_setup_pad(pwdn ? NEW_PAD_CTRL(MX53_PAD_NANDF_CS2__GPIO6_15, PAD_CTL_PUS_360K_DOWN)
 			: MX53_PAD_NANDF_CS2__CSI0_MCLK);
@@ -1679,6 +1699,7 @@ static struct mxc_camera_platform_data camera_data = {
 	.mclk = 26000000,
 	.csi = 0,
 	.pwdn = camera_pwdn,
+	.flash_notify = camera_flash_notify,
 	.power_down = MAKE_GP(1, 2),	/* Nitrogen53 A/K override */
 	.reset = CAMERA_RESET,
 	.i2c_bus = 1,
@@ -2716,6 +2737,7 @@ struct gpio n53k_gpios_specific[] __initdata = {
 #endif
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 	{.label = "USBH1 Power",	.gpio = MAKE_GP(2, 17),		.flags = GPIOF_INIT_HIGH},	/* EIM_A21, active high power enable */
+	{.label = "Camera flash",	.gpio = MAKE_GP(3, 2),		.flags = GPIOF_INIT_LOW},	/* EIM_DA2, active high, camera flash */
 #if !defined(CONFIG_GPIO_OUTPUT) && !defined(CONFIG_GPIO_OUTPUT_MODULE)
 	/*
 	 * Wake* trig*
@@ -2729,7 +2751,6 @@ struct gpio n53k_gpios_specific[] __initdata = {
 	{.label = "Led2",		.gpio = MAKE_GP(3, 31),		.flags = GPIOF_INIT_HIGH},	/* EIM_D31, active low, Yellow LED */
 	{.label = "Led3",		.gpio = MAKE_GP(3, 22),		.flags = GPIOF_INIT_HIGH},	/* EIM_D22, active low, Blue LED */
 	{.label = "Led4",		.gpio = MAKE_GP(2, 18),		.flags = GPIOF_INIT_HIGH},	/* EIM_A20, active low, Orange LED */
-	{.label = "Camera flash",	.gpio = MAKE_GP(3, 2),		.flags = GPIOF_INIT_LOW},	/* EIM_DA2, active high, camera flash */
 #endif
 };
 
@@ -2974,7 +2995,7 @@ static iomux_v3_cfg_t n53k_pads_specific[] __initdata = {
 
 	/* Camera daughter board */
 	MX53_PAD_GPIO_7__GPIO1_7,		/* strobe input (from camera) */
-	MX53_PAD_EIM_DA2__GPIO3_2,		/* flash output (active high) */
+	NEW_PAD_CTRL(MX53_PAD_EIM_DA2__GPIO3_2, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_360K_DOWN) | MUX_SION_MASK,	/* flash output (active high) */
 	MX53_PAD_EIM_CS0__GPIO_2_23,		/* accelerometer int1 */
 	MX53_PAD_EIM_CS1__GPIO_2_24,		/* accelerometer int2 */
 	NEW_PAD_CTRL(MX53_PAD_EIM_EB0__GPIO2_28, BUTTON_PAD_CTRL) | MUX_SION_MASK,     /* da9053 fault */

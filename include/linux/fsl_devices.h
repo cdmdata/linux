@@ -395,6 +395,7 @@ struct mxc_camera_platform_data {
 	u32 mclk;
 	u32 csi;
 	void (*pwdn)(int pwdn);
+	void (*flash_notify)(int on);
 	int power_down ;
 	int reset ;
 	char *sensor_name ;
