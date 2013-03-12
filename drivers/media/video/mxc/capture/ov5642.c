@@ -7547,6 +7547,10 @@ static int ioctl_dev_init(struct v4l2_int_device *s) {
 
 	retval = disableFocusHUD();
 
+
+	ov5642_strobe_stop();
+	if (camera_plat->flash_notify)
+		camera_plat->flash_notify(1);
 	err: return retval;
 }
 
