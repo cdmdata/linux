@@ -110,10 +110,10 @@ ssize_t gpio_output_write(struct file *file, const char __user *data, size_t len
 	unsigned gpio = MINOR (file->f_dentry->d_inode->i_rdev);
 	unsigned char val ;
 	if (0 == copy_from_user(&val,data,sizeof(val))) {
+		int prev = gpio_get_value(gpio);
 		val &= 1 ;
-		printk (KERN_DEBUG "%s: set gp[%u] to %d (now %d)\n", name, gpio, val, gpio_get_value(gpio));
 		gpio_set_value(gpio,val);
-		printk (KERN_DEBUG "%s: gp[%u] now %d\n", name, gpio, gpio_get_value(gpio));
+		pr_debug("%s: set gp[%u] to %d (%d to %d)\n", name, gpio, val, prev, gpio_get_value(gpio));
 		return len ;
 	}
 	else
