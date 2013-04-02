@@ -928,6 +928,7 @@ struct v4l2_send_command_control {
 	int32_t		     id;
 	int32_t		     value0;
 	int32_t		     value1;
+	char	     	 debug[256];
 };
 
 /*  Values for ctrl_class field */

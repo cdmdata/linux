@@ -310,76 +310,16 @@ static uint8_t checksum(uint8_t const *buf, unsigned len)
 
 static void report_touch(struct input_dev *idev, unsigned x, unsigned y)
 {
-	int newy = 0;
-	int newx = 0;
-	int outy = 0;
-	int outx = 0;
-	int ydiff = 0;
-	int xdiff = 0;
-
-	//fix the y value
-	if (y >= 512) {
-		ydiff = (((y - 512) * 50 ) / 1000);
-		newy = y - ydiff;
-	}
-	else {
-		newy = 512 - y;
-		ydiff = ((newy * 50) / 1000);
-		//fudge the edge
-		if (y < ydiff) {
-			ydiff = ydiff/2;
-		}
-		newy = y + ydiff;
-	}
-
-	if (newy < 0) {
-		newy = 0;
-	}
-	if (newy > 1023 || y == 1023) {
-		newy = 1015;
-	}
-
-	outy = newy;
-
-	//fix the x value
-	if (x >= 512) {
-		xdiff = (((x - 512) * 35 ) / 1000);
-		newx = x - xdiff;
-	}
-	else {
-		newx = 512 - x;
-		xdiff = ((newx * 35) / 1000);
-		//fudge the edge
-		if (x < xdiff) {
-			xdiff = xdiff/2;
-		}
-		newx = x + xdiff;
-	}
-
-	if (newx < 0) {
-		newx = 0;
-	}
-	if (newx > 1023 || x == 1023) {
-		newx = 1015;
-	}
-
-	outx = newx;
-
-
 #ifndef TOUCHSCREEN_EKTF2K_SINGLE_TOUCH
-	//printk(KERN_INFO "Multi Touch org.. %d,%d",x,y);
-	//printk(KERN_INFO "Multi Touch fixed %d,%d",outx,outy);
-	input_event(idev, EV_ABS, ABS_MT_POSITION_X, outx);
-	input_event(idev, EV_ABS, ABS_MT_POSITION_Y, outy);
-	input_event(idev, EV_ABS, ABS_MT_TOUCH_MAJOR, 1);
-	input_mt_sync(idev);
+input_event(idev, EV_ABS, ABS_MT_POSITION_X, x);
+input_event(idev, EV_ABS, ABS_MT_POSITION_Y, y);
+input_event(idev, EV_ABS, ABS_MT_TOUCH_MAJOR, 1);
+input_mt_sync(idev);
 #else
-	//printk(KERN_INFO "Single Touch org.. %d,%d",x,y);
-	//printk(KERN_INFO "Single Touch fixed %d,%d",outx,outy);
-	input_event(idev, EV_ABS, ABS_X, outx);
-	input_event(idev, EV_ABS, ABS_Y, outy);
-	input_event(idev, EV_ABS, ABS_PRESSURE, 1);
-	input_report_key(idev, BTN_TOUCH, 1);
+input_event(idev, EV_ABS, ABS_X, x);
+input_event(idev, EV_ABS, ABS_Y, y);
+input_event(idev, EV_ABS, ABS_PRESSURE, 1);
+input_report_key(idev, BTN_TOUCH, 1);
 #endif
 }
 
