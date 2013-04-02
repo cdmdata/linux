@@ -1470,8 +1470,8 @@ static int mxc_v4l_open(struct file *file) {
 	cam_data *cam = video_get_drvdata(dev);
 	int err = 0;
 
-	pr_debug("\nIn MVC: mxc_v4l_open\n");
-	pr_debug("   device name is %s\n", dev->name);
+	pr_info("\nIn MVC: mxc_v4l_open\n");
+	pr_info("   device name is %s\n", dev->name);
 
 	if (!cam) {
 		pr_err("ERROR: v4l2 capture: Internal error, "
@@ -1759,8 +1759,11 @@ static long mxc_v4l_do_ioctl(struct file *file, unsigned int ioctlnr, void *arg)
 	pr_debug("In MVC: mxc_v4l_do_ioctl %x\n", ioctlnr);
 	wait_event_interruptible(cam->power_queue, cam->low_power == false);
 	/* make this _really_ smp-safe */
-	if (down_interruptible(&cam->busy_lock))
+	if (down_interruptible(&cam->busy_lock)){
+		pr_info("IOCTL BUSY EXITING!!!!!!!!");
 		return -EBUSY;
+	}
+
 	switch (ioctlnr) {
 	/*!
 	 * V4l2 VIDIOC_QUERYCAP ioctl
@@ -2229,7 +2232,7 @@ static long mxc_v4l_do_ioctl(struct file *file, unsigned int ioctlnr, void *arg)
 	}
 
 	case VIDIOC_SEND_COMMAND: {
-		pr_debug("   case VIDIOC_SEND_COMMAND\n");
+		pr_info("   case VIDIOC_SEND_COMMAND\n");
 		retval = mxc_v4l2_send_command(cam, arg);
 		break;
 	}
