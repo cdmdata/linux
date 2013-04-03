@@ -280,18 +280,26 @@ static struct reg_value ov5642_initial_setting[] = { { 0x3103, 0x93, 0, 0 }, {
 
 		0x519e, 0x00, 0, 0 }, { 0x5025, 0x80, 0, 0 }, { 0x3a0f, 0x38, 0, 0 }, {
 		0x3a10, 0x30, 0, 0 }, { 0x3a1b, 0x3a, 0, 0 }, { 0x3a1e, 0x2e, 0, 0 }, {
-		0x3a11, 0x60, 0, 0 }, { 0x3a1f, 0x10, 0, 0 }, { 0x5688, 0x31, 0, 0 }, {
-		0x5689, 0x13, 0, 0 }, { 0x568a, 0xF3, 0, 0 }, { 0x568b, 0x3F, 0, 0 }, {
-		0x568c, 0xF3, 0, 0 }, { 0x568d, 0x0F, 0, 0 }, { 0x568e, 0x00, 0, 0 }, {
-		0x568f, 0x00, 0, 0 }, { 0x5583, 0x40, 0, 0 }, { 0x5584, 0x40, 0, 0 }, {
-
+		0x3a11, 0x60, 0, 0 }, { 0x3a1f, 0x10, 0, 0 }, { 0x5583, 0x40, 0, 0 }, { 
+		0x5584, 0x40, 0, 0 }, {
 		0x519e, 0x00, 0, 0 }, { 0x5025, 0x80, 0, 0 }, { 0x3a0f, 0x30, 0, 0 }, {
 		0x3a10, 0x28, 0, 0 }, { 0x3a1b, 0x3a, 0, 0 }, { 0x3a1e, 0x2e, 0, 0 }, {
 		0x3a11, 0x60, 0, 0 }, { 0x3a1f, 0x10, 0, 0 },
 
-		{ 0x5688, 0xa6,	0, 0 }, { 0x5689, 0x6a, 0, 0 }, { 0x568a, 0xea, 0, 0 },
-		{ 0x568b, 0xae,	0, 0 }, { 0x568c, 0xa6, 0, 0 }, { 0x568d, 0x6a, 0, 0 },
-		{ 0x568e, 0x62, 0, 0 }, { 0x568f, 0x26, 0, 0 },
+		//		{ 0x5688, 0xa6,	0, 0 }, { 0x5689, 0x6a, 0, 0 },
+		//		{ 0x568a, 0xea, 0, 0 }, { 0x568b, 0xae,	0, 0 },
+		//		{ 0x568c, 0xea, 0, 0 }, { 0x568d, 0xae, 0, 0 },
+		//		{ 0x568e, 0xa6, 0, 0 }, { 0x568f, 0xa6, 0, 0 },
+
+				// { 0x5688, 0x00,	0, 0 }, { 0x5689, 0x00, 0, 0 },
+		// { 0x568a, 0xe0, 0, 0 }, { 0x568b, 0x0e,	0, 0 },
+		// { 0x568c, 0xe0, 0, 0 }, { 0x568d, 0x0e, 0, 0 },
+		// { 0x568e, 0xa6, 0, 0 }, { 0x568f, 0xa6, 0, 0 },
+
+		{ 0x5688, 0xa6,	0, 0 }, { 0x5689, 0x6a, 0, 0 },
+		{ 0x568a, 0xea, 0, 0 }, { 0x568b, 0xae,	0, 0 },
+		{ 0x568c, 0xea, 0, 0 }, { 0x568d, 0xae, 0, 0 },
+		{ 0x568e, 0xaa, 0, 0 }, { 0x568f, 0xaa, 0, 0 },
 
 		{ 0x5583, 0x4F, 0, 0 }, { 0x5584, 0x4F, 0, 0 }, {
 
@@ -5903,10 +5911,16 @@ static struct reg_value ov5642_setting_15fps_QSXGA_2592_1944[] = {
 		};
 
 static struct reg_value ov5642_setting_VGA_2_VGA[] = { { 0x3825, 0xb4, 0, 0 }, {
-		0x3827, 0x08, 0, 0 }, { 0x3804, 0x05, 0, 0 }, { 0x3805, 0x00, 0, 0 }, {
-		0x5682, 0x05, 0, 0 }, { 0x5683, 0x00, 0, 0 }, { 0x3806, 0x03, 0, 0 }, {
-		0x3807, 0xc0, 0, 0 }, { 0x5686, 0x03, 0, 0 }, { 0x5687, 0xc0, 0, 0 }, {
-		0x3808, 0x02, 0, 0 }, { 0x3809, 0x80, 0, 0 }, { 0x380a, 0x01, 0, 0 }, {
+		0x3827, 0x08, 0, 0 }, 
+
+		{0x3804, 0x05, 0, 0 }, { 0x3805, 0x00, 0, 0 }, 
+		{0x5682, 0x05, 0, 0 }, { 0x5683, 0x00, 0, 0 }, 
+
+		{0x3806, 0x03, 0, 0 }, {0x3807, 0xc0, 0, 0 }, 
+
+		{ 0x5686, 0x03, 0, 0 }, { 0x5687, 0xc0, 0, 0 }, 
+
+		{0x3808, 0x02, 0, 0 }, { 0x3809, 0x80, 0, 0 }, { 0x380a, 0x01, 0, 0 }, {
 		0x380b, 0xe0, 0, 0 }, };
 
 static struct reg_value ov5642_setting_QSXGA_2_VGA[] = { { 0x3503, 0x00, 0, 0 },
@@ -6042,14 +6056,33 @@ static struct reg_value ov5642_setting_30fps_VGA_640_480[] = { { 0x3103, 0x93,
 		0, 0 }, { 0x3a10, 0x28, 0, 0 }, { 0x3a1b, 0x3a, 0, 0 }, { 0x3a1e, 0x2e,
 		0, 0 }, { 0x3a11, 0x60, 0, 0 }, { 0x3a1f, 0x10, 0, 0 },
 
-		{ 0x5688, 0xa6,	0, 0 }, { 0x5689, 0x6a, 0, 0 }, { 0x568a, 0xea, 0, 0 },
-		{ 0x568b, 0xae,	0, 0 }, { 0x568c, 0xa6, 0, 0 }, { 0x568d, 0x6a, 0, 0 },
-		{ 0x568e, 0x62, 0, 0 }, { 0x568f, 0x26, 0, 0 },
+		// { 0x5688, 0x22,	0, 0 }, { 0x5689, 0x22, 0, 0 },
+		// { 0x568a, 0xf2, 0, 0 }, { 0x568b, 0x2f,	0, 0 },
+		// { 0x568c, 0xf2, 0, 0 }, { 0x568d, 0x2f, 0, 0 },
+		// { 0x568e, 0x22, 0, 0 }, { 0x568f, 0x22, 0, 0 },
+
+//		{ 0x5688, 0xa6,	0, 0 }, { 0x5689, 0x6a, 0, 0 },
+//		{ 0x568a, 0xea, 0, 0 }, { 0x568b, 0xae,	0, 0 },
+//		{ 0x568c, 0xea, 0, 0 }, { 0x568d, 0xae, 0, 0 },
+//		{ 0x568e, 0xa6, 0, 0 }, { 0x568f, 0xa6, 0, 0 },
+
+		// { 0x5688, 0x00,	0, 0 }, { 0x5689, 0x00, 0, 0 },
+		// { 0x568a, 0xe0, 0, 0 }, { 0x568b, 0x0e,	0, 0 },
+		// { 0x568c, 0xe0, 0, 0 }, { 0x568d, 0x0e, 0, 0 },
+		// { 0x568e, 0xa6, 0, 0 }, { 0x568f, 0xa6, 0, 0 },
+
+		//zone weights
+		{ 0x5688, 0xa6,	0, 0 }, { 0x5689, 0x6a, 0, 0 },
+		{ 0x568a, 0xea, 0, 0 }, { 0x568b, 0xae,	0, 0 },
+		{ 0x568c, 0xea, 0, 0 }, { 0x568d, 0xae, 0, 0 },
+		{ 0x568e, 0xaa, 0, 0 }, { 0x568f, 0xaa, 0, 0 },
 
 		{ 0x5583, 0x4F, 0, 0 }, { 0x5584, 0x4F,
 
-		0, 0 }, { 0x5580, 0x02, 0, 0 }, { 0x5000, 0xcf, 0, 0 }, { 0x5800, 0x27,
-		0, 0 }, { 0x5801, 0x19, 0, 0 }, { 0x5802, 0x12, 0, 0 }, { 0x5803, 0x0f,
+		0, 0 }, { 0x5580, 0x02, 0, 0 }, { 0x5000, 0xcf, 0, 0 }, 
+
+		//lenc
+		{ 0x5800, 0x27,	0, 0 }, { 0x5801, 0x19, 0, 0 }, { 0x5802, 0x12, 0, 0 }, { 0x5803, 0x0f,
 		0, 0 }, { 0x5804, 0x10, 0, 0 }, { 0x5805, 0x15, 0, 0 }, { 0x5806, 0x1e,
 		0, 0 }, { 0x5807, 0x2f, 0, 0 }, { 0x5808, 0x15, 0, 0 }, { 0x5809, 0x0d,
 		0, 0 }, { 0x580a, 0x0a, 0, 0 }, { 0x580b, 0x09, 0, 0 }, { 0x580c, 0x0a,
@@ -6094,7 +6127,11 @@ static struct reg_value ov5642_setting_30fps_VGA_640_480[] = { { 0x3103, 0x93,
 		0, 0 }, { 0x587f, 0x11, 0, 0 }, { 0x5880, 0x12, 0, 0 }, { 0x5881, 0x15,
 		0, 0 }, { 0x5882, 0x14, 0, 0 }, { 0x5883, 0x15, 0, 0 }, { 0x5884, 0x15,
 		0, 0 }, { 0x5885, 0x15, 0, 0 }, { 0x5886, 0x13, 0, 0 }, { 0x5887, 0x17,
-		0, 0 }, { 0x3710, 0x10, 0, 0 }, { 0x3632, 0x51, 0, 0 }, { 0x3702, 0x10,
+		0, 0 }, 
+
+
+
+		{ 0x3710, 0x10, 0, 0 }, { 0x3632, 0x51, 0, 0 }, { 0x3702, 0x10,
 		0, 0 }, { 0x3703, 0xb2, 0, 0 }, { 0x3704, 0x18, 0, 0 }, { 0x370b, 0x40,
 		0, 0 }, { 0x370d, 0x03, 0, 0 }, { 0x3631, 0x01, 0, 0 }, { 0x3632, 0x52,
 		0, 0 }, { 0x3606, 0x24, 0, 0 }, { 0x3620, 0x96, 0, 0 }, { 0x5785, 0x07,
@@ -6321,27 +6358,67 @@ static int ov5642_set_awb(__s32 value){
 //			ov5642_write_reg(0x5192, 0x00);
 //			ov5642_write_reg(0x5183, 0x94);
 
+			//based on OVT software notes
+			// ov5642_write_reg(0x3406 ,0x00);
+			// ov5642_write_reg(0x5183 ,0x80);
+			// ov5642_write_reg(0x5191 ,0xff);
+			// ov5642_write_reg(0x5192 ,0x00);
+
+
 
 			//Advanced AWB based on OVT Software notes
-			ov5642_write_reg(0x3406 ,0x0 );
-			ov5642_write_reg(0x5192 ,0x04);
-			ov5642_write_reg(0x5191 ,0xf8);
-			ov5642_write_reg(0x518d ,0x26);
-			ov5642_write_reg(0x518f ,0x42);
-			ov5642_write_reg(0x518e ,0x2b);
-			ov5642_write_reg(0x5190 ,0x42);
-			ov5642_write_reg(0x518b ,0xd0);
-			ov5642_write_reg(0x518c ,0xbd);
-			ov5642_write_reg(0x5187 ,0x18);
-			ov5642_write_reg(0x5188 ,0x18);
-			ov5642_write_reg(0x5189 ,0x56);
-			ov5642_write_reg(0x518a ,0x5c);
-			ov5642_write_reg(0x5186 ,0x1c);
-			ov5642_write_reg(0x5181 ,0x50);
-			ov5642_write_reg(0x5184 ,0x20);
-			ov5642_write_reg(0x5182 ,0x11);
-			ov5642_write_reg(0x5183 ,0x0 );
+//			ov5642_write_reg(0x3406 ,0x0 );
+//			ov5642_write_reg(0x5192 ,0x04);
+//			ov5642_write_reg(0x5191 ,0xf8);
+//			ov5642_write_reg(0x518d ,0x26);
+//			ov5642_write_reg(0x518f ,0x42);
+//			ov5642_write_reg(0x518e ,0x2b);
+//			ov5642_write_reg(0x5190 ,0x42);
+//			ov5642_write_reg(0x518b ,0xd0);
+//			ov5642_write_reg(0x518c ,0xbd);
+//			ov5642_write_reg(0x5187 ,0x18);
+//			ov5642_write_reg(0x5188 ,0x18);
+//			ov5642_write_reg(0x5189 ,0x56);
+//			ov5642_write_reg(0x518a ,0x5c);
+//			ov5642_write_reg(0x5186 ,0x1c);
+//			ov5642_write_reg(0x5181 ,0x50);
+//			ov5642_write_reg(0x5184 ,0x20);
+//			ov5642_write_reg(0x5182 ,0x11);
+//			ov5642_write_reg(0x5183 ,0x0 );
 
+			//Advanced AWB based on Truly YUV INI File
+			ov5642_write_reg(0x3406, 0x0);
+			ov5642_write_reg(0x5180, 0xff);
+			ov5642_write_reg(0x5181, 0x58);
+			ov5642_write_reg(0x5182, 0x11);
+			ov5642_write_reg(0x5183, 0x10);
+			ov5642_write_reg(0x5184, 0x25);
+			ov5642_write_reg(0x5185, 0x22);
+			ov5642_write_reg(0x5186, 0x19);
+			ov5642_write_reg(0x5187, 0x18);
+			ov5642_write_reg(0x5188, 0x15);
+			ov5642_write_reg(0x5189, 0x72);
+			ov5642_write_reg(0x518a, 0x5c);
+			ov5642_write_reg(0x518b, 0xa4);
+			ov5642_write_reg(0x518c, 0x90);
+			ov5642_write_reg(0x518d, 0x3d);
+			ov5642_write_reg(0x518e, 0x38);
+			ov5642_write_reg(0x518f, 0x4c);
+			ov5642_write_reg(0x5190, 0x43);
+			ov5642_write_reg(0x5191, 0xf8);
+			ov5642_write_reg(0x5192, 0x4 );
+			ov5642_write_reg(0x5193, 0x70);
+			ov5642_write_reg(0x5194, 0xf0);
+			ov5642_write_reg(0x5195, 0xf0);
+			ov5642_write_reg(0x5196, 0x3);
+			ov5642_write_reg(0x5197, 0x1 );
+			ov5642_write_reg(0x5198, 0x4 );
+			ov5642_write_reg(0x5199, 0x8e);
+			ov5642_write_reg(0x519a, 0x4);
+			ov5642_write_reg(0x519b, 0x0 );
+			ov5642_write_reg(0x519c, 0x8 );
+			ov5642_write_reg(0x519d, 0xe1);
+			ov5642_write_reg(0x519e, 0x0 );
 
 			break;
 
@@ -6408,12 +6485,12 @@ static int ov5642_set_post_processing(void){
 	ov5642_write_reg(0x5001 ,0xff);
 
 	//saturation adjustment
-	ov5642_write_reg(0x5583 ,0x45); //u chan
+	ov5642_write_reg(0x5583 ,0x50); //u chan
 	ov5642_write_reg(0x5584 ,0x50); //v chan
 
 	//hue
-	ov5642_write_reg(0x5581 ,0x80);
-	ov5642_write_reg(0x5582 ,0x10);
+//	ov5642_write_reg(0x5581 ,0x80);
+//	ov5642_write_reg(0x5582 ,0x00);
 
 	//brightness
 	ov5642_write_reg(0x5589 ,0x10);
@@ -6423,8 +6500,9 @@ static int ov5642_set_post_processing(void){
 	//ov5642_write_reg(0x5588 ,0x28);
 
 	//turn on hue,saturation, brightness adjustments
-	ov5642_write_reg(0x558a ,0x09);
 	ov5642_write_reg(0x5580 ,0x07);
+	ov5642_write_reg(0x558a ,0x09);
+
 }
 
 static int ov5642_config_brightness(void){
@@ -6510,6 +6588,30 @@ static int ov5642_set_af_infinite_mode(void) {
 	return retval;
 }
 
+static int ov5642_set_af_infinite_mode2(void) {
+	int retval = 0;
+	u8 ReadVal = 0x03;
+	int lc = 0;
+
+	pr_info("Setting AF to infinite mode2...");
+
+	ov5642_write_reg(REG_CMD_TAG, 0x01);
+	ov5642_write_reg(REG_CMD_MAIN, 0x05);
+
+	//wait for REG_CMD_TAG == 0x0
+	for (lc = 0; (lc < 100) && (ReadVal != 0x0); ++lc) {
+		retval = ov5642_read_reg(REG_CMD_TAG, &ReadVal);
+		if (retval < 0) {
+			pr_err("Error reading REG_CMD_TAG. Aborting focus request");
+			retval = -1;
+			break;
+		}
+		mdelay(10);
+	}
+
+	return retval;
+}
+
 static int ov5642_auto_focus_start(void) {
 	register u16 RegAddr = 0;
 	u8 RegVal = 0;
@@ -6524,7 +6626,7 @@ static int ov5642_auto_focus_start(void) {
 	if (ov5642_data.brightness < 0x1a) {
 		//torchOn = 1;
 		//xrp6840_torch_mode_on();
-		return ov5642_set_af_infinite_mode();
+		return ov5642_set_af_infinite_mode2();
 	}
 
 	retval = ov5642_set_idle_mode();
@@ -6617,6 +6719,7 @@ static struct capture_sensor_data {
 	u8 ret_l, ret_m, ret_h, gain, lines_10ms, ret_af;
 	u16 ulcapture_exposure, icapture_gain, preview_maxlines;
 	u32 ulcapture_exposure_gain, capture_maxlines, g_preview_exposure;
+	u8 luminance;
 } ov5642_cap_sensor_data;
 
 static void print_capture_sensor_data(void){
@@ -6624,7 +6727,7 @@ static void print_capture_sensor_data(void){
 			"exposure_low=0x%x, exposure_mid=0x%x, exposure_high=0x%x, "
 			"ret_l=0x%x, ret_m=0x%x, ret_h=0x%x, gain=0x%x, lines_10ms=0x%x, ret_af=0x%x, "
 			"ulcapture_exposure=0x%x, icapture_gain=0x%x, preview_maxlines=0x%x, "
-			"ulcapture_exposure_gain=0x%x, capture_maxlines=0x%x, g_preview_exposure=0x%x",
+			"ulcapture_exposure_gain=0x%x, capture_maxlines=0x%x, g_preview_exposure=0x%x, luminance=0x%x",
 			ov5642_cap_sensor_data.m_60Hz,
 			ov5642_cap_sensor_data.capture_frame_rate,
 			ov5642_cap_sensor_data.g_preview_frame_rate,
@@ -6642,7 +6745,35 @@ static void print_capture_sensor_data(void){
 			ov5642_cap_sensor_data.preview_maxlines,
 			ov5642_cap_sensor_data.ulcapture_exposure_gain,
 			ov5642_cap_sensor_data.capture_maxlines,
-			ov5642_cap_sensor_data.g_preview_exposure);
+			ov5642_cap_sensor_data.g_preview_exposure,
+			ov5642_cap_sensor_data.luminance);
+}
+
+static void get_capture_sensor_data(char *debug){
+	sprintf( debug, "m_60Hz==0x%x, cfr=0x%x, pfr=0x%x, "
+			"elow=0x%x, emid=0x%x, ehigh=0x%x, "
+			"ret_l=0x%x, ret_m=0x%x, ret_h=0x%x, gain=0x%x, lines_10ms=0x%x, ret_af=0x%x, "
+			"ulcapture_e=0x%x, icapture_g=0x%x, pmaxlines=0x%x, "
+			"ulcapture_eg=0x%x, clines=0x%x, g_pre_exp=0x%x, lum=0x%x",
+			ov5642_cap_sensor_data.m_60Hz,
+			ov5642_cap_sensor_data.capture_frame_rate,
+			ov5642_cap_sensor_data.g_preview_frame_rate,
+			ov5642_cap_sensor_data.exposure_low,
+			ov5642_cap_sensor_data.exposure_mid,
+			ov5642_cap_sensor_data.exposure_high,
+			ov5642_cap_sensor_data.ret_l,
+			ov5642_cap_sensor_data.ret_m,
+			ov5642_cap_sensor_data.ret_h,
+			ov5642_cap_sensor_data.gain,
+			ov5642_cap_sensor_data.lines_10ms,
+			ov5642_cap_sensor_data.ret_af,
+			ov5642_cap_sensor_data.ulcapture_exposure,
+			ov5642_cap_sensor_data.icapture_gain,
+			ov5642_cap_sensor_data.preview_maxlines,
+			ov5642_cap_sensor_data.ulcapture_exposure_gain,
+			ov5642_cap_sensor_data.capture_maxlines,
+			ov5642_cap_sensor_data.g_preview_exposure,
+			ov5642_cap_sensor_data.luminance);
 }
 
 static int ov5642_prep_cap_mode_pre(void) {
@@ -6670,15 +6801,39 @@ static int ov5642_prep_cap_mode_pre(void) {
 	ov5642_cap_sensor_data.gain = 0;
 	ov5642_read_reg(0x350b, &ov5642_cap_sensor_data.gain);
 
+	ov5642_read_reg(0x5690, &ov5642_cap_sensor_data.luminance);
+
+
 	print_capture_sensor_data();
 	return 0;
 }
 
 static int ov5642_prep_cap_mode_post(void) {
+	u8 RegVal = 0;
+
 	pr_info(">>>>>> %s <<<<<", __FUNCTION__);
+	ov5642_write_reg(0x3503, 0x07);
+	ov5642_write_reg(0x3503,RegVal);
+	pr_info("Camera mode: 0x%x",RegVal);
+
+//	pr_info("Preview Gain: %d",ov5642_cap_sensor_data.gain);
+//	if (ov5642_cap_sensor_data.gain < 0x04) {
+//		pr_info("Setting Gain to: 0x04");
+//		ov5642_cap_sensor_data.gain = 0x04;
+//	}
+//
+//	//ov5642_read_reg(0x5690, &regLuminanceValue);
+//	if (ov5642_cap_sensor_data.luminance > 0x1a && ov5642_cap_sensor_data.gain > 0x04) {
+//		ov5642_cap_sensor_data.gain = 0x04 ;
+//		//bump preview exposure
+//		pr_info("Preview Exposure: %d",ov5642_cap_sensor_data.g_preview_exposure);
+//		ov5642_cap_sensor_data.g_preview_exposure += ov5642_cap_sensor_data.g_preview_exposure;
+//		pr_info("Preview Exposure After: %d",ov5642_cap_sensor_data.g_preview_exposure);
+//	}
+
 	ov5642_cap_sensor_data.ret_h = ov5642_cap_sensor_data.ret_m = ov5642_cap_sensor_data.ret_l = 0;
-	ov5642_read_reg(0x380e, &ov5642_cap_sensor_data.ret_h);
-	ov5642_read_reg(0x380f, &ov5642_cap_sensor_data.ret_l);
+	ov5642_read_reg(0x380e, &ov5642_cap_sensor_data.ret_h);//timing/size
+	ov5642_read_reg(0x380f, &ov5642_cap_sensor_data.ret_l);//timing/size
 	ov5642_cap_sensor_data.capture_maxlines = (ov5642_cap_sensor_data.ret_h << 8) + ov5642_cap_sensor_data.ret_l;
 	if (ov5642_cap_sensor_data.m_60Hz == true)
 		ov5642_cap_sensor_data.lines_10ms = ov5642_cap_sensor_data.capture_frame_rate * ov5642_cap_sensor_data.capture_maxlines / 12000;
@@ -6691,6 +6846,9 @@ static int ov5642_prep_cap_mode_post(void) {
 	ov5642_cap_sensor_data.ulcapture_exposure = (ov5642_cap_sensor_data.g_preview_exposure * (ov5642_cap_sensor_data.capture_frame_rate)
 			* (ov5642_cap_sensor_data.capture_maxlines))
 			/ (((ov5642_cap_sensor_data.preview_maxlines) * (ov5642_cap_sensor_data.g_preview_frame_rate)));
+
+
+
 	ov5642_cap_sensor_data.icapture_gain = (ov5642_cap_sensor_data.gain & 0x0f) + 16;
 	if (ov5642_cap_sensor_data.gain & 0x10)
 		ov5642_cap_sensor_data.icapture_gain = ov5642_cap_sensor_data.icapture_gain << 1;
@@ -6719,11 +6877,16 @@ static int ov5642_prep_cap_mode_post(void) {
 		ov5642_cap_sensor_data.ulcapture_exposure = 1;
 
 	ov5642_cap_sensor_data.icapture_gain = (ov5642_cap_sensor_data.ulcapture_exposure_gain * 2 / ov5642_cap_sensor_data.ulcapture_exposure + 1) / 2;
+
+//	if (regLuminanceValue > 0x1a) {
+//			ov5642_cap_sensor_data.ulcapture_exposure = ov5642_cap_sensor_data.ulcapture_exposure << 1 ;
+//		}
+
 	ov5642_cap_sensor_data.exposure_low = ((unsigned char) ov5642_cap_sensor_data.ulcapture_exposure) << 4;
 	ov5642_cap_sensor_data.exposure_mid = (unsigned char) (ov5642_cap_sensor_data.ulcapture_exposure >> 4) & 0xff;
 	ov5642_cap_sensor_data.exposure_high = (unsigned char) (ov5642_cap_sensor_data.ulcapture_exposure >> 12);
 
-	ov5642_cap_sensor_data.gain = 0x10;
+	ov5642_cap_sensor_data.gain = 0x0;
 	if (ov5642_cap_sensor_data.icapture_gain > 31) {
 		ov5642_cap_sensor_data.gain |= 0x10;
 		ov5642_cap_sensor_data.icapture_gain = ov5642_cap_sensor_data.icapture_gain >> 1;
@@ -6745,6 +6908,10 @@ static int ov5642_prep_cap_mode_post(void) {
 
 	if (ov5642_cap_sensor_data.gain == 0x10)
 		ov5642_cap_sensor_data.gain = 0x11;
+
+
+
+
 
 	ov5642_write_reg(0x350b, ov5642_cap_sensor_data.gain);
 	ov5642_write_reg(0x3502, ov5642_cap_sensor_data.exposure_low);
@@ -7345,10 +7512,18 @@ static int ioctl_send_command(struct v4l2_int_device *s, struct v4l2_send_comman
 		case 106: //debug
 			//fooret = xrp6840_torch_mode_on();
 			pr_info("Out from xrp6840: %d", fooret);
+			break;
 
 		case 107: //debug
 			//fooret = xrp6840_torch_mode_off();
 			pr_info("Out from xrp6840: %d", fooret);
+			break;
+
+		case 108:
+			pr_info("get_capture_sensor_data");
+			get_capture_sensor_data(vc->debug);
+			pr_info("%s",vc->debug);
+			break;
 
 		default:
 			break;
