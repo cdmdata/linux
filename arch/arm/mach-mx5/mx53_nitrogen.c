@@ -327,8 +327,8 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "sdhc1-cd",		.gpio = MAKE_GP(3, 13),		.flags = GPIOF_DIR_IN},
 #define N53_SD1_WP				MAKE_GP(3, 14)
 	{.label = "sdhc1-wp",		.gpio = MAKE_GP(3, 14),		.flags = GPIOF_DIR_IN},
-#define N53_SC16IS7XX_INT			MAKE_GP(3, 20)
-	{.label = "sc16is7xx-int",	.gpio = MAKE_GP(3, 20),		.flags = GPIOF_DIR_IN},		/* EIM_D20 */
+//define N53_SC16IS7XX_INT			MAKE_GP(3, 20)
+//	{.label = "sc16is7xx-int",	.gpio = MAKE_GP(3, 20),		.flags = GPIOF_DIR_IN},		/* EIM_D20 */
 #define N53_I2C_0_SCL				MAKE_GP(3, 21)
 	{.label = "i2c-0-scl",		.gpio = MAKE_GP(3, 21),		.flags = GPIOF_DIR_IN},
 #define N53_I2C_0_SDA				MAKE_GP(3, 28)
@@ -2594,7 +2594,7 @@ struct gpio n53k_gpios_specific[] __initdata = {
 	{.label = "accelerometer int1",	.gpio = MAKE_GP(2, 23),		.flags = GPIOF_DIR_IN},
 	{.label = "accelerometer int2",	.gpio = MAKE_GP(2, 24),		.flags = GPIOF_DIR_IN},
 	{.label = "da9053 fault",	.gpio = MAKE_GP(2, 28),		.flags = GPIOF_DIR_IN},
-	{.label = "uart1 cts",		.gpio = MAKE_GP(2, 31),		.flags = GPIOF_INIT_LOW},
+//	{.label = "uart1 cts",		.gpio = MAKE_GP(2, 31),		.flags = GPIOF_INIT_LOW},
 	{.label = "Dispay w3 cs",	.gpio = MAKE_GP(3, 3),		.flags = GPIOF_INIT_HIGH},
 	{.label = "da9053 shutdown",	.gpio = MAKE_GP(3, 4),		.flags = GPIOF_INIT_HIGH},
 	{.label = "ambient int",	.gpio = MAKE_GP(3, 7),		.flags = GPIOF_INIT_HIGH},
