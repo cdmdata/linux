@@ -39,6 +39,8 @@
 #include "mxc_v4l2_capture.h"
 #include "ipu_prp_sw.h"
 
+#define pr_info(...)
+
 static int video_nr = -1, local_buf_num;
 static cam_data *g_cam;
 

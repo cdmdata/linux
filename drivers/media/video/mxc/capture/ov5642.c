@@ -32,6 +32,7 @@
 #include <media/v4l2-int-device.h>
 #include "mxc_v4l2_capture.h"
 
+#define pr_info(...)
 
 #define OV5642_VOLTAGE_ANALOG               2800000
 #define OV5642_VOLTAGE_DIGITAL_CORE         1500000
