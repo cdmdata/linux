@@ -3075,8 +3075,7 @@ static struct mxc_mmc_platform_data n53k_mmc4_data = {
 
 static int headphone_det_status_k(void)
 {
-	gpio_get_value(N53K_HEADPHONE_DET);
-	return 0;
+	return (gpio_get_value(N53K_HEADPHONE_DET)) ? 0 : 1;
 }
 
 #ifdef CONFIG_K2
