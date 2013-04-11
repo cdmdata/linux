@@ -282,7 +282,7 @@
 #define MX53_PAD_LVDS1_TX3_P__LVDS1_TX3		IOMUX_PAD(NON_PAD_I, 0x1EC, 1, 0x0, 0, NO_PAD_CTRL)
 #define MX53_PAD_NANDF_CS0__GPIO6_11_KEY	IOMUX_PAD(0x5B0, 0x238, 1|IOMUX_CONFIG_SION, 0x0, 0, BUTTON_PAD_CTRL)
 #define MX53_PAD_NANDF_CS1__GPIO6_14_KEY	IOMUX_PAD(0x5B4, 0x23C, 1|IOMUX_CONFIG_SION, 0x0, 0, BUTTON_PAD_CTRL)
-#define MX53_PAD_NANDF_CS2__CSI0_MCLK		IOMUX_PAD(0x5B8, 0x240, 5|IOMUX_CONFIG_SION, 0x0, 0, NO_PAD_CTRL)
+#define MX53_PAD_NANDF_CS2__CSI0_MCLK		IOMUX_PAD(0x5B8, 0x240, 5|IOMUX_CONFIG_SION, 0x0, 0, PAD_CTL_DSE_HIGH)
 #define MX53_PAD_NANDF_CS3__GPIO_6_16		IOMUX_PAD(0x5BC, 0x244, 1, 0x0, 0, NO_PAD_CTRL)
 #define MX53_PAD_SD1_CLK__SD1_CLK		IOMUX_PAD(0x67C, 0x2F4, IOMUX_CONFIG_SION, 0x0, 0, MX53_SDHC_PAD_CTRL | PAD_CTL_HYS)
 #define MX53_PAD_SD1_CMD__SD1_CMD		IOMUX_PAD(0x674, 0x2EC, IOMUX_CONFIG_SION, 0x0, 0, MX53_SDHC_PAD_CTRL)
@@ -327,8 +327,8 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "sdhc1-cd",		.gpio = MAKE_GP(3, 13),		.flags = GPIOF_DIR_IN},
 #define N53_SD1_WP				MAKE_GP(3, 14)
 	{.label = "sdhc1-wp",		.gpio = MAKE_GP(3, 14),		.flags = GPIOF_DIR_IN},
-//define N53_SC16IS7XX_INT			MAKE_GP(3, 20)
-//	{.label = "sc16is7xx-int",	.gpio = MAKE_GP(3, 20),		.flags = GPIOF_DIR_IN},		/* EIM_D20 */
+#define N53_SC16IS7XX_INT			MAKE_GP(3, 20)
+	{.label = "sc16is7xx-int",	.gpio = MAKE_GP(3, 20),		.flags = GPIOF_DIR_IN},		/* EIM_D20 */
 #define N53_I2C_0_SCL				MAKE_GP(3, 21)
 	{.label = "i2c-0-scl",		.gpio = MAKE_GP(3, 21),		.flags = GPIOF_DIR_IN},
 #define N53_I2C_0_SDA				MAKE_GP(3, 28)
@@ -372,6 +372,7 @@ struct gpio nitrogen53_gpios[] __initdata = {
 	{.label = "USB HUB reset",	.gpio = MAKE_GP(5, 0),		.flags = 0},
 #define N53_CAMERA_STANDBY			MAKE_GP(5, 20)
 	{.label = "Camera standby",	.gpio = MAKE_GP(5, 20),		.flags = 0},
+	{.label = "Camera xclk",	.gpio = MAKE_GP(6, 15),		.flags = 0},
 #define N53_PHY_RESET				MAKE_GP(7, 13)
 	{.label = "ICS1893 reset",	.gpio = MAKE_GP(7, 13),		.flags = 0},	/* ICS1893 Ethernet PHY reset */
 #if defined(CONFIG_SERIAL_IMX_RS485)
@@ -385,9 +386,15 @@ static int num_cpu_wp = 3;
 
 static iomux_v3_cfg_t mx53common_pads[] = {
 	/* AUD3, J8 - PCM */
+#if 0
+	/*
+	 * Don't set yet, because Tiwi wants to be an output
+	 * on these pins. So configure CPU as input first
+	 */
 	MX53_PAD_CSI0_D4__AUD3_TXC,
-	MX53_PAD_CSI0_D5__AUD3_TXD,
 	MX53_PAD_CSI0_D6__AUD3_TXFS,
+#endif
+	MX53_PAD_CSI0_D5__AUD3_TXD,
 //	MX53_PAD_CSI0_D7__AUD3_RXD,
 
 	/* AUD4, sgtl5000 */
@@ -461,8 +468,6 @@ static iomux_v3_cfg_t mx53common_pads[] = {
 	NEW_PAD_CTRL(MX53_PAD_EIM_A22__GPIO_2_16, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
 	NEW_PAD_CTRL(MX53_PAD_EIM_A21__GPIO_2_17, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
 	NEW_PAD_CTRL(MX53_PAD_EIM_A20__GPIO_2_18, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
-	NEW_PAD_CTRL(MX53_PAD_EIM_A19__GPIO_2_19, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
-	NEW_PAD_CTRL(MX53_PAD_EIM_A18__GPIO_2_20, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Keyboard */
 	NEW_PAD_CTRL(MX53_PAD_EIM_A17__GPIO_2_21, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Pmic IRQ */
 	NEW_PAD_CTRL(MX53_PAD_EIM_A16__GPIO_2_22, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* Camera power down(nitrogenA) */
 	MX53_PAD_EIM_EB1__GPIO_2_29,									/* tpf410_i2cmode */
@@ -521,7 +526,7 @@ static iomux_v3_cfg_t mx53common_pads[] = {
 	MX53_PAD_CSI0_VSYNC__CSI0_VSYNC,
 	MX53_PAD_CSI0_MCLK__CSI0_HSYNC,
 	MX53_PAD_CSI0_PIXCLK__CSI0_PIXCLK,
-	MX53_PAD_NANDF_CS2__CSI0_MCLK,
+	NEW_PAD_CTRL(MX53_PAD_NANDF_CS2__GPIO6_15, PAD_CTL_PUS_360K_DOWN),	/* pull is off */
 	MX53_PAD_GPIO_2__GPIO_1_2,	/* CAMERA_POWERDOWN (nitrogen53) */
 	MX53_PAD_GPIO_7__GPIO_1_7,	/* CAMERA_STROBE */
 	MX53_PAD_KEY_COL4__GPIO_4_14,	/* CAMERA_RESET */
@@ -770,11 +775,12 @@ static struct mxc_pwm_platform_data mxc_pwm2_platform_data = {
 };
 
 #ifdef CONFIG_MACH_MX53_NITROGEN_K
-#define N53K_DISPLAY_BL_EN      MAKE_GP(2, 16)
+#define N53K_DISPLAY_BL_EN			MAKE_GP(2, 16)
+
 int n53k_bl_notify(struct device *dev, int brightness)
 {
-  gpio_set_value(N53K_DISPLAY_BL_EN, brightness ? 1 : 0);
-  return brightness;
+	gpio_set_value(N53K_DISPLAY_BL_EN, brightness ? 1 : 0);
+	return brightness;
 }
 #endif
 
@@ -786,7 +792,7 @@ static struct platform_pwm_backlight_data mxc_backlight_data_pwm2 = {
 	.pwm_period_ns = 1000000000/32768,	/* 30517 */
 #ifdef CONFIG_MACH_MX53_NITROGEN_K
 	.usable_range = {0,256},
- 	.notify = n53k_bl_notify,
+	.notify = n53k_bl_notify,
 #endif
 };
 #endif
@@ -1655,11 +1661,35 @@ static struct platform_device boundary_camera_interfaces[] = {
 
 #ifdef HAVE_CAMERA
 static struct mxc_camera_platform_data camera_data;
+
+static void *camera_pdata;
+static void (*camera_notify_callback)(void * pdata, int on);
+
+void set_camera_active_notify(void *pdata, void (*notify_callback)(void * pdata, int on))
+{
+	camera_pdata = pdata;
+	camera_notify_callback = notify_callback;
+}
+EXPORT_SYMBOL(set_camera_active_notify);
+
+static void camera_flash_notify(int on)
+{
+	if (camera_notify_callback)
+		camera_notify_callback(camera_pdata, on);
+
+}
+
 static void camera_pwdn(int pwdn)
 {
-//	pr_info("pwdn=%d camera_data.power_down=%x camera_data.reset=%x\n", pwdn, camera_data.power_down, camera_data.reset);
+	if (pwdn)
+		camera_flash_notify(0);
+	pr_debug("pwdn=%d camera_data.power_down=%x camera_data.reset=%x\n", pwdn, camera_data.power_down, camera_data.reset);
+	mxc_iomux_v3_setup_pad(pwdn ? NEW_PAD_CTRL(MX53_PAD_NANDF_CS2__GPIO6_15, PAD_CTL_PUS_360K_DOWN)
+			: MX53_PAD_NANDF_CS2__CSI0_MCLK);
 	gpio_set_value(camera_data.power_down, pwdn ? 1 : 0);
 	gpio_set_value(camera_data.reset, (0==pwdn));
+	if (!pwdn)
+		msleep(2);
 }
 
 static struct mxc_camera_platform_data camera_data = {
@@ -1669,6 +1699,7 @@ static struct mxc_camera_platform_data camera_data = {
 	.mclk = 26000000,
 	.csi = 0,
 	.pwdn = camera_pwdn,
+	.flash_notify = camera_flash_notify,
 	.power_down = MAKE_GP(1, 2),	/* Nitrogen53 A/K override */
 	.reset = CAMERA_RESET,
 	.i2c_bus = 1,
@@ -2044,15 +2075,29 @@ static struct i2c_board_info n53a_i2c5_board_info[] __initdata = {
 	},
 };
 
-/* EDID is here too */
 static struct i2c_board_info n53a_i2c6_board_info[] __initdata = {
+	{
+	 .type = "isl1208",
+	 .addr = 0x6f,
+	},
+};
+
+/* EDID is here too */
+static struct i2c_board_info n53a_i2c7_board_info[] __initdata = {
 	{
 	 .type = "bq20z75",		/* Battery */
 	 .addr = 0x0b,
 	},
 };
 
-static struct i2c_board_info n53a_i2c7_board_info[] __initdata = {
+static struct i2c_board_info n53a_i2c8_board_info[] __initdata = {
+	{
+	 .type = "bq20z75",		/* 2nd Battery */
+	 .addr = 0x0b,
+	},
+};
+
+static struct i2c_board_info n53a_i2c9_board_info[] __initdata = {
 	{
 	 .type = "sc16is7xx-uart",
 	 .addr = 0x49,
@@ -2063,17 +2108,20 @@ static struct i2c_board_info n53a_i2c7_board_info[] __initdata = {
 #endif
 
 #ifdef CONFIG_MACH_NITROGEN_A_IMX53
-/* i2c3-i2c6, Middle i2C bus has a switch */
+/* i2c3-i2c8, Middle i2C bus has a switch */
 static const unsigned n53a_i2c2_gpiomux_gpios[] = {
-	/* i2c3- i2c6*/
-	MAKE_GP(3, 7),		/* EIM_DA7 - PIC16F616_TOUCH */
-	MAKE_GP(3, 10),		/* EIM_DA10 - Camera */
-	MAKE_GP(3, 11),		/* EIM_DA11 - TFP410_ACCEL*/
-	MAKE_GP(6, 11)		/* NANDF_CS0 - BATT_EDID */
+	/* i2c3- i2c8*/
+	MAKE_GP(3, 6),		/* 1 - EIM_DA6 - battery select */
+	MAKE_GP(3, 7),		/* 2 - EIM_DA7 - PIC16F616_TOUCH */
+	MAKE_GP(3, 10),		/* 4 - EIM_DA10 - Camera */
+	MAKE_GP(3, 11),		/* 8 - EIM_DA11 - TFP410_ACCEL*/
+	MAKE_GP(6, 11),		/* 16 - NANDF_CS0 - BATT_EDID */
+	MAKE_GP(6, 12),		/* 32 - NANDF_WE - rtc isl1208 */
 };
 
 static const unsigned n53a_i2c2_gpiomux_values[] = {
-	1, 2, 4, 8
+/* bus	3  4  5   6   7   8 */
+	2, 4, 8, 32, 16, 16 | 1,
 };
 
 static struct gpio_i2cmux_platform_data n53a_i2c2_i2cmux_data = {
@@ -2094,9 +2142,9 @@ static struct platform_device n53a_i2c2_i2cmux = {
         },
 };
 
-/* i2c7, Last i2C bus has a buffer for UART */
+/* i2c9, Last i2C bus has a buffer for UART */
 static const unsigned n53a_i2c3_gpiomux_gpios[] = {
-	/* i2c7*/
+	/* i2c9*/
 	MAKE_GP(6, 10)		/* NANDF_RB0 - SC16IS7XX */
 };
 
@@ -2106,7 +2154,7 @@ static const unsigned n53a_i2c3_gpiomux_values[] = {
 
 static struct gpio_i2cmux_platform_data n53a_i2c3_i2cmux_data = {
 	.parent		= 2,
-	.base_nr	= 7, /* optional */
+	.base_nr	= 9, /* optional */
 	.values		= n53a_i2c3_gpiomux_values,
 	.n_values	= ARRAY_SIZE(n53a_i2c3_gpiomux_values),
 	.gpios		= n53a_i2c3_gpiomux_gpios,
@@ -2171,6 +2219,10 @@ static iomux_v3_cfg_t nitrogen53_pads_specific_a[] __initdata = {
 
 	/* Pic16F616 touch int */
 	NEW_PAD_CTRL(MX53_PAD_EIM_DA8__GPIO_3_8, BUTTON_100K) | MUX_SION_MASK,
+
+	/* Keyboard */
+	NEW_PAD_CTRL(MX53_PAD_EIM_A18__GPIO_2_20, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
+	NEW_PAD_CTRL(MX53_PAD_EIM_A19__GPIO_2_19, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
 };
 
 static int sdhc_write_protect4(struct device *dev)
@@ -2216,6 +2268,8 @@ static void __init mxc_board_init_nitrogen_a(void)
 	ldo8_consumers[0].dev_name = n53a_camera_i2c_dev_name;
 	ldo9_consumers[0].dev_name = n53a_camera_i2c_dev_name;
 	mxci2c2_data.i2c_clock_toggle = n53a_i2c_clock_toggle2;
+	/* eMMC settings */
+	mmc3_data.caps = MMC_CAP_MMC_HIGHSPEED | MMC_CAP_4_BIT_DATA | MMC_CAP_8_BIT_DATA;	// MMC_CAP_DATA_DDR causes errors
 
 #ifdef HAVE_CAMERA
 	camera_data.power_down = MAKE_GP(2, 22);
@@ -2249,9 +2303,13 @@ static void __init mxc_board_init_nitrogen_a(void)
 	i2c_register_board_info(4, n53a_i2c4_board_info, ARRAY_SIZE(n53a_i2c4_board_info));
 	i2c_register_board_info(5, n53a_i2c5_board_info, ARRAY_SIZE(n53a_i2c5_board_info));
 	i2c_register_board_info(6, n53a_i2c6_board_info, ARRAY_SIZE(n53a_i2c6_board_info));
+	i2c_register_board_info(7, n53a_i2c7_board_info, ARRAY_SIZE(n53a_i2c7_board_info));
+	i2c_register_board_info(8, n53a_i2c8_board_info, ARRAY_SIZE(n53a_i2c8_board_info));
 
 	mxc_register_device(&n53a_i2c3_i2cmux, &n53a_i2c3_i2cmux_data);
-	i2c_register_board_info(7, n53a_i2c7_board_info, ARRAY_SIZE(n53a_i2c7_board_info));
+	i2c_register_board_info(9, n53a_i2c9_board_info, ARRAY_SIZE(n53a_i2c9_board_info));
+
+	mxc_register_device(&mxc_bt_rfkill, &mxc_bt_rfkill_data);
 }
 
 MACHINE_START(NITROGEN_A_IMX53, "Boundary Devices Nitrogen_A MX53 Board")
@@ -2264,15 +2322,18 @@ MACHINE_END
 #endif
 
 /*****************************************************************************/
-extern struct platform_device mxc_uart_device3;
+extern struct platform_device mxc_uart_device1;
 extern struct platform_device mxc_uart_device2;
+extern struct platform_device mxc_uart_device3;
 static struct imxuart_platform_data uart_pdata = {
 	.flags = IMXUART_HAVE_RTSCTS,
 };
 
 #ifdef CONFIG_MACH_NITROGEN_IMX53
 struct gpio nitrogen53_gpios_specific[] __initdata = {
+#ifndef CONFIG_N_9BIT
 	{.label = "Camera power down",	.gpio = MAKE_GP(1, 2),		.flags = GPIOF_INIT_HIGH},
+#endif
 	{.label = "pmic-int",		.gpio = MAKE_GP(2, 21),		.flags = GPIOF_DIR_IN},
 #ifdef CONFIG_WL12XX_PLATFORM_DATA
 	{.label = "wl1271_btfunct5",	.gpio = MAKE_GP(1, 6),		.flags = GPIOF_DIR_IN},		/* GPIO_1_6 - (HOST_WU) */
@@ -2342,6 +2403,12 @@ static struct i2c_board_info mxc_i2c1_board_info[] __initdata = {
 	 .platform_data  = &camera_data,
 	},
 #endif
+#if defined(CONFIG_RTC_DRV_ISL1208) || defined(CONFIG_RTC_DRV_ISL1208_MODULE)
+	{
+	 .type = "isl1208",
+	 .addr = 0x6f,
+	},
+#endif
 };
 
 static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
@@ -2382,6 +2449,10 @@ static iomux_v3_cfg_t nitrogen53_pads_specific[] __initdata = {
 #endif
 	/* PWM1 backlight */
 	MX53_PAD_GPIO_9__PWMO, /* pwm1 */
+
+	/* Keyboard */
+	NEW_PAD_CTRL(MX53_PAD_EIM_A19__GPIO_2_19, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
+	NEW_PAD_CTRL(MX53_PAD_EIM_A18__GPIO_2_20, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),
 };
 
 #ifdef CONFIG_WL12XX_PLATFORM_DATA
@@ -2440,11 +2511,28 @@ static int sdhc_write_protect3(struct device *dev)
 	return gpio_get_value(N53_SD3_WP);
 }
 
+#ifdef CONFIG_N_9BIT
+static struct imxuart_platform_data uart1_pdata = {
+	.flags = IMXUART_USING_RS485 | IMXUART_HALF_DUPLEX | IMXUART_9BIT,
+	.rs485_tx_gpio = MAKE_GP(1, 2),
+};
+static struct imxuart_platform_data uart3_pdata = {
+	.flags = IMXUART_USING_RS485 | IMXUART_HALF_DUPLEX,
+	.rs485_tx_gpio = MAKE_GP(1, 5),			/* was MAKE_GP(3, 30) */
+};
+#define UART1_DATA &uart1_pdata
+#define UART3_DATA &uart3_pdata
+#else
+#define UART1_DATA NULL
+#define UART3_DATA &uart_pdata	/* rts/cts */
+#endif
+
 static void __init mxc_board_init_nitrogen(void)
 {
 	unsigned da9052_irq = gpio_to_irq(MAKE_GP(2, 21));	/* pad EIM_A17 */
+	mxc_uart_device1.dev.platform_data = UART1_DATA;
+	mxc_uart_device3.dev.platform_data = UART3_DATA;
 #ifdef CONFIG_WL12XX_PLATFORM_DATA
-	mxc_uart_device3.dev.platform_data = &uart_pdata;
 	/* PWM2 - GPIO_1 is slow clock */
 	mxc_pwm2_platform_data.clk_select = PWM_CLK_HIGHPERF;
 	mxc_backlight_data_pwm2.dft_brightness = 128;	/* slow clock 50% duty */
@@ -2581,23 +2669,23 @@ struct elan_ktf2k_i2c_platform_data ts_elan_ktf2k_data[] = {
 
 struct gpio n53k_gpios_specific[] __initdata = {
 	{.label = "pmic-int",		.gpio = MAKE_GP(2, 21),		.flags = GPIOF_DIR_IN},
-	{.label = "Dispay w3 sda",	.gpio = MAKE_GP(2, 19),		.flags = GPIOF_INIT_HIGH},
-	{.label = "Dispay w3 scl",	.gpio = MAKE_GP(2, 20),		.flags = GPIOF_INIT_HIGH},
+	{.label = "Dispay w3 sda",	.gpio = MAKE_GP(2, 19),		.flags = GPIOF_DIR_IN},
+	{.label = "Dispay w3 scl",	.gpio = MAKE_GP(2, 20),		.flags = GPIOF_DIR_IN},
 //	{.label = "i2c touchscreen int", .gpio = MAKE_GP(6, 6),		.flags = GPIOF_DIR_IN},
 #ifdef CONFIG_K2
 #define	N53K_HEADPHONE_DET			MAKE_GP(1, 2)
 	{.label = "headphone detect",	.gpio = MAKE_GP(1, 2),		.flags = GPIOF_DIR_IN},
-#define N53K_DISPLAY_BL_EN      MAKE_GP(2, 16)
+#define N53K_DISPLAY_BL_EN			MAKE_GP(2, 16)
 	{.label = "Display power",	.gpio = MAKE_GP(2, 16),		.flags = GPIOF_INIT_HIGH},
 #define N53K_CAMERA_POWER_DOWN			MAKE_GP(2, 22)
 	{.label = "Camera power down",	.gpio = MAKE_GP(2, 22),		.flags = GPIOF_INIT_HIGH},
 	{.label = "accelerometer int1",	.gpio = MAKE_GP(2, 23),		.flags = GPIOF_DIR_IN},
 	{.label = "accelerometer int2",	.gpio = MAKE_GP(2, 24),		.flags = GPIOF_DIR_IN},
 	{.label = "da9053 fault",	.gpio = MAKE_GP(2, 28),		.flags = GPIOF_DIR_IN},
-//	{.label = "uart1 cts",		.gpio = MAKE_GP(2, 31),		.flags = GPIOF_INIT_LOW},
-	{.label = "Dispay w3 cs",	.gpio = MAKE_GP(3, 3),		.flags = GPIOF_INIT_HIGH},
+	{.label = "uart1 cts",		.gpio = MAKE_GP(2, 31),		.flags = GPIOF_INIT_LOW},
+	{.label = "Dispay w3 cs",	.gpio = MAKE_GP(3, 3),		.flags = GPIOF_DIR_IN},
 	{.label = "da9053 shutdown",	.gpio = MAKE_GP(3, 4),		.flags = GPIOF_INIT_HIGH},
-	{.label = "ambient int",	.gpio = MAKE_GP(3, 7),		.flags = GPIOF_INIT_HIGH},
+	{.label = "ambient int",	.gpio = MAKE_GP(3, 7),		.flags = GPIOF_DIR_IN},
 #define I2C2_HUB_EDID				MAKE_GP(3, 8)
 //	{.label = "i2c2 hub-EDID",	.gpio = MAKE_GP(3, 8),		.flags = GPIOF_INIT_LOW},
 #define I2C2_HUB_BQ24163			MAKE_GP(3, 9)
@@ -2649,23 +2737,20 @@ struct gpio n53k_gpios_specific[] __initdata = {
 #endif
 	{.label = "i2c-2-sda",		.gpio = MAKE_GP(7, 11),		.flags = GPIOF_DIR_IN},
 	{.label = "USBH1 Power",	.gpio = MAKE_GP(2, 17),		.flags = GPIOF_INIT_HIGH},	/* EIM_A21, active high power enable */
+	{.label = "Camera flash",	.gpio = MAKE_GP(3, 2),		.flags = GPIOF_INIT_LOW},	/* EIM_DA2, active high, camera flash */
 #if !defined(CONFIG_GPIO_OUTPUT) && !defined(CONFIG_GPIO_OUTPUT_MODULE)
-#define N53K_BARCODE_SCAN_TRIG			MAKE_GP(3, 30)
-//	{.label = "barcode scan power",	.gpio = MAKE_GP(3, 23),		.flags = GPIOF_INIT_HIGH},
-//	{.label = "barcode scan trig",	.gpio = MAKE_GP(3, 30),		.flags = GPIOF_INIT_LOW},	/* EIM_D30, active high scanner trigger */
-/*
-  * Wake* trig*
-  *  x     0 - line lasts for 3 seconds, then off
-  *  0     1 - aim mode, dot beam which expands to line every 5 seconds
-  *  1     1 - beam off
-  */
-	{.label = "barcode scan trig",  .gpio = MAKE_GP(3, 30),    .flags = GPIOF_INIT_HIGH},  /* EIM_D30, active low scanner trigger */
-	{.label = "barcode wake",  .gpio = MAKE_GP(3, 23),    .flags = GPIOF_INIT_HIGH},  /* EIM_D23, active low scanner wake up */
+	/*
+	 * Wake* trig*
+	 *  x     0 - line lasts for 3 seconds, then off
+	 *  0     1 - aim mode, dot beam which expands to line every 5 seconds
+	 *  1     1 - beam off
+	 */
+	{.label = "barcode scan trig",	.gpio = MAKE_GP(3, 30),		.flags = GPIOF_INIT_HIGH},	/* EIM_D30, active low scanner trigger */
+	{.label = "barcode wake",	.gpio = MAKE_GP(3, 23),		.flags = GPIOF_INIT_HIGH},	/* EIM_D23, active low scanner wake up */
 	{.label = "Led1",		.gpio = MAKE_GP(5, 4),		.flags = GPIOF_INIT_HIGH},
 	{.label = "Led2",		.gpio = MAKE_GP(3, 31),		.flags = GPIOF_INIT_HIGH},	/* EIM_D31, active low, Yellow LED */
 	{.label = "Led3",		.gpio = MAKE_GP(3, 22),		.flags = GPIOF_INIT_HIGH},	/* EIM_D22, active low, Blue LED */
 	{.label = "Led4",		.gpio = MAKE_GP(2, 18),		.flags = GPIOF_INIT_HIGH},	/* EIM_A20, active low, Orange LED */
-	{.label = "Camera flash",	.gpio = MAKE_GP(3, 2),		.flags = GPIOF_INIT_LOW},	/* EIM_DA2, active high, camera flash */
 #endif
 };
 
@@ -2673,7 +2758,7 @@ struct gpio n53k_gpios_specific[] __initdata = {
 static const unsigned i2c2_gpiomux_gpios[] = {
 	/* i2c3- i2c6*/
 	I2C2_HUB_EDID, I2C2_HUB_BQ24163, I2C2_HUB_AMBIENT, I2C2_HUB_CAMERA,
-	MAKE_GP(3, 6),    /* 7 - EIM_DA6 - rtc isl1208 select */
+	MAKE_GP(3, 6),		/* 7 - EIM_DA6 - rtc isl1208 select */
 
 };
 
@@ -2759,10 +2844,10 @@ static struct i2c_board_info n53k_i2c6_board_info[] __initdata = {
 	 .platform_data  = &camera_data,
 	},
 #endif
- 	{
- 	.type = "xrp6840", 
- 	.addr = 0x28,
- 	},
+	{
+	.type = "xrp6840",
+	.addr = 0x28,
+	},
 };
 static struct i2c_board_info n53k_i2c7_board_info[] __initdata = {
 #if defined(CONFIG_RTC_DRV_ISL1208) || defined(CONFIG_RTC_DRV_ISL1208_MODULE)
@@ -2882,7 +2967,6 @@ static iomux_v3_cfg_t n53k_pads_specific[] __initdata = {
 	MX53_PAD_EIM_DA9__GPIO_3_9,	/* i2c2 hub - BQ24163 enable */
 	MX53_PAD_GPIO_12__GPIO4_2,	/* BQ24163 int/status */
 	MX53_PAD_ATA_CS_0__GPIO_7_9,	/* accelerometer int1 on i2c3 */
-	MX53_PAD_EIM_DA3__GPIO3_3,	/* Dispay w3 cs */
 	/* UART3 */
 	MX53_PAD_EIM_D24__UART3_TXD,
 	MX53_PAD_EIM_D25__UART3_RXD,
@@ -2890,7 +2974,6 @@ static iomux_v3_cfg_t n53k_pads_specific[] __initdata = {
 	/* TiWi */
 	MX53_PAD_EIM_DA9__GPIO_3_9,	/* BT_FUNCT5 */
 	MX53_PAD_ATA_CS_0__GPIO_7_9,	/* WL1271_irq */
-	MX53_PAD_EIM_D24__GPIO3_24,	/* Dispay w3 cs */
 	/* UART3 */
 	MX53_PAD_ATA_CS_0__UART3_TXD,
 	MX53_PAD_ATA_CS_1__UART3_RXD,
@@ -2902,10 +2985,9 @@ static iomux_v3_cfg_t n53k_pads_specific[] __initdata = {
 	/* I2C3 */
 	MX53_PAD_GPIO_3__I2C3_SCL,	/* GPIO1[3] */
 	MX53_PAD_GPIO_16__I2C3_SDA,	/* gpio7[11] */
-//	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP),	/* barcode scan power */
-//	MX53_PAD_EIM_D30__GPIO_3_30,	/* Barcode scanner trigger */
-	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP) | MUX_SION_MASK,  /* barcode scanner wake */
-	NEW_PAD_CTRL(MX53_PAD_EIM_D30__GPIO_3_30, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP) | MUX_SION_MASK,  /* Barcode scanner trigger */
+	NEW_PAD_CTRL(MX53_PAD_EIM_D23__GPIO_3_23, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP) | MUX_SION_MASK,	/* barcode scanner wake */
+	NEW_PAD_CTRL(MX53_PAD_EIM_D30__GPIO_3_30, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_100K_UP) | MUX_SION_MASK,	/* Barcode scanner trigger */
+
 	/* LED daughter board */
 	MX53_PAD_EIM_A20__GPIO_2_18,	/* Led4 */
 	MX53_PAD_EIM_D22__GPIO_3_22,	/* Led3 */
@@ -2913,7 +2995,7 @@ static iomux_v3_cfg_t n53k_pads_specific[] __initdata = {
 
 	/* Camera daughter board */
 	MX53_PAD_GPIO_7__GPIO1_7,		/* strobe input (from camera) */
-	MX53_PAD_EIM_DA2__GPIO3_2,		/* flash output (active high) */
+	NEW_PAD_CTRL(MX53_PAD_EIM_DA2__GPIO3_2, PAD_CTL_PKE | PAD_CTL_PUE | PAD_CTL_PUS_360K_DOWN) | MUX_SION_MASK,	/* flash output (active high) */
 	MX53_PAD_EIM_CS0__GPIO_2_23,		/* accelerometer int1 */
 	MX53_PAD_EIM_CS1__GPIO_2_24,		/* accelerometer int2 */
 	NEW_PAD_CTRL(MX53_PAD_EIM_EB0__GPIO2_28, BUTTON_PAD_CTRL) | MUX_SION_MASK,     /* da9053 fault */
@@ -2923,9 +3005,18 @@ static iomux_v3_cfg_t n53k_pads_specific[] __initdata = {
 	MX53_PAD_NANDF_RB0__GPIO6_10,		/* i2c2 hub-Camera */
 	MX53_PAD_NANDF_WE_B__GPIO6_12,		/* main power */
 	MX53_PAD_PATA_CS_1__GPIO7_10,		/* eMMC reset */
-	MX53_PAD_EIM_DA6__GPIO_3_6,    		/* rtc isl1208 i2c_en */
-	NEW_PAD_CTRL(MX53_PAD_EIM_OE__GPIO2_25, PAD_CTL_PUS_100K_UP),    /* rtc isl1208 interrupt */
-	NEW_PAD_CTRL(MX53_PAD_EIM_LBA__GPIO2_27, BUTTON_100K) | MUX_SION_MASK,  /* barcode scanner interrupt */
+	MX53_PAD_EIM_DA6__GPIO_3_6,		/* rtc isl1208 i2c_en */
+	NEW_PAD_CTRL(MX53_PAD_EIM_OE__GPIO2_25, PAD_CTL_PUS_100K_UP),		/* rtc isl1208 interrupt */
+	NEW_PAD_CTRL(MX53_PAD_EIM_LBA__GPIO2_27, BUTTON_100K) | MUX_SION_MASK,	/* barcode scanner interrupt */
+
+	/* W3 for Lvds display */
+	NEW_PAD_CTRL(MX53_PAD_EIM_A18__GPIO_2_20, PAD_CTL_PUS_100K_UP),	/* w3 scl, external pullup */
+	NEW_PAD_CTRL(MX53_PAD_EIM_A19__GPIO_2_19, PAD_CTL_PUS_100K_UP),	/* w3 sda, external pullup */
+#ifdef CONFIG_K2
+	NEW_PAD_CTRL(MX53_PAD_EIM_DA3__GPIO3_3, PAD_CTL_PUS_100K_UP),	/* w3 cs, external pullup */
+#else
+	MX53_PAD_EIM_D24__GPIO3_24,	/* Dispay w3 cs */
+#endif
 };
 
 #ifdef CONFIG_WL12XX_PLATFORM_DATA
@@ -3028,7 +3119,7 @@ static void __init n53k_board_init(void)
 	i2c_register_board_info(4, n53k_i2c4_board_info, ARRAY_SIZE(n53k_i2c4_board_info));
 	i2c_register_board_info(5, n53k_i2c5_board_info, ARRAY_SIZE(n53k_i2c5_board_info));
 	i2c_register_board_info(6, n53k_i2c6_board_info, ARRAY_SIZE(n53k_i2c6_board_info));
- 	i2c_register_board_info(7, n53k_i2c7_board_info, ARRAY_SIZE(n53k_i2c7_board_info));
+	i2c_register_board_info(7, n53k_i2c7_board_info, ARRAY_SIZE(n53k_i2c7_board_info));
 #endif
 
 	/* eMMC is sdhc4 */
