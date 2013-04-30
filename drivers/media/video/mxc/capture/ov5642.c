@@ -32,7 +32,7 @@
 #include <media/v4l2-int-device.h>
 #include "mxc_v4l2_capture.h"
 
-#define pr_info(...)
+//#define pr_info(...)
 
 #define OV5642_VOLTAGE_ANALOG               2800000
 #define OV5642_VOLTAGE_DIGITAL_CORE         1500000
@@ -7524,6 +7524,16 @@ static int ioctl_send_command(struct v4l2_int_device *s, struct v4l2_send_comman
 			pr_info("get_capture_sensor_data");
 			get_capture_sensor_data(vc->debug);
 			pr_info("%s",vc->debug);
+			break;
+
+		case 109:
+			pr_info("software suspend");
+			ov5642_write_reg(0x3008, 0x42);
+			break;
+
+		case 110:
+			pr_info("software resume");
+			ov5642_write_reg(0x3008, 0x02);
 			break;
 
 		default:

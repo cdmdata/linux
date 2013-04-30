@@ -39,7 +39,7 @@
 #include "mxc_v4l2_capture.h"
 #include "ipu_prp_sw.h"
 
-#define pr_info(...)
+//#define pr_info(...)
 
 static int video_nr = -1, local_buf_num;
 static cam_data *g_cam;
@@ -1456,6 +1456,20 @@ static int mxc_v4l_dqueue(cam_data *cam, struct v4l2_buffer *buf) {
 	return retval;
 }
 
+static int mxc_v4l2_software_resume(){
+	struct v4l2_send_command_control args;
+	args.id = 110;
+	args.value0 = 0;
+	args.value1 = 0;
+
+	if (g_cam->sensor){
+		pr_info("In MVC:mxc_v4l2_software_resume\n");
+		mxc_v4l2_send_command(g_cam, &args);
+	}
+	return 0;
+}
+
+
 /*!
  * V4L interface - open function
  *
@@ -1490,6 +1504,8 @@ static int mxc_v4l_open(struct file *file) {
 	err = 0;
 	if (signal_pending(current))
 		goto oops;
+
+	mxc_v4l2_software_resume();
 
 	if (cam->open_count++ == 0) {
 		wait_event_interruptible(cam->power_queue, cam->low_power == false);
@@ -1591,6 +1607,19 @@ static int mxc_v4l_open(struct file *file) {
 	return err;
 }
 
+static int mxc_v4l2_software_suspend(){
+	struct v4l2_send_command_control args;
+	args.id = 109;
+	args.value0 = 0;
+	args.value1 = 0;
+
+	if (g_cam->sensor){
+		pr_info("In MVC:mxc_v4l2_software_suspend\n");
+		mxc_v4l2_send_command(g_cam, &args);
+	}
+	return 0;
+}
+
 /*!
  * V4L interface - close function
  *
@@ -1622,6 +1651,7 @@ static int mxc_v4l_close(struct file *file) {
 	}
 
 	if (--cam->open_count == 0) {
+		mxc_v4l2_software_suspend();
 		wait_event_interruptible(cam->power_queue, cam->low_power == false);
 		pr_info("mxc_v4l_close: release resource\n");
 
@@ -2634,7 +2664,7 @@ static int mxc_v4l2_remove(struct platform_device *pdev) {
 static int mxc_v4l2_suspend(struct platform_device *pdev, pm_message_t state) {
 	cam_data *cam = platform_get_drvdata(pdev);
 
-	pr_debug("In MVC:mxc_v4l2_suspend\n");
+	pr_info("In MVC:mxc_v4l2_suspend\n");
 
 	if (cam == NULL) {
 		return -1;
@@ -2654,6 +2684,7 @@ static int mxc_v4l2_suspend(struct platform_device *pdev, pm_message_t state) {
 	return 0;
 }
 
+
 /*!
  * This function is called to bring the sensor back from a low power state.
  * Refer to the document driver-model/driver.txt in the kernel source tree
@@ -2666,7 +2697,7 @@ static int mxc_v4l2_suspend(struct platform_device *pdev, pm_message_t state) {
 static int mxc_v4l2_resume(struct platform_device *pdev) {
 	cam_data *cam = platform_get_drvdata(pdev);
 
-	pr_debug("In MVC:mxc_v4l2_resume\n");
+	pr_info("In MVC:mxc_v4l2_resume\n");
 
 	if (cam == NULL) {
 		return -1;
