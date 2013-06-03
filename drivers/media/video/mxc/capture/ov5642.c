@@ -7528,12 +7528,12 @@ static int ioctl_send_command(struct v4l2_int_device *s, struct v4l2_send_comman
 
 		case 109:
 			pr_info("software suspend");
-			ov5642_write_reg(0x3008, 0x42);
+			//ov5642_write_reg(0x3008, 0x42);
 			break;
 
 		case 110:
 			pr_info("software resume");
-			ov5642_write_reg(0x3008, 0x02);
+			//ov5642_write_reg(0x3008, 0x02);
 			break;
 
 		default:
