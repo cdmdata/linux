@@ -1457,15 +1457,15 @@ static int mxc_v4l_dqueue(cam_data *cam, struct v4l2_buffer *buf) {
 }
 
 static int mxc_v4l2_software_resume(){
-	struct v4l2_send_command_control args;
-	args.id = 110;
-	args.value0 = 0;
-	args.value1 = 0;
+	// struct v4l2_send_command_control args;
+	// args.id = 110;
+	// args.value0 = 0;
+	// args.value1 = 0;
 
-	if (g_cam->sensor){
-		pr_info("In MVC:mxc_v4l2_software_resume\n");
-		mxc_v4l2_send_command(g_cam, &args);
-	}
+	// if (g_cam->sensor){
+	// 	pr_info("In MVC:mxc_v4l2_software_resume\n");
+	// 	mxc_v4l2_send_command(g_cam, &args);
+	// }
 	return 0;
 }
 
@@ -1608,15 +1608,15 @@ static int mxc_v4l_open(struct file *file) {
 }
 
 static int mxc_v4l2_software_suspend(){
-	struct v4l2_send_command_control args;
-	args.id = 109;
-	args.value0 = 0;
-	args.value1 = 0;
+	// struct v4l2_send_command_control args;
+	// args.id = 109;
+	// args.value0 = 0;
+	// args.value1 = 0;
 
-	if (g_cam->sensor){
-		pr_info("In MVC:mxc_v4l2_software_suspend\n");
-		mxc_v4l2_send_command(g_cam, &args);
-	}
+	// if (g_cam->sensor){
+	// 	pr_info("In MVC:mxc_v4l2_software_suspend\n");
+	// 	mxc_v4l2_send_command(g_cam, &args);
+	// }
 	return 0;
 }
 
