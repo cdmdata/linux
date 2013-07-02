@@ -30,7 +30,8 @@
 #define DRIVER_VERSION			"1.1.0"
 
 #define BQ27x00_REG_TEMP		0x06
-#define BQ27x00_REG_VOLT		0x08
+#define BQ27x00_REG_VOLT_HIGH	0x09
+#define BQ27x00_REG_VOLT_LOW	0x08
 #define BQ27x00_REG_AI			0x14
 #define BQ27x00_REG_FLAGS		0x0A
 #define BQ27x00_REG_TTE			0x16
@@ -77,6 +78,8 @@ static enum power_supply_property bq27x00_battery_props[] = {
 	POWER_SUPPLY_PROP_TEMP,
 };
 
+static int fakersoc = 30;
+
 /*
  * Common code for BQ27x00 devices
  */
@@ -92,21 +95,44 @@ static int bq27x00_read(u8 reg, int *rt_value, int b_single,
  * Or < 0 if something fails.
  */
 static int bq27x00_battery_temperature(struct bq27x00_device_info *di)
-{
-	int ret;
-	int temp = 0;
-
-	ret = bq27x00_read(BQ27x00_REG_TEMP, &temp, 0, di);
+ {
+ 	int ret;
+	int temp, templ = 0, temph = 0;
+ 
+	ret = bq27x00_read(BQ27x00_REG_TEMP, &templ, 1, di);
+ 	if (ret) {
+		dev_err(di->dev, "error %d reading TEMPL\n",ret);
+ 		return ret;
+ 	}
+ 
+	ret = bq27x00_read(BQ27x00_REG_TEMP+1, &temph, 1, di);
 	if (ret) {
-		dev_err(di->dev, "error reading temperature\n");
+		dev_err(di->dev, "error %d reading TEMPH\n",ret);
 		return ret;
 	}
+	temp = (temph<<8)|templ;
 
-	if (di->chip == BQ27500)
-		return temp - 2731;
-	else
-		return ((temp * 10) >> 2) - 2730;
-}
+	/* convert to units of 0.1C */
+ 	if (di->chip == BQ27500)
+		ret = temp - 2731;
+ 	else
+		ret = ((temp * 10) >> 2) - 2730;
+
+    if (1000 < ret){ /* 100C */
+		int tempcomp = 0;
+		pr_err("%s: temp %d, reg 0x%04x\n", __func__, ret, temp);
+		ret = bq27x00_read(0x7f, &tempcomp, 1, di);
+		pr_err("%s: temp compens %d/%02x\n", __func__, ret, tempcomp);
+		ret = bq27x00_read(BQ27x00_REG_TEMP, &temp, 0, di);
+		pr_err("%s: re-read %d/%02x\n", __func__, ret, temp);
+		ret = bq27x00_read(BQ27x00_REG_TEMP, &temp, 1, di);
+		pr_err("%s: TEMPL %d/%02x\n", __func__, ret, temp);
+		ret = bq27x00_read(BQ27x00_REG_TEMP+1, &temp, 1, di);
+		pr_err("%s: TEMPH %d/%02x\n", __func__, ret, temp);
+		ret = 315; /* 31.5C */
+	}
+	return ret;
+ }
 
 /*
  * Return the battery Voltage in milivolts
@@ -116,13 +142,20 @@ static int bq27x00_battery_voltage(struct bq27x00_device_info *di)
 {
 	int ret;
 	int volt = 0;
+	u8 hibyte;
+	u8 lobyte;
 
-	ret = bq27x00_read(BQ27x00_REG_VOLT, &volt, 0, di);
+	ret = bq27x00_read(BQ27x00_REG_VOLT_HIGH, &volt, 0, di);
+	//dev_err(di->dev, "bq27x00_battery_voltage: 0x%x", volt);
 	if (ret) {
 		dev_err(di->dev, "error reading voltage\n");
 		return ret;
 	}
 
+	hibyte = (volt & 0xff00) >> 8;
+	lobyte = (volt & 0xff);
+	volt = lobyte << 8 | hibyte;
+	dev_err(di->dev, "bq27x00_battery_voltage: 0x%x", volt);
 	return volt * 1000;
 }
 
@@ -170,10 +203,6 @@ static int bq27x00_battery_rsoc(struct bq27x00_device_info *di)
 {
 	int ret;
 	int rsoc = 0;
-        long rsoc_scaled;
-
-#define RSOC_SF 100000
-#define RSOC_100        100
 
 	if (di->chip == BQ27500)
 		ret = bq27x00_read(BQ27500_REG_SOC, &rsoc, 0, di);
@@ -183,11 +212,14 @@ static int bq27x00_battery_rsoc(struct bq27x00_device_info *di)
 		dev_err(di->dev, "error reading relative State-of-Charge\n");
 		return ret;
 	}
-       /* Scale output for 6% - OSBC = 100 – [(100 – ABC)* 1.0638] */
+	
+	//testing code REMOVE WHEN DONE
+	// fakersoc--;
+	// if (fakersoc < 5)
+	// 	fakersoc = 30;
 
-        rsoc_scaled = RSOC_100-(((RSOC_100-rsoc)*106832)/RSOC_SF);
-
-        return rsoc;
+	//dev_err(di->dev, "returning fakersoc %d\n", fakersoc);
+    return rsoc;
 }
 
 static int bq27x00_battery_status(struct bq27x00_device_info *di,
@@ -198,6 +230,7 @@ static int bq27x00_battery_status(struct bq27x00_device_info *di,
 	int ret;
 
 	ret = bq27x00_read(BQ27x00_REG_FLAGS, &flags, 0, di);
+	dev_err(di->dev, "bq27x00 flags: 0x%x", flags);
 	if (ret < 0) {
 		dev_err(di->dev, "error reading flags\n");
 		return ret;
@@ -257,15 +290,6 @@ static int bq27x00_battery_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
 		val->intval = bq27x00_battery_temperature(di);
-   		if (1000 < val->intval) {
-      			dev_err(di->dev, "--------- invalid temperature reading: %d\n", val->intval);
-      			val->intval = bq27x00_battery_temperature(di);
-      			dev_err(di->dev, "--------- temperature reading now: %d\n", val->intval);
-      			if (1000 < val->intval) {
-        			dev_err(di->dev, "--------- temperature reading now: %d\n", val->intval);
-        			val->intval = 315;
-      			}
-    		}
 		break;
 	default:
 		return -EINVAL;
@@ -298,39 +322,37 @@ static int bq27x00_read_i2c(u8 reg, int *rt_value, int b_single,
 			struct bq27x00_device_info *di)
 {
 	struct i2c_client *client = di->client;
-	struct i2c_msg msg[1];
-	unsigned char data[2];
-	int err;
+	struct i2c_msg msgs[2];
+	unsigned char txdata[2];
+	unsigned char rxdata[2];
+	int num_transferred;
 
 	if (!client->adapter)
 		return -ENODEV;
 
-	msg->addr = client->addr;
-	msg->flags = 0;
-	msg->len = 1;
-	msg->buf = data;
+	msgs[0].addr = client->addr;
+	msgs[0].flags = 0;
+	msgs[0].len = 1;
+	msgs[0].buf = txdata;
+	txdata[0] = reg;
 
-	data[0] = reg;
-	err = i2c_transfer(client->adapter, msg, 1);
+	msgs[1].addr = client->addr;
+	msgs[1].flags = I2C_M_RD;
+	msgs[1].len = 1 + (0 != b_single);
+	msgs[1].buf = rxdata;
+	num_transferred = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
 
-	if (err >= 0) {
-		if (!b_single)
-			msg->len = 2;
-		else
-			msg->len = 1;
-
-		msg->flags = I2C_M_RD;
-		err = i2c_transfer(client->adapter, msg, 1);
-		if (err >= 0) {
-			if (!b_single)
-				*rt_value = get_unaligned_le16(data);
-			else
-				*rt_value = data[0];
-
-			return 0;
+	if (ARRAY_SIZE(msgs) == num_transferred) {
+		if (!b_single){
+			//dev_err(di->dev, "bq27x00_read_i2c.rxdata[0]: %x", rxdata[0]);
+			//dev_err(di->dev, "bq27x00_read_i2c.rxdata[1]: %x", rxdata[1]);
+			*rt_value = get_unaligned_le16(rxdata);
 		}
+		else
+			*rt_value = rxdata[0];
+		return 0;
 	}
-	return err;
+	return -EIO ;
 }
 
 static int bq27x00_battery_probe(struct i2c_client *client,
