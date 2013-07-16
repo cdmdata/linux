@@ -155,7 +155,7 @@ static int bq27x00_battery_voltage(struct bq27x00_device_info *di)
 	hibyte = (volt & 0xff00) >> 8;
 	lobyte = (volt & 0xff);
 	volt = lobyte << 8 | hibyte;
-	dev_err(di->dev, "bq27x00_battery_voltage: 0x%x", volt);
+	//dev_err(di->dev, "bq27x00_battery_voltage: 0x%x", volt);
 	return volt * 1000;
 }
 
@@ -230,7 +230,7 @@ static int bq27x00_battery_status(struct bq27x00_device_info *di,
 	int ret;
 
 	ret = bq27x00_read(BQ27x00_REG_FLAGS, &flags, 0, di);
-	dev_err(di->dev, "bq27x00 flags: 0x%x", flags);
+	//dev_err(di->dev, "bq27x00 flags: 0x%x", flags);
 	if (ret < 0) {
 		dev_err(di->dev, "error reading flags\n");
 		return ret;
