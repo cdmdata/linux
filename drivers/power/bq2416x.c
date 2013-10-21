@@ -191,7 +191,7 @@ static int bq2416x_charger_config(struct bq2416x_priv *bq)
 	if (policy->disable_charging)
 		settings[BQ24163_CONTROL] |= BIT(1);
 	/* enable temperature control */
-	settings[BQ24163_SAFETY_TIMER] |= BIT(3);
+	settings[BQ24163_SAFETY_TIMER] &= ~(1 << 3);
 
 	/* charge_mV */
 	tmp = convert_setting(bq, policy->charge_mV, BQ_mV_TO_CHARGE_OFFSET,
